@@ -30,6 +30,10 @@ const entitySchema = new Schema({
 		type: String,
 		required: true,
 	},
+	image: {
+		type: String,
+		required: false,
+	},
 	createdBy: {
 		type: mongoose.Types.ObjectId,
 		required: true,

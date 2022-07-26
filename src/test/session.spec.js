@@ -36,7 +36,7 @@ describe('Sessions controller and helper test', () => {
 			],
 			categories: [
 				{
-					label: 'label',
+					label: '62d8f479ef73cce8d46ac6ab',
 					value: 'value',
 				},
 			],

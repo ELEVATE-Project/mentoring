@@ -16,6 +16,8 @@ const bigBlueButton = require('./bigBlueButton')
 const userProfile = require('./userProfile')
 const utils = require('@generics/utils')
 
+const entitiesData = require('@db/entities/query')
+
 module.exports = class SessionsHelper {
 	/**
 	 * Create session.
@@ -340,6 +342,13 @@ module.exports = class SessionsHelper {
 				})
 				sessionDetails.image = await Promise.all(sessionDetails.image)
 			}
+			if (sessionDetails.categories && sessionDetails.categories.length > 0) {
+				let entityData = await entitiesData.findEntityById(sessionDetails.categories[0].label)
+				if (entityData && entityData.image != '') {
+					sessionDetails.categoryImage = await utils.getDownloadableUrl(entityData.image)
+				}
+			}
+			delete sessionDetails.categories
 
 			return common.successResponse({
 				statusCode: httpStatusCode.created,
@@ -424,6 +433,13 @@ module.exports = class SessionsHelper {
 							})
 							session.image = await Promise.all(session.image)
 						}
+						if (session.categories && session.categories.length > 0) {
+							let entityData = await entitiesData.findEntityById(session.categories[0].label)
+							if (entityData && entityData.image != '') {
+								session.categoryImage = await utils.getDownloadableUrl(entityData.image)
+							}
+						}
+						delete session.categories
 					})
 				)
 			}

@@ -90,6 +90,7 @@ module.exports = class SessionsData {
 							image: 1,
 							endDateUtc: 1,
 							userId: 1,
+							categories: 1,
 							startDateUtc: 1,
 						},
 					},
