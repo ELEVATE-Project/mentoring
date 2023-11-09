@@ -740,4 +740,43 @@ module.exports = class MenteesHelper {
 			return error
 		}
 	}
+
+	/**
+	 * reactivate a mentee extension by user ID.
+	 * @method
+	 * @name activateMenteeProfile
+	 * @param {String} userId - User ID of the mentee.
+	 * @returns {Promise<Object>} - Indicates if the mentee extension was reactivated successfully.
+	 */
+
+	static async activateMenteeProfile(userId) {
+		try {
+		  
+		  const menteeProfile = await menteeQueries.getMenteeExtension(userId)
+	  
+		  if (!menteeProfile) {
+			return common.failureResponse({
+			  statusCode: httpStatusCode.not_found,
+			  message: 'MENTEE_PROFILE_NOT_FOUND',
+			})
+		  }
+	  
+		  if (menteeProfile.status === 'ACTIVE') {
+			return common.failureResponse({
+			  statusCode: httpStatusCode.bad_request,
+			  message: 'MENTEE_PROFILE_ALREADY_ACTIVE',
+			})
+		  }
+	  
+		  const updateData = { status: 'ACTIVE' }
+		  await menteeQueries.updateMenteeExtension(userId, updateData)
+	  
+		  return common.successResponse({
+			statusCode: httpStatusCode.ok,
+			message: 'MENTEE_PROFILE_ACTIVATED',
+		  })
+		} catch (error) {
+		  return error
+		}
+	  }
 }

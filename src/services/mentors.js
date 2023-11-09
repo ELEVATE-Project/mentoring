@@ -555,4 +555,38 @@ module.exports = class MentorsHelper {
 			return error
 		}
 	}
+
+	/**
+	 * reactivate a mentor extension by user ID.
+	 * @method
+	 * @name activateMentorProfile
+	 * @param {String} userId - User ID of the mentor.
+	 * @returns {Promise<Object>} - Indicates if the mentor extension was reactivated successfully.
+	 */
+
+	static async activateMentorProfile(userId) {
+		try {
+		  const mentorProfile = await mentorQueries.getMentorExtension(userId)
+		  if (!mentorProfile) {
+			return common.failureResponse({
+			  statusCode: httpStatusCode.not_found,
+			  message: 'MENTOR_PROFILE_NOT_FOUND',
+			})
+		  }
+		  if (mentorProfile.status === 'ACTIVE') {
+			return common.failureResponse({
+			  statusCode: httpStatusCode.bad_request,
+			  message: 'MENTOR_PROFILE_ALREADY_ACTIVE',
+			})
+		  }
+		  const updateData = { status: 'ACTIVE' }
+		  await MentorExtension.updateMentorExtension(userId, updateData);
+		  return common.successResponse({
+			statusCode: httpStatusCode.ok,
+			message: 'MENTOR_PROFILE_ACTIVATED',
+		  })
+		} catch (error) {
+		  return error
+		}
+	  }
 }

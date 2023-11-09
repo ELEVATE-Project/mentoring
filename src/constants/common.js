@@ -53,6 +53,7 @@ module.exports = {
 		'/mentors/profile/',
 		'/mentors/upcomingSessions/',
 		'/platform/config',
+		'/mentoring/v1/profile/reActivate',
 	],
 	DELETE_METHOD: 'DELETE',
 	dateFormat: 'dddd, Do MMMM YYYY',

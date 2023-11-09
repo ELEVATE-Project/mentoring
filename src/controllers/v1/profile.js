@@ -97,6 +97,38 @@ module.exports = class Mentees {
 		}
 	}
 
+	/**
+	 * Get mentor or mentee extension by user ID.
+	 * @method
+	 * @name reActivate
+	 * @param {Object} req - Request data.
+	 * @param {String} req.params.id - User ID of the user.
+	 * @returns {Promise<Object>} - user extension updated details.
+	 */
+
+	async reActivate(req) {
+		try {
+		  const userId = req.decodedToken.id
+		  const orgId = req.decodedToken.organization_id
+		  console.log(userId)
+		  console.log(orgId)
+	  
+		  if (!userId) {
+			return common.failureResponse({
+			  statusCode: httpStatusCode.bad_request,
+			  message: 'MISSING_USER_ID',
+			})
+		  }
+	  
+		  if (isAMentor(req.decodedToken.roles)) {
+			return await mentorsHelper.activateMentorProfile(userId)
+		  } else {
+			return await menteesHelper.activateMenteeProfile(userId)
+		  }
+		} catch (error) {
+			return error
+		}
+	  }
 	//To be enabled when delete flow is needed.
 	// /**
 	//  * Delete a mentee extension by user ID.
