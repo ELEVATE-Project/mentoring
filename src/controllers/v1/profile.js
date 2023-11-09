@@ -1,5 +1,6 @@
 const menteesService = require('@services/mentees')
 const mentorsService = require('@services/mentors')
+const usersService = require('@services/users')
 const { isAMentor } = require('@generics/utils')
 
 module.exports = class Mentees {
@@ -43,13 +44,13 @@ module.exports = class Mentees {
 	async update(req) {
 		try {
 			if (isAMentor(req.decodedToken.roles)) {
-				return await mentorsService.updateMentorExtension(
+				return await mentorsService.updateUserExtension(
 					req.body,
 					req.decodedToken.id,
 					req.decodedToken.organization_id
 				)
 			}
-			return await menteesService.updateMenteeExtension(
+			return await menteesService.updateUserExtension(
 				req.body,
 				req.decodedToken.id,
 				req.decodedToken.organization_id
@@ -92,6 +93,21 @@ module.exports = class Mentees {
 				return await mentorsService.read(req.decodedToken.id, req.decodedToken.organization_id)
 			}
 			return await menteesService.read(req.decodedToken.id, req.decodedToken.organization_id)
+		} catch (error) {
+			return error
+		}
+	}
+	/**
+	 * Delete a mentee or mentor
+	 * @method
+	 * @name delete
+	 * @param {Object} req - Request data.
+	 * @param {Object} req.body - User id of mentee or mentor
+	 * @returns {Promise<Object>} - delete a profile
+	 */
+	async delete(req) {
+		try {
+			return await usersService.deleteUser(req.decodedToken.id)
 		} catch (error) {
 			return error
 		}

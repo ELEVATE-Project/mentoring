@@ -52,4 +52,47 @@ module.exports = class UserHelper {
 			throw error
 		}
 	}
+	/**
+	 * Delete a user.
+	 * @method
+	 * @name delete
+	 * @param {String} userType - mentee/mentor.
+	 * @param {Integer} userId - User ID to delete.
+	 * @returns {JSON} - user delete
+	 */
+	static async deleteUser(id) {
+		try {
+			// Assuming you have a database model and a method to update the user's status
+			const user = await menteeQueries.getUsersByUserIds(id)
+
+			if (!user) {
+				return common.failureResponse({
+					message: 'USER_DOES_NOT_EXIST',
+					statusCode: httpStatusCode.internal_server_error,
+					responseCode: 'SERVER_ERROR',
+				})
+			}
+
+			// Update the user's status to "deleted"
+			const deletedrows = await menteeQueries.updateMenteeExtension(id, {
+				status: 'DELETED',
+				name: 'Deleted User',
+			})
+			if (deletedrows === 0) {
+				return common.failureResponse({
+					message: 'User_DELETION_FAILED',
+					statusCode: httpStatusCode.internal_server_error,
+					responseCode: 'SERVER_ERROR',
+				})
+			}
+
+			return common.successResponse({
+				message: 'USER_DELETED',
+				statusCode: httpStatusCode.ok,
+				responseCode: 'USER_DELETED_SUCESSFULLY',
+			})
+		} catch (error) {
+			throw error
+		}
+	}
 }

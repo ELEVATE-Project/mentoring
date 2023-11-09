@@ -58,6 +58,9 @@ module.exports = {
 			deleted_at: {
 				type: Sequelize.DATE,
 			},
+			status: {
+				type: Sequelize.STRING,
+			},
 		})
 	},
 	async down(queryInterface, Sequelize) {

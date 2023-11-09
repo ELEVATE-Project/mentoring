@@ -50,6 +50,9 @@ module.exports = (sequelize, DataTypes) => {
 			experience: {
 				type: DataTypes.STRING,
 			},
+			status: {
+				type: DataTypes.STRING,
+			},
 		},
 		{
 			sequelize,
