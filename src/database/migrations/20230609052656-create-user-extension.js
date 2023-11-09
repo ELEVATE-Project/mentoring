@@ -8,6 +8,11 @@ module.exports = {
 				primaryKey: true,
 				type: Sequelize.INTEGER,
 			},
+			status: {
+				type: Sequelize.STRING,
+				allowNull: false,
+				defaultValue: 'ACTIVE',
+			},
 			designation: {
 				type: Sequelize.ARRAY(Sequelize.STRING),
 			},

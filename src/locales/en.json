@@ -96,5 +96,12 @@
 	"SESSION_CREATION_FAILED": "Failed to create session.",
 	"SESSION_UPDATION_FAILED": "Failed to update session.",
 	"SCHEDULER_SERVICE_DOWN": "Scheduler service is down",
-	"DEFAULT_ORG_ID_NOT_SET": "Failed to set default organization id"
+	"DEFAULT_ORG_ID_NOT_SET": "Failed to set default organization id",
+	"MENTEE_PROFILE_NOT_FOUND": "Mentee profile does not exists",
+	"MENTEE_PROFILE_ALREADY_ACTIVE": "this profile is already active",
+	"MENTEE_PROFILE_ACTIVATED": "This mentee profile is now activated",
+	"MENTOR_PROFILE_NOT_FOUND": "Mentor profile does not exists",
+	"MENTOR_PROFILE_ALREADY_ACTIVE": "this profile is already active",
+	"MENTOR_PROFILE_ACTIVATED": "This mentor profile is now activated",
+	"MISSING_USER_ID": "User id does not exists"
 }

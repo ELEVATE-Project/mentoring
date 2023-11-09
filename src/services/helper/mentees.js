@@ -582,4 +582,34 @@ module.exports = class MenteesHelper {
 			return error
 		}
 	}
+
+	static async activateMenteeProfile(userId) {
+		try {
+			const menteeProfile = await menteeQueries.getMenteeExtension(userId)
+
+			if (!menteeProfile) {
+				return common.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'MENTEE_PROFILE_NOT_FOUND',
+				})
+			}
+
+			if (menteeProfile.status === common.active_status) {
+				return common.failureResponse({
+					statusCode: httpStatusCode.bad_request,
+					message: 'MENTEE_PROFILE_ALREADY_ACTIVE',
+				})
+			}
+
+			const updateData = { status: common.active_status }
+			await menteeQueries.updateMenteeExtension(userId, updateData)
+
+			return common.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'MENTEE_PROFILE_ACTIVATED',
+			})
+		} catch (error) {
+			return error
+		}
+	}
 }

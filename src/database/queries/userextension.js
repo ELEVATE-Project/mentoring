@@ -70,6 +70,7 @@ module.exports = class MenteeExtensionQueries {
 					external_session_visibility: null,
 					external_mentor_visibility: null,
 					deleted_at: Date.now(),
+					status: null,
 				},
 				{
 					where: {
