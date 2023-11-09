@@ -4,6 +4,7 @@ const common = require('@constants/common')
 const userRequests = require('@requests/user')
 const menteeQueries = require('@database/queries/userExtension')
 const mentorQueries = require('@database/queries/mentorExtension')
+const userExtension = require('@database/models/userExtension')
 module.exports = class UserHelper {
 	/**
 	 * Get user list.
@@ -63,7 +64,7 @@ module.exports = class UserHelper {
 	static async deleteUser(id) {
 		try {
 			// Assuming you have a database model and a method to update the user's status
-			const user = await menteeQueries.getUsersByUserIds(id)
+			const user = await userRequests.getUsersByUserIds(id)
 
 			if (!user) {
 				return common.failureResponse({
@@ -74,7 +75,7 @@ module.exports = class UserHelper {
 			}
 
 			// Update the user's status to "deleted"
-			const deletedrows = await menteeQueries.updateMenteeExtension(id, {
+			const deletedrows = await userRequets.updatUserExtension(id, {
 				status: 'DELETED',
 				name: 'Deleted User',
 			})

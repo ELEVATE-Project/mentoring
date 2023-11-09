@@ -44,13 +44,13 @@ module.exports = class Mentees {
 	async update(req) {
 		try {
 			if (isAMentor(req.decodedToken.roles)) {
-				return await mentorsService.updateUserExtension(
+				return await mentorsService.updateMentorExtension(
 					req.body,
 					req.decodedToken.id,
 					req.decodedToken.organization_id
 				)
 			}
-			return await menteesService.updateUserExtension(
+			return await menteesService.updateMenteeExtension(
 				req.body,
 				req.decodedToken.id,
 				req.decodedToken.organization_id
