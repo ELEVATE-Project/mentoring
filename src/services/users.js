@@ -90,7 +90,7 @@ module.exports = class UserHelper {
 			return common.successResponse({
 				message: 'USER_DELETED',
 				statusCode: httpStatusCode.ok,
-				responseCode: 'USEREXTENSION_DELETED_SUCESSFULLY',
+				responseCode: 'USER_DELETED_SUCESSFULLY',
 			})
 		} catch (error) {
 			throw error
