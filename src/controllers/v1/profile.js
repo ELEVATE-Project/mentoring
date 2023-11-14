@@ -98,7 +98,7 @@ module.exports = class Mentees {
 	}
 
 	/**
-	 * Get mentor or mentee extension by user ID.
+	 * To reactivate mentee or mentor account .
 	 * @method
 	 * @name reActivate
 	 * @param {Object} req - Request data.
