@@ -8,10 +8,6 @@ module.exports = {
 				primaryKey: true,
 				type: Sequelize.INTEGER,
 			},
-			status: {
-				type: Sequelize.STRING,
-				defaultValue: 'ACTIVE',
-			},
 			designation: {
 				type: Sequelize.ARRAY(Sequelize.STRING),
 			},

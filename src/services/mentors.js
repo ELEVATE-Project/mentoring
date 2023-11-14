@@ -566,27 +566,27 @@ module.exports = class MentorsHelper {
 
 	static async activateMentorProfile(userId) {
 		try {
-		  const mentorProfile = await mentorQueries.getMentorExtension(userId)
-		  if (!mentorProfile) {
-			return common.failureResponse({
-			  statusCode: httpStatusCode.not_found,
-			  message: 'MENTOR_PROFILE_NOT_FOUND',
+			const mentorProfile = await mentorQueries.getMentorExtension(userId)
+			if (!mentorProfile) {
+				return common.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'MENTOR_PROFILE_NOT_FOUND',
+				})
+			}
+			if (mentorProfile.status === common.active_status) {
+				return common.failureResponse({
+					statusCode: httpStatusCode.bad_request,
+					message: 'MENTOR_PROFILE_ALREADY_ACTIVE',
+				})
+			}
+			const updateData = { status: common.active_status }
+			await MentorExtension.updateMentorExtension(userId, updateData)
+			return common.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'MENTOR_PROFILE_ACTIVATED',
 			})
-		  }
-		  if (mentorProfile.status === 'ACTIVE') {
-			return common.failureResponse({
-			  statusCode: httpStatusCode.bad_request,
-			  message: 'MENTOR_PROFILE_ALREADY_ACTIVE',
-			})
-		  }
-		  const updateData = { status: 'ACTIVE' }
-		  await MentorExtension.updateMentorExtension(userId, updateData);
-		  return common.successResponse({
-			statusCode: httpStatusCode.ok,
-			message: 'MENTOR_PROFILE_ACTIVATED',
-		  })
 		} catch (error) {
-		  return error
+			return error
 		}
-	  }
+	}
 }

@@ -56,6 +56,7 @@ module.exports = {
 		'/mentoring/v1/profile/reActivate',
 	],
 	DELETE_METHOD: 'DELETE',
+	active_status: 'ACTIVE',
 	dateFormat: 'dddd, Do MMMM YYYY',
 	timeFormat: 'hh:mm A',
 	MENTEE_SESSION_REMAINDER_EMAIL_CODE: 'mentee_session_reminder',
@@ -123,5 +124,5 @@ module.exports = {
 		approval_required_for: [],
 	},
 	CURRENT: 'CURRENT',
-	ALL: 'ALL'
+	ALL: 'ALL',
 }

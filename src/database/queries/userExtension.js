@@ -80,7 +80,6 @@ module.exports = class MenteeExtensionQueries {
 					external_mentor_visibility: null,
 					deleted_at: Date.now(),
 					org_id,
-					status: null,
 				},
 				{
 					where: {
