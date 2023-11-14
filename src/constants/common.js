@@ -125,4 +125,6 @@ module.exports = {
 	},
 	CURRENT: 'CURRENT',
 	ALL: 'ALL',
+	PATCH_METHOD: 'PATCH',
+	GET_METHOD: 'GET',
 }
