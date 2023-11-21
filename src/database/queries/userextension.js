@@ -1,4 +1,4 @@
-const MenteeExtension = require('../models/index').UserExtension
+const MenteeExtension = require('@database/models/index').UserExtension
 
 module.exports = class MenteeExtensionQueries {
 	static async getColumns() {

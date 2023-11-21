@@ -14,7 +14,7 @@ const ObjectId = require('mongoose').Types.ObjectId
 const { successResponse } = require('@constants/common')
 
 const { UniqueConstraintError } = require('sequelize')
-const menteeQueries = require('../../database/queries/userextension')
+const menteeQueries = require('@database/queries/userextension')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const sessionQueries = require('@database/queries/sessions')
 const _ = require('lodash')

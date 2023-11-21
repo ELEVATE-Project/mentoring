@@ -1,4 +1,4 @@
-const Entity = require('../models/index').Entity
+const Entity = require('@database/models/entities').Entity
 module.exports = class UserEntityData {
 	static async createEntity(data) {
 		try {

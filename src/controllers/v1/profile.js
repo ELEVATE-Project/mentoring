@@ -101,8 +101,7 @@ module.exports = class Mentees {
 		try {
 			const userId = req.decodedToken.id
 			const orgId = req.decodedToken.organization_id
-			console.log(userId)
-			console.log(orgId)
+			const roles = req.decodedToken.roles
 
 			if (!userId) {
 				return common.failureResponse({
@@ -110,12 +109,10 @@ module.exports = class Mentees {
 					message: 'MISSING_USER_ID',
 				})
 			}
-
-			if (isAMentor(req.decodedToken.roles)) {
+			if (isAMentor == roles) {
 				return await mentorsHelper.activateMentorProfile(userId)
-			} else {
-				return await menteesHelper.activateMenteeProfile(userId)
 			}
+			return await menteesHelper.activateMenteeProfile(userId)
 		} catch (error) {
 			return error
 		}

@@ -9,7 +9,7 @@ const httpStatusCode = require('@generics/http-status')
 const ObjectId = require('mongoose').Types.ObjectId
 const sessionAttendees = require('@db/sessionAttendees/queries')
 
-const mentorQueries = require('../../database/queries/mentorextension')
+const mentorQueries = require('@database/queries/mentorextension')
 const { UniqueConstraintError } = require('sequelize')
 const _ = require('lodash')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
@@ -454,8 +454,8 @@ module.exports = class MentorsHelper {
 
 	static async activateMentorProfile(userId) {
 		try {
-			const mentorProfile = await mentorQueries.getMentorExtension(userId)
-			if (!mentorProfile) {
+			const mentorProfile = await getMentorExtension(userId)
+			if (mentorProfile != mentor) {
 				return common.failureResponse({
 					statusCode: httpStatusCode.not_found,
 					message: 'MENTOR_PROFILE_NOT_FOUND',

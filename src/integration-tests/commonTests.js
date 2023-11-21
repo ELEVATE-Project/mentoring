@@ -2,7 +2,7 @@ var supertest = require('supertest') //require supertest
 var defaults = require('superagent-defaults')
 const { faker } = require('@faker-js/faker')
 const crypto = require('crypto')
-let baseURL = 'http://localhost:3000'
+let baseURL = 'http://localhost:3009'
 //supertest hits the HTTP server (your app)
 let defaultHeaders
 const logIn = async () => {
@@ -16,10 +16,10 @@ const logIn = async () => {
 			timeout: 30000,
 		}
 		await waitOn(opts)
-		let email = 'nevil' + crypto.randomBytes(5).toString('hex') + '@tunerlabs.com'
+		let email = 'suman' + crypto.randomBytes(5).toString('hex') + '@pacewisdom.com'
 		let password = faker.internet.password()
 		let res = await request.post('/user/v1/account/create').send({
-			name: 'Nevil',
+			name: 'Suman',
 			email: email,
 			password: password,
 			isAMentor: false,
@@ -30,7 +30,7 @@ const logIn = async () => {
 		})
 		//console.log(res.body)
 
-		if (res.body.result.access_token && res.body.result.user._id) {
+		if (res.body.result.access_token && res.body.result.user.id) {
 			defaultHeaders = {
 				'X-auth-token': 'bearer ' + res.body.result.access_token,
 				Connection: 'keep-alive',
@@ -38,7 +38,7 @@ const logIn = async () => {
 			}
 			global.request = defaults(supertest(baseURL))
 			global.request.set(defaultHeaders)
-			global.userId = res.body.result.user._id
+			global.userId = res.body.result.user.id
 			/* .end(function (err, res) {
 				let successCodes = [200, 201, 202]
 				if (!successCodes.includes(res.statusCode)) {
@@ -49,7 +49,7 @@ const logIn = async () => {
 			return {
 				token: res.body.result.access_token,
 				refreshToken: res.body.result.refresh_token,
-				userId: res.body.result.user._id,
+				userId: res.body.result.user.id,
 				email: email,
 				password: password,
 			}
@@ -72,10 +72,10 @@ const mentorLogIn = async () => {
 			timeout: 30000,
 		}
 		await waitOn(opts)
-		let email = 'nevil' + crypto.randomBytes(5).toString('hex') + '@tunerlabs.com'
+		let email = 'suman' + crypto.randomBytes(5).toString('hex') + '@pacewisdom.com'
 		let password = faker.internet.password()
 		let res = await request.post('/user/v1/account/create').send({
-			name: 'Nevil',
+			name: 'Suman',
 			email: email,
 			password: password,
 			isAMentor: true,
@@ -86,7 +86,7 @@ const mentorLogIn = async () => {
 			password: password,
 		})
 
-		if (res.body.result.access_token && res.body.result.user._id) {
+		if (res.body.result.access_token && res.body.result.user.id) {
 			defaultHeaders = {
 				'X-auth-token': 'bearer ' + res.body.result.access_token,
 				Connection: 'keep-alive',
@@ -99,11 +99,11 @@ const mentorLogIn = async () => {
 					console.log('Response Body', res.body)
 				}
 			}) */
-			global.userId = res.body.result.user._id
+			global.userId = res.body.result.user.id
 			return {
 				token: res.body.result.access_token,
 				refreshToken: res.body.result.refresh_token,
-				userId: res.body.result.user._id,
+				userId: res.body.result.user.id,
 				email: email,
 				password: password,
 			}
@@ -121,8 +121,51 @@ function logError(res) {
 		console.log('Response Body', res.body)
 	}
 }
+const reActivateProfile = async () => {
+	try {
+		let request = defaults(supertest('http://localhost:3001'))
+		let waitOn = require('wait-on')
+		let opts = {
+			resources: [baseURL],
+			delay: 1000, // initial delay in ms, default 0
+			interval: 500, // poll interval in ms, default 250ms
+			timeout: 30000,
+		}
+		await waitOn(opts)
+		let email = 'suman.v@pacewisdom.com'
+		let res = await request.post('/user/v1/account/reActivateOtp').send({
+			email: email,
+		})
+		let otp = 123456
+		res = await request.post('/user/v1/account/reActivate').send({ email: email, otp: otp })
+		if (res.body.result.accessToken && res.body.result.user.id) {
+			defaultHeaders = {
+				'X-auth-token': 'bearer ' + res.body.result.accessToken,
+				Connection: 'keep-alive',
+				'Content-Type': 'application/json',
+			}
+			global.request = defaults(supertest(baseURL))
+			global.request.set(defaultHeaders)
+			global.userId = res.body.result.user.id
+
+			return {
+				token: res.body.result.accessToken,
+				refreshToken: res.body.result.refreshToken,
+				userId: res.body.result.user.id,
+				email: email,
+				roles: res.body.result.roles,
+			}
+		} else {
+			console.error('Error while getting access token')
+			return false
+		}
+	} catch (error) {
+		console.error(error)
+	}
+}
 module.exports = {
 	logIn, //-- export if token is generated
 	logError,
 	mentorLogIn,
+	reActivateProfile,
 }
