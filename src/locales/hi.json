@@ -72,5 +72,14 @@
 	"APP_CONFIG_FETCHED_SUCCESSFULLY": "App config fetched successfully.",
 	"USER_REMOVED_SUCCESSFULLY": "User details removed successfully.",
 	"USER_NOT_REMOVED_SUCCESSFULLY": "Error while removing user details.",
-	"INVALID_SECRET_CODE": "गलत कोड, दोबारा प्रयास करें।"
+	"INVALID_SECRET_CODE": "गलत कोड, दोबारा प्रयास करें।",
+	"PERMISSION_CREATED_SUCCESSFULLY": "permission created successfully",
+	"PERMISSION_ALREADY_EXISTS": "permission already exists",
+	"PERMISSION_NOT_FOUND": "permission dose not exists",
+	"PERMISSION_NOT_UPDATED": "permission is not updated",
+	"PERMISSION_UPDATED_SUCCESSFULLY": "permission updated successfully",
+	"PERMISSION_NOT_DELETED": "permission is not deleted",
+	"PERMISSION_DELETED_SUCCESSFULLY": "permission deleted successfully",
+	"PERMISSION_HAS_EMPTY_LIST": "permission contains empty list ",
+	"PERMISSION_FETCHED_SUCCESSFULLY": "permission list fetched successfully"
 }
