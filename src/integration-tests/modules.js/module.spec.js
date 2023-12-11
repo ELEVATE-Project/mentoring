@@ -1,17 +1,14 @@
 const commonHelper = require('@commonTests')
 const schema = require('./responseSchema')
 
-describe('mentoring/v1/permissions ', function () {
+describe('mentoring/v1/modules ', function () {
 	let userDetails
 	beforeAll(async () => {
 		userDetails = await commonHelper.mentorLogIn()
 	})
 	it('/create', async () => {
-		let res = await request.post('/mentoring/v1/permissions/create').send({
-			code: 'sessioncreation',
-			module: 'sessions',
-			actions: 'WRITE',
-			status: 'ACTIVE',
+		let res = await request.post('/mentoring/v1/modules/create').send({
+			code: 'SystemAdmin',
 		})
 		//console.log(res.body)
 		expect(res.statusCode).toBe(201)
@@ -19,11 +16,8 @@ describe('mentoring/v1/permissions ', function () {
 	})
 
 	it('/update', async () => {
-		let res = await request.post('/mentoring/v1/permissions/update/6').send({
-			code: 'sessioncreate',
-			module: 'sessions',
-			actions: 'READ',
-			status: 'ACTIVE',
+		let res = await request.post('/mentoring/v1/modules/update/3').send({
+			code: 'Mennnnn',
 		})
 		//console.log(res.body)
 		expect(res.statusCode).toBe(201)
@@ -31,16 +25,14 @@ describe('mentoring/v1/permissions ', function () {
 	})
 
 	it('/delete', async () => {
-		let res = await request.post('/mentoring/v1/permissions/delete/6')
+		let res = await request.post('/mentoring/v1/modules/delete/8')
 		//console.log(res.body)
 		expect(res.statusCode).toBe(202)
 		expect(res.body).toMatchSchema(schema.deleteSchema)
 	})
 
 	it('/list', async () => {
-		let res = await request
-			.get('/mentoring/v1/permissions/list')
-			.query({ page: 1, limit: 10, code: 'c2Vzc2lvbg==' })
+		let res = await request.get('/mentoring/v1/modules/list').query({ page: 1, limit: 10, code: 'cw==' })
 		//console.log(res.body)
 		expect(res.statusCode).toBe(200)
 		expect(res.body).toMatchSchema(schema.listSchema)

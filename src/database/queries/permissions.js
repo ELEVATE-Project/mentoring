@@ -1,4 +1,4 @@
-const Permissions = require('@database/models/index').permissions
+const Permissions = require('@database/models/index').Permission
 const { Op } = require('sequelize')
 
 module.exports = class UserRolePermissionData {
@@ -75,8 +75,8 @@ module.exports = class UserRolePermissionData {
 
 	static async findPermissionId(filter) {
 		try {
-			const entityData = await Permissions.findByPk(filter)
-			return entityData
+			const permissionData = await Permissions.findByPk(filter)
+			return permissionData
 		} catch (error) {
 			return error
 		}

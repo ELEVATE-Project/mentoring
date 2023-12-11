@@ -3,7 +3,7 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
 	async up(queryInterface, Sequelize) {
-		await queryInterface.createTable('permissions', {
+		await queryInterface.createTable('modules', {
 			id: {
 				allowNull: false,
 				autoIncrement: true,
@@ -13,14 +13,6 @@ module.exports = {
 			code: {
 				allowNull: false,
 				type: Sequelize.STRING,
-			},
-			module: {
-				allowNull: false,
-				type: Sequelize.STRING,
-			},
-			actions: {
-				allowNull: false,
-				type: Sequelize.ENUM('ALL', 'READ', 'WRITE', 'UPDATE', 'DELETE'),
 			},
 			status: {
 				type: Sequelize.STRING,
@@ -38,9 +30,10 @@ module.exports = {
 				type: Sequelize.DATE,
 			},
 		})
-		await queryInterface.addIndex('permissions', ['code'], {
+
+		await queryInterface.addIndex('modules', ['code'], {
 			unique: true,
-			name: 'unique_code',
+			name: 'code_unique',
 			where: {
 				deleted_at: null,
 			},
@@ -48,6 +41,6 @@ module.exports = {
 	},
 
 	async down(queryInterface, Sequelize) {
-		await queryInterface.dropTable('permissions')
+		await queryInterface.dropTable('modules')
 	},
 }

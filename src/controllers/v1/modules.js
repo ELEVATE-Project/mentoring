@@ -1,54 +1,52 @@
 const common = require('@constants/common')
-const permissionsService = require('@services/permissions')
+const modulesService = require('@services/modules')
 
-module.exports = class permissions {
+module.exports = class modules {
 	/**
-	 * create permissions
+	 * create modules
 	 * @method
 	 * @name create
 	 * @param {Object} req - request data.
-	 * @returns {JSON} - permissions creation object.
+	 * @returns {JSON} - modules creation object.
 	 */
 
 	async create(req) {
 		const params = req.body
-		const role = req.decodedToken.roles
 		try {
-			const createdPermissions = await permissionsService.create(params)
-			return createdPermissions
+			const createdModules = await modulesService.create(params)
+			return createdModules
 		} catch (error) {
 			return error
 		}
 	}
 
 	/**
-	 * updates permissions
+	 * updates modules
 	 * @method
 	 * @name update
 	 * @param {Object} req - request data.
-	 * @returns {JSON} - permissions updation response.
+	 * @returns {JSON} - modules updation response.
 	 */
 
 	async update(req) {
 		const params = req.body
 		const id = req.params.id
-		const role = req.decodedToken.roles
 		try {
-			const updatedPermissions = await permissionsService.update(id, params)
-			return updatedPermissions
+			const updatedModules = await modulesService.update(id, params)
+			return updatedModules
 		} catch (error) {
 			return error
 		}
 	}
 
 	/**
-	 * Get all available permissions
+	 * Get all available modules
 	 * @method
 	 * @name list
 	 * @param {String} req.pageNo - Page No.
 	 * @param {String} req.pageSize - Page size limit.
 	 * @param {String} req.searchText - Search text.
-	 * @returns {JSON} - Permissions List.
+	 * @returns {JSON} - modules List.
 	 */
 
 	async list(req) {
@@ -56,27 +54,26 @@ module.exports = class permissions {
 			const page = req.pageNo
 			const limit = req.pageSize
 			const search = req.searchText
-			const PermissionsDetails = await permissionsService.list(page, limit, search)
-			return PermissionsDetails
+			const modulesDetails = await modulesService.list(page, limit, search)
+			return modulesDetails
 		} catch (error) {
 			return error
 		}
 	}
 
 	/**
-	 * deletes permissions
+	 * deletes modules
 	 * @method
 	 * @name delete
 	 * @param {Object} req - request data.
-	 * @returns {JSON} - permissions deletion response.
+	 * @returns {JSON} - modules deletion response.
 	 */
 
 	async delete(req) {
-		const role = req.decodedToken.roles
 		const id = req.params.id
 		try {
-			const permissionsDelete = await permissionsService.delete(id)
-			return permissionsDelete
+			const modulesDelete = await modulesService.delete(id)
+			return modulesDelete
 		} catch (error) {
 			return error
 		}

@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
-	const Permissions = sequelize.define(
-		'permissions',
+	const Permission = sequelize.define(
+		'Permission',
 		{
 			id: {
 				allowNull: false,
@@ -27,16 +27,14 @@ module.exports = (sequelize, DataTypes) => {
 			},
 		},
 		{
-			timestamps: false,
-		},
-		{
 			sequelize,
-			modelName: 'Permissions',
+			modelName: 'Permission',
 			tableName: 'permissions',
 			freezeTableName: true,
 			indexes: [{ unique: true, fields: ['code'] }],
+			paranoid: true,
 		}
 	)
 
-	return Permissions
+	return Permission
 }
