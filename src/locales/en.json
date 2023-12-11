@@ -116,7 +116,6 @@
 	"RELATED_ORG_UPDATED": "Related organizations updated successfully",
 	"ORG_DEFAULT_QUESTION_SETS_SET_SUCCESSFULLY": "Default Questionsets Set Successfully",
 	"SESSION_DEACTIVATION_FAILED": "Failed to deactivate session.",
-	"MENTOR_LIST": "Mentor list fetched successfully.",
 	"PERMISSION_CREATED_SUCCESSFULLY": "permission created successfully",
 	"PERMISSION_ALREADY_EXISTS": "permission already exists",
 	"PERMISSION_NOT_FOUND": "permission does not exists",
@@ -135,5 +134,6 @@
 	"MODULES_NOT_DELETED": "modules are not deleted",
 	"MODULES_DELETED_SUCCESSFULLY": "modules are deleted successfully",
 	"MODULES_HAS_EMPTY_LIST": "modules are empty for searchlist",
-	"MODULES_FETCHED_SUCCESSFULLY": "modules are fetched successfully"
+	"MODULES_FETCHED_SUCCESSFULLY": "modules are fetched successfully",
+	"MENTOR_LIST": "Mentor list fetched successfully."
 }
