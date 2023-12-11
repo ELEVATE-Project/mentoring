@@ -134,6 +134,5 @@
 	"MODULES_NOT_DELETED": "modules are not deleted",
 	"MODULES_DELETED_SUCCESSFULLY": "modules are deleted successfully",
 	"MODULES_HAS_EMPTY_LIST": "modules are empty for searchlist",
-	"MODULES_FETCHED_SUCCESSFULLY": "modules are fetched successfully",
-	"MENTOR_LIST": "Mentor list fetched successfully."
+	"MODULES_FETCHED_SUCCESSFULLY": "modules are fetched successfully"
 }
