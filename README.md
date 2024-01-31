@@ -1,6 +1,6 @@
 <div align="center">
 
-# Mentoring Service
+# Mentor Service
 
 <a href="https://shikshalokam.org/elevate/">
 <img
