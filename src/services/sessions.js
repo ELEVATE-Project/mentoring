@@ -1890,10 +1890,14 @@ module.exports = class SessionsHelper {
 	 * @param {number} [page] - Page number for pagination.
 	 * @param {number} [limit] - Limit of sessions per page for pagination.
 	 * @param {boolean} [transformEntities=false] - Flag to indicate whether to transform entity types.
+	 * @param {boolean} sendEpochTime - Flag to indicate whether to pass start_date as epoch.
 	 * @returns {Promise<Array>} - Array of session objects with populated details.
 	 * @throws {Error} - Throws an error if there's an issue during processing.
 	 */
-	static async populateSessionDetails({ sessions, timezone, page, limit, transformEntities = false }) {
+	static async populateSessionDetails(
+		{ sessions, timezone, page, limit, transformEntities = false },
+		sendEpochTime = false
+	) {
 		try {
 			const uniqueOrgIds = [...new Set(sessions.map((obj) => obj.mentor_organization_id))]
 			sessions = await entityTypeService.processEntityTypesToAddValueLabels(
@@ -1909,6 +1913,7 @@ module.exports = class SessionsHelper {
 						if (session.status) session.status = session.status.label
 						if (session.type) session.type = session.type.label
 					}
+
 					const res = await this.transformSessionDate(session, timezone)
 					const menteeCount = session.seats_limit - session.seats_remaining
 					let indexNumber
@@ -1916,7 +1921,12 @@ module.exports = class SessionsHelper {
 					indexNumber = index + 1 + (page && limit ? limit * (page - 1) : 0)
 
 					Object.assign(session, {
-						start_date: res.start_date,
+						// Check if sendEpochTimeAndMeetingInfo is false before adding start_date
+						...(sendEpochTime
+							? {}
+							: {
+									start_date: res.start_date,
+							  }),
 						start_time: res.start_time,
 						duration_in_minutes: res.duration_in_minutes,
 						mentee_count: menteeCount,
@@ -1974,27 +1984,40 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			sessions.rows = await this.populateSessionDetails({
-				sessions: sessions.rows,
-				timezone: timezone,
-				page: page,
-				limit: limit,
-			})
+			sessions.rows = await this.populateSessionDetails(
+				{
+					sessions: sessions.rows,
+					timezone: timezone,
+					page: page,
+					limit: limit,
+				},
+				true
+			)
 
-			const formattedSessionList = sessions.rows.map((session, index) => ({
-				id: session.id,
-				index_number: index + 1 + limit * (page - 1), //To keep consistency with pagination
-				title: session.title,
-				type: session.type,
-				mentor_name: session.mentor_name,
-				start_date: session.start_date,
-				start_time: session.start_time,
-				duration_in_minutes: session.duration_in_minutes,
-				status: session.status,
-				mentee_count: session.mentee_count,
-				mentor_organization_id: session.mentor_organization_id,
-				mentor_id: session.mentor_id,
-			}))
+			const formattedSessionList = sessions.rows.map((session, index) => {
+				// adding meeting_info
+				const meetingInfo = session.meeting_info
+					? {
+							value: session.meeting_info.value,
+							platform: session.meeting_info.platform,
+					  }
+					: {}
+
+				return {
+					id: session.id,
+					index_number: index + 1 + limit * (page - 1), //To keep consistency with pagination
+					title: session.title,
+					type: session.type,
+					mentor_name: session.mentor_name,
+					start_date: session.start_date,
+					duration_in_minutes: session.duration_in_minutes,
+					status: session.status,
+					mentee_count: session.mentee_count,
+					mentor_organization_id: session.mentor_organization_id,
+					mentor_id: session.mentor_id,
+					meeting_info: meetingInfo,
+				}
+			})
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
