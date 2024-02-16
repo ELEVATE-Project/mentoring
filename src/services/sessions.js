@@ -767,10 +767,13 @@ module.exports = class SessionsHelper {
 						}
 					}
 				})
-				// send mail to mentor if session is created and handled by a manager
+				// send mail to mentor if session is created and handled by a manager and if there is any data change
 				// send notification only if front end request for user notification
 				// notifyUser ---> this key is added for above purpose
-				if (isSessionCreatedByManager && notifyUser) {
+				if (
+					(method == common.DELETE_METHOD && isSessionCreatedByManager) ||
+					(notifyUser && isSessionDataChanged)
+				) {
 					let response = await this.pushSessionRelatedMentorEmailToKafka(
 						mentorEmailTemplate,
 						orgId,
@@ -1913,7 +1916,6 @@ module.exports = class SessionsHelper {
 						if (session.status) session.status = session.status.label
 						if (session.type) session.type = session.type.label
 					}
-
 					const res = await this.transformSessionDate(session, timezone)
 					const menteeCount = session.seats_limit - session.seats_remaining
 					let indexNumber
@@ -1994,30 +1996,20 @@ module.exports = class SessionsHelper {
 				true
 			)
 
-			const formattedSessionList = sessions.rows.map((session, index) => {
-				// adding meeting_info
-				const meetingInfo = session.meeting_info
-					? {
-							value: session.meeting_info.value,
-							platform: session.meeting_info.platform,
-					  }
-					: {}
-
-				return {
-					id: session.id,
-					index_number: index + 1 + limit * (page - 1), //To keep consistency with pagination
-					title: session.title,
-					type: session.type,
-					mentor_name: session.mentor_name,
-					start_date: session.start_date,
-					duration_in_minutes: session.duration_in_minutes,
-					status: session.status,
-					mentee_count: session.mentee_count,
-					mentor_organization_id: session.mentor_organization_id,
-					mentor_id: session.mentor_id,
-					meeting_info: meetingInfo,
-				}
-			})
+			const formattedSessionList = sessions.rows.map((session, index) => ({
+				id: session.id,
+				index_number: index + 1 + limit * (page - 1), //To keep consistency with pagination
+				title: session.title,
+				type: session.type,
+				mentor_name: session.mentor_name,
+				start_date: session.start_date,
+				end_date: session.end_date,
+				duration_in_minutes: session.duration_in_minutes,
+				status: session.status,
+				mentee_count: session.mentee_count,
+				mentor_organization_id: session.mentor_organization_id,
+				mentor_id: session.mentor_id,
+			}))
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
