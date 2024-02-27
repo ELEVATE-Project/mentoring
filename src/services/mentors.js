@@ -1,11 +1,16 @@
 // Dependencies
-const utils = require('@generics/utils')
+const roleUtils = require('@utils/role')
+const cloudUtils = require('@utils/cloud')
+const dateTimeUtils = require('@utils/dateTime')
+const genericUtils = require('@utils/generic')
+const requestUtils = require('@utils/request')
+const entityHelpers = require('@helpers/entity')
+
 const userRequests = require('@requests/user')
 const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const mentorQueries = require('@database/queries/mentorExtension')
 const menteeQueries = require('@database/queries/userExtension')
-const rolePermissionMappingQueries = require('@database/queries/role-permission-mapping')
 const { UniqueConstraintError } = require('sequelize')
 const _ = require('lodash')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
@@ -15,7 +20,6 @@ const organisationExtensionQueries = require('@database/queries/organisationExte
 const orgAdminService = require('@services/org-admin')
 const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
-const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const moment = require('moment')
 const menteesService = require('@services/mentees')
 const entityTypeService = require('@services/entity-type')
@@ -43,7 +47,7 @@ module.exports = class MentorsHelper {
 				})
 			}
 
-			const query = utils.processQueryParametersWithExclusions(queryParams)
+			const query = requestUtils.processQueryParametersWithExclusions(queryParams)
 			const sessionModelName = await sessionQueries.getModelName()
 
 			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities({
@@ -52,7 +56,7 @@ module.exports = class MentorsHelper {
 				model_names: { [Op.contains]: [sessionModelName] },
 			})
 
-			const filteredQuery = utils.validateFilters(query, validationData, sessionModelName)
+			const filteredQuery = requestUtils.validateFilters(query, validationData, sessionModelName)
 
 			// Filter upcoming sessions based on saas policy
 			const saasFilter = await menteesService.filterSessionsBasedOnSaasPolicy(menteeUserId, isAMentor)
@@ -149,7 +153,7 @@ module.exports = class MentorsHelper {
 
 	static async reports(userId, filterType, roles) {
 		try {
-			if (!utils.isAMentor(roles)) {
+			if (!roleUtils.isAMentor(roles)) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.bad_request,
 					message: 'MENTORS_NOT_FOUND',
@@ -161,13 +165,13 @@ module.exports = class MentorsHelper {
 
 			switch (filterType) {
 				case 'MONTHLY':
-					;[filterStartDate, filterEndDate] = utils.getCurrentMonthRange()
+					;[filterStartDate, filterEndDate] = dateTimeUtils.getCurrentMonthRange()
 					break
 				case 'WEEKLY':
-					;[filterStartDate, filterEndDate] = utils.getCurrentWeekRange()
+					;[filterStartDate, filterEndDate] = dateTimeUtils.getCurrentWeekRange()
 					break
 				case 'QUARTERLY':
-					;[filterStartDate, filterEndDate] = utils.getCurrentQuarterRange()
+					;[filterStartDate, filterEndDate] = dateTimeUtils.getCurrentQuarterRange()
 					break
 				default:
 					throw new Error('Invalid filterType')
@@ -250,7 +254,7 @@ module.exports = class MentorsHelper {
 						if (sessions.image && sessions.image.length > 0) {
 							sessions.image = sessions.image.map(async (imgPath) => {
 								if (imgPath && imgPath != '') {
-									return await utils.getDownloadableUrl(imgPath)
+									return await cloudUtils.getDownloadableUrl(imgPath)
 								}
 							})
 							sessions.image = await Promise.all(sessions.image)
@@ -338,9 +342,9 @@ module.exports = class MentorsHelper {
 			})
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const validationData = entityHelpers.removeDefaultOrgEntityTypes(entityTypes, orgId)
 
-			let res = utils.validateInput(data, validationData, mentorExtensionsModelName)
+			let res = entityHelpers.validateInput(data, validationData, mentorExtensionsModelName)
 			if (!res.success) {
 				return responses.failureResponse({
 					message: 'SESSION_CREATION_FAILED',
@@ -350,7 +354,7 @@ module.exports = class MentorsHelper {
 				})
 			}
 			let mentorExtensionsModel = await mentorQueries.getColumns()
-			data = utils.restructureBody(data, validationData, mentorExtensionsModel)
+			data = entityHelpers.restructureBody(data, validationData, mentorExtensionsModel)
 
 			// construct saas policy data
 			let saasPolicyData = await orgAdminService.constructOrgPolicyObject(organisationPolicy, true)
@@ -368,7 +372,7 @@ module.exports = class MentorsHelper {
 
 			const response = await mentorQueries.createMentorExtension(data)
 
-			const processDbResponse = utils.processDbResponse(response.toJSON(), validationData)
+			const processDbResponse = entityHelpers.processDbResponse(response.toJSON(), validationData)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -428,10 +432,20 @@ module.exports = class MentorsHelper {
 				},
 				model_names: { [Op.contains]: [mentorExtensionsModelName] },
 			})
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const validationData = entityHelpers.removeDefaultOrgEntityTypes(entityTypes, orgId)
 			let mentorExtensionsModel = await mentorQueries.getColumns()
 
-			data = utils.restructureBody(data, validationData, mentorExtensionsModel)
+			let res = entityHelpers.validateInput(data, validationData, mentorExtensionsModelName)
+			if (!res.success) {
+				return responses.failureResponse({
+					message: 'PROFILE_UPDATE_FAILED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+					result: res.errors,
+				})
+			}
+
+			data = entityHelpers.restructureBody(data, validationData, mentorExtensionsModel)
 
 			const [updateCount, updatedMentor] = await mentorQueries.updateMentorExtension(userId, data, {
 				returning: true,
@@ -447,7 +461,7 @@ module.exports = class MentorsHelper {
 					})
 				}
 
-				const processDbResponse = utils.processDbResponse(fallbackUpdatedUser, validationData)
+				const processDbResponse = entityHelpers.processDbResponse(fallbackUpdatedUser, validationData)
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'MENTOR_EXTENSION_UPDATED',
@@ -457,7 +471,7 @@ module.exports = class MentorsHelper {
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
-			const processDbResponse = utils.processDbResponse(updatedMentor[0], validationData)
+			const processDbResponse = entityHelpers.processDbResponse(updatedMentor[0], validationData)
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTOR_EXTENSION_UPDATED',
@@ -578,9 +592,9 @@ module.exports = class MentorsHelper {
 					message: 'MENTORS_NOT_FOUND',
 				})
 			}
-			mentorProfile = utils.deleteProperties(mentorProfile.data.result, ['created_at', 'updated_at'])
+			mentorProfile = genericUtils.deleteProperties(mentorProfile.data.result, ['created_at', 'updated_at'])
 
-			mentorExtension = utils.deleteProperties(mentorExtension, ['user_id', 'visible_to_organizations'])
+			mentorExtension = genericUtils.deleteProperties(mentorExtension, ['user_id', 'visible_to_organizations'])
 
 			const defaultOrgId = await getDefaultOrgId()
 			if (!defaultOrgId)
@@ -600,8 +614,8 @@ module.exports = class MentorsHelper {
 			})
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
-			const processDbResponse = utils.processDbResponse(mentorExtension, validationData)
+			const validationData = entityHelpers.removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const processDbResponse = entityHelpers.processDbResponse(mentorExtension, validationData)
 			const totalSessionHosted = await sessionQueries.countHostedSessions(id)
 
 			const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id)
@@ -744,7 +758,7 @@ module.exports = class MentorsHelper {
 				}
 			}
 
-			const query = utils.processQueryParametersWithExclusions(queryParams)
+			const query = requestUtils.processQueryParametersWithExclusions(queryParams)
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
 			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities({
@@ -753,7 +767,7 @@ module.exports = class MentorsHelper {
 				model_names: { [Op.contains]: [mentorExtensionsModelName] },
 			})
 
-			const filteredQuery = utils.validateFilters(query, validationData, mentorExtensionsModelName)
+			const filteredQuery = requestUtils.validateFilters(query, validationData, mentorExtensionsModelName)
 			const userType = common.MENTOR_ROLE
 
 			const saasFilter = await this.filterMentorListBasedOnSaasPolicy(userId, isAMentor, organization_ids)
@@ -961,7 +975,7 @@ module.exports = class MentorsHelper {
 
 	static async createdSessions(loggedInUserId, page, limit, search, status, roles) {
 		try {
-			if (!utils.isAMentor(roles)) {
+			if (!roleUtils.isAMentor(roles)) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.bad_request,
 					message: 'NOT_A_MENTOR',

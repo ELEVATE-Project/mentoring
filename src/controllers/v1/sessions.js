@@ -7,7 +7,7 @@
 
 // Dependencies
 const sessionService = require('@services/sessions')
-const { isAMentor } = require('@generics/utils')
+const roleUtils = require('@utils/role')
 const common = require('@constants/common')
 
 module.exports = class Sessions {
@@ -51,7 +51,7 @@ module.exports = class Sessions {
 					req.body,
 					req.decodedToken.id,
 					req.decodedToken.organization_id,
-					isAMentor(req.decodedToken.roles),
+					roleUtils.isAMentor(req.decodedToken.roles),
 					notifyUser
 				)
 
@@ -77,7 +77,7 @@ module.exports = class Sessions {
 			const sessionDetails = await sessionService.details(
 				req.params.id,
 				req.decodedToken ? req.decodedToken.id : '',
-				req.decodedToken ? isAMentor(req.decodedToken.roles) : '',
+				req.decodedToken ? roleUtils.isAMentor(req.decodedToken.roles) : '',
 				req.query
 			)
 			return sessionDetails
@@ -106,7 +106,7 @@ module.exports = class Sessions {
 				req.pageSize,
 				req.searchText,
 				req.query,
-				isAMentor(req.decodedToken.roles)
+				roleUtils.isAMentor(req.decodedToken.roles)
 			)
 			return sessionDetails
 		} catch (error) {
@@ -149,7 +149,7 @@ module.exports = class Sessions {
 				req.params.id,
 				req.decodedToken,
 				req.headers['timezone'],
-				isAMentor(req.decodedToken.roles)
+				roleUtils.isAMentor(req.decodedToken.roles)
 			)
 			return enrolledSession
 		} catch (error) {

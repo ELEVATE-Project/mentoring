@@ -1,5 +1,5 @@
 'use strict'
-// Dependenices
+// Dependencies
 const common = require('@constants/common')
 const mentorQueries = require('@database/queries/mentorExtension')
 const menteeQueries = require('@database/queries/userExtension')
@@ -9,11 +9,10 @@ const adminService = require('./admin')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const entityTypeQueries = require('@database/queries/entityType')
 const userRequests = require('@requests/user')
-const utils = require('@generics/utils')
+const roleUtils = require('@utils/role')
 const _ = require('lodash')
 const questionSetQueries = require('../database/queries/question-set')
 const { Op } = require('sequelize')
-const user = require('@health-checks/user')
 const responses = require('@helpers/responses')
 
 module.exports = class OrgAdminService {
@@ -28,13 +27,13 @@ module.exports = class OrgAdminService {
 	static async roleChange(bodyData) {
 		try {
 			if (
-				utils.validateRoleAccess(bodyData.current_roles, common.MENTOR_ROLE) &&
-				utils.validateRoleAccess(bodyData.new_roles, common.MENTEE_ROLE)
+				roleUtils.validateRoleAccess(bodyData.current_roles, common.MENTOR_ROLE) &&
+				roleUtils.validateRoleAccess(bodyData.new_roles, common.MENTEE_ROLE)
 			) {
 				return await this.changeRoleToMentee(bodyData)
 			} else if (
-				utils.validateRoleAccess(bodyData.current_roles, common.MENTEE_ROLE) &&
-				utils.validateRoleAccess(bodyData.new_roles, common.MENTOR_ROLE)
+				roleUtils.validateRoleAccess(bodyData.current_roles, common.MENTEE_ROLE) &&
+				roleUtils.validateRoleAccess(bodyData.new_roles, common.MENTOR_ROLE)
 			) {
 				return await this.changeRoleToMentor(bodyData)
 			}
@@ -413,7 +412,7 @@ module.exports = class OrgAdminService {
 				visibility: orgPolicies.mentor_visibility_policy,
 				visible_to_organizations: organizationDetails.data.result.related_orgs,
 			}
-			if (utils.validateRoleAccess(bodyData.roles, common.MENTOR_ROLE))
+			if (roleUtils.validateRoleAccess(bodyData.roles, common.MENTOR_ROLE))
 				await mentorQueries.updateMentorExtension(bodyData.user_id, updateData)
 			else await menteeQueries.updateMenteeExtension(bodyData.user_id, updateData)
 			return responses.successResponse({

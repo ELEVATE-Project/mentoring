@@ -1,7 +1,7 @@
-const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 
-const utils = require('@generics/utils')
+const genericUtils = require('@utils/generic')
+const emailUtils = require('@utils/email')
 const kafkaCommunication = require('@generics/kafka-communication')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
 const issueQueries = require('../database/queries/issue')
@@ -37,7 +37,7 @@ module.exports = class issuesHelper {
 				let metaItems = ''
 				if (bodyData.meta_data) {
 					for (const [key, value] of Object.entries(bodyData.meta_data)) {
-						metaItems += `<li><b>${utils.capitalize(key)}:</b> ${value}</li>\n`
+						metaItems += `<li><b>${genericUtils.capitalize(key)}:</b> ${value}</li>\n`
 					}
 				}
 
@@ -48,7 +48,7 @@ module.exports = class issuesHelper {
 							to: email,
 							replyTo: userEmailId,
 							subject: templateData.subject,
-							body: utils.composeEmailBody(templateData.body, {
+							body: emailUtils.composeEmailBody(templateData.body, {
 								name,
 								role,
 								userEmailId,

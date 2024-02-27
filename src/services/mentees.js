@@ -3,10 +3,12 @@ const userRequests = require('@requests/user')
 const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const feedbackHelper = require('./feedback')
-const utils = require('@generics/utils')
 
-const { successResponse } = require('@constants/common')
-const rolePermissionMappingQueries = require('@database/queries/role-permission-mapping')
+const cloudUtils = require('@utils/cloud')
+const dateTimeUtils = require('@utils/dateTime')
+const requestUtils = require('@utils/request')
+const entityHelpers = require('@helpers/entity')
+
 const { UniqueConstraintError } = require('sequelize')
 const menteeQueries = require('@database/queries/userExtension')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
@@ -19,9 +21,7 @@ const orgAdminService = require('@services/org-admin')
 const mentorQueries = require('@database/queries/mentorExtension')
 const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
-const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const entityTypeService = require('@services/entity-type')
-const entityType = require('@database/models/entityType')
 const { getEnrolledMentees } = require('@helpers/getEnrolledMentees')
 const responses = require('@helpers/responses')
 const permissions = require('@helpers/getPermissions')
@@ -56,10 +56,10 @@ module.exports = class MenteesHelper {
 			},
 			model_names: { [Op.contains]: [userExtensionsModelName] },
 		})
-		const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
+		const validationData = entityHelpers.removeDefaultOrgEntityTypes(entityTypes, orgId)
 		//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
-		const processDbResponse = utils.processDbResponse(mentee, validationData)
+		const processDbResponse = entityHelpers.processDbResponse(mentee, validationData)
 
 		const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id)
 
@@ -126,13 +126,13 @@ module.exports = class MenteesHelper {
 
 			switch (filterType) {
 				case 'MONTHLY':
-					;[filterStartDate, filterEndDate] = utils.getCurrentMonthRange()
+					;[filterStartDate, filterEndDate] = dateTimeUtils.getCurrentMonthRange()
 					break
 				case 'WEEKLY':
-					;[filterStartDate, filterEndDate] = utils.getCurrentWeekRange()
+					;[filterStartDate, filterEndDate] = dateTimeUtils.getCurrentWeekRange()
 					break
 				case 'QUARTERLY':
-					;[filterStartDate, filterEndDate] = utils.getCurrentQuarterRange()
+					;[filterStartDate, filterEndDate] = dateTimeUtils.getCurrentQuarterRange()
 					break
 				default:
 					throw new Error('Invalid filterType')
@@ -272,7 +272,7 @@ module.exports = class MenteesHelper {
 					},
 					{
 						meeting_info: meetingInfo,
-						joined_at: utils.utcFormat(),
+						joined_at: dateTimeUtils.utcFormat(),
 					}
 				)
 				return responses.successResponse({
@@ -300,7 +300,7 @@ module.exports = class MenteesHelper {
 					},
 					{
 						meeting_info: meetingInfo,
-						joined_at: utils.utcFormat(),
+						joined_at: dateTimeUtils.utcFormat(),
 					}
 				)
 			}
@@ -334,7 +334,7 @@ module.exports = class MenteesHelper {
 			additionalProjectionString = queryParams.fields
 			delete queryParams.fields
 		}
-		let query = utils.processQueryParametersWithExclusions(queryParams)
+		let query = requestUtils.processQueryParametersWithExclusions(queryParams)
 		const sessionModelName = await sessionQueries.getModelName()
 
 		let validationData = await entityTypeQueries.findAllEntityTypesAndEntities({
@@ -343,7 +343,7 @@ module.exports = class MenteesHelper {
 			model_names: { [Op.contains]: [sessionModelName] },
 		})
 
-		let filteredQuery = utils.validateFilters(query, validationData, sessionModelName)
+		let filteredQuery = requestUtils.validateFilters(query, validationData, sessionModelName)
 
 		// Create saas filter for view query
 		const saasFilter = await this.filterSessionsBasedOnSaasPolicy(userId, isAMentor)
@@ -551,7 +551,7 @@ module.exports = class MenteesHelper {
 					if (session.image && session.image.length > 0) {
 						session.image = await Promise.all(
 							session.image.map(async (imgPath) =>
-								imgPath ? await utils.getDownloadableUrl(imgPath) : null
+								imgPath ? await cloudUtils.getDownloadableUrl(imgPath) : null
 							)
 						)
 					}
@@ -607,9 +607,9 @@ module.exports = class MenteesHelper {
 			})
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const validationData = entityHelpers.removeDefaultOrgEntityTypes(entityTypes, orgId)
 
-			let res = utils.validateInput(data, validationData, userExtensionsModelName)
+			let res = entityHelpers.validateInput(data, validationData, userExtensionsModelName)
 			if (!res.success) {
 				return responses.failureResponse({
 					message: 'MENTEE_EXTENSION_CREATION_FAILED',
@@ -619,7 +619,7 @@ module.exports = class MenteesHelper {
 				})
 			}
 			let menteeExtensionsModel = await menteeQueries.getColumns()
-			data = utils.restructureBody(data, validationData, menteeExtensionsModel)
+			data = entityHelpers.restructureBody(data, validationData, menteeExtensionsModel)
 
 			// construct policy object
 			let saasPolicyData = await orgAdminService.constructOrgPolicyObject(organisationPolicy, true)
@@ -636,7 +636,7 @@ module.exports = class MenteesHelper {
 			}
 
 			const response = await menteeQueries.createMenteeExtension(data)
-			const processDbResponse = utils.processDbResponse(response.toJSON(), validationData)
+			const processDbResponse = entityHelpers.processDbResponse(response.toJSON(), validationData)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -697,12 +697,12 @@ module.exports = class MenteesHelper {
 			}
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
 
-			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
-			let res = utils.validateInput(data, validationData, userExtensionsModelName)
+			//validationData = entityHelpers.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
+			const validationData = entityHelpers.removeDefaultOrgEntityTypes(entityTypes, orgId)
+			let res = entityHelpers.validateInput(data, validationData, userExtensionsModelName)
 			if (!res.success) {
 				return responses.failureResponse({
-					message: 'SESSION_CREATION_FAILED',
+					message: 'PROFILE_UPDATE_FAILED',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 					result: res.errors,
@@ -711,7 +711,7 @@ module.exports = class MenteesHelper {
 
 			let userExtensionModel = await menteeQueries.getColumns()
 
-			data = utils.restructureBody(data, validationData, userExtensionModel)
+			data = entityHelpers.restructureBody(data, validationData, userExtensionModel)
 
 			const [updateCount, updatedUser] = await menteeQueries.updateMenteeExtension(userId, data, {
 				returning: true,
@@ -727,7 +727,7 @@ module.exports = class MenteesHelper {
 						message: 'MENTEE_EXTENSION_NOT_FOUND',
 					})
 				}
-				const processDbResponse = utils.processDbResponse(fallbackUpdatedUser, validationData)
+				const processDbResponse = entityHelpers.processDbResponse(fallbackUpdatedUser, validationData)
 
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
@@ -736,7 +736,7 @@ module.exports = class MenteesHelper {
 				})
 			}
 
-			const processDbResponse = utils.processDbResponse(updatedUser[0], validationData)
+			const processDbResponse = entityHelpers.processDbResponse(updatedUser[0], validationData)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -784,8 +784,8 @@ module.exports = class MenteesHelper {
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
-			const processDbResponse = utils.processDbResponse(mentee, validationData)
+			const validationData = entityHelpers.removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const processDbResponse = entityHelpers.processDbResponse(mentee, validationData)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -830,17 +830,20 @@ module.exports = class MenteesHelper {
 	 * @param {Boolean} queryParams - queryParams
 	 * @returns {JSON} - Filter list.
 	 */
-	static async getFilterList(queryParams, tokenInformation) {
+	static async getFilterList(entity_type, filterType, tokenInformation) {
 		try {
 			let result = {
 				organizations: [],
 				entity_types: {},
 			}
 
+			const filter_type = filterType !== '' ? filterType : common.MENTOR_ROLE
+
 			let organization_ids = []
 			const organizations = await this.getOrganizationIdBasedOnPolicy(
 				tokenInformation.id,
-				tokenInformation.organization_id
+				tokenInformation.organization_id,
+				filter_type
 			)
 
 			if (organizations.success && organizations.result.length > 0) {
@@ -858,7 +861,7 @@ module.exports = class MenteesHelper {
 					// get entity type with entities list
 					const getEntityTypesWithEntities = await this.getEntityTypeWithEntitiesBasedOnOrg(
 						organization_ids,
-						queryParams,
+						entity_type,
 						defaultOrgId ? defaultOrgId : ''
 					)
 
@@ -890,43 +893,115 @@ module.exports = class MenteesHelper {
 		}
 	}
 
-	static async getOrganizationIdBasedOnPolicy(userId, organization_id) {
+	static async getOrganizationIdBasedOnPolicy(userId, organization_id, filterType) {
 		try {
-			let organization_ids = []
+			let organizationIds = []
+			filterType = filterType.toLowerCase()
+			const attributes =
+				filterType == common.MENTEE_ROLE
+					? ['organization_id', 'session_visibility_policy']
+					: ['organization_id', 'external_mentor_visibility_policy']
 
-			const orgPolicies = await organisationExtensionQueries.findOne(
+			const orgExtension = await organisationExtensionQueries.findOne(
 				{ organization_id },
 				{
-					attributes: ['organization_id', 'external_mentor_visibility_policy'],
+					attributes: attributes,
 				}
 			)
 
-			if (orgPolicies?.organization_id) {
-				if (orgPolicies.external_mentor_visibility_policy === common.CURRENT) {
-					organization_ids.push(orgPolicies.organization_id)
-				} else if (
-					orgPolicies.external_mentor_visibility_policy === common.ASSOCIATED ||
-					orgPolicies.external_mentor_visibility_policy === common.ALL
-				) {
-					organization_ids.push(orgPolicies.organization_id)
+			const visibilityPolicy =
+				filterType == common.MENTEE_ROLE
+					? orgExtension.session_visibility_policy
+					: orgExtension.external_mentor_visibility_policy
+
+			if (orgExtension?.organization_id) {
+				if (visibilityPolicy === common.CURRENT) {
+					organizationIds.push(orgExtension.organization_id)
+				} else if (visibilityPolicy === common.ASSOCIATED || visibilityPolicy === common.ALL) {
+					organizationIds.push(orgExtension.organization_id)
 					let relatedOrgs = []
-					let userOrgDetails = await userRequests.fetchDefaultOrgDetails(orgPolicies.organization_id)
+					let userOrgDetails = await userRequests.fetchDefaultOrgDetails(orgExtension.organization_id)
 					if (userOrgDetails.success && userOrgDetails.data?.result?.related_orgs?.length > 0) {
 						relatedOrgs = userOrgDetails.data.result.related_orgs
 					}
-					if (orgPolicies.external_mentor_visibility_policy === common.ASSOCIATED) {
-						organization_ids.push(...relatedOrgs)
+					if (visibilityPolicy === common.ASSOCIATED) {
+						const associatedAdditionalFilter =
+							filterType == common.MENTEE_ROLE
+								? {
+										external_session_visibility_policy: {
+											[Op.ne]: 'CURRENT',
+										},
+								  }
+								: {
+										mentor_visibility_policy: {
+											[Op.ne]: 'CURRENT',
+										},
+								  }
+
+						const organizationExtension = await organisationExtensionQueries.findAll(
+							{
+								[Op.and]: [
+									{
+										organization_id: {
+											[Op.in]: [...relatedOrgs],
+										},
+									},
+									associatedAdditionalFilter,
+								],
+							},
+							{
+								attributes: ['organization_id'],
+							}
+						)
+						organizationIds.push(orgExtension.organization_id)
+						if (organizationExtension) {
+							const organizationIdsFromOrgExtension = organizationExtension.map(
+								(orgExt) => orgExt.organization_id
+							)
+							organizationIds.push(...organizationIdsFromOrgExtension)
+						}
 					} else {
+						// filter out the organizations
+						// CASE 1 : in case of mentee listing filterout organizations with external_session_visibility_policy = ALL
+						// CASE 2 : in case of mentor listing filterout organizations with mentor_visibility_policy = ALL
+						const filterQuery =
+							filterType == common.MENTEE_ROLE
+								? {
+										external_session_visibility_policy: common.ALL,
+								  }
+								: {
+										mentor_visibility_policy: common.ALL,
+								  }
+
+						// this filter is applied for the below condition
+						// SM session_visibility_policy (in case of mentee list) or external_mentor_visibility policy (in case of mentor list) = ALL
+						//  and CASE 1 (mentee list) : Mentees is related to the SM org but external_session_visibility is CURRENT (exclude these mentees)
+						//  CASE 2 : (mentor list) : Mentors is related to SM Org but mentor_visibility set to CURRENT  (exclude these mentors)
+						const additionalFilter =
+							filterType == common.MENTEE_ROLE
+								? {
+										external_session_visibility_policy: {
+											[Op.ne]: 'CURRENT',
+										},
+								  }
+								: {
+										mentor_visibility_policy: {
+											[Op.ne]: 'CURRENT',
+										},
+								  }
 						const organizationExtension = await organisationExtensionQueries.findAll(
 							{
 								[Op.or]: [
+									filterQuery,
 									{
-										mentor_visibility_policy: common.ALL,
-									},
-									{
-										organization_id: {
-											[Op.in]: [...relatedOrgs, orgPolicies.organization_id],
-										},
+										[Op.and]: [
+											{
+												organization_id: {
+													[Op.in]: [...relatedOrgs],
+												},
+											},
+											additionalFilter,
+										],
 									},
 								],
 							},
@@ -934,9 +1009,12 @@ module.exports = class MenteesHelper {
 								attributes: ['organization_id'],
 							}
 						)
+						organizationIds.push(orgExtension.organization_id)
 						if (organizationExtension) {
-							const organizationIds = organizationExtension.map((orgExt) => orgExt.organization_id)
-							organization_ids.push(...organizationIds)
+							const organizationIdsFromOrgExtension = organizationExtension.map(
+								(orgExt) => orgExt.organization_id
+							)
+							organizationIds.push(...organizationIdsFromOrgExtension)
 						}
 					}
 				}
@@ -944,7 +1022,7 @@ module.exports = class MenteesHelper {
 
 			return {
 				success: true,
-				result: organization_ids,
+				result: organizationIds,
 			}
 		} catch (error) {
 			return {
@@ -1027,7 +1105,7 @@ module.exports = class MenteesHelper {
 				}
 			}
 
-			const query = utils.processQueryParametersWithExclusions(queryParams)
+			const query = requestUtils.processQueryParametersWithExclusions(queryParams)
 			const userExtensionModelName = await menteeQueries.getModelName()
 			const mentorExtensionModelName = await menteeQueries.getModelName()
 
@@ -1036,7 +1114,7 @@ module.exports = class MenteesHelper {
 				model_names: { [Op.overlap]: [userExtensionModelName, mentorExtensionModelName] },
 			})
 
-			let filteredQuery = utils.validateFilters(
+			let filteredQuery = requestUtils.validateFilters(
 				query,
 				JSON.parse(JSON.stringify(validationData)),
 				userExtensionModelName
@@ -1191,9 +1269,17 @@ module.exports = class MenteesHelper {
 				: ['external_mentor_visibility', 'organization_id']
 
 			const userPolicyDetails = isAMentor
-				? await mentorQueries.getMentorExtension(userId, extensionColumns)
-				: await menteeQueries.getMenteeExtension(userId, extensionColumns)
+				? await mentorQueries.getMentorExtension(userId, ['organization_id'])
+				: await menteeQueries.getMenteeExtension(userId, ['organization_id'])
 
+			const getOrgPolicy = await organisationExtensionQueries.findOne(
+				{
+					organization_id: userPolicyDetails.organization_id,
+				},
+				{
+					attributes: ['session_visibility_policy', 'organization_id'],
+				}
+			)
 			// Throw error if mentor/mentee extension not found
 			if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
 				return responses.failureResponse({
@@ -1209,37 +1295,37 @@ module.exports = class MenteesHelper {
 			if (organization_ids.length !== 0) {
 				additionalFilter = `AND "organization_id" in (${organization_ids.join(',')})`
 			}
-			if (userPolicyDetails.external_mentor_visibility && userPolicyDetails.organization_id) {
-				const externalVisibilityPolicy = userPolicyDetails[extensionColumns[0]]
+			if (getOrgPolicy.session_visibility_policy && userPolicyDetails.organization_id) {
+				const visibilityPolicy = getOrgPolicy.session_visibility_policy
 
 				// Filter user data based on policy
 				// generate filter based on condition
-				if (externalVisibilityPolicy === common.CURRENT) {
+				if (visibilityPolicy === common.CURRENT) {
 					/**
 					 * if user external_mentor_visibility is current. He can only see his/her organizations mentors
 					 * so we will check mentor's organization_id and user organization_id are matching
 					 */
 					filter = `AND "organization_id" = ${userPolicyDetails.organization_id}`
-				} else if (externalVisibilityPolicy === common.ASSOCIATED) {
+				} else if (visibilityPolicy === common.ASSOCIATED) {
 					/**
 					 * If user external_mentor_visibility is associated
 					 * <<point**>> first we need to check if mentor's visible_to_organizations contain the user organization_id and verify mentor's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
 					 */
 					filter =
 						additionalFilter +
-						`AND ( (${userPolicyDetails.organization_id} = ANY("visible_to_organizations") AND "visibility" != 'CURRENT')`
+						`AND ( (${userPolicyDetails.organization_id} = ANY("visible_to_organizations") AND "external_session_visibility" != 'CURRENT')`
 
 					if (additionalFilter.length === 0)
 						filter += ` OR organization_id = ${userPolicyDetails.organization_id} )`
 					else filter += `)`
-				} else if (externalVisibilityPolicy === common.ALL) {
+				} else if (visibilityPolicy === common.ALL) {
 					/**
 					 * We need to check if mentor's visible_to_organizations contain the user organization_id and verify mentor's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
 					 * OR if mentor visibility is ALL that mentor is also accessible
 					 */
 					filter =
 						additionalFilter +
-						`AND ((${userPolicyDetails.organization_id} = ANY("visible_to_organizations") AND "visibility" != 'CURRENT' ) OR "visibility" = 'ALL' OR "organization_id" = ${userPolicyDetails.organization_id})`
+						`AND ((${userPolicyDetails.organization_id} = ANY("visible_to_organizations") AND "external_session_visibility" != 'CURRENT' ) OR "external_session_visibility" = 'ALL' OR "organization_id" = ${userPolicyDetails.organization_id})`
 				}
 			}
 

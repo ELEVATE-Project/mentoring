@@ -1,11 +1,10 @@
-// DependenciesI
+// Dependencies
 const httpStatusCode = require('@generics/http-status')
 const entityTypeQueries = require('../database/queries/entityType')
 const { UniqueConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
-const { removeDefaultOrgEntityTypes } = require('@generics/utils')
+const entityHelpers = require('@helpers/entity')
 const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
-const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 
 module.exports = class EntityHelper {
@@ -135,7 +134,7 @@ module.exports = class EntityHelper {
 			}
 			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
 
-			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const prunedEntities = entityHelpers.removeDefaultOrgEntityTypes(entityTypes, orgId)
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
@@ -223,10 +222,10 @@ module.exports = class EntityHelper {
 
 				// Filter entity types based on orgIds and remove parent entity types
 				let entitTypeData = entityTypesWithEntities.filter((obj) => orgIdToSearch.includes(obj.organization_id))
-				entitTypeData = utils.removeParentEntityTypes(entitTypeData)
+				entitTypeData = entityHelpers.removeParentEntityTypes(entitTypeData)
 
 				// Process the data asynchronously to add value labels
-				const processDbResponse = await utils.processDbResponse(element, entitTypeData)
+				const processDbResponse = await entityHelpers.processDbResponse(element, entitTypeData)
 
 				// Return the processed result
 				return processDbResponse

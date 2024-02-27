@@ -14,7 +14,6 @@ const menteeExtensionQueries = require('@database/queries/userExtension')
 const sessionEnrollmentQueries = require('@database/queries/sessionEnrollments')
 const postSessionQueries = require('@database/queries/postSessionDetail')
 const entityTypeQueries = require('@database/queries/entityType')
-const entitiesQueries = require('@database/queries/entity')
 const { Op } = require('sequelize')
 const notificationQueries = require('@database/queries/notificationTemplate')
 
@@ -22,11 +21,19 @@ const schedulerRequest = require('@requests/scheduler')
 
 const bigBlueButtonRequests = require('@requests/bigBlueButton')
 const userRequests = require('@requests/user')
-const utils = require('@generics/utils')
+
+const roleUtils = require('@utils/role')
+const cloudUtils = require('@utils/cloud')
+const dateTimeUtils = require('@utils/dateTime')
+const genericUtils = require('@utils/generic')
+const emailUtils = require('@utils/email')
+const authUtils = require('@utils/auth')
+
+const entityHelpers = require('@helpers/entity')
+
 const bigBlueButtonService = require('./bigBlueButton')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
-const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const menteeService = require('@services/mentees')
 const { updatedDiff } = require('deep-object-diff')
 const { Parser } = require('@json2csv/plainjs')
@@ -161,9 +168,9 @@ module.exports = class SessionsHelper {
 			})
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const validationData = entityHelpers.removeDefaultOrgEntityTypes(entityTypes, orgId)
 
-			let res = utils.validateInput(bodyData, validationData, sessionModelName)
+			let res = entityHelpers.validateInput(bodyData, validationData, sessionModelName)
 			if (!res.success) {
 				return responses.failureResponse({
 					message: 'SESSION_CREATION_FAILED',
@@ -173,7 +180,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 			let sessionModel = await sessionQueries.getColumns()
-			bodyData = utils.restructureBody(bodyData, validationData, sessionModel)
+			bodyData = entityHelpers.restructureBody(bodyData, validationData, sessionModel)
 
 			bodyData.meeting_info = {
 				platform: process.env.DEFAULT_MEETING_SERVICE,
@@ -228,17 +235,21 @@ module.exports = class SessionsHelper {
 			await this.setMentorPassword(data.id, data.mentor_id)
 			await this.setMenteePassword(data.id, data.created_at)
 
-			const processDbResponse = utils.processDbResponse(data.toJSON(), validationData)
+			const processDbResponse = entityHelpers.processDbResponse(data.toJSON(), validationData)
 
 			// Set notification schedulers for the session
 			// Deep clone to avoid unintended modifications to the original object.
 			const jobsToCreate = _.cloneDeep(common.jobsToCreate)
 
 			// Calculate delays for notification jobs
-			jobsToCreate[0].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.start_date, 1, 'hour')
-			jobsToCreate[1].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.start_date, 24, 'hour')
-			jobsToCreate[2].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.start_date, 15, 'minutes')
-			jobsToCreate[3].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.end_date, 0, 'minutes')
+			jobsToCreate[0].delay = await dateTimeUtils.getTimeDifferenceInMilliseconds(bodyData.start_date, 1, 'hour')
+			jobsToCreate[1].delay = await dateTimeUtils.getTimeDifferenceInMilliseconds(bodyData.start_date, 24, 'hour')
+			jobsToCreate[2].delay = await dateTimeUtils.getTimeDifferenceInMilliseconds(
+				bodyData.start_date,
+				15,
+				'minutes'
+			)
+			jobsToCreate[3].delay = await dateTimeUtils.getTimeDifferenceInMilliseconds(bodyData.end_date, 0, 'minutes')
 
 			// Iterate through the jobs and create scheduler jobs
 			for (let jobIndex = 0; jobIndex < jobsToCreate.length; jobIndex++) {
@@ -285,12 +296,20 @@ module.exports = class SessionsHelper {
 						email: {
 							to: userDetails.email,
 							subject: templateData.subject,
-							body: utils.composeEmailBody(templateData.body, {
+							body: emailUtils.composeEmailBody(templateData.body, {
 								name,
 								sessionTitle: data.title,
 								mentorName: data.mentor_name,
-								startDate: utils.getTimeZone(data.start_date, common.dateFormat, data.time_zone),
-								startTime: utils.getTimeZone(data.start_date, common.timeFormat, data.time_zone),
+								startDate: dateTimeUtils.getTimeZone(
+									data.start_date,
+									common.dateFormat,
+									data.time_zone
+								),
+								startTime: dateTimeUtils.getTimeZone(
+									data.start_date,
+									common.timeFormat,
+									data.time_zone
+								),
 								sessionDuration: Math.round(elapsedMinutes),
 								sessionPlatform: data.meeting_info.platform,
 								unitOfTime: common.UNIT_OF_TIME,
@@ -433,9 +452,9 @@ module.exports = class SessionsHelper {
 			})
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const validationData = entityHelpers.removeDefaultOrgEntityTypes(entityTypes, orgId)
 
-			let res = utils.validateInput(bodyData, validationData, sessionModelName)
+			let res = entityHelpers.validateInput(bodyData, validationData, sessionModelName)
 
 			if (!res.success) {
 				return responses.failureResponse({
@@ -446,7 +465,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 			let sessionModel = await sessionQueries.getColumns()
-			bodyData = utils.restructureBody(bodyData, validationData, sessionModel)
+			bodyData = entityHelpers.restructureBody(bodyData, validationData, sessionModel)
 			let isSessionDataChanged = false
 			let updatedSessionData = {}
 
@@ -473,11 +492,7 @@ module.exports = class SessionsHelper {
 			let message
 			const sessionRelatedJobIds = common.notificationJobIdPrefixes.map((element) => element + sessionDetail.id)
 			if (method == common.DELETE_METHOD) {
-				let statTime = moment.unix(sessionDetail.start_date)
-				const current = moment.utc()
-				let diff = statTime.diff(current, 'minutes')
-
-				if (sessionDetail.status == common.PUBLISHED_STATUS && diff > 10) {
+				if (sessionDetail.status == common.PUBLISHED_STATUS) {
 					await sessionQueries.deleteSession({
 						id: sessionId,
 					})
@@ -490,7 +505,7 @@ module.exports = class SessionsHelper {
 					}
 				} else {
 					return responses.failureResponse({
-						message: 'SESSION_DELETION_FAILED',
+						message: 'CANNOT_DELETE_LIVE_SESSION',
 						statusCode: httpStatusCode.bad_request,
 						responseCode: 'CLIENT_ERROR',
 					})
@@ -556,17 +571,17 @@ module.exports = class SessionsHelper {
 					const updateDelayData = sessionRelatedJobIds.map((jobId) => ({ id: jobId }))
 
 					// Calculate new delays for notification jobs
-					updateDelayData[0].delay = await utils.getTimeDifferenceInMilliseconds(
+					updateDelayData[0].delay = await dateTimeUtils.getTimeDifferenceInMilliseconds(
 						bodyData.start_date,
 						1,
 						'hour'
 					)
-					updateDelayData[1].delay = await utils.getTimeDifferenceInMilliseconds(
+					updateDelayData[1].delay = await dateTimeUtils.getTimeDifferenceInMilliseconds(
 						bodyData.start_date,
 						24,
 						'hour'
 					)
-					updateDelayData[2].delay = await utils.getTimeDifferenceInMilliseconds(
+					updateDelayData[2].delay = await dateTimeUtils.getTimeDifferenceInMilliseconds(
 						bodyData.start_date,
 						15,
 						'minutes'
@@ -583,7 +598,7 @@ module.exports = class SessionsHelper {
 					const jobId = common.jobPrefixToMarkSessionAsCompleted + sessionDetail.id
 					await schedulerRequest.updateDelayOfScheduledJob({
 						id: jobId,
-						delay: await utils.getTimeDifferenceInMilliseconds(bodyData.end_date, 0, 'minutes'),
+						delay: await dateTimeUtils.getTimeDifferenceInMilliseconds(bodyData.end_date, 0, 'minutes'),
 					})
 				}
 			}
@@ -649,17 +664,17 @@ module.exports = class SessionsHelper {
 							email: {
 								to: attendee.attendeeEmail,
 								subject: templateData.subject,
-								body: utils.composeEmailBody(templateData.body, {
+								body: emailUtils.composeEmailBody(templateData.body, {
 									name: attendee.attendeeName,
 									sessionTitle: sessionDetail.title,
 									sessionDuration: Math.round(sessionDuration),
 									unitOfTime: common.UNIT_OF_TIME,
-									startDate: utils.getTimeZone(
+									startDate: dateTimeUtils.getTimeZone(
 										sessionDetail.start_date,
 										common.dateFormat,
 										sessionDetail.time_zone
 									),
-									startTime: utils.getTimeZone(
+									startTime: dateTimeUtils.getTimeZone(
 										sessionDetail.start_date,
 										common.timeFormat,
 										sessionDetail.time_zone
@@ -689,59 +704,59 @@ module.exports = class SessionsHelper {
 							email: {
 								to: attendee.attendeeEmail,
 								subject: templateData.subject,
-								body: utils.composeEmailBody(templateData.body, {
+								body: emailUtils.composeEmailBody(templateData.body, {
 									name: attendee.attendeeName,
 									sessionTitle: sessionDetail.title,
-									oldStartDate: utils.getTimeZone(
+									oldStartDate: dateTimeUtils.getTimeZone(
 										sessionDetail.start_date,
 										common.dateFormat,
 										sessionDetail.time_zone
 									),
-									startDate: utils.getTimeZone(
+									startDate: dateTimeUtils.getTimeZone(
 										sessionDetail.start_date,
 										common.dateFormat,
 										sessionDetail.time_zone
 									),
-									oldStartTime: utils.getTimeZone(
+									oldStartTime: dateTimeUtils.getTimeZone(
 										sessionDetail.startDateUtc
 											? sessionDetail.startDateUtc
 											: sessionDetail.start_date,
 										common.timeFormat,
 										sessionDetail.time_zone
 									),
-									startTime: utils.getTimeZone(
+									startTime: dateTimeUtils.getTimeZone(
 										sessionDetail.startDateUtc
 											? sessionDetail.startDateUtc
 											: sessionDetail.start_date,
 										common.timeFormat,
 										sessionDetail.time_zone
 									),
-									oldEndDate: utils.getTimeZone(
+									oldEndDate: dateTimeUtils.getTimeZone(
 										sessionDetail.end_date,
 										common.dateFormat,
 										sessionDetail.time_zone
 									),
-									oldEndTime: utils.getTimeZone(
+									oldEndTime: dateTimeUtils.getTimeZone(
 										sessionDetail.end_date,
 										common.timeFormat,
 										sessionDetail.time_zone
 									),
-									newStartDate: utils.getTimeZone(
+									newStartDate: dateTimeUtils.getTimeZone(
 										bodyData['start_date'] ? bodyData['start_date'] : sessionDetail.start_date,
 										common.dateFormat,
 										sessionDetail.time_zone
 									),
-									newStartTime: utils.getTimeZone(
+									newStartTime: dateTimeUtils.getTimeZone(
 										bodyData['start_date'] ? bodyData['start_date'] : sessionDetail.start_date,
 										common.timeFormat,
 										sessionDetail.time_zone
 									),
-									newEndDate: utils.getTimeZone(
+									newEndDate: dateTimeUtils.getTimeZone(
 										bodyData['end_date'] ? bodyData['end_date'] : sessionDetail.end_date,
 										common.dateFormat,
 										sessionDetail.time_zone
 									),
-									newEndTime: utils.getTimeZone(
+									newEndTime: dateTimeUtils.getTimeZone(
 										bodyData['end_date'] ? bodyData['end_date'] : sessionDetail.end_date,
 										common.timeFormat,
 										sessionDetail.time_zone
@@ -815,7 +830,7 @@ module.exports = class SessionsHelper {
 	static async details(id, userId = '', isAMentor = '', queryParams) {
 		try {
 			let filter = {}
-			if (utils.isNumeric(id)) {
+			if (genericUtils.isNumeric(id)) {
 				filter.id = id
 			} else {
 				filter.share_link = id
@@ -883,7 +898,7 @@ module.exports = class SessionsHelper {
 			if (sessionDetails.image && sessionDetails.image.some(Boolean)) {
 				sessionDetails.image = sessionDetails.image.map(async (imgPath) => {
 					if (imgPath != '') {
-						return await utils.getDownloadableUrl(imgPath)
+						return await cloudUtils.getDownloadableUrl(imgPath)
 					}
 				})
 				sessionDetails.image = await Promise.all(sessionDetails.image)
@@ -913,9 +928,12 @@ module.exports = class SessionsHelper {
 					},
 					model_names: { [Op.contains]: [mentorExtensionsModelName] },
 				})
-				const validationData = removeDefaultOrgEntityTypes(entityTypes, mentorExtension.organization_id)
+				const validationData = entityHelpers.removeDefaultOrgEntityTypes(
+					entityTypes,
+					mentorExtension.organization_id
+				)
 
-				const processedEntityType = utils.processDbResponse(
+				const processedEntityType = entityHelpers.processDbResponse(
 					{
 						designation: mentorExtension.designation,
 						custom_entity_text: mentorExtension.custom_entity_text,
@@ -935,8 +953,11 @@ module.exports = class SessionsHelper {
 			})
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, sessionDetails.mentor_organization_id)
-			const processDbResponse = utils.processDbResponse(sessionDetails, validationData)
+			const validationData = entityHelpers.removeDefaultOrgEntityTypes(
+				entityTypes,
+				sessionDetails.mentor_organization_id
+			)
+			const processDbResponse = entityHelpers.processDbResponse(sessionDetails, validationData)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -1179,12 +1200,20 @@ module.exports = class SessionsHelper {
 					email: {
 						to: email,
 						subject: templateData.subject,
-						body: utils.composeEmailBody(templateData.body, {
+						body: emailUtils.composeEmailBody(templateData.body, {
 							name,
 							sessionTitle: session.title,
 							mentorName: session.mentor_name,
-							startDate: utils.getTimeZone(session.start_date, common.dateFormat, session.time_zone),
-							startTime: utils.getTimeZone(session.start_date, common.timeFormat, session.time_zone),
+							startDate: dateTimeUtils.getTimeZone(
+								session.start_date,
+								common.dateFormat,
+								session.time_zone
+							),
+							startTime: dateTimeUtils.getTimeZone(
+								session.start_date,
+								common.timeFormat,
+								session.time_zone
+							),
 							sessionDuration: Math.round(elapsedMinutes),
 							sessionPlatform: session.meeting_info.platform,
 							unitOfTime: common.UNIT_OF_TIME,
@@ -1276,13 +1305,21 @@ module.exports = class SessionsHelper {
 					email: {
 						to: email,
 						subject: templateData.subject,
-						body: utils.composeEmailBody(templateData.body, {
+						body: emailUtils.composeEmailBody(templateData.body, {
 							name,
 							sessionTitle: session.title,
 							mentorName: session.mentor_name,
 							unitOfTime: common.UNIT_OF_TIME,
-							startDate: utils.getTimeZone(session.start_date, common.dateFormat, session.time_zone),
-							startTime: utils.getTimeZone(session.start_date, common.timeFormat, session.time_zone),
+							startDate: dateTimeUtils.getTimeZone(
+								session.start_date,
+								common.dateFormat,
+								session.time_zone
+							),
+							startTime: dateTimeUtils.getTimeZone(
+								session.start_date,
+								common.timeFormat,
+								session.time_zone
+							),
 							sessionDuration: Math.round(sessionDuration),
 						}),
 					},
@@ -1362,7 +1399,7 @@ module.exports = class SessionsHelper {
 			}
 			let shareLink = session.share_link
 			if (!shareLink) {
-				shareLink = utils.md5Hash(sessionId + '###' + session.mentor_id)
+				shareLink = authUtils.md5Hash(sessionId + '###' + session.mentor_id)
 				await sessionQueries.updateOne(
 					{
 						id: sessionId,
@@ -1457,7 +1494,7 @@ module.exports = class SessionsHelper {
 					},
 					{
 						status: common.LIVE_STATUS,
-						started_at: utils.utcFormat(),
+						started_at: dateTimeUtils.utcFormat(),
 					}
 				)
 			}
@@ -1516,7 +1553,7 @@ module.exports = class SessionsHelper {
 					},
 					{
 						status: common.LIVE_STATUS,
-						started_at: utils.utcFormat(),
+						started_at: dateTimeUtils.utcFormat(),
 						meeting_info: meetingInfo,
 					}
 				)
@@ -1543,7 +1580,7 @@ module.exports = class SessionsHelper {
 
 	static async setMentorPassword(sessionId, userId) {
 		try {
-			let hashPassword = utils.hash('' + sessionId + userId + '')
+			let hashPassword = authUtils.hash('' + sessionId + userId + '')
 			const result = await sessionQueries.updateOne(
 				{
 					id: sessionId,
@@ -1570,7 +1607,7 @@ module.exports = class SessionsHelper {
 
 	static async setMenteePassword(sessionId, createdAt) {
 		try {
-			let hashPassword = utils.hash(sessionId + createdAt)
+			let hashPassword = authUtils.hash(sessionId + createdAt)
 			const result = await sessionQueries.updateOne(
 				{
 					id: sessionId,
@@ -1620,7 +1657,7 @@ module.exports = class SessionsHelper {
 				},
 				{
 					status: common.COMPLETED_STATUS,
-					completed_at: utils.utcFormat(),
+					completed_at: dateTimeUtils.utcFormat(),
 				},
 				{ returning: false, raw: true }
 			)
@@ -2152,7 +2189,7 @@ module.exports = class SessionsHelper {
 			const successIds = []
 
 			const enrollPromises = menteeDetails.map((menteeData) => {
-				let isAMentor = utils.isAMentor(menteeData.roles)
+				let isAMentor = roleUtils.isAMentor(menteeData.roles)
 				return this.enroll(sessionId, menteeData, timeZone, isAMentor, false, sessionDetails)
 					.then((response) => {
 						if (response.statusCode == httpStatusCode.created) {
@@ -2228,31 +2265,31 @@ module.exports = class SessionsHelper {
 				email: {
 					to: userDetails.email,
 					subject: templateData.subject,
-					body: utils.composeEmailBody(templateData.body, {
+					body: emailUtils.composeEmailBody(templateData.body, {
 						name: userDetails.name,
 						sessionTitle: updatedSessionDetails.title ? updatedSessionDetails.title : sessionDetail.title,
 						sessionDuration: oldSessionDuration
 							? Math.round(oldSessionDuration)
 							: Math.round(sessionDuration),
 						unitOfTime: common.UNIT_OF_TIME,
-						startDate: utils.getTimeZone(
+						startDate: dateTimeUtils.getTimeZone(
 							sessionDetail.start_date,
 							common.dateFormat,
 							sessionDetail.time_zone
 						),
-						startTime: utils.getTimeZone(
+						startTime: dateTimeUtils.getTimeZone(
 							sessionDetail.start_date,
 							common.timeFormat,
 							sessionDetail.time_zone
 						),
-						newStartDate: utils.getTimeZone(
+						newStartDate: dateTimeUtils.getTimeZone(
 							updatedSessionDetails['start_date']
 								? updatedSessionDetails['start_date']
 								: sessionDetail.start_date,
 							common.dateFormat,
 							sessionDetail.time_zone
 						),
-						newStartTime: utils.getTimeZone(
+						newStartTime: dateTimeUtils.getTimeZone(
 							updatedSessionDetails['start_date']
 								? updatedSessionDetails['start_date']
 								: sessionDetail.start_date,

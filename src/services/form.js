@@ -1,12 +1,11 @@
 const httpStatusCode = require('@generics/http-status')
-const utils = require('@generics/utils')
+const cacheUtils = require('@utils/cache')
 const form = require('@generics/form')
 const KafkaProducer = require('@generics/kafka-communication')
 
 const formQueries = require('../database/queries/form')
 const { UniqueConstraintError } = require('sequelize')
 
-const entityTypeQueries = require('../database/queries/entityType')
 const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
 
 const responses = require('@helpers/responses')
@@ -25,7 +24,7 @@ module.exports = class FormsHelper {
 			bodyData['organization_id'] = orgId
 			const form = await formQueries.createForm(bodyData)
 
-			await utils.internalDel('formVersion')
+			await cacheUtils.internalDel('formVersion')
 
 			await KafkaProducer.clearInternalCache('formVersion')
 
@@ -85,7 +84,7 @@ module.exports = class FormsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			await utils.internalDel('formVersion')
+			await cacheUtils.internalDel('formVersion')
 			await KafkaProducer.clearInternalCache('formVersion')
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,

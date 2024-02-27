@@ -197,6 +197,41 @@ let enviromentVariables = {
 		message: 'Default organization ID',
 		optional: false,
 	},
+	MENTEE_SESSION_EDITED_BY_MANAGER_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentee session edited by manager',
+		optional: true,
+		default: 'mentee_session_edited_by_manager_email_template',
+	},
+	MENTEE_SESSION_ENROLLMENT_BY_MANAGER_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentee session enrollment by manager',
+		optional: true,
+		default: 'mentee_session_enrollment_by_manager',
+	},
+	MENTOR_PRIVATE_SESSION_INVITE_BY_MANAGER_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentor private session invite by manager',
+		optional: true,
+		default: 'mentor_invite_private_session_by_manager',
+	},
+	MENTOR_PUBLIC_SESSION_INVITE_BY_MANAGER_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentor public session invite by manager',
+		optional: true,
+		default: 'mentor_invite_public_session_by_manager',
+	},
+	MENTOR_SESSION_EDITED_BY_MANAGER_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentor session edited by manager',
+		optional: true,
+		default: 'mentor_session_edited_by_manager_email_template',
+	},
+	MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentor session deleted by manager',
+		optional: true,
+		default: 'session_deleted_by_manager',
+	},
+	SESSION_TITLE_EDITED_BY_MANAGER_EMAIL_TEMPLATE: {
+		message: 'Required email template name for session title edited by manager',
+		optional: true,
+		default: 'session_title_edited_by_manager_email_template',
+	},
 }
 
 let success = true

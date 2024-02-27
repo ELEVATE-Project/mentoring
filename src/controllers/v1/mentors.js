@@ -7,7 +7,7 @@
 
 // Dependencies
 const mentorsService = require('@services/mentors')
-const { isAMentor } = require('@generics/utils')
+const roleUtils = require('@utils/role')
 
 module.exports = class Mentors {
 	/**
@@ -30,7 +30,7 @@ module.exports = class Mentors {
 				req.searchText,
 				req.params.menteeId ? req.params.menteeId : req?.decodedToken?.id,
 				req.query,
-				isAMentor(req.decodedToken.roles)
+				roleUtils.isAMentor(req.decodedToken.roles)
 			)
 		} catch (error) {
 			return error
@@ -49,7 +49,12 @@ module.exports = class Mentors {
 	 */
 	async details(req) {
 		try {
-			return await mentorsService.read(req.params.id, '', req.decodedToken.id, isAMentor(req.decodedToken.roles))
+			return await mentorsService.read(
+				req.params.id,
+				'',
+				req.decodedToken.id,
+				roleUtils.isAMentor(req.decodedToken.roles)
+			)
 		} catch (error) {
 			return error
 		}
@@ -118,7 +123,7 @@ module.exports = class Mentors {
 				req.searchText,
 				req.query,
 				req.decodedToken.id,
-				isAMentor(req.decodedToken.roles)
+				roleUtils.isAMentor(req.decodedToken.roles)
 			)
 		} catch (error) {
 			return error

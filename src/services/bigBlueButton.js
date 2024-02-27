@@ -8,7 +8,7 @@
 // Dependencies
 const bigBlueButtonUrl = process.env.BIG_BLUE_BUTTON_URL + process.env.BIB_BLUE_BUTTON_BASE_URL
 const endpoints = require('@constants/endpoints')
-const utils = require('@generics/utils')
+const authUtils = require('@utils/auth')
 
 module.exports = class BigBlueButtonHelper {
 	/**
@@ -26,7 +26,7 @@ module.exports = class BigBlueButtonHelper {
 			mentorName = encodeURI(mentorName)
 			let query = 'meetingID=' + meetingId + '&password=' + moderatorPW + '&fullName=' + mentorName
 			let checkSumGeneration = 'join' + query + process.env.BIG_BLUE_BUTTON_SECRET_KEY
-			const checksum = utils.generateCheckSum(checkSumGeneration)
+			const checksum = authUtils.generateCheckSum(checkSumGeneration)
 
 			const joinUrl = bigBlueButtonUrl + endpoints.JOIN_MEETING + '?' + query + '&checksum=' + checksum
 			return joinUrl
@@ -50,7 +50,7 @@ module.exports = class BigBlueButtonHelper {
 			menteeName = encodeURI(menteeName)
 			let query = 'meetingID=' + meetingId + '&password=' + menteePW + '&fullName=' + menteeName
 			let checkSumGeneration = 'join' + query + process.env.BIG_BLUE_BUTTON_SECRET_KEY
-			const checksum = utils.generateCheckSum(checkSumGeneration)
+			const checksum = authUtils.generateCheckSum(checkSumGeneration)
 
 			const joinUrl = bigBlueButtonUrl + endpoints.JOIN_MEETING + '?' + query + '&checksum=' + checksum
 			return joinUrl

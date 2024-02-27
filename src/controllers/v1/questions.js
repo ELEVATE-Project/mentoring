@@ -7,7 +7,7 @@
 
 // Dependencies
 const questionsService = require('@services/questions')
-const utilsHelper = require('@generics/utils')
+const roleUtils = require('@utils/role')
 const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
@@ -23,7 +23,7 @@ module.exports = class Questions {
 
 	async create(req) {
 		try {
-			if (!utilsHelper.validateRoleAccess(req.decodedToken.roles, [common.ADMIN_ROLE, common.ORG_ADMIN_ROLE])) {
+			if (!roleUtils.validateRoleAccess(req.decodedToken.roles, [common.ADMIN_ROLE, common.ORG_ADMIN_ROLE])) {
 				throw responses.failureResponse({
 					message: 'USER_IS_NOT_A_ADMIN',
 					statusCode: httpStatusCode.bad_request,
@@ -47,7 +47,7 @@ module.exports = class Questions {
 
 	async update(req) {
 		try {
-			if (!utilsHelper.validateRoleAccess(req.decodedToken.roles, [common.ADMIN_ROLE, common.ORG_ADMIN_ROLE])) {
+			if (!roleUtils.validateRoleAccess(req.decodedToken.roles, [common.ADMIN_ROLE, common.ORG_ADMIN_ROLE])) {
 				throw responses.failureResponse({
 					message: 'USER_IS_NOT_A_ADMIN',
 					statusCode: httpStatusCode.bad_request,

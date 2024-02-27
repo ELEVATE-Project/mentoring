@@ -1,6 +1,5 @@
 const httpStatusCode = require('@generics/http-status')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
-const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 
 module.exports = class NotificationTemplateHelper {

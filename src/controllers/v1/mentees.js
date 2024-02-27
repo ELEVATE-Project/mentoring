@@ -6,7 +6,7 @@
  */
 
 // Dependencies
-const { isAMentor } = require('@generics/utils')
+const roleUtils = require('@utils/role')
 const menteesService = require('@services/mentees')
 
 module.exports = class Mentees {
@@ -88,7 +88,7 @@ module.exports = class Mentees {
 		try {
 			const homeFeed = await menteesService.homeFeed(
 				req.decodedToken.id,
-				isAMentor(req.decodedToken.roles),
+				roleUtils.isAMentor(req.decodedToken.roles),
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
@@ -127,7 +127,7 @@ module.exports = class Mentees {
 				req.searchText,
 				req.query,
 				req.decodedToken.id,
-				isAMentor(req.decodedToken.roles)
+				roleUtils.isAMentor(req.decodedToken.roles)
 			)
 		} catch (error) {
 			return error

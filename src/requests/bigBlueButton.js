@@ -9,7 +9,7 @@
 const bigBlueButtonUrl = process.env.BIG_BLUE_BUTTON_URL + process.env.BIB_BLUE_BUTTON_BASE_URL
 const request = require('@generics/requests')
 const endpoints = require('@constants/endpoints')
-const utils = require('@generics/utils')
+const authUtils = require('@utils/auth')
 
 /**
  * Create Meeting.
@@ -51,7 +51,7 @@ const createMeeting = function (meetingId, meetingName, attendeePW, moderatorPW,
 				lastUserTimeout
 
 			let checkSumGeneration = 'create' + query + process.env.BIG_BLUE_BUTTON_SECRET_KEY
-			const checksum = utils.generateCheckSum(checkSumGeneration)
+			const checksum = authUtils.generateCheckSum(checkSumGeneration)
 
 			const createUrl = bigBlueButtonUrl + endpoints.CREATE_MEETING + '?' + query + '&checksum=' + checksum
 			let response = await request.get(createUrl)
@@ -74,7 +74,7 @@ const getRecordings = function (meetingId) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			let checkSumGeneration = 'getRecordingsmeetingID=' + meetingId + process.env.BIG_BLUE_BUTTON_SECRET_KEY
-			const checksum = utils.generateCheckSum(checkSumGeneration)
+			const checksum = authUtils.generateCheckSum(checkSumGeneration)
 
 			const meetingInfoUrl =
 				bigBlueButtonUrl + endpoints.GET_RECORDINGS + '?meetingID=' + meetingId + '&checksum=' + checksum

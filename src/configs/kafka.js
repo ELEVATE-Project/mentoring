@@ -5,7 +5,7 @@
  * Description : Kafka connection configurations
  */
 
-const utils = require('@generics/utils')
+const cacheUtils = require('@utils/cache')
 const { elevateLog } = require('elevate-logger')
 const logger = elevateLog.init()
 const { Kafka } = require('kafkajs')
@@ -39,9 +39,10 @@ module.exports = async () => {
 				try {
 					let streamingData = JSON.parse(message.value)
 					if (streamingData.type == 'CLEAR_INTERNAL_CACHE') {
-						utils.internalDel(streamingData.value)
+						cacheUtils.internalDel(streamingData.value)
 					}
 				} catch (error) {
+					console.error(error)
 					throw error
 				}
 			},

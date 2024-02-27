@@ -1,7 +1,6 @@
 const cloudServices = require('@generics/cloud-services')
 const httpStatusCode = require('@generics/http-status')
-const common = require('@constants/common')
-const utils = require('@generics/utils')
+const cloudUtils = require('@utils/cloud')
 const responses = require('@helpers/responses')
 
 module.exports = class FilesHelper {
@@ -39,7 +38,7 @@ module.exports = class FilesHelper {
 
 	static async getDownloadableUrl(path) {
 		try {
-			let response = await utils.getDownloadableUrl(path)
+			let response = await cloudUtils.getDownloadableUrl(path)
 			return responses.successResponse({
 				message: 'DOWNLOAD_URL_GENERATED_SUCCESSFULLY',
 				statusCode: httpStatusCode.ok,

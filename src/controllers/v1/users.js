@@ -6,7 +6,7 @@
  */
 
 // Dependencies
-const { isAMentor } = require('@generics/utils')
+const roleUtils = require('@utils/role')
 const feedbackService = require('@services/feedback')
 const userService = require('@services/users')
 
@@ -25,7 +25,7 @@ module.exports = class Users {
 		try {
 			const pendingFeedBacks = await feedbackService.pending(
 				req.decodedToken.id,
-				isAMentor(req.decodedToken.roles)
+				roleUtils.isAMentor(req.decodedToken.roles)
 			)
 			return pendingFeedBacks
 		} catch (error) {

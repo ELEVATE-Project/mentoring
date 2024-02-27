@@ -1,7 +1,7 @@
-// Dependenices
+// Dependencies
 const common = require('@constants/common')
 const kafkaCommunication = require('@generics/kafka-communication')
-const utils = require('@generics/utils')
+const emailUtils = require('@utils/email')
 const sessionQueries = require('@database/queries/sessions')
 const notificationQueries = require('@database/queries/notificationTemplate')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
@@ -124,9 +124,9 @@ module.exports = class Notifications {
 					process.env.DEFAULT_MEETING_SERVICE.toUpperCase() != common.BBB_VALUE &&
 					!session.meetingInfo?.link
 				) {
-					emailBody = utils.extractEmailTemplate(emailBody, ['default', 'linkWarning'])
+					emailBody = emailUtils.extractEmailTemplate(emailBody, ['default', 'linkWarning'])
 				} else {
-					emailBody = utils.extractEmailTemplate(emailBody, ['default'])
+					emailBody = emailUtils.extractEmailTemplate(emailBody, ['default'])
 				}
 				emailBody = emailBody.replace('{sessionTitle}', session.title)
 				if (userAccountDetails && userAccountDetails.email && userAccountDetails.name) {

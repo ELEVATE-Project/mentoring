@@ -1,7 +1,7 @@
 const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 
-const utils = require('@generics/utils')
+const emailUtils = require('@utils/email')
 const kafkaCommunication = require('@generics/kafka-communication')
 
 const sessionQueries = require('@database/queries/sessions')
@@ -102,7 +102,7 @@ module.exports = class AdminHelper {
 						email: {
 							to: attendee.attendeeEmail,
 							subject: templateData.subject,
-							body: utils.composeEmailBody(templateData.body, {
+							body: emailUtils.composeEmailBody(templateData.body, {
 								name: attendee.attendeeName,
 								sessionTitle: session.title,
 							}),
