@@ -32,19 +32,6 @@ services:
       options:
         gelf-address: 'udp://0.0.0.0:12201'
         tag: 'kafka-logs'
-  mongo:
-    image: 'mongo:4.1.4'
-    restart: 'always'
-    command:
-      - '--logpath'
-      - '/var/log/mongodb/mongod.log'
-    ports:
-      - '27017:27017'
-    networks:
-      - elevate_net
-    volumes:
-      - mongo-data:/data/db
-      - logs:/var/log/mongodb
   redis:
     image: 'redis:7.0.0'
     restart: 'always'
@@ -60,69 +47,116 @@ services:
         gelf-address: 'udp://0.0.0.0:12201'
         tag: 'redis-logs'
   mentoring:
-    image: shikshalokamqa/elevate-mentoring:2.4
+    # update image url with latest one:
+    # image: shikshalokamqa/elevate-mentoring:2.4
     ports:
       - '3000:3000'
     command: ['nodemon', 'app.js']
     environment:
-      - MONGODB_URL=mongodb://mongo:27017/elevate-mentoring
       - KAFKA_URL=kafka:9092
       - USER_SERIVCE_HOST=http://user:3001
       - REDIS_HOST=redis://redis:6379
+      - DEV_DATABASE_URL=postgres://postgres:postgres@citus_master:5432/elevate-mentoring
+      - SCHEDULER_SERVICE_HOST=http://scheduler:4000
     depends_on:
       - kafka
-      - mongo
       - redis
+      - citus
     networks:
       - elevate_net
     env_file:
       - ${mentoring_env}
   user:
-    image: shikshalokamqa/elevate-user:2.4
+    # update with latest image
+    # image: shikshalokamqa/elevate-user:2.4
     ports:
       - '3001:3001'
     command: ['nodemon', 'app.js']
     environment:
-      - MONGODB_URL=mongodb://mongo:27017/elevate-user
+      - DEV_DATABASE_URL=postgres://postgres:postgres@citus_master:5432/elevate-user
       - KAFKA_URL=kafka:9092
       - REDIS_HOST=redis://redis:6379
     depends_on:
       - kafka
-      - mongo
+      - citus
       - redis
     networks:
       - elevate_net
     env_file:
       - ${users_env}
   notification:
-    image: shikshalokamqa/elevate-notification:2.4
+    # Update with latest image
+    # image: shikshalokamqa/elevate-notification:2.4
     ports:
       - '3002:3002'
     command: ['nodemon', 'app.js']
     environment:
       - KAFKA_HOST=kafka:9092
+      - DEV_DATABASE_URL=postgres://postgres:postgres@citus_master:5432/elevate-notification
     depends_on:
       - kafka
+      - citus
     networks:
       - elevate_net
     env_file:
       - ${notification_env}
-
   scheduler:
-    image: shikshalokamqa/elevate-scheduler:2.4
+    # Update with latest image
+    # image: shikshalokamqa/elevate-scheduler:2.4
     ports:
       - '4000:4000'
     command: ['nodemon', 'app.js']
     environment:
       - KAFKA_URL=kafka:9092
-      - MONGODB_URL=mongodb://mongo:27017/elevate-scheduler
     env_file:
       - ${scheduler_env}
     depends_on:
       - kafka
-      - mongo
+      - redis
     networks:
       - elevate_net
+  interface:
+    # Update with latest image
+    # image: elevate/interface:1.0
+    ports:
+      - '3569:3569'
+    command: ['node', 'app.js']
+    networks:
+      - elevate_net
+  citus:
+    image: citusdata/citus:11.2.0
+    container_name: 'citus_master'
+    ports:
+      - 5432:5432
+    # expose:
+    #   - 5432
+    # command: >
+    #   bash -c "while ! pg_isready -h localhost -U postgres -q; do sleep 1; done &&
+    #   psql -h localhost -U postgres -d <database_name> -c 'CREATE EXTENSION citus; SELECT create_distributed_table(\"notification_templates\", \"id\");'"
+    environment: &AUTH
+      POSTGRES_USER: '${POSTGRES_USER:-postgres}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD:-postgres}'
+      PGUSER: '${POSTGRES_USER:-postgres}'
+      PGPASSWORD: '${POSTGRES_PASSWORD:-postgres}'
+      POSTGRES_DB: 'postgres'
+      POSTGRES_HOST_AUTH_METHOD: '${POSTGRES_HOST_AUTH_METHOD:-trust}'
+      POSTGRES_LOG_STATEMENT: 'all' # Enable query logging (set to 'all' for all queries)
+
+    networks:
+      - elevate_net
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: elevate-pgadmin
+    restart: always
+    ports:
+      - '5500:80'
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=user@shikshalokam.org
+      - PGADMIN_DEFAULT_PASSWORD=password
+    networks:
+      - elevate_net
+    logging:
+      driver: none
 
   #The below services can be disable safely. Only enable if graylog service is needed.
   # elasticsearch:
@@ -205,9 +239,8 @@ services:
 networks:
   elevate_net:
     external: false
-volumes:
-  zookeeper-data:
-  kafka-data:
-  mongo-data:
-  fbdata:
-  logs:
+# volumes:
+#   zookeeper-data:
+#   kafka-data:
+# fbdata:
+# logs:

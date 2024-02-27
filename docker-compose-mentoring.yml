@@ -32,17 +32,6 @@ services:
       - kafka-data:/bitnami/kafka
     logging:
       driver: none
-  mongo:
-    image: 'mongo:4.1.4'
-    restart: 'always'
-    ports:
-      - '27017:27017'
-    networks:
-      - elevate_net
-    volumes:
-      - mongo-data:/data/db
-    logging:
-      driver: none
   redis:
     image: 'redis:7.0.0'
     restart: 'always'
@@ -66,14 +55,14 @@ services:
 
   mentoring:
     build: './'
-    image: elevate/mentoring:2.4
+    #  change to latest image
+    # image: elevate/mentoring:2.4
     volumes:
       - ./src/:/var/src
     ports:
       - '3000:3000'
     command: ['nodemon', '--trace-warnings', 'app.js']
     environment:
-      - MONGODB_URL=mongodb://mongo:27017/elevate-mentoring
       - KAFKA_URL=kafka:9092
       - USER_SERVICE_HOST=http://user:3001
       - DEV_DATABASE_URL=postgres://postgres:postgres@citus_master:5432/mentoring-local
@@ -82,31 +71,32 @@ services:
 
     depends_on:
       - kafka
-      - mongo
+      - citus
     networks:
       - elevate_net
   user:
     build: '../user/'
-    image: elevate/user:2.4
+    # update with latest image
+    # image: elevate/user:2.4
     volumes:
       - ../user/src/:/var/src
     ports:
       - '3001:3001'
     command: ['nodemon', '--trace-warnings', 'app.js']
     environment:
-      - MONGODB_URL=mongodb://mongo:27017/elevate-mentoring
       - KAFKA_URL=kafka:9092
       - REDIS_HOST=redis://redis:6379
       - DEV_DATABASE_URL=postgres://postgres:postgres@citus_master:5432/user-local
     depends_on:
       - kafka
-      - mongo
+      - citus
       - redis
     networks:
       - elevate_net
   notification:
     build: '../notification/'
-    image: elevate/notification:2.4
+    # Update with latest image
+    # image: elevate/notification:2.4
     volumes:
       - ../notification/src/:/var/src
     ports:
@@ -115,15 +105,15 @@ services:
     environment:
       - KAFKA_HOST=kafka:9092
       - DEV_DATABASE_URL=postgres://postgres:postgres@citus_master:5432/notification-local
-
     depends_on:
       - kafka
-      - mongo
+      - citus
     networks:
       - elevate_net
   scheduler:
     build: '../scheduler/'
-    image: elevate/scheduler:1.0
+    # update with latest image
+    # image: elevate/scheduler:1.0
     volumes:
       - ../scheduler/src/:/var/src
     ports:
@@ -131,16 +121,15 @@ services:
     command: ['nodemon', '--trace-warnings', 'app.js']
     environment:
       - KAFKA_URL=kafka:9092
-      - MONGODB_URL=mongodb://mongo:27017/elevate-scheduler
     depends_on:
       - kafka
-      - mongo
       - redis
     networks:
       - elevate_net
   interface:
     build: '../interface-service/'
-    image: elevate/interface:1.0
+    # Update with latest image
+    # image: elevate/interface:1.0
     volumes:
       - ../interface-service/src/:/var/src
     ports:
@@ -222,6 +211,5 @@ networks:
 volumes:
   zookeeper-data:
   kafka-data:
-  mongo-data:
-  redis_data:
-  healthcheck-volume:
+  # redis_data:
+  # healthcheck-volume:
