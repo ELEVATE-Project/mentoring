@@ -524,6 +524,11 @@ module.exports = class SessionsHelper {
 						await this.removeMentees(sessionId, menteesToRemove, bodyData.time_zone)
 					}
 				}
+
+				if (bodyData.start_date !== Number(sessionDetail.start_date)) {
+					await sessionQueries.updateOne({ id: sessionId }, { status: common.PUBLISHED_STATUS })
+				}
+
 				const { rowsAffected, updatedRows } = await sessionQueries.updateOne({ id: sessionId }, bodyData, {
 					returning: true,
 				})
