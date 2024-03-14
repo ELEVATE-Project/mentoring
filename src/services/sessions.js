@@ -473,11 +473,7 @@ module.exports = class SessionsHelper {
 			let message
 			const sessionRelatedJobIds = common.notificationJobIdPrefixes.map((element) => element + sessionDetail.id)
 			if (method == common.DELETE_METHOD) {
-				let statTime = moment.unix(sessionDetail.start_date)
-				const current = moment.utc()
-				let diff = statTime.diff(current, 'minutes')
-
-				if (sessionDetail.status == common.PUBLISHED_STATUS && diff > 10) {
+				if (sessionDetail.status == common.PUBLISHED_STATUS) {
 					await sessionQueries.deleteSession({
 						id: sessionId,
 					})
@@ -490,7 +486,7 @@ module.exports = class SessionsHelper {
 					}
 				} else {
 					return responses.failureResponse({
-						message: 'SESSION_DELETION_FAILED',
+						message: 'CANNOT_DELETE_LIVE_SESSION',
 						statusCode: httpStatusCode.bad_request,
 						responseCode: 'CLIENT_ERROR',
 					})
@@ -1122,16 +1118,7 @@ module.exports = class SessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			// check if the session is accessible to the user
-			let isAccessible = await this.checkIfSessionIsAccessible(session, userId, isAMentor)
 
-			if (!isAccessible) {
-				return responses.failureResponse({
-					message: 'INVALID_PERMISSION',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
 			const sessionAttendeeExist = await sessionAttendeesQueries.findOne({
 				session_id: sessionId,
 				mentee_id: userId,

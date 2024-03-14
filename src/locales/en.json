@@ -65,9 +65,10 @@
 	"FORM_VERSION_FETCHED_SUCCESSFULLY": "Form versions fetched successfully",
 	"ACCESS_TOKEN_EXPIRED": "Session expired. Please login again.",
 	"INVALID_TIME_SELECTION": "You already have a session '{{sessionName}}' scheduled at this time. Please select a different time.",
-	"SESSION_DELETION_FAILED": "Session can't be deleted",
+	"CANNOT_DELETE_LIVE_SESSION": "Cannot delete ongoing session.",
 	"MEETING_SERVICE_INFO_NOT_FOUND": "BBB is currently disabled. Please provide an alternative meeting platform.",
 	"SESSION_EDIT_WINDOW": "Session editing is only allowed up to {{editWindow}} minutes before the session start time.",
+	"CANNOT_EDIT_LIVE_SESSION": "Cannot edit ongoing session.",
 	"SESSION_SEAT_FULL": "Session seats full.",
 	"APP_CONFIG_FETCHED_SUCCESSFULLY": "App config fetched successfully.",
 	"USER_REMOVED_SUCCESSFULLY": "User details removed successfully.",
@@ -155,5 +156,6 @@
 	"ORG_EXTENSION_CREATED_SUCCESSFULLY": "Organization Extension Created Successfully",
 	"PERMISSIONS_NOT_FOUND": "permissions not found",
 	"SESSION_MENTOR_ADDED_TO_MENTEE_LIST": "You have added the Session Mentor in the Mentee list. Please go back and select another mentee.",
-	"INVALID_DATA_PASSED": "Invalid data passed for creation"
+	"INVALID_DATA_PASSED": "Invalid data passed for creation",
+	"PROFILE_UPDATE_FAILED": "Profile update failed. Please try again."
 }

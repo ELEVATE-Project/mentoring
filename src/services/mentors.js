@@ -364,6 +364,8 @@ module.exports = class MentorsHelper {
 				...data,
 				...saasPolicyData,
 				visible_to_organizations: userOrgDetails.data.result.related_orgs,
+				visibility: organisationPolicy.mentee_visibility_policy,
+				external_mentee_visibility: organisationPolicy.external_mentee_visibility_policy,
 			}
 
 			const response = await mentorQueries.createMentorExtension(data)
@@ -430,6 +432,16 @@ module.exports = class MentorsHelper {
 			})
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
 			let mentorExtensionsModel = await mentorQueries.getColumns()
+
+			let res = utils.validateInput(data, validationData, mentorExtensionsModelName)
+			if (!res.success) {
+				return responses.failureResponse({
+					message: 'PROFILE_UPDATE_FAILED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+					result: res.errors,
+				})
+			}
 
 			data = utils.restructureBody(data, validationData, mentorExtensionsModel)
 

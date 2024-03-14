@@ -54,6 +54,10 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.INTEGER,
 				allowNull: false,
 			},
+			external_mentee_visibility: {
+				type: DataTypes.STRING,
+				defaultValue: 'CURRENT',
+			},
 		},
 		{
 			sequelize,

@@ -210,6 +210,15 @@ module.exports = class OrgAdminService {
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
+
+			if (!policies.hasOwnProperty('mentee_visibility_policy')) {
+				policies['mentee_visibility_policy'] = 'CURRENT'
+			}
+
+			if (!policies.hasOwnProperty('external_mentee_visibility_policy')) {
+				policies['external_mentee_visibility_policy'] = 'CURRENT'
+			}
+
 			const orgPolicies = await organisationExtensionQueries.upsert({
 				organization_id: decodedToken.organization_id,
 				...policies,
@@ -485,6 +494,7 @@ module.exports = class OrgAdminService {
 			mentor_visibility_policy,
 			external_session_visibility_policy,
 			external_mentor_visibility_policy,
+			external_mentee_visibility_policy,
 			organization_id,
 		} = organisationPolicy
 		// create policy object
@@ -492,6 +502,7 @@ module.exports = class OrgAdminService {
 			visibility: mentor_visibility_policy,
 			external_session_visibility: external_session_visibility_policy,
 			external_mentor_visibility: external_mentor_visibility_policy,
+			external_mentee_visibility: external_mentee_visibility_policy,
 		}
 		// add org_ id value if requested
 		if (addOrgId) {
