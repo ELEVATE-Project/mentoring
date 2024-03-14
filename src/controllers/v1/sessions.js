@@ -26,7 +26,7 @@ module.exports = class Sessions {
 	async update(req) {
 		try {
 			// check if notifyUser is true or false. By default true
-			const notifyUser = req.query.notifyUser ? req.query.notifyUser.toLowerCase() === 'true' : true
+			const notifyUser = req.query.notifyUser ? String(req.query.notifyUser).toLowerCase() === 'true' : true
 
 			if (req.params.id) {
 				if (req.headers.timezone) {
