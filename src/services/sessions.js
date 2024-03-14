@@ -1145,7 +1145,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			if (session.seats_remaining <= 0) {
+			if (session.seats_remaining <= 0 && session.created_by != userId) {
 				return responses.failureResponse({
 					message: 'SESSION_SEAT_FULL',
 					statusCode: httpStatusCode.bad_request,
