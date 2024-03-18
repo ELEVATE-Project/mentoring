@@ -633,6 +633,8 @@ module.exports = class MenteesHelper {
 				...data,
 				...saasPolicyData,
 				visible_to_organizations: userOrgDetails.data.result.related_orgs,
+				visibility: organisationPolicy.mentee_visibility_policy,
+				external_mentee_visibility: organisationPolicy.external_mentee_visibility_policy,
 			}
 
 			const response = await menteeQueries.createMenteeExtension(data)
@@ -898,8 +900,8 @@ module.exports = class MenteesHelper {
 			let organizationIds = []
 			filterType = filterType.toLowerCase()
 			const attributes =
-				filterType == common.MENTEE_ROLE
-					? ['organization_id', 'session_visibility_policy']
+				filterType == common.MENTEE_ROLE					
+					? ['organization_id', 'external_mentee_visibility_policy']
 					: ['organization_id', 'external_mentor_visibility_policy']
 
 			const orgExtension = await organisationExtensionQueries.findOne(
@@ -911,7 +913,7 @@ module.exports = class MenteesHelper {
 
 			const visibilityPolicy =
 				filterType == common.MENTEE_ROLE
-					? orgExtension.session_visibility_policy
+					? orgExtension.external_mentee_visibility_policy
 					: orgExtension.external_mentor_visibility_policy
 
 			if (orgExtension?.organization_id) {
@@ -928,7 +930,7 @@ module.exports = class MenteesHelper {
 						const associatedAdditionalFilter =
 							filterType == common.MENTEE_ROLE
 								? {
-										external_session_visibility_policy: {
+										external_mentee_visibility_policy: {
 											[Op.ne]: 'CURRENT',
 										},
 								  }
@@ -1277,7 +1279,7 @@ module.exports = class MenteesHelper {
 					organization_id: userPolicyDetails.organization_id,
 				},
 				{
-					attributes: ['session_visibility_policy', 'organization_id'],
+					attributes: ['external_mentee_visibility_policy', 'organization_id'],
 				}
 			)
 			// Throw error if mentor/mentee extension not found
@@ -1295,8 +1297,8 @@ module.exports = class MenteesHelper {
 			if (organization_ids.length !== 0) {
 				additionalFilter = `AND "organization_id" in (${organization_ids.join(',')})`
 			}
-			if (getOrgPolicy.session_visibility_policy && userPolicyDetails.organization_id) {
-				const visibilityPolicy = getOrgPolicy.session_visibility_policy
+			if (getOrgPolicy.external_mentee_visibility_policy && userPolicyDetails.organization_id) {
+				const visibilityPolicy = getOrgPolicy.external_mentee_visibility_policy
 
 				// Filter user data based on policy
 				// generate filter based on condition
@@ -1313,7 +1315,7 @@ module.exports = class MenteesHelper {
 					 */
 					filter =
 						additionalFilter +
-						`AND ( (${userPolicyDetails.organization_id} = ANY("visible_to_organizations") AND "external_session_visibility" != 'CURRENT')`
+						`AND ( (${userPolicyDetails.organization_id} = ANY("visible_to_organizations") AND "external_mentee_visibility_policy" != 'CURRENT')`
 
 					if (additionalFilter.length === 0)
 						filter += ` OR organization_id = ${userPolicyDetails.organization_id} )`
@@ -1325,7 +1327,7 @@ module.exports = class MenteesHelper {
 					 */
 					filter =
 						additionalFilter +
-						`AND ((${userPolicyDetails.organization_id} = ANY("visible_to_organizations") AND "external_session_visibility" != 'CURRENT' ) OR "external_session_visibility" = 'ALL' OR "organization_id" = ${userPolicyDetails.organization_id})`
+						`AND ((${userPolicyDetails.organization_id} = ANY("visible_to_organizations") AND "external_mentee_visibility_policy" != 'CURRENT' ) OR "external_mentee_visibility_policy" = 'ALL' OR "organization_id" = ${userPolicyDetails.organization_id})`
 				}
 			}
 

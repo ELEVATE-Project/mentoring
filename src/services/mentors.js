@@ -364,6 +364,8 @@ module.exports = class MentorsHelper {
 				...data,
 				...saasPolicyData,
 				visible_to_organizations: userOrgDetails.data.result.related_orgs,
+				visibility: organisationPolicy.mentee_visibility_policy,
+				external_mentee_visibility: organisationPolicy.external_mentee_visibility_policy,
 			}
 
 			const response = await mentorQueries.createMentorExtension(data)

@@ -1119,16 +1119,7 @@ module.exports = class SessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			// check if the session is accessible to the user
-			let isAccessible = await this.checkIfSessionIsAccessible(session, userId, isAMentor)
 
-			if (!isAccessible) {
-				return responses.failureResponse({
-					message: 'INVALID_PERMISSION',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
 			const sessionAttendeeExist = await sessionAttendeesQueries.findOne({
 				session_id: sessionId,
 				mentee_id: userId,

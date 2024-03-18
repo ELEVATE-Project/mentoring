@@ -98,8 +98,10 @@ module.exports = {
 	DEFAULT_ORGANISATION_POLICY: {
 		session_visibility_policy: 'CURRENT',
 		mentor_visibility_policy: 'CURRENT',
+		mentee_visibility_policy: 'CURRENT',
 		external_session_visibility_policy: 'CURRENT',
 		external_mentor_visibility_policy: 'CURRENT',
+		external_mentee_visibility_policy: 'CURRENT',
 		allow_mentor_override: false,
 		approval_required_for: [],
 	},
