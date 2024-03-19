@@ -500,34 +500,29 @@ module.exports = class OrgAdminService {
 		return policyData
 	}
 
-	static async updateRelatedOrgs(relatedOrgs, orgId) {
+	/**
+	 * @description 							- update related organization of mentees and mentors if there is an update in the organization
+	 * @method									- POST
+	 * @name 									- updateRelatedOrgs
+	 * @param {Array} relatedOrgs 		 		- Array of related organization passed
+	 * @param {Number} orgId 					- Specific orgId which was updated
+	 * @param {Object} organizationDetails 		- Object of organization details of the related org from user service.
+	 * @returns {Object} 						- A object that reurn a response object.
+	 */
+	static async updateRelatedOrgs(delta_organization_ids, orgId, action) {
 		try {
-			const orgPolicies = await organisationExtensionQueries.getById(orgId)
-			if (
-				orgPolicies.external_mentor_visibility_policy == common.ASSOCIATED ||
-				orgPolicies.mentor_visibility_policy == common.ASSOCIATED
-			) {
-				relatedOrgs.push(orgId) //Adding there own org id since its used for querying
-
-				const updateData = {
-					visible_to_organizations: relatedOrgs,
-				}
-
+			if (action == common.PUSH) {
 				await Promise.all([
-					mentorQueries.updateMentorExtension(
-						null,
-						updateData,
-						{ raw: true, returning: true },
-						{ organization_id: orgId }
-					),
-					menteeQueries.updateMenteeExtension(
-						null,
-						updateData,
-						{ raw: true, returning: true },
-						{ organization_id: orgId }
-					),
+					await menteeQueries.addVisibleToOrg(orgId, delta_organization_ids),
+					await mentorQueries.addVisibleToOrg(orgId, delta_organization_ids),
+				])
+			} else if (action == common.POP) {
+				await Promise.all([
+					await menteeQueries.removeVisibleToOrg(orgId, delta_organization_ids),
+					await mentorQueries.removeVisibleToOrg(orgId, delta_organization_ids),
 				])
 			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'RELATED_ORG_UPDATED',

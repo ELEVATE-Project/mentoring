@@ -66,7 +66,8 @@ module.exports = {
 			.withMessage('user_ids must be an array')
 	},
 	updateRelatedOrgs: (req) => {
-		req.checkBody('related_organization_ids').notEmpty().withMessage('related_organization_ids field is empty')
+		req.checkBody('delta_organization_ids').notEmpty().withMessage('delta_organization_ids field is empty')
 		req.checkBody('organization_id').notEmpty().withMessage('organization_id field is empty')
+		req.checkBody('action').notEmpty().withMessage('action field is empty')
 	},
 }

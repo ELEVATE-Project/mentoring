@@ -28,8 +28,8 @@ Please refer to the below documentation to install Docker and docker-compose on 
     - Download the below 2 files from the mentoring service and paste them into the mentoring folder.
         - [setup file of mentoring service](https://github.com/ELEVATE-Project/mentoring/blob/temp_setup/src/setup.sh)
         - [distributionColumn file of mentoring service ](https://github.com/ELEVATE-Project/mentoring/blob/temp_setup/src/distributionColumns.psql)
-        Change the permission of setup file using below command
-        chmod +x setup.sh
+          Change the permission of setup file using below command
+          chmod +x setup.sh
     - Create a folder named user inside backend folder
 
         ```bash
@@ -39,8 +39,8 @@ Please refer to the below documentation to install Docker and docker-compose on 
     - Do the same for user; download the below 2 files from the user service and paste them into the user folder.
         - [ setup file of user service](https://github.com/ELEVATE-Project/user/blob/temp_setup/src/setup.sh)
         - [ distributionColumn.sql of user service ](https://github.com/ELEVATE-Project/user/blob/temp_setup/src/distributionColumns.sql)
-        Change the permission of setup file using below command
-        chmod +x setup.sh
+          Change the permission of setup file using below command
+          chmod +x setup.sh
 
 2. Create env file to the mentoring service
 
