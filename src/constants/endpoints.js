@@ -16,4 +16,5 @@ module.exports = {
 	UPDATE_DELAY: 'jobs/updateDelay', // Update delay of scheduled job endpoint
 	REMOVE_SCHEDULED_JOB: 'jobs/remove', // Remove scheduled job endpoint
 	ORGANIZATION_LIST: 'v1/organization/list',
+	VALIDATE_SESSIONS: 'v1/account/validateUserSession',
 }

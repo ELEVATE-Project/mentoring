@@ -1,4 +1,5 @@
 let table = require('cli-table')
+const common = require('@constants/common')
 
 let tableData = new table()
 
@@ -250,6 +251,11 @@ let enviromentVariables = {
 		message: 'Required signed url expiration time in milliseconds',
 		optional: true,
 		default: 3600000,
+	},
+	AUTH_METHOD: {
+		message: 'Required authentication method',
+		optional: false,
+		default: common.AUTH_METHOD.JWT_ONLY,
 	},
 }
 

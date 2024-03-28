@@ -97,7 +97,36 @@ module.exports = async function (req, res, next) {
 				})
 			} else throw unAuthorizedResponse
 		}
+		if (process.env.AUTH_METHOD == common.AUTH_METHOD.USER_SERVICE) {
+			try {
+				const userBaseUrl = process.env.USER_SERVICE_HOST + process.env.USER_SERVICE_BASE_URL
+				const validateSessionEndpoint = userBaseUrl + endpoints.VALIDATE_SESSIONS
+				const reqBody = {
+					token: authHeader,
+				}
+				const isSessionActive = await requests.post(validateSessionEndpoint, reqBody, '', true)
 
+				if (isSessionActive.data.responseCode == 'UNAUTHORIZED') {
+					const accessTokenExpiredError = new Error('ACCESS_TOKEN_EXPIRED')
+					accessTokenExpiredError.statusCode = httpStatusCode.unauthorized
+					accessTokenExpiredError.responseCode = 'UNAUTHORIZED'
+					throw accessTokenExpiredError
+				}
+			} catch (error) {
+				if (error.message === 'ACCESS_TOKEN_EXPIRED') {
+					throw responses.failureResponse({
+						message: error.message,
+						statusCode: error.statusCode,
+						responseCode: error.responseCode,
+					})
+				}
+				throw responses.failureResponse({
+					message: 'USER_SERVICE_DOWN',
+					statusCode: httpStatusCode.internal_server_error,
+					responseCode: 'SERVER_ERROR',
+				})
+			}
+		}
 		if (!decodedToken) throw unAuthorizedResponse
 
 		let isAdmin = false
