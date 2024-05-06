@@ -166,7 +166,7 @@ This project relies on the following services:
 
 Please follow the setup guide provided with each service to ensure proper configuration. While these are the recommended services, feel free to utilize any alternative microservices that better suit your project's requirements.
 
-For a comprehensive overview of the MentorEd implementation, refer to the [MentorEd Documentation](https://elevate-docs.shikshalokam.org/.mentorEd/intro).
+For a comprehensive overview of the MentorEd implementation, refer to the [MentorEd Documentation](https://github.com/ELEVATE-Project/mentoring/blob/master/documentation/MentorEd-Documentation-Developer-Guide.md).
 
 The source code for the frontend/mobile application can be found in its respective [GitHub repository](https://github.com/ELEVATE-Project/mentoring-mobile-app).
 
