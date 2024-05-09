@@ -66,17 +66,22 @@ The Mentor building block enables effective mentoring interactions between mento
 
 # Setup Options
 
-**Elevate services can be setup in local using two methods:**
+**Elevate services can be set up in local using two methods:**
 
-<details><summary>Dockerized Services & Dependencies Using Docker-Compose File</summary>
+<details><summary>Dockerized Services and Dependencies Using Docker-Compose File</summary>
 
-## Dockerized Services & Dependencies
+## Dockerized Services and Dependencies
 
-Expectation: Upon following the prescribed steps, you will achieve a fully operational MentorEd application setup, complete with both the portal and backend services.
+Expectation: Upon following the prescribed steps, you will achieve a fully operational Mentor application setup, complete with both the portal and backend services.
 
 ## Prerequisites
 
-To set up the MentorEd application, ensure you have Docker and Docker Compose installed on your system. For Ubuntu users, detailed installation instructions for both can be found in the documentation here: [How To Install and Use Docker Compose on Ubuntu](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-20-04). For Windows and MacOS users, you can refer to the Docker documentation for installation instructions: [Docker Compose Installation Guide](https://docs.docker.com/compose/install/). Once these prerequisites are in place, you're all set to get started with setting up the MentorEd application.
+To set up the Mentor application, you must intall Docker and Docker Compose on your system using any one of the following ways: 
+
+* Ubuntu users can find the detailed installation instructions for both on [How To Install and Use Docker Compose on Ubuntu](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-20-04).
+* Windows and MacOS users, can refer to the installation instructions on [Docker Compose Installation Guide](https://docs.docker.com/compose/install/).
+
+After these prerequisites are in place, you're all set to get started with setting up the application.
 
 ## Installation
 
@@ -90,7 +95,7 @@ To set up the MentorEd application, ensure you have Docker and Docker Compose in
     curl -OJL https://github.com/ELEVATE-Project/mentoring/raw/master/documentation/2.6.1/dockerized/docker-compose-mentoring.yml
     ```
 
-    > Note: All commands are run from the mentoring directory.
+    > Note: Run all the commands from the mentoring directory.
 
     Directory structure:
 
@@ -125,11 +130,11 @@ To set up the MentorEd application, ensure you have Docker and Docker Compose in
 
     > **Note:** Modify the environment files as necessary for your deployment using any text editor, ensuring that the values are appropriate for your environment. The default values provided in the current files are functional and serve as a good starting point. Refer to the sample env files provided at the [Mentoring](https://github.com/ELEVATE-Project/mentoring/blob/master/src/.env.sample), [User](https://github.com/ELEVATE-Project/user/blob/master/src/.env.sample), [Notification](https://github.com/ELEVATE-Project/notification/blob/master/src/.env.sample), [Scheduler](https://github.com/ELEVATE-Project/scheduler/blob/master/src/.env.sample), and [Interface](https://github.com/ELEVATE-Project/interface-service/blob/main/src/.env.sample) repositories for reference.
 
-    > **Caution:** While the default values in the downloaded environment files enable the MentorEd Application to operate, certain features may not function correctly or could be impaired unless the adopter-specific environment variables are properly configured.
+    > **Caution:** While the default values in the downloaded environment files enable the application to operate, certain features may not function correctly or could be impaired unless the adopter-specific environment variables are properly configured.
     >
     > For detailed instructions on adjusting these values, please consult the **[MentorEd Environment Variable Modification Guide](https://github.com/ELEVATE-Project/mentoring/blob/master/documentation/2.6.1/MentorEd-Env-Modification-README.md)**.
 
-    > **Important:** As mentioned in the above linked document, the **User SignUp** functionality may be compromised if key environment variables are not set correctly during deployment. If you opt to skip this setup, consider using the sample user account generator detailed in the `Sample User Accounts Generation` section of this document.
+    > **Important:** As mentioned in the above linked document, the **User SignUp** functionality may be compromised if key environment variables are not set correctly during deployment. If you opt to skip this setup, consider using the sample user account generator detailed in the [Sample User Accounts Generation](#sample-user-accounts-generation) section of this document.
 
 4.  **Download `replace_volume_path` Script File**
 
@@ -220,7 +225,7 @@ To set up the MentorEd application, ensure you have Docker and Docker Compose in
 
         > **Note**: During the first Docker Compose run, the database, migration seeder files, and the script to set the default organization will be executed automatically.
 
-8.  **Access The MentorEd Application**: Once the services are up and the front-end app bundle is built successfully, navigate to **[localhost:8100](http://localhost:8100/)** to access the MentorEd app.
+8.  **Access the Application**: Once the services are up and the front-end app bundle is built successfully, navigate to **[localhost:8100](http://localhost:8100/)** to access the application.
 9.  **Gracefully Stop All Services & Dependencies:** All containers which are part of the docker-compose can be gracefully stopped by pressing `Ctrl + c` in the same terminal where the services are running.
 10. **Remove All Service & Dependency Containers**: All docker containers can be stopped and removed by using the `docker-compose-down` file.
 
@@ -238,7 +243,7 @@ To set up the MentorEd application, ensure you have Docker and Docker Compose in
 
 ## Enable Citus Extension
 
-MentorEd relies on PostgreSQL as its core database system. To boost performance and scalability, users can opt to enable the Citus extension. This transforms PostgreSQL into a distributed database, spreading data across multiple nodes to handle large datasets more efficiently as demand grows.
+Mentor application relies on PostgreSQL as its core database system. To boost performance and scalability, users can opt to enable the Citus extension. This transforms PostgreSQL into a distributed database, spreading data across multiple nodes to handle large datasets more efficiently as demand grows.
 
 For more information, refer **[Citus Data](https://www.citusdata.com/)**.
 
@@ -327,9 +332,9 @@ By implementing these adjustments, the configuration ensures that when the `dock
 
 ## Sample User Accounts Generation
 
-During the initial setup of MentorEd services with the default configuration, you may encounter issues creating new accounts through the regular SignUp flow on the MentorEd portal. This typically occurs because the default SignUp process includes OTP verification to prevent abuse. Until the notification service is configured correctly to send actual emails, you will not be able to create new accounts.
+During the initial setup of Mentor services with the default configuration, you may encounter issues creating new accounts through the regular SignUp flow on the Mentor portal. This typically occurs because the default SignUp process includes OTP verification to prevent abuse. Until the notification service is configured correctly to send actual emails, you will not be able to create new accounts.
 
-In such cases, you can generate sample user accounts using the steps below. This allows you to explore the MentorEd services and portal immediately after setup.
+In such cases, you can generate sample user accounts using the steps below. This allows you to explore the services and portal immediately after setup.
 
 > **Warning:** Use this generator only immediately after the initial system setup and before any normal user accounts are created through the portal. It should not be used under any circumstances thereafter.
 
@@ -392,15 +397,15 @@ In such cases, you can generate sample user accounts using the steps below. This
 </details>
 
 <details>
-<summary>Natively Installed Services & Dependencies </summary>
+<summary>Natively Installed Services and Dependencies </summary>
 
-## PM2 Managed Services & Natively Installed Dependencies
+## PM2 Managed Services and Natively Installed Dependencies
 
-Expectation: Upon following the prescribed steps, you will achieve a fully operational MentorEd application setup. Both the portal and backend services are managed using PM2, with all dependencies installed natively on the host system.
+Expectation: Upon following the prescribed steps, you will achieve a fully operational Mentor application setup. Both the portal and backend services are managed using PM2, with all dependencies installed natively on the host system.
 
 ## Prerequisites
 
-Before setting up the following MentorEd application, dependencies given below should be installed and verified to be running. Refer to the steps given below to install them and verify.
+Before setting up the following application, dependencies given below should be installed and verified to be running. Refer to the steps given below to install them and verify.
 
 -   **Ubuntu/Linux**
 
@@ -495,7 +500,7 @@ Before setting up the following MentorEd application, dependencies given below s
 
         1. Adapt the instructions given in the following ["Apache Kafka on Windows"](https://www.conduktor.io/kafka/how-to-install-apache-kafka-on-windows/) documentation to install Kafka version 3.5.0.
 
-            > Note: As per the instructions, Kafka server and Zookeeper has to be kept active on different WSL terminals for the entire lifetime of MentorEd services.
+            > Note: As per the instructions, Kafka server and Zookeeper has to be kept active on different WSL terminals for the entire lifetime of the services.
 
             > Note: Multiple WSL terminals can be opened by launching `Ubuntu` from start menu.
 
@@ -649,7 +654,7 @@ Before setting up the following MentorEd application, dependencies given below s
 
     > **Note:** Modify the environment files as necessary for your deployment using any text editor, ensuring that the values are appropriate for your environment. The default values provided in the current files are functional and serve as a good starting point. Refer to the sample env files provided at the [Mentoring](https://github.com/ELEVATE-Project/mentoring/blob/master/src/.env.sample), [User](https://github.com/ELEVATE-Project/user/blob/master/src/.env.sample), [Notification](https://github.com/ELEVATE-Project/notification/blob/master/src/.env.sample), [Scheduler](https://github.com/ELEVATE-Project/scheduler/blob/master/src/.env.sample), and [Interface](https://github.com/ELEVATE-Project/interface-service/blob/main/src/.env.sample) repositories for reference.
 
-    > **Caution:** While the default values in the downloaded environment files enable the MentorEd Application to operate, certain features may not function correctly or could be impaired unless the adopter-specific environment variables are properly configured.
+    > **Caution:** While the default values in the downloaded environment files enable the application to operate, certain features may not function correctly or could be impaired unless the adopter-specific environment variables are properly configured.
     >
     > For detailed instructions on adjusting these values, please consult the **[MentorEd Environment Variable Modification Guide](https://github.com/ELEVATE-Project/mentoring/blob/master/documentation/2.6.1/MentorEd-Env-Modification-README.md)**.
 
@@ -725,7 +730,7 @@ Before setting up the following MentorEd application, dependencies given below s
 
 7. **Enabling Citus And Setting Distribution Columns (Optional)**
 
-    MentorEd relies on PostgreSQL as its core database system. To boost performance and scalability, users can opt to enable the Citus extension. This transforms PostgreSQL into a distributed database, spreading data across multiple nodes to handle large datasets more efficiently as demand grows.
+    Mentor application relies on PostgreSQL as its core database system. To boost performance and scalability, users can opt to enable the Citus extension. This transforms PostgreSQL into a distributed database, spreading data across multiple nodes to handle large datasets more efficiently as demand grows.
 
     > NOTE: Currently only available for Linux based operation systems.
 
@@ -767,7 +772,7 @@ Before setting up the following MentorEd application, dependencies given below s
                 ```
 
 8. **Insert Initial Data**
-   Use MentorEd in-build seeders to insert the initial data.
+   Use the in-build seeders to insert the initial data.
 
     - **Ubuntu/Linux/MacOS**
 
@@ -784,7 +789,7 @@ Before setting up the following MentorEd application, dependencies given below s
 
 9. **Start The Services**
 
-    Following the steps given below, 2 instances of each MentorEd backend service will be deployed and be managed by PM2 process manager.
+    Following the steps given below, 2 instances of the backend services will be deployed and be managed by PM2 process manager.
 
     - **Ubuntu/Linux**
 
@@ -834,7 +839,7 @@ Before setting up the following MentorEd application, dependencies given below s
 
 11. **Start The Portal**
 
-    MentorEd portal utilizes Ionic and Angular CLI for building the browser bundle, follow the steps given below to install them and start the portal.
+    Mentor portal utilizes Ionic and Angular CLI for building the browser bundle, follow the steps given below to install them and start the portal.
 
     - **Ubuntu/Linux**
 
@@ -929,13 +934,13 @@ Before setting up the following MentorEd application, dependencies given below s
             pm2 start pm2.config.json & cd ..
             ```
 
-    Navigate to http://localhost:7601 to access the MentorEd Portal.
+    Navigate to http://localhost:7601 to access the portal.
 
 ## Sample User Accounts Generation
 
-During the initial setup of MentorEd services with the default configuration, you may encounter issues creating new accounts through the regular SignUp flow on the MentorEd portal. This typically occurs because the default SignUp process includes OTP verification to prevent abuse. Until the notification service is configured correctly to send actual emails, you will not be able to create new accounts.
+During the initial setup of Mentor services with the default configuration, you may encounter issues creating new accounts through the regular SignUp flow on the Mentor portal. This typically occurs because the default SignUp process includes OTP verification to prevent abuse. Until the notification service is configured correctly to send actual emails, you will not be able to create new accounts.
 
-In such cases, you can generate sample user accounts using the steps below. This allows you to explore the MentorEd services and portal immediately after setup.
+In such cases, you can generate sample user accounts using the steps below. This allows you to explore the services and portal immediately after setup.
 
 > **Warning:** Use this generator only immediately after the initial system setup and before any normal user accounts are created through the portal. It should not be used under any circumstances thereafter.
 
@@ -1057,7 +1062,7 @@ This project relies on the following services:
 
 Please follow the setup guide provided with each service to ensure proper configuration. While these are the recommended services, feel free to utilize any alternative microservices that better suit your project's requirements.
 
-For a comprehensive overview of the MentorEd implementation, refer to the [MentorEd Documentation](https://elevate-docs.shikshalokam.org/.mentorEd/intro).
+For a comprehensive overview of the implementation, refer to the [Mentor Documentation](https://elevate-docs.shikshalokam.org/mentor/intro).
 
 The source code for the frontend/mobile application can be found in its respective [GitHub repository](https://github.com/ELEVATE-Project/mentoring-mobile-app).
 
