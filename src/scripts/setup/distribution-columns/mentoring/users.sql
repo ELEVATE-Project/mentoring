@@ -1,0 +1,3 @@
+INSERT INTO public.user_extensions VALUES ({id}, '{beo}', '{communication}', 'BA', NULL, NULL, NULL, NULL, NULL, 'CURRENT', '{1}', 'CURRENT', 'CURRENT', NULL, '2024-04-18 09:09:48.938+00', '2024-04-18 09:10:07.028+00', NULL, '2', 1);
+INSERT INTO public.mentor_extensions VALUES ({id}, '{beo}', '{communication}', 'BA', NULL, NULL, NULL, NULL, NULL, 'CURRENT', '{1}', 'CURRENT', 'CURRENT', NULL, '2024-04-18 09:09:48.938+00', '2024-04-18 09:10:07.028+00', NULL, '2', 1);
+INSERT INTO public.user_extensions VALUES ({id}, '{beo}', '{communication}', 'BCA', NULL, NULL, NULL, NULL, NULL, 'CURRENT', '{1}', 'CURRENT', 'CURRENT', NULL, '2024-04-18 09:09:48.938+00', '2024-04-18 09:10:07.028+00', NULL, '5', 1);
