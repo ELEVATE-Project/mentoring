@@ -62,4 +62,13 @@ module.exports = class Users {
 			return error
 		}
 	}
+
+	async update(req) {
+		try {
+			return await userService.update(req.body)
+		} catch (error) {
+			console.log(error)
+			return error
+		}
+	}
 }

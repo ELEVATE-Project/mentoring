@@ -1,11 +1,12 @@
 const IdMapping = require('../models/index').IdMapping
 
 module.exports = class IdMappingQueries {
-	static async create(data) {
+	static async findOrCreate(data) {
 		try {
-			const existingRecord = await IdMapping.findOne({ where: { uuid: data.uuid } })
-			if (existingRecord) return existingRecord
-			return await IdMapping.create(data, { returning: true })
+			const existingRecord = await IdMapping.findOne({ where: { uuid: data.uuid }, raw: true })
+			if (existingRecord) return [existingRecord, false]
+			const newRecord = (await IdMapping.create(data, { returning: true })).get({ plain: true })
+			return [newRecord, true]
 		} catch (error) {
 			console.error('Error creating or finding IdMapping:', error)
 			throw new Error('Error creating or finding IdMapping')

@@ -55,7 +55,7 @@ module.exports = class MentorExtensionQueries {
 		}
 	}
 
-	static async getMentorExtension(userId, attributes = []) {
+	static async getMentorExtension(userId, attributes = [], unScoped = false) {
 		try {
 			const queryOptions = {
 				where: { user_id: userId },
@@ -66,7 +66,14 @@ module.exports = class MentorExtensionQueries {
 			if (attributes.length > 0) {
 				queryOptions.attributes = attributes
 			}
-			const mentor = await MentorExtension.findOne(queryOptions)
+
+			let mentor
+			if (unScoped) {
+				mentor = await MentorExtension.unscoped().findOne(queryOptions)
+			} else {
+				mentor = await MentorExtension.findOne(queryOptions)
+			}
+
 			return mentor
 		} catch (error) {
 			throw error

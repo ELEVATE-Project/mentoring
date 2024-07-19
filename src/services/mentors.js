@@ -316,7 +316,6 @@ module.exports = class MentorsHelper {
 			}
 			// Call user service to fetch organisation details --SAAS related changes
 			let userOrgDetails = await userRequests.fetchOrgDetails({ organizationId: orgId })
-			console.log('USER ORG DETAILS: ', userOrgDetails)
 			// Return error if user org does not exists
 			if (!userOrgDetails.success || !userOrgDetails.data || !userOrgDetails.data.result) {
 				return responses.failureResponse({
@@ -455,6 +454,29 @@ module.exports = class MentorsHelper {
 			}
 
 			data = utils.restructureBody(data, validationData, mentorExtensionsModel)
+
+			if (data.organization.id) {
+				//Do a org policy update for the user only if the data object explicitly includes an
+				//organization.id. This is added for the users/update workflow where
+				//both both user data and organisation can change at the same time.
+				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationId: data.organization.id })
+				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+					data.organization.id
+				)
+				if (!orgPolicies?.organization_id) {
+					return responses.failureResponse({
+						message: 'ORG_EXTENSION_NOT_FOUND',
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+				data.organization_id = data.organization.id
+				const newPolicy = await orgAdminService.constructOrgPolicyObject(orgPolicies, true)
+				data = _.merge({}, data, newPolicy)
+				data.visible_to_organizations = Array.from(
+					new Set([...userOrgDetails.data.result.related_orgs, data.organization.id])
+				)
+			}
 
 			const [updateCount, updatedMentor] = await mentorQueries.updateMentorExtension(userId, data, {
 				returning: true,
