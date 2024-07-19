@@ -7,7 +7,6 @@ module.exports = {
 			.withMessage(
 				'The type field is required, must be a non-empty string, and must be either session or mentor.'
 			)
-
 		req.checkBody('target_field')
 			.isString()
 			.notEmpty()
