@@ -151,133 +151,78 @@ function isNumeric(value) {
 
 function validateInput(input, validationData, modelName, skipValidation = false) {
 	const errors = []
+
+	function addError(param, value, dataType, message) {
+		errors.push({
+			param,
+			msg: `${value} is invalid for data type ${dataType}. ${message}`,
+		})
+	}
+
 	for (const field of validationData) {
-		if (!skipValidation) {
-			if (field.required === true && !input.hasOwnProperty(field.value)) {
-				errors.push({
-					param: field.value,
-					msg: `${field.value} is required but missing in the input data.`,
-				})
-			}
+		const fieldValue = input[field.value]
+
+		if (!skipValidation && field.required && !(field.value in input)) {
+			errors.push({
+				param: field.value,
+				msg: `${field.value} is required but missing in the input data.`,
+			})
+			continue
 		}
 
-		const fieldValue = input[field.value] // Get the value of the current field from the input data
-
-		// Check if the field is not allowed for the current model and has a value
-		if (modelName && !field.model_names.includes(modelName) && input[field.value]) {
+		if (modelName && !field.model_names.includes(modelName) && fieldValue) {
 			errors.push({
 				param: field.value,
 				msg: `${field.value} is not allowed for the ${modelName} model.`,
 			})
-		}
-
-		function addError(field, value, dataType, message) {
-			errors.push({
-				param: field.value,
-				msg: `${value} is invalid for data type ${dataType}. ${message}`,
-			})
+			continue
 		}
 
 		if (fieldValue !== undefined) {
-			// Check if the field value is defined in the input data
-			const dataType = field.data_type // Get the data type of the field from validation data
-
-			switch (dataType) {
+			switch (field.data_type) {
 				case 'ARRAY[STRING]':
-					if (Array.isArray(fieldValue)) {
-						fieldValue.forEach((element) => {
-							if (typeof element !== 'string') {
-								addError(field.value, element, dataType, 'It should be a string')
-							} else if (field.allow_custom_entities) {
-								if (field.regex && !new RegExp(field.regex).test(element)) {
-									addError(
-										field.value,
-										element,
-										dataType,
-										`Does not match the required pattern: ${field.regex}`
-									)
-								} else if (!field.regex && /[^A-Za-z0-9\s_]/.test(element)) {
-									addError(
-										field.value,
-										element,
-										dataType,
-										'It should not contain special characters except underscore.'
-									)
-								}
-							}
-						})
-					} else {
-						addError(field.value, field.value, dataType, '')
+					if (!Array.isArray(fieldValue)) {
+						addError(field.value, field.value, 'ARRAY[STRING]', 'It should be an array.')
+						break
+					}
+					for (const element of fieldValue) {
+						if (typeof element !== 'string')
+							addError(field.value, element, 'STRING', 'It should be a string.')
+						else if (field.allow_custom_entities) validateCustomEntity(element, field)
 					}
 					break
 
 				case 'STRING':
-					if (typeof fieldValue !== 'string') {
-						addError(field.value, fieldValue, dataType, 'It should be a string')
-					} else if (field.allow_custom_entities) {
-						if (field.regex && !new RegExp(field.regex).test(fieldValue)) {
-							addError(
-								field.value,
-								fieldValue,
-								dataType,
-								`Does not match the required pattern: ${field.regex}`
-							)
-						} else if (!field.regex && /[^A-Za-z0-9\s_]/.test(fieldValue)) {
-							addError(
-								field.value,
-								fieldValue,
-								dataType,
-								'It should not contain special characters except underscore.'
-							)
-						}
-					}
+					if (typeof fieldValue !== 'string')
+						addError(field.value, fieldValue, 'STRING', 'It should be a string.')
+					else if (field.allow_custom_entities) validateCustomEntity(fieldValue, field)
 					break
+
 				case 'INTEGER':
 				case 'NUMBER':
-					if (typeof fieldValue !== 'number') {
-						addError(field.value, fieldValue, dataType, '')
-					}
-					break
-
-				default:
-					//isValid = false
+					if (typeof fieldValue !== 'number')
+						addError(field.value, fieldValue, field.data_type, 'It should be a number.')
 					break
 			}
 		}
 
-		if (!fieldValue || field.allow_custom_entities === true || field.has_entities === false) {
-			continue // Skip validation if the field is not present in the input or allow_custom_entities is true
-		}
-
-		if (Array.isArray(fieldValue)) {
-			// Check if the field value is an array
-			for (const value of fieldValue) {
-				if (!field.entities.some((entity) => entity.value === value)) {
-					// Check if the value is a valid entity
-					errors.push({
-						param: field.value,
-						msg: `${value} is not a valid entity.`,
-					})
-				}
-			}
-		} else if (!field.entities.some((entity) => entity.value === fieldValue)) {
-			errors.push({
-				param: field.value,
-				msg: `${fieldValue} is not a valid entity.`,
-			})
-		}
+		if (fieldValue && !field.allow_custom_entities && field.has_entities !== false)
+			input[field.value] = validateEntities(fieldValue, field)
 	}
 
-	if (errors.length === 0) {
-		return {
-			success: true,
-			message: 'Validation successful',
-		}
+	return errors.length === 0 ? { success: true, message: 'Validation successful' } : { success: false, errors }
+
+	function validateCustomEntity(value, field) {
+		if (field.regex && !new RegExp(field.regex).test(value))
+			addError(field.value, value, 'STRING', `Does not match the required pattern: ${field.regex}`)
+		else if (!field.regex && /[^A-Za-z0-9\s_]/.test(value))
+			addError(field.value, value, 'STRING', 'It should not contain special characters except underscore.')
 	}
 
-	return {
-		success: false,
-		errors: errors,
+	function validateEntities(value, field) {
+		let values = Array.isArray(value) ? value : [value]
+		values = values.filter((val) => field.entities.some((entity) => entity.value === val))
+		return Array.isArray(value) ? values : values[0]
 	}
 }
 

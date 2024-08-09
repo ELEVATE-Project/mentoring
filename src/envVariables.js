@@ -288,11 +288,6 @@ let enviromentVariables = {
 		optional: true,
 		default: './constants/keycloakPublicKeys',
 	},
-	IS_EXTERNAL_USER_SERVICE: {
-		message: 'Required Flag For External User Service',
-		optional: true,
-		default: 'false',
-	},
 	SESSION_VERIFICATION_METHOD: {
 		message: 'Required Session Verification Method',
 		optional: true,
