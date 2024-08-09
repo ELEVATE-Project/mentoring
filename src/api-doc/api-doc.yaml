@@ -3387,15 +3387,19 @@ paths:
                       correlation: c1987eb0-c58a-415c-99bc-a9de62518318
                       meeting_platform: BBB
   /mentoring/v1/questions/update/{QuestionId}:
-    patch:
+    put:
       summary: Update questions
       tags:
         - Question
-      description: |-
-        This API is associated with updating questions 
-         - The API Endpoint forupdate question `/mentoring/v1/questions/update` 
-         - It is mandatory to provide values for parameters marked with `required` 
-         - Mandatory parameter cannot be empty or null
+      description: >-
+        This API is associated with updating questions
+
+        * The API Endpoint forupdate question `/mentoring/v1/questions/update`
+
+        * It is mandatory to provide values for parameters marked with
+        `required`
+
+        * Mandatory parameter cannot be empty or null
       parameters:
         - name: x-auth-token
           in: header
@@ -3431,34 +3435,48 @@ paths:
                 status:
                   type: string
                 category:
-                  type: 'null'
+                  type: object
+                  properties:
+                    evaluating:
+                      type: string
                 rendering_data:
                   type: object
                   properties:
-                    value:
-                      type: string
-                    class:
-                      type: string
-                    disabled:
-                      type: boolean
-                    noOfstars:
-                      type: string
-                    position:
-                      type: string
-                    validation:
+                    validators:
                       type: object
                       properties:
                         required:
                           type: boolean
-                meta:
-                  type: 'null'
             examples:
               example1:
                 value:
                   name: keyvalue
                   question: >-
-                    To what extent did you feel comfortable sharing your
-                    thoughts in the session
+                    To what extent were you able to learn new skills in the
+                    session-QA Org?
+                  type: rating
+                  options: null
+                  no_of_stars: 5
+                  status: active
+                  category:
+                    evaluating: mentor
+                  rendering_data:
+                    validators:
+                      required: true
+              example2:
+                value:
+                  name: keyvalue
+                  question: >-
+                    To what extent were you able to learn new skills in the
+                    session-QA Org?
+                  type: rating
+                  options: null
+                  no_of_stars: 5
+                  status: active
+                  category: null
+                  rendering_data:
+                    validators:
+                      required: true
       responses:
         '202':
           description: Accepted
