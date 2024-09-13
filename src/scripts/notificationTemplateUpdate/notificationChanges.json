@@ -1,0 +1,10 @@
+[
+	{
+		"code": "email_header",
+		"body": "<div style='margin:auto;width:100%;max-width:650px;'><p style='text-align:center'><img class='img_path' style='width:200px; max-width:100%; height:auto;' alt='KarmaYogiBharat' src='https://igotkarmayogi.gov.in/assets/img/karmayogiLogo.svg'></p><div style='text-align:left;'>"
+	},
+	{
+		"code": "email_footer",
+		"body": "</div><div style='margin-top:20px;text-align:left;'><div>Regards,</div><div>Team Karmayogi</div><div style='margin-top:20px;color:#b13e33;text-align:left'><div>Note: Do not reply to this email. This email is sent from an unattended mailbox. Replies will not be read.</div><div>For any queries, please feel free to reach out to us at mission.karmayogi@gov.in</div></div></div></div>"
+	}
+]
