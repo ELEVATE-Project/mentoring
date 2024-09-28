@@ -29,17 +29,55 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/entity/create",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "entity", "create"]
-						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/entity/create",
 						"description": "NOTE: Pass type as roles/designation/expertise etc. whatever types needs to be created"
 					},
 					"response": []
 				},
 				{
 					"name": "Read Entity",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "x-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/entity/read?value=deo",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "entity", "read"],
+							"query": [
+								{
+									"key": "id",
+									"value": "2",
+									"description": "id of the entity",
+									"disabled": true
+								},
+								{
+									"key": "value",
+									"value": "deo",
+									"description": "value of the entity"
+								}
+							]
+						},
+						"description": "NOTE: Pass type as roles/designation/expertise etc. whatever types needs to be created"
+					},
+					"response": []
+				},
+				{
+					"name": "List Entity",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -100,11 +138,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/entity/update/1",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "entity", "update", "1"]
-						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/entity/update/1",
 						"description": "NOET: All body req parameters are optional to update."
 					},
 					"response": []
@@ -120,11 +154,7 @@
 								"type": "text"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/entity/delete/1",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "entity", "delete", "1"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/entity/delete/1"
 					},
 					"response": []
 				}
@@ -153,11 +183,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/form/create",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "form", "create"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/form/create"
 					},
 					"response": []
 				},
@@ -181,11 +207,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/form/read/16",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "form", "read", "16"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/form/read/16"
 					},
 					"response": []
 				},
@@ -209,11 +231,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/form/update/16",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "form", "update", "16"]
-						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/form/update/16",
 						"description": "NOTE: Id is required in params and that should be objectId"
 					},
 					"response": []
@@ -236,18 +254,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"value\": \"roless\",\n    \"label\": \"RolesV\",\n    \"status\": \"ACTIVE\",\n    \"type\": \"SYSTEM\",\n    \"data_type\": \"ARRAY[STRING]\",\n    \"model_names\": [\"UserExtension\",\"Session\"],\n    \"required\": true,\n    \"allow_filtering\": true\n}",
+							"raw": "{\n    \"value\": \"ln\",\n    \"label\": \"Languages\",\n    \"status\": \"ACTIVE\",\n    \"type\": \"SYSTEM\",\n    \"data_type\": \"STRING\",\n    \"allow_filtering\": true\n}",
 							"options": {
 								"raw": {
 									"language": "json"
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/entity-type/create",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "entity-type", "create"]
-						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/entity-type/create",
 						"description": "NOTE: Pass type as roles/designation/expertise etc. whatever types needs to be created"
 					},
 					"response": []
@@ -263,11 +277,7 @@
 								"type": "text"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/entity-type/read",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "entity-type", "read"]
-						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/entity-type/read",
 						"description": "NOTE: Query Parmas\n1). type is mandatory\n2). deleted is optional\n3). status is optional"
 					},
 					"response": []
@@ -331,18 +341,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"value\": \"roless\",\n    \"label\": \"RolesV\",\n    \"status\": \"ACTIVE\",\n    \"type\": \"SYSTEM\",\n    \"data_type\": \"ARRAY[STRING]\",\n    \"model_names\": [\"UserExtension\",\"Session\"],\n    \"required\": true\n}",
+							"raw": "{\n    \"value\": \"roles\",\n    \"label\": \"RolesV\",\n    \"status\": \"ACTIVE\",\n    \"type\": \"SYSTEM\",\n    \"data_type\": \"STRING\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/entity-type/update/1",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "entity-type", "update", "1"]
-						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/entity-type/update/1",
 						"description": "NOET: All body req parameters are optional to update."
 					},
 					"response": []
@@ -358,11 +364,7 @@
 								"type": "text"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/entity-type/delete/1",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "entity-type", "delete", "1"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/entity-type/delete/1"
 					},
 					"response": []
 				}
@@ -391,11 +393,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/default-rule/create",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "default-rule", "create"]
-						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/default-rule/create",
 						"description": "### Create Default Rule\n\nThis endpoint allows the creation of a default rule for mentoring.\n\n#### Request Body\n\n- `type` (string): The type of the rule.\n- `target_field` (string): The target field for the rule.\n- `is_target_from_sessions_mentor` (boolean): Indicates if the target is from sessions mentor.\n- `requester_field` (string): The requester field for the rule.\n- `field_configs` (null): Field configurations (if any).\n- `matching_operator` (string): The matching operator for the rule.\n- `requester_roles` (array of strings): The roles of the requester.\n- `role_config.exclude` (boolean): Indicates if the role should be excluded.\n    \n\n#### Response\n\nThe response is in JSON format with the following schema:\n\n``` json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"responseCode\": {\"type\": \"string\"},\n    \"message\": {\"type\": \"string\"},\n    \"result\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"created_at\": {\"type\": \"string\"},\n        \"updated_at\": {\"type\": \"string\"},\n        \"id\": {\"type\": \"integer\"},\n        \"type\": {\"type\": \"string\"},\n        \"target_field\": {\"type\": \"string\"},\n        \"is_target_from_sessions_mentor\": {\"type\": \"boolean\"},\n        \"requester_field\": {\"type\": \"string\"},\n        \"field_configs\": {\"type\": \"null\"},\n        \"matching_operator\": {\"type\": \"string\"},\n        \"requester_roles\": {\n          \"type\": \"array\",\n          \"items\": {\"type\": \"string\"}\n        },\n        \"role_config\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"exclude\": {\"type\": \"boolean\"}\n          }\n        },\n        \"created_by\": {\"type\": \"integer\"},\n        \"updated_by\": {\"type\": \"integer\"},\n        \"organization_id\": {\"type\": \"integer\"},\n        \"deleted_at\": {\"type\": [\"string\", \"null\"]}\n      }\n    },\n    \"meta\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"formsVersion\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"id\": {\"type\": \"integer\"},\n              \"type\": {\"type\": \"string\"},\n              \"version\": {\"type\": \"integer\"}\n            }\n          }\n        },\n        \"correlation\": {\"type\": \"string\"},\n        \"meetingPlatform\": {\"type\": \"string\"}\n      }\n    }\n  }\n}\n\n ```"
 					},
 					"response": []
@@ -479,11 +477,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/default-rule/update/2",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "default-rule", "update", "2"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/default-rule/update/2"
 					},
 					"response": []
 				},
@@ -507,11 +501,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/default-rule/delete/4",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "default-rule", "delete", "4"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/default-rule/delete/4"
 					},
 					"response": []
 				}
@@ -563,11 +553,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/sessions/update",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "sessions", "update"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/sessions/update"
 					},
 					"response": []
 				},
@@ -876,11 +862,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/sessions/feedback/1",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "sessions", "feedback", "1"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/sessions/feedback/1"
 					},
 					"response": []
 				},
@@ -905,16 +887,7 @@
 								}
 							]
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/sessions/updateRecordingUrl/2e9975b5251b6ba94ad96267268da55660cb619a-1683007926764",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": [
-								"v1",
-								"sessions",
-								"updateRecordingUrl",
-								"2e9975b5251b6ba94ad96267268da55660cb619a-1683007926764"
-							]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/sessions/updateRecordingUrl/2e9975b5251b6ba94ad96267268da55660cb619a-1683007926764"
 					},
 					"response": []
 				},
@@ -1096,11 +1069,7 @@
 								"type": "text"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/sessions/getSampleCSV",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "sessions", "getSampleCSV"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/sessions/getSampleCSV"
 					},
 					"response": []
 				},
@@ -1124,11 +1093,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/sessions/bulkSessionCreate",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "sessions", "bulkSessionCreate"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/sessions/bulkSessionCreate"
 					},
 					"response": []
 				}
@@ -1615,11 +1580,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/questions/create",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "questions", "create"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/questions/create"
 					},
 					"response": []
 				},
@@ -1714,11 +1675,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/question-set/create",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "question-set", "create"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/question-set/create"
 					},
 					"response": []
 				},
@@ -1808,11 +1765,7 @@
 								"type": "text"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/users/pendingFeedbacks",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "users", "pendingFeedbacks"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/users/pendingFeedbacks"
 					},
 					"response": []
 				},
@@ -1828,21 +1781,29 @@
 							}
 						],
 						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/users/list?type=mentee&page=1&limit=3",
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/users/list?type=mentee&page=1&limit=5&search=YQ==",
 							"host": ["{{MentoringBaseUrl}}mentoring"],
 							"path": ["v1", "users", "list"],
 							"query": [
 								{
 									"key": "type",
-									"value": "mentee"
+									"value": "mentee",
+									"description": "type of user mentee or mentor"
 								},
 								{
 									"key": "page",
-									"value": "1"
+									"value": "1",
+									"description": "Page No"
 								},
 								{
 									"key": "limit",
-									"value": "3"
+									"value": "5",
+									"description": "Limit of data per page"
+								},
+								{
+									"key": "search",
+									"value": "YQ==",
+									"description": "search text in base64 code"
 								}
 							]
 						}
@@ -1852,13 +1813,9 @@
 			],
 			"auth": {
 				"type": "bearer",
-				"bearer": [
-					{
-						"key": "token",
-						"value": "bearer {{token}}",
-						"type": "string"
-					}
-				]
+				"bearer": {
+					"token": "bearer {{token}}"
+				}
 			},
 			"event": [
 				{
@@ -1900,11 +1857,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/issues/create",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "issues", "create"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/issues/create"
 					},
 					"response": []
 				}
@@ -1924,11 +1877,7 @@
 								"type": "text"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/platform/config",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "platform", "config"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/platform/config"
 					},
 					"response": []
 				}
@@ -1982,11 +1931,7 @@
 								"type": "text"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/admin/triggerViewRebuild",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "admin", "triggerViewRebuild"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/admin/triggerViewRebuild"
 					},
 					"response": []
 				},
@@ -2007,11 +1952,7 @@
 								"disabled": true
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/admin/triggerViewRebuildInternal",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "admin", "triggerViewRebuildInternal"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/admin/triggerViewRebuildInternal"
 					},
 					"response": []
 				},
@@ -2032,11 +1973,7 @@
 								"type": "text"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/admin/triggerPeriodicViewRefresh",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "admin", "triggerPeriodicViewRefresh"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/admin/triggerPeriodicViewRefresh"
 					},
 					"response": []
 				},
@@ -2084,18 +2021,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"designation\": [\n        \"beo\",\n        \"deo\"\n    ],\n    \"area_of_expertise\": [\n        \"educational_leadership\",\n        \"sqaa\"\n    ],\n    \"education_qualification\": \"MBA\",\n    \"gender\": \"male\"\n}",
+							"raw": "{\n  \"designation\": [\n        \"beo\",\n        \"deo\"\n    ],\n  \"area_of_expertise\": [\n        \"educational_leadership\",\n        \"sqaa\"\n    ],\n  \"education_qualification\": \"mba\",\n  \"experience\": 10,\n  \"tags\": [\n    \"Experienced\",\n    \"Technical\"\n  ],\n  \"configs\": {\n    \"notification\": true,\n    \"visibility\": \"public\"\n  }\n}",
 							"options": {
 								"raw": {
 									"language": "json"
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/profile/create",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "profile", "create"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/profile/create"
 					},
 					"response": []
 				},
@@ -2110,11 +2043,7 @@
 								"type": "text"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/profile/read",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "profile", "read"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/profile/read"
 					},
 					"response": []
 				},
@@ -2131,18 +2060,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"designation\": [\n        \"beo\",\n        \"deo\"\n    ],\n    \"area_of_expertise\": [\n        \"educational_leadership\",\n        \"sqaa\"\n    ],\n    \"education_qualification\": \"MBA\",\n    \"gender\": \"male\"\n}",
+							"raw": "{\n  \"designation\": [\n        \"beo\",\n        \"deo\"\n    ],\n  \"area_of_expertise\": [\n        \"educational_leadership\",\n        \"sqaa\"\n    ],\n  \"education_qualification\": \"mba\",\n  \"experience\": 10,\n  \"tags\": [\n    \"Experienced\",\n    \"Technical\"\n  ],\n  \"configs\": {\n    \"notification\": true,\n    \"visibility\": \"public\"\n  }\n}",
 							"options": {
 								"raw": {
 									"language": "json"
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/profile/update",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "profile", "update"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/profile/update"
 					},
 					"response": []
 				},
@@ -2211,11 +2136,7 @@
 							"mode": "raw",
 							"raw": "{\n    \"user_id\": 1,\n    \"current_roles\": [\n        \"mentee\"\n    ],\n    \"new_roles\": [\n        \"mentor\"\n    ]\n}"
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/org-admin/roleChange",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "org-admin", "roleChange"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/org-admin/roleChange"
 					},
 					"response": []
 				},
@@ -2237,11 +2158,7 @@
 							"mode": "raw",
 							"raw": "{\n\t\"entity_type_value\": \"categories\",\n\t\"target_entity_type_label\": \"training\"\n}"
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/org-admin/inheritEntityType",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "org-admin", "inheritEntityType"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/org-admin/inheritEntityType"
 					},
 					"response": []
 				},
@@ -2264,11 +2181,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/org-admin/setOrgPolicies",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "org-admin", "setOrgPolicies"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/org-admin/setOrgPolicies"
 					},
 					"response": []
 				},
@@ -2282,11 +2195,7 @@
 								"value": "bearer {{token}}"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/org-admin/getOrgPolicies",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "org-admin", "getOrgPolicies"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/org-admin/getOrgPolicies"
 					},
 					"response": []
 				},
@@ -2297,23 +2206,25 @@
 						"header": [
 							{
 								"key": "x-auth-token",
-								"value": "bearer {{token}}"
+								"value": "bearer {{token}}",
+								"disabled": true
+							},
+							{
+								"key": "internal_access_token",
+								"value": "{{internal_access_token}}",
+								"type": "text"
 							}
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"related_organization_ids\": [\n        4\n    ],\n    \"organization_id\": 1\n}",
+							"raw": "{\n    \"delta_organization_ids\": [ 1 ],\n    \"action\":\"PUSH\",\n    \"organization_id\": 1\n}",
 							"options": {
 								"raw": {
 									"language": "json"
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/org-admin/updateRelatedOrgs",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "org-admin", "updateRelatedOrgs"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/org-admin/updateRelatedOrgs"
 					},
 					"response": []
 				},
@@ -2365,11 +2276,7 @@
 							"mode": "raw",
 							"raw": "{\n\t\"jobId\": \"mentoring_session_one_hour_1\",\n\t\"emailTemplateCode\": \"mentor_one_hour_before_session_reminder\"\n}"
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/notifications/emailCronJob",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "notifications", "emailCronJob"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/notifications/emailCronJob"
 					},
 					"response": []
 				}
@@ -2392,11 +2299,7 @@
 							"mode": "raw",
 							"raw": "{\n  \"name\": \"sore\",\n  \"email\": \"sorefa6947@unbiex.com\",\n  \"password\": \"passwordofuser\",\n  \"otp\": \"593398\",\n  \"has_accepted_terms_and_conditions\": true\n}"
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}interface/v1/account/create",
-							"host": ["{{MentoringBaseUrl}}interface"],
-							"path": ["v1", "account", "create"]
-						}
+						"url": "{{MentoringBaseUrl}}interface/v1/account/create"
 					},
 					"response": []
 				},
@@ -2414,11 +2317,7 @@
 							"mode": "raw",
 							"raw": "{\n    \"value\": [\n        \"medium\",\n        \"languages\"\n    ]\n}"
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}/interface/v1/entity-type/read",
-							"host": ["{{MentoringBaseUrl}}"],
-							"path": ["interface", "v1", "entity-type", "read"]
-						}
+						"url": "{{MentoringBaseUrl}}/interface/v1/entity-type/read"
 					},
 					"response": []
 				},
@@ -2447,11 +2346,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}interface/v1/account/update",
-							"host": ["{{MentoringBaseUrl}}interface"],
-							"path": ["v1", "account", "update"]
-						}
+						"url": "{{MentoringBaseUrl}}interface/v1/account/update"
 					},
 					"response": []
 				}
@@ -2483,11 +2378,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/permissions/create",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "permissions", "create"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/permissions/create"
 					},
 					"response": []
 				},
@@ -2616,11 +2507,7 @@
 								}
 							}
 						},
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/modules/create",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "modules", "create"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/modules/create"
 					},
 					"response": []
 				},
@@ -3128,11 +3015,7 @@
 								"type": "text"
 							}
 						],
-						"url": {
-							"raw": "{{MentoringBaseUrl}}mentoring/v1/role-permission-mapping/list",
-							"host": ["{{MentoringBaseUrl}}mentoring"],
-							"path": ["v1", "role-permission-mapping", "list"]
-						}
+						"url": "{{MentoringBaseUrl}}mentoring/v1/role-permission-mapping/list"
 					},
 					"response": []
 				}
@@ -3231,11 +3114,7 @@
 										}
 									}
 								},
-								"url": {
-									"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-									"host": ["{{MentoringBaseUrl}}mentoring"],
-									"path": ["v1", "availability", "create"]
-								}
+								"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 							},
 							"response": [
 								{
@@ -3258,11 +3137,7 @@
 												}
 											}
 										},
-										"url": {
-											"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-											"host": ["{{MentoringBaseUrl}}mentoring"],
-											"path": ["v1", "availability", "create"]
-										}
+										"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 									},
 									"status": "Created",
 									"code": 201,
@@ -3334,11 +3209,7 @@
 										}
 									}
 								},
-								"url": {
-									"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-									"host": ["{{MentoringBaseUrl}}mentoring"],
-									"path": ["v1", "availability", "create"]
-								}
+								"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 							},
 							"response": [
 								{
@@ -3361,11 +3232,7 @@
 												}
 											}
 										},
-										"url": {
-											"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-											"host": ["{{MentoringBaseUrl}}mentoring"],
-											"path": ["v1", "availability", "create"]
-										}
+										"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 									},
 									"status": "Created",
 									"code": 201,
@@ -3437,11 +3304,7 @@
 										}
 									}
 								},
-								"url": {
-									"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-									"host": ["{{MentoringBaseUrl}}mentoring"],
-									"path": ["v1", "availability", "create"]
-								}
+								"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 							},
 							"response": [
 								{
@@ -3464,11 +3327,7 @@
 												}
 											}
 										},
-										"url": {
-											"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-											"host": ["{{MentoringBaseUrl}}mentoring"],
-											"path": ["v1", "availability", "create"]
-										}
+										"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 									},
 									"status": "Created",
 									"code": 201,
@@ -3540,11 +3399,7 @@
 										}
 									}
 								},
-								"url": {
-									"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-									"host": ["{{MentoringBaseUrl}}mentoring"],
-									"path": ["v1", "availability", "create"]
-								}
+								"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 							},
 							"response": [
 								{
@@ -3567,11 +3422,7 @@
 												}
 											}
 										},
-										"url": {
-											"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-											"host": ["{{MentoringBaseUrl}}mentoring"],
-											"path": ["v1", "availability", "create"]
-										}
+										"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 									},
 									"status": "Created",
 									"code": 201,
@@ -3643,11 +3494,7 @@
 										}
 									}
 								},
-								"url": {
-									"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-									"host": ["{{MentoringBaseUrl}}mentoring"],
-									"path": ["v1", "availability", "create"]
-								}
+								"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 							},
 							"response": [
 								{
@@ -3670,11 +3517,7 @@
 												}
 											}
 										},
-										"url": {
-											"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-											"host": ["{{MentoringBaseUrl}}mentoring"],
-											"path": ["v1", "availability", "create"]
-										}
+										"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 									},
 									"status": "Created",
 									"code": 201,
@@ -3746,11 +3589,7 @@
 										}
 									}
 								},
-								"url": {
-									"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-									"host": ["{{MentoringBaseUrl}}mentoring"],
-									"path": ["v1", "availability", "create"]
-								}
+								"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 							},
 							"response": [
 								{
@@ -3773,11 +3612,7 @@
 												}
 											}
 										},
-										"url": {
-											"raw": "{{MentoringBaseUrl}}mentoring/v1/availability/create",
-											"host": ["{{MentoringBaseUrl}}mentoring"],
-											"path": ["v1", "availability", "create"]
-										}
+										"url": "{{MentoringBaseUrl}}mentoring/v1/availability/create"
 									},
 									"status": "Created",
 									"code": 201,
@@ -4505,6 +4340,86 @@
 							"body": "{\n    \"responseCode\": \"OK\",\n    \"message\": \"Events fetched\",\n    \"result\": {\n        \"1713139200\": [\n            {\n                \"id\": 8,\n                \"user_id\": 133,\n                \"event_name\": \"Weekly on specific weekdays\",\n                \"start_time\": 1713155400,\n                \"end_time\": \"1713159000\",\n                \"expiration_date\": null,\n                \"repeat_on\": [\n                    \"Monday\",\n                    \"Tuesday\",\n                    \"Wednesday\"\n                ],\n                \"repeat_unit\": \"DAY\",\n                \"exceptions\": null,\n                \"occurrence_in_month\": null,\n                \"repeat_increment\": 1,\n                \"session_id\": null,\n                \"updated_by\": 133,\n                \"created_by\": 133,\n                \"organization_id\": 456,\n                \"created_at\": \"2024-04-12T09:35:04.542Z\",\n                \"updated_at\": \"2024-04-12T09:35:04.542Z\",\n                \"deleted_at\": null\n            }\n        ],\n        \"1713225600\": [\n            {\n                \"id\": 8,\n                \"user_id\": 133,\n                \"event_name\": \"Weekly on specific weekdays\",\n                \"start_time\": 1713241800,\n                \"end_time\": \"1713159000\",\n                \"expiration_date\": null,\n                \"repeat_on\": [\n                    \"Monday\",\n                    \"Tuesday\",\n                    \"Wednesday\"\n                ],\n                \"repeat_unit\": \"DAY\",\n                \"exceptions\": null,\n                \"occurrence_in_month\": null,\n                \"repeat_increment\": 1,\n                \"session_id\": null,\n                \"updated_by\": 133,\n                \"created_by\": 133,\n                \"organization_id\": 456,\n                \"created_at\": \"2024-04-12T09:35:04.542Z\",\n                \"updated_at\": \"2024-04-12T09:35:04.542Z\",\n                \"deleted_at\": null\n            }\n        ],\n        \"1713312000\": [\n            {\n                \"id\": 8,\n                \"user_id\": 133,\n                \"event_name\": \"Weekly on specific weekdays\",\n                \"start_time\": 1713328200,\n                \"end_time\": \"1713159000\",\n                \"expiration_date\": null,\n                \"repeat_on\": [\n                    \"Monday\",\n                    \"Tuesday\",\n                    \"Wednesday\"\n                ],\n                \"repeat_unit\": \"DAY\",\n                \"exceptions\": null,\n                \"occurrence_in_month\": null,\n                \"repeat_increment\": 1,\n                \"session_id\": null,\n                \"updated_by\": 133,\n                \"created_by\": 133,\n                \"organization_id\": 456,\n                \"created_at\": \"2024-04-12T09:35:04.542Z\",\n                \"updated_at\": \"2024-04-12T09:35:04.542Z\",\n                \"deleted_at\": null\n            }\n        ],\n        \"1713398400\": [],\n        \"1713484800\": [],\n        \"1713571200\": [],\n        \"1713657600\": []\n    },\n    \"meta\": {\n        \"formsVersion\": [\n            {\n                \"id\": 4,\n                \"type\": \"termsAndConditions\",\n                \"version\": 0\n            },\n            {\n                \"id\": 5,\n                \"type\": \"faq\",\n                \"version\": 0\n            },\n            {\n                \"id\": 6,\n                \"type\": \"helpVideos\",\n                \"version\": 0\n            },\n            {\n                \"id\": 7,\n                \"type\": \"platformApp\",\n                \"version\": 0\n            },\n            {\n                \"id\": 9,\n                \"type\": \"sampleCsvDownload\",\n                \"version\": 0\n            },\n            {\n                \"id\": 2,\n                \"type\": \"editProfile\",\n                \"version\": 0\n            },\n            {\n                \"id\": 3,\n                \"type\": \"session\",\n                \"version\": 0\n            },\n            {\n                \"id\": 8,\n                \"type\": \"helpApp\",\n                \"version\": 0\n            },\n            {\n                \"id\": 10,\n                \"type\": \"mentorQuestionnaire\",\n                \"version\": 0\n            },\n            {\n                \"id\": 1,\n                \"type\": \"managersSession\",\n                \"version\": 0\n            }\n        ],\n        \"correlation\": \"7bf027bd-74d0-48f9-ab23-ce5e04ec45e8\",\n        \"meetingPlatform\": \"BBB\"\n    }\n}"
 						}
 					]
+				}
+			]
+		},
+		{
+			"name": "Notification Templates",
+			"item": [
+				{
+					"name": "Create Notification Templates",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\" : \"email\",\n    \"code\": \"tl-email-invite\",\n    \"subject\": \"Hi Welcome Backk\",\n    \"body\": \"<p>Dear User,</p> Welcome back to mentorEd\",\n    \"email_header\": \"email_header\",\n    \"email_footer\":\"email_footer\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/notification/template"
+					},
+					"response": []
+				},
+				{
+					"name": "Read Notification Templates",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/notification/template"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Notification Templates",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "X-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"type\" : \"email\",\n    \"code\": \"tl-email-invite\",\n    \"subject\": \"Hi Welcome Back We missed You\" ,\n    \"body\": \"<p>Dear User,</p> Welcome back to mentorEd\",\n    \"email_header\": \"email_header\",\n    \"email_footer\":\"email_footer\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/notification/template/14"
+					},
+					"response": []
 				}
 			]
 		}
