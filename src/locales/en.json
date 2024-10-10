@@ -189,5 +189,6 @@
 	"ADD_ORG_HEADER": "{{orgIdHeader}} is mandatory when {{adminHeader}} is passed",
 	"UNAUTHORIZED_REQUEST": "You are not authorized to access this resource. Please ensure that you have the correct permissions or authentication credentials.",
 	"NO_RESULTS_FOUND": "No results found",
-	"ENTITY_TYPE_AND_ENTITES_DELETED_SUCCESSFULLY": "Entity types and Entities deleted successfully."
+	"ENTITY_TYPE_AND_ENTITES_DELETED_SUCCESSFULLY": "Entity types and Entities deleted successfully.",
+	"USER_DETAILS_FETCHED_SUCCESSFULLY": "User details fetched successfully."
 }

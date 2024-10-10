@@ -342,6 +342,8 @@ module.exports = class MentorsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+			data.organization_name = userOrgDetails.data.result.name
+
 			// Find organisation policy from organisation_extension table
 			let organisationPolicy = await organisationExtensionQueries.findOrInsertOrganizationExtension(orgId)
 
