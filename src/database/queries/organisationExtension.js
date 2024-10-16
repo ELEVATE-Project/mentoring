@@ -40,7 +40,7 @@ module.exports = class OrganizationExtensionQueries {
 	 * @throws {Error} If organizationId is missing or if an error occurs during the operation.
 	 */
 
-	static async findOrInsertOrganizationExtension(organizationId) {
+	static async findOrInsertOrganizationExtension(organizationId, organization_name) {
 		try {
 			if (!organizationId) {
 				throw new Error('organization Id Missing')
@@ -48,6 +48,8 @@ module.exports = class OrganizationExtensionQueries {
 
 			const data = common.getDefaultOrgPolicies()
 			data.organization_id = organizationId
+			data.name = organization_name
+
 			// Try to find the data, and if it doesn't exist, create it
 			const [orgPolicies, created] = await OrganizationExtension.findOrCreate({
 				where: {
