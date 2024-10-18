@@ -640,6 +640,7 @@ module.exports = class MenteesHelper {
 			}
 			// Call user service to fetch organisation details --SAAS related changes
 			let userOrgDetails = await userRequests.fetchOrgDetails({ organizationId: orgId })
+
 			// Return error if user org does not exists
 			if (!userOrgDetails.success || !userOrgDetails.data || !userOrgDetails.data.result) {
 				return responses.failureResponse({
@@ -648,8 +649,14 @@ module.exports = class MenteesHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			const organization_name = userOrgDetails.data.result.name
+
 			// Find organisation policy from organisation_extension table
-			let organisationPolicy = await organisationExtensionQueries.findOrInsertOrganizationExtension(orgId)
+			let organisationPolicy = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+				orgId,
+				organization_name
+			)
 
 			data.user_id = userId
 
@@ -788,7 +795,8 @@ module.exports = class MenteesHelper {
 				//both both user data and organisation can change at the same time.
 				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationId: data.organization.id })
 				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
-					data.organization.id
+					data.organization.id,
+					userOrgDetails.data.result.name
 				)
 				if (!orgPolicies?.organization_id) {
 					return responses.failureResponse({
