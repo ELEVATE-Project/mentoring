@@ -109,6 +109,7 @@ module.exports = class MentorExtensionQueries {
 			throw error
 		}
 	}
+
 	static async removeMentorDetails(userId) {
 		try {
 			return await MentorExtension.update(
@@ -125,6 +126,10 @@ module.exports = class MentorExtensionQueries {
 					visible_to_organizations: [],
 					external_session_visibility: null,
 					external_mentor_visibility: null,
+					custom_entity_text: null,
+					name: null,
+					email: null,
+					phone: null,
 					deleted_at: Date.now(),
 				},
 				{
@@ -138,6 +143,7 @@ module.exports = class MentorExtensionQueries {
 			throw error
 		}
 	}
+	
 	static async getMentorsByUserIds(ids, options = {}, unscoped = false) {
 		try {
 			const query = {

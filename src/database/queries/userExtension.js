@@ -177,6 +177,7 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
+	
 	static async removeMenteeDetails(userId) {
 		try {
 			return await MenteeExtension.update(
@@ -195,6 +196,10 @@ module.exports = class MenteeExtensionQueries {
 					external_mentor_visibility: null,
 					external_mentee_visibility: null,
 					mentee_visibility: null,
+					custom_entity_text: null,
+					name: null,
+					email: null,
+					phone: null,
 					deleted_at: Date.now(),
 				},
 				{
