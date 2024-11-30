@@ -1,9 +1,10 @@
 {
 	"info": {
-		"_postman_id": "a9e2eeae-f3d1-470e-98aa-599c4cc28f8a",
+		"_postman_id": "818ee469-af80-4d85-ae2f-1179da95e68c",
 		"name": "MentorED-Scheduler",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "21498549"
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "24204448",
+		"_collection_link": "https://dark-astronaut-764227.postman.co/workspace/Elevate-Workspace~39b977d8-9e5b-4232-87f3-3da4bed3a67c/collection/24204448-818ee469-af80-4d85-ae2f-1179da95e68c?action=share&source=collection_link&creator=24204448"
 	},
 	"item": [
 		{
@@ -40,13 +41,7 @@
 							"mode": "raw",
 							"raw": "{\n    \"jobName\": \"emailCronJobBeforeOneHour\",\n    \"email\": [\n        \"nevil@tunerlabs.com\"\n    ],\n    \"request\": {\n        \"url\": \"http://mentoring:3000/mentoring/v1/notifications/emailCronJobBeforeOneHour\",\n        \"method\": \"get\",\n        \"header\": {\n            \"internal_access_token\": \"internal_access_token\"\n        }\n    },\n    \"jobOptions\": {\n        \"jobId\": \"emailCronJobBeforeOneHour\",\n        \"repeat\": {\n            \"pattern\": \"15 3 * * *\"\n        },\n        \"removeOnComplete\": 100,\n        \"removeOnFail\": 200,\n        \"attempts\": 3\n    }\n}"
 						},
-						"url": {
-							"raw": "http://localhost:4000/scheduler/jobs/create",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "4000",
-							"path": ["scheduler", "jobs", "create"]
-						}
+						"url": "http://localhost:4000/scheduler/jobs/create"
 					},
 					"response": []
 				},
@@ -106,13 +101,7 @@
 							"mode": "raw",
 							"raw": "{\n    \"jobName\": \"emailCronJobBeforeOneHour\",\n    \"email\": [\n        \"nevil@tunerlabs.com\"\n    ],\n    \"request\": {\n        \"url\": \"http://mentoring:3000/mentoring/v1/notifications/emailCronJobBeforeOneHour\",\n        \"method\": \"get\",\n        \"header\": {\n            \"internal_access_token\": \"internal_access_etoken\"\n        }\n    },\n    \"jobOptions\": {\n        \"jobId\": \"{{var}}\",\n        \"delay\": 15000,\n        \"removeOnComplete\": false,\n        \"removeOnFail\": false,\n        \"attempts\": 1\n    }\n}"
 						},
-						"url": {
-							"raw": "http://localhost:4000/scheduler/jobs/create",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "4000",
-							"path": ["scheduler", "jobs", "create"]
-						}
+						"url": "http://localhost:4000/scheduler/jobs/create"
 					},
 					"response": []
 				},
@@ -130,13 +119,7 @@
 							"mode": "raw",
 							"raw": "{\n    \"jobName\": \"emailCronJobBeforeOneHour\",\n    \"email\": [\n        \"nevil@tunerlabs.com\"\n    ],\n    \"request\": {\n        \"url\": \"http://mentoring:3000/mentoring/v1/notifications/emailCronJobBeforeOneHour\",\n        \"method\": \"get\",\n        \"header\": {\n            \"internal_access_token\": \"internal_access_token\"\n        }\n    },\n    \"jobOptions\": {\n        \"jobId\": \"emailCronJobBeforeOneHour\",\n        \"repeat\": {\n            \"every\": 100,\n            \"limit\": 250\n        },\n        \"removeOnComplete\": 50,\n        \"removeOnFail\": 200,\n        \"attempts\": 3\n    }\n}"
 						},
-						"url": {
-							"raw": "http://localhost:4000/scheduler/jobs/create",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "4000",
-							"path": ["scheduler", "jobs", "create"]
-						}
+						"url": "http://localhost:4000/scheduler/jobs/create"
 					},
 					"response": []
 				}
@@ -159,13 +142,7 @@
 							"mode": "raw",
 							"raw": "{\n    \"method\": \"clean\",\n    \"options\": {\n        \"gracePeriod\": 60,\n        \"limit\": 0,\n        \"jobStatus\": \"failed\"\n    }\n}"
 						},
-						"url": {
-							"raw": "http://localhost:4000/scheduler/jobs/purge",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "4000",
-							"path": ["scheduler", "jobs", "purge"]
-						}
+						"url": "http://localhost:4000/scheduler/jobs/purge"
 					},
 					"response": []
 				},
@@ -183,13 +160,7 @@
 							"mode": "raw",
 							"raw": "{\n    \"method\": \"drain\"\n}"
 						},
-						"url": {
-							"raw": "http://localhost:4000/scheduler/jobs/purge",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "4000",
-							"path": ["scheduler", "jobs", "purge"]
-						}
+						"url": "http://localhost:4000/scheduler/jobs/purge"
 					},
 					"response": []
 				},
@@ -207,13 +178,7 @@
 							"mode": "raw",
 							"raw": "{\n    \"method\": \"obliterate\"\n}"
 						},
-						"url": {
-							"raw": "http://localhost:4000/scheduler/jobs/purge",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "4000",
-							"path": ["scheduler", "jobs", "purge"]
-						}
+						"url": "http://localhost:4000/scheduler/jobs/purge"
 					},
 					"response": []
 				}
@@ -233,13 +198,7 @@
 					"mode": "raw",
 					"raw": "{\n    \"jobId\": \"emailCronJobBeforeOneHour\"\n}"
 				},
-				"url": {
-					"raw": "http://localhost:4000/scheduler/jobs/remove",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "4000",
-					"path": ["scheduler", "jobs", "remove"]
-				}
+				"url": "http://localhost:4000/scheduler/jobs/remove"
 			},
 			"response": []
 		},
@@ -263,9 +222,15 @@
 				"url": {
 					"raw": "http://localhost:4000/scheduler/jobs/list?filter=completed,failed,delayed,active,wait,paused,repeat",
 					"protocol": "http",
-					"host": ["localhost"],
+					"host": [
+						"localhost"
+					],
 					"port": "4000",
-					"path": ["scheduler", "jobs", "list"],
+					"path": [
+						"scheduler",
+						"jobs",
+						"list"
+					],
 					"query": [
 						{
 							"key": "filter",
@@ -332,13 +297,7 @@
 					"mode": "raw",
 					"raw": "{\n    \"delay\": 120000,\n    \"id\": 47\n}"
 				},
-				"url": {
-					"raw": "http://localhost:4000/scheduler/jobs/updateDelay",
-					"protocol": "http",
-					"host": ["localhost"],
-					"port": "4000",
-					"path": ["scheduler", "jobs", "updateDelay"]
-				}
+				"url": "http://localhost:4000/scheduler/jobs/updateDelay"
 			},
 			"response": []
 		}

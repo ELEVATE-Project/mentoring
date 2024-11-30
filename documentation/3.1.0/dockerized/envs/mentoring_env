@@ -3,9 +3,11 @@ APPLICATION_HOST="mentoring"
 APPLICATION_ENV="development"
 APPLICATION_BASE_URL="/mentoring/"
 ALLOWED_HOST="*"
-ACCESS_TOKEN_SECRET="xG7V87nfj2394fJD394jfgh08dfDfh98DKJlndfj9d"  # New secure access token secret
+# New secure access token secret
+ACCESS_TOKEN_SECRET="xG7V87nfj2394fJD394jfgh08dfDfh98DKJlndfj9d"  
 ADMIN_TOKEN_HEADER_NAME="admin-auth-token"
-ADMIN_ACCESS_TOKEN="j8a3Ndf9sdH92nDkf7j4FgH92nDdjf7G2J9sHnLz8X5N"  # New secure admin access token
+# New secure admin access token
+ADMIN_ACCESS_TOKEN="j8a3Ndf9sdH92nDkf7j4FgH92nDdjf7G2J9sHnLz8X5N"  
 ORG_ID_HEADER_NAME="organization-id"
 KAFKA_URL="kafka:9092"
 KAFKA_GROUP_ID="mentoring"
@@ -40,20 +42,26 @@ REFRESH_VIEW_INTERVAL="30000"
 DEFAULT_ORG_ID="1"
 DEFAULT_QUEUE="mentoring-queue"
 CLOUD_STORAGE_PROVIDER="aws"
-CLOUD_STORAGE_ACCOUNTNAME="EXAMPLEACCESSKEY"  # New AWS access key
-CLOUD_STORAGE_SECRET="EXAMPLESECRETKEY"  # New AWS secret key
+# New AWS access key
+CLOUD_STORAGE_ACCOUNTNAME="EXAMPLEACCESSKEY"  
+# New AWS secret key
+CLOUD_STORAGE_SECRET="EXAMPLESECRETKEY"  
 CLOUD_STORAGE_REGION="ap-south-1"
 CLOUD_ENDPOINT="s3.ap-south-1.amazonaws.com"
 CLOUD_STORAGE_BUCKETNAME="private-or-public-bucket"
 PUBLIC_ASSET_BUCKETNAME="public-bucket"
 CLOUD_STORAGE_BUCKET_TYPE="private"
 EMAIL_ID_ENCRYPTION_ALGORITHM="aes-256-cbc"
-EMAIL_ID_ENCRYPTION_IV="c9c7bd480494409071847264652f5c95"  #New encryption IV
+#New encryption IV
+EMAIL_ID_ENCRYPTION_IV="c9c7bd480494409071847264652f5c95"  
 EMAIL_ID_ENCRYPTION_KEY="eef7e009626c18724be86afa41a2620e0718561a508c61f92d7ee0377177ef7b" # New secure encryption key
 ENABLE_LOG="true"
-MENTOR_SECRET_CODE="2345"  # New mentor secret code
-KEY="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz+/"  # New secure key
-INTERNAL_ACCESS_TOKEN="internal_access_token"  # Replace with secure internal access token
+# New mentor secret code
+MENTOR_SECRET_CODE="2345"  
+# New secure key
+KEY="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz+/"  
+# Replace with secure internal access token
+INTERNAL_ACCESS_TOKEN="internal_access_token"  
 REPORT_ISSUE_EMAIL_TEMPLATE_CODE="user_issue_reported"
 SCHEDULER_SERVICE_URL="http://interface:3569/jobs/scheduleJob"
 SESSION_EDIT_WINDOW_MINUTES="0"
@@ -78,5 +86,8 @@ SIGNED_URL_EXPIRY_DURATION=120000
 SESSION_VERIFICATION_METHOD="user_service_authenticated"
 SEESION_MANAGER_AND_MENTEE_LIMIT=6
 SCHEDULER_SERVICE_ERROR_REPORTING_EMAIL_ID="sample@sample.com"
-IV="LHYOA5YnTonqcgrm15k3/Q=="  # New IV for encryption
+# New IV for encryption
+IV="LHYOA5YnTonqcgrm15k3/Q=="  
 ZEST_ENV="ZEST_ENV"
+MENTEE_SESSION_CANCELLATION_EMAIL_TEMPLATE="mentee_session_cancel"
+MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE="session_deleted_by_manager"

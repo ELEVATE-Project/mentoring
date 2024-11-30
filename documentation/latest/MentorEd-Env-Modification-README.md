@@ -10,30 +10,9 @@ This document acts as a reference for such functionalities or features and their
 
 ## Affected Features
 
-1. **User Signup**
+1. **Bulk Upload Sessions**
 
-    Since an email with an OTP code is sent to verify the email ID provided during the signup process, the Notification service environment variables must be configured with real values sourced from an email service. 
-    
-    Currently, the Notification service natively supports [Twilio® SendGrid](https://sendgrid.com/en-us) as the default email service. Therefore, the following environment variables must be set for this feature to function properly.
-
-    ### Notification Service
-
-    **Docker Setup:** `notification_env`
-
-    **Manual Setup:** `notification/src/.env`
-
-    **Variables:**
-
-    ```
-    SENDGRID_API_KEY
-    SENDGRID_FROM_EMAIL
-    ```
-
-    > **Note:** If the **APPLICATION_ENV** in the User service is set to "**development**," the OTP code will be logged in the console. This feature might be advantageous in a local setup as it bypasses the need for a Sendgrid account. Logging is disabled in production environments (**APPLICATION_ENV=production**).
-
-2. **File Upload**
-
-    The application utilizes file upload functionality to implement several features like profile and session image upload, bulk user creation and bulk session creation. Therefore, it is expected that you have a bucket configured with a cloud provider of your choosing (AWS, GCP, AZURE, or OCI). And relevant environment fields are set in the following services.
+    The application utilizes file upload functionality to implement several features like profile and session image upload, bulk user creation and in release-3.1.0 bulk session creation is introduced with new envs. Therefore, it is expected that you have a bucket configured with a cloud provider of your choosing (AWS, GCP, AZURE, or OCI). And relevant environment fields are set in the following services.
 
     ### Mentor and User Services
 
@@ -46,29 +25,13 @@ This document acts as a reference for such functionalities or features and their
     ```
     CLOUD_STORAGE			->Choice of cloud provider (AWS, GCP, AZURE, OCI)
 
-    ============AWS============
-    AWS_ACCESS_KEY_ID
-    AWS_SECRET_ACCESS_KEY
-    AWS_BUCKET_REGION
-    AWS_BUCKET_ENDPOINT
-    DEFAULT_AWS_BUCKET_NAME
-
-    ============GCP============
-    GCP_PATH
-    DEFAULT_GCP_BUCKET_NAME
-    GCP_PROJECT_ID
-
-    ===========AZURE===========
-    AZURE_ACCOUNT_NAME
-    AZURE_ACCOUNT_KEY
-    DEFAULT_AZURE_CONTAINER_NAME
-
-    ============OCI============
-    OCI_ACCESS_KEY_ID
-    OCI_SECRET_ACCESS_KEY
-    OCI_BUCKET_REGION
-    OCI_BUCKET_ENDPOINT
-    DEFAULT_OCI_BUCKET_NAME
+CLOUD_STORAGE_PROVIDER
+CLOUD_STORAGE_ACCOUNTNAME
+CLOUD_STORAGE_SECRET
+CLOUD_STORAGE_PROJECT 
+CLOUD_STORAGE_BUCKETNAME
+CLOUD_STORAGE_BUCKET_TYPE
+PUBLIC_ASSET_BUCKETNAME
     ```
 
     ### Relevant Resources
@@ -78,88 +41,10 @@ This document acts as a reference for such functionalities or features and their
     3. [Create Azure Blob Storage](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal)
     4. [Create OCI Object Storage Bucket](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/managingbuckets_topic-To_create_a_bucket.htm)
 
-3. **Support Emails**
 
-    The application provides a mechanism for users to generate request emails that are sent to a support team overseeing user requests. For example, if a user wants to delete their account or report an issue, they can trigger an email with their request message from the portal.
+2. **Session Management**
 
-    <div style="text-align: left; width: 100%;">
-        <h4 style="text-align: left;">Report Issue Help Page</h4>
-        <img src="../../public/images/help_report_issue.png" alt="MentorEd Report Issue Help Page" 
-            style="max-width: 100%; height: auto; width: auto; max-height: 300px;">
-    </div>
-
-    For this feature to function, support email IDs and other values must be set in the Mentor service as listed below.
-
-    ### Mentor Service
-
-    **Docker Setup:** `mentoring_env`
-
-    **Manual Setup:** `mentoring/src/.env`
-
-    **Variables:**
-
-    ```
-    SUPPORT_EMAIL_ID
-    ENABLE_EMAIL_FOR_REPORT_ISSUE			-> Already enabled in default/sample env files
-    ```
-
-    > **Important:** As a prerequisite, the Notification service must be configured with the proper SendGrid environment variables, as shown in the User SignUp section.
-
-4. **Email Encryption**
-
-    Since version 2.6.1, the application has enhanced its security by implementing system-wide email encryption, now enabled by default. This update ensures that email IDs are not stored as plaintext in the database. Instead, they are encrypted using the `AES-256-CBC` algorithm. The encryption and decryption processes are governed by the following environment variables:
-
-    ### User Service
-
-    **Docker Setup:** `user_env`
-
-    **Manual Setup:** `user/src/.env`
-
-    **Variables:**
-
-    ```
-    EMAIL_ID_ENCRYPTION_KEY
-    EMAIL_ID_ENCRYPTION_IV
-    ```
-
-    > **Critical:** The default environment files provided with the deployment guide contain default but valid values for the email encryption variables. Replace these default values with unique ones for your deployment to avoid the risk of using a publicly available KEY and IV pair for encrypting your email IDs.
-
-    To generate a new, valid pair of KEY and IV, you can use the following script: [Generate Encryption Keys](https://github.com/ELEVATE-Project/user/blob/master/src/scripts/generateEncyrptionKeys.js).
-
-5. **CAPTCHA**
-
-    Since version 2.6.1, the application has introduced the option to implement CAPTCHA using [Google reCAPTCHA](https://www.google.com/recaptcha/about/) on various portal pages such as Login and SignUp. By default, this feature is disabled in the configuration settings found in the default environment files included in the deployment guide.
-
-    If you wish to enable CAPTCHA, you need to obtain a `site key` and `secret key` from Google. To do this, follow the instructions provided in the [reCAPTCHA Developer Guide](https://developers.google.com/recaptcha/intro). Once you have your keys, update the following environment variables to activate CAPTCHA on your site.
-
-    ### User Service
-
-    **Docker Setup:** `user_env`
-
-    **Manual Setup:** `user/src/.env`
-
-    **Variables:**
-
-    ```
-    CAPTCHA_ENABLE                  -> Set it as true
-    RECAPTCHA_SECRET_KEY
-    ```
-
-    ### Portal
-
-    **Docker Setup:** `environment.ts`
-
-    **Manual Setup:** `src/environments/environment.ts`
-
-    **Variables:**
-
-    ```
-    recaptchaSiteKey                -> Eg. recaptchaSiteKey:"6ASfWasd68fAAAAACxKbas98df63BwbJkJas8df67IM_6Ea"
-    ```
-
-6. **Session Management**
-
-    Since version 2.6.1, the application includes advanced features for user session management, such as inactivity timeouts, session tracking, and remote logout. These features are controlled by the following environment variables:
+    Since version 3.1.0, the application includes advanced features for user session management, such as inactivity timeouts, session tracking, and remote logout. These features are controlled by the following environment variables:
 
     ### User Service
 
@@ -180,9 +65,9 @@ This document acts as a reference for such functionalities or features and their
 
     - **ALLOWED_ACTIVE_SESSIONS**: Defines the limit on the number of concurrent sessions a user can have. By default, there is no limit, allowing an unlimited number of active sessions.
 
-7. **Rate Limiting**
+3. **Rate Limiting**
 
-    The rate-limiting feature has been introduced in version 2.6.1 to enhance system stability and prevent abuse. This feature regulates the number of requests a user can make to the services within a given timeframe. Rate-limiting is enabled by default.
+    The rate-limiting feature has been introduced in version 3.1.0 to enhance system stability and prevent abuse. This feature regulates the number of requests a user can make to the services within a given timeframe. Rate-limiting is enabled by default.
 
     ### User Service
 
@@ -198,3 +83,24 @@ This document acts as a reference for such functionalities or features and their
     ```
 
     Refer to the [Rate-Limiting Guide](./MentorEd-Rate-Limiting-Guide.md) for more information on how to set these variables.
+
+4. **Setting Default Rules**
+
+    In version 3.1.0, Admins can set default rules based on mandatory profile fields (Gender, Location, Language) for mentees and mentors, applying them to searches, sessions, and connections. Mentees can only view and enroll in sessions that match these rules, and mentors can create sessions only if their profile aligns with the mentees. Any changes to mandatory fields trigger notifications and restrict users until profiles are updated.
+
+5. **Search Functionality**
+
+    In version 3.1.0 a mentor or mentee, I should be able to search for mentors and sessions to get relevant results based on my search.
+    When I type a keyword in the search bar and press 'Enter,' the results page will show my search term along with categorized results: mentors and sessions. Each section will display 10 results, with options to filter and view more, and pagination for additional results. Default rules and filters will apply, and filters set by the admin cannot be changed. If no results match, a "no results found" page will be shown.
+
+6. **Profile Details Page**
+
+    In release 3.1.0, the "Your Role" field will include the new "Other" option, allowing users to enter a custom role if it's not listed. The multi-select functionality remains, and users selecting "Other" must fill out the new role field, which will be categorized and appear when filtered on the requests page. All fields and values on the profile page are configurable, ensuring flexibility for administrators. This update enhances role customization and improves filtering accuracy for requests.
+
+7. **User Account Displays in Profile and Role**
+    
+    In release-3.1.0, the user role hierarchy and profiles are enhanced. Mentors automatically have a Mentee Profile, and users assigned roles as Org-admin or Session Managers will see these roles displayed alongside their profiles. The role hierarchy prioritizes (1) Org-admin over (2) Session Manager, ensuring a streamlined user experience based on assigned roles.
+
+8. **SignUp And Mandatory Profile Update**
+   
+   In release-3.1.0, after OTP validation, users are redirected to the "Profile Details" page to complete their profile setup by filling in mandatory fields. If they log out or close the browser before finishing, they are redirected to the "Setup Profile" pop-up upon re-login until the profile is successfully updated.

@@ -120,3 +120,5 @@ while IFS= read -r line; do
 done <"$SAMPLE_COLUMNS_FILE"
 
 echo "Sample Data Insertion Completed"
+
+
