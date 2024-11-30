@@ -9,21 +9,28 @@ const rl = readline.createInterface({
 
 let accessToken = ''
 let entityTypeId = ''
+let adminAuthToken = ''
+let organizationId = ''
 
-const DEFAULT_MENTORING_DOMAIN = 'http://localhost:3569'
+const DEFAULT_MENTORING_DOMAIN = 'http://localhost:3567'
 let MENTORING_DOMAIN = DEFAULT_MENTORING_DOMAIN
 
 async function main() {
 	try {
 		await promptForDomain()
-		await promptForAccessToken()
+		await promptForAuthenticatedUserToken()
+		await promptForAuthorization()
+		await promptForAdminAuthToken()
+		await promptForOrganizationId()
 
 		while (true) {
 			const chosenFile = await selectCsvFile()
 			if (!chosenFile) break
 
+			const required = await promptForRequired()
 			const modelNames = await promptForModelNames()
-			const entityTypeData = buildEntityTypeData(chosenFile, modelNames)
+			const dataType = await selectDataType()
+			const entityTypeData = buildEntityTypeData(chosenFile, modelNames, required, dataType)
 			await createEntityType(entityTypeData)
 
 			await processCsvFile(chosenFile)
@@ -47,8 +54,46 @@ async function promptForDomain() {
 	console.log(`Using domain: ${MENTORING_DOMAIN}`)
 }
 
-async function promptForAccessToken() {
-	accessToken = await promptQuestion('Enter access token: ')
+async function promptForAuthenticatedUserToken() {
+	authenticatedUserToken = await promptQuestion('Enter authenticated user token: ')
+}
+
+async function promptForAuthorization() {
+	authorization = await promptQuestion('Enter authorization token: ')
+}
+
+async function promptForAdminAuthToken() {
+	adminAuthToken = await promptQuestion('Enter admin Auth Token: ')
+}
+
+async function promptForOrganizationId() {
+	organizationId = await promptQuestion('Enter organization Id: ')
+}
+
+async function promptForRequired() {
+	const requiredAnswer = await promptQuestion('Is EntityType Mandatory ? (y/n, default is y): ')
+	const requiredValue = requiredAnswer.toLowerCase() === 'n' ? false : true
+	return requiredValue
+}
+
+async function selectDataType() {
+	const dataTypeOptions = ['STRING', 'ARRAY[STRING]']
+
+	console.log('Data type options:')
+	dataTypeOptions.forEach((option, index) => {
+		console.log(`${index + 1}. ${option}`)
+	})
+
+	const dataTypeIndex = parseInt(await promptQuestion('Select data type (number): '), 10) - 1
+
+	if (dataTypeIndex < 0 || dataTypeIndex >= dataTypeOptions.length) {
+		console.log('Invalid data type. Try again.')
+		return null
+	}
+
+	const dataType = dataTypeOptions[dataTypeIndex]
+	console.log(`Chosen data type: ${dataType}`)
+	return dataType
 }
 
 function selectCsvFile() {
@@ -106,7 +151,13 @@ async function createEntityType(entityTypeData) {
 			`${MENTORING_DOMAIN}/mentoring/v1/entity-type/create`,
 			JSON.stringify(entityTypeData),
 			{
-				headers: { 'x-auth-token': `bearer ${accessToken}`, 'Content-Type': 'application/json' },
+				headers: {
+					'x-authenticated-user-token': `${authenticatedUserToken}`,
+					Authorization: `bearer ${authorization}`,
+					'Content-Type': 'application/json',
+					'admin-auth-token': `${adminAuthToken}`,
+					'organization-id': `${organizationId}`,
+				},
 			}
 		)
 		entityTypeId = response.data.result.id
@@ -117,17 +168,21 @@ async function createEntityType(entityTypeData) {
 	}
 }
 
+function sleep(ms) {
+	return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function processCsvFile(chosenFile) {
 	try {
 		const csvData = fs.readFileSync(`${__dirname}/${chosenFile}`, 'utf8')
-		const lines = csvData.trim().split('\n')
-		const headers = lines[0].split(',')
-
+		const lines = csvData.split('\n')
+		const headers = lines[0].trim().split(',')
 		for (let i = 1; i < lines.length; i++) {
 			const line = lines[i].split(',')
-			const identifier = line[headers.indexOf('identifier')]
-			const entity = line[headers.indexOf('entity')]
-
+			let identifier = line[headers.indexOf('identifier')]
+			identifier = identifier.replace(/[^a-zA-Z0-9_]/g, '_')
+			let entity = line[headers.indexOf('entity')]
+			entity = entity.replace(/\r/g, '')
 			await createEntity(identifier, entity)
 		}
 
@@ -142,14 +197,20 @@ async function createEntity(identifier, entity, retries = 3) {
 		const response = await axios.post(
 			`${MENTORING_DOMAIN}/mentoring/v1/entity/create`,
 			JSON.stringify({
-				value: identifier.trim(),
-				label: entity.trim(),
+				value: identifier,
+				label: entity,
 				status: 'ACTIVE',
 				type: 'SYSTEM',
 				entity_type_id: entityTypeId,
 			}),
 			{
-				headers: { 'x-auth-token': `bearer ${accessToken}`, 'Content-Type': 'application/json' },
+				headers: {
+					'x-authenticated-user-token': `${authenticatedUserToken}`,
+					Authorization: `bearer ${authorization}`,
+					'Content-Type': 'application/json',
+					'admin-auth-token': `${adminAuthToken}`,
+					'organization-id': `${organizationId}`,
+				},
 			}
 		)
 		console.log(`Entity created successfully: ${identifier} - ${entity}`)
@@ -162,14 +223,18 @@ async function createEntity(identifier, entity, retries = 3) {
 
 		if (retries > 0) {
 			console.log(`Retrying (${retries} retries left)...`)
-			await createEntity(identifier, entity, retries - 1)
+			if (error.response.status === 429) {
+				console.log('Too many requests. Wait for 1 minute.')
+				await sleep(60000)
+				await createEntity(identifier, entity, retries - 1)
+			}
 		} else {
 			console.log(`Max retries reached for (${identifier} - ${entity}). Skipping.`)
 		}
 	}
 }
 
-function buildEntityTypeData(chosenFile, modelNames) {
+function buildEntityTypeData(chosenFile, modelNames, required, dataType) {
 	return {
 		value: chosenFile.replace('.csv', '').toLowerCase(),
 		label: chosenFile
@@ -179,9 +244,10 @@ function buildEntityTypeData(chosenFile, modelNames) {
 			.replace(/\b\w/g, (l) => l.toUpperCase()),
 		status: 'ACTIVE',
 		allow_filtering: false,
-		data_type: 'STRING',
+		data_type: dataType,
 		allow_custom_entities: true,
 		model_names: modelNames,
+		required: required,
 	}
 }
 
