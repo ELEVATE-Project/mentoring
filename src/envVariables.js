@@ -6,7 +6,8 @@ let tableData = new table()
 let enviromentVariables = {
 	APPLICATION_PORT: {
 		message: 'Required port no',
-		optional: false,
+		optional: true,
+		default: '3000',
 	},
 	APPLICATION_HOST: {
 		message: 'Required host',
@@ -18,7 +19,8 @@ let enviromentVariables = {
 	},
 	APPLICATION_BASE_URL: {
 		message: 'Required application base url',
-		optional: false,
+		optional: true,
+		default: '/mentoring/',
 	},
 	ACCESS_TOKEN_SECRET: {
 		message: 'Required access token secret',
@@ -55,11 +57,28 @@ let enviromentVariables = {
 	},
 	KAFKA_GROUP_ID: {
 		message: 'Required kafka group id',
-		optional: false,
+		optional: true,
+		default: 'mentoring',
 	},
 	NOTIFICATION_KAFKA_TOPIC: {
 		message: 'Required kafka topic',
-		optional: false,
+		optional: true,
+		default: 'notificationtopic',
+	},
+	KAFKA_TOPIC: {
+		message: 'Required kafka topic',
+		optional: true,
+		default: 'mentoring.topic',
+	},
+	RATING_KAFKA_TOPIC: {
+		message: 'Required kafka topic',
+		optional: true,
+		default: 'mentoring.rating',
+	},
+	KAFKA_MENTORING_TOPIC: {
+		message: 'Required kafka topic',
+		optional: true,
+		default: 'mentoringtopics',
 	},
 	USER_SERVICE_HOST: {
 		message: 'Required user service host',
@@ -67,11 +86,12 @@ let enviromentVariables = {
 	},
 	USER_SERVICE_BASE_URL: {
 		message: 'Required user service base url',
-		optional: false,
+		optional: true,
+		default: '/user/',
 	},
 	BIG_BLUE_BUTTON_URL: {
 		message: 'Required big blue button url',
-		optional: false,
+		optional: process.env.DEFAULT_MEETING_SERVICE === 'BBB' ? false : true,
 	},
 	MEETING_END_CALLBACK_EVENTS: {
 		message: 'Required meeting end callback events',
@@ -79,7 +99,7 @@ let enviromentVariables = {
 	},
 	BIG_BLUE_BUTTON_SECRET_KEY: {
 		message: 'Required big blue button secret key',
-		optional: false,
+		optional: process.env.DEFAULT_MEETING_SERVICE === 'BBB' ? false : true,
 	},
 	RECORDING_READY_CALLBACK_URL: {
 		message: 'Required recording ready callback url',
@@ -91,11 +111,13 @@ let enviromentVariables = {
 	},
 	API_DOC_URL: {
 		message: 'Required api doc url',
-		optional: false,
+		optional: true,
+		default: '/mentoring/api-doc',
 	},
 	INTERNAL_CACHE_EXP_TIME: {
 		message: 'Internal Cache Expiry Time',
-		optional: false,
+		optional: true,
+		default: 86400,
 	},
 	REDIS_HOST: {
 		message: 'Redis Host Url',
@@ -103,7 +125,8 @@ let enviromentVariables = {
 	},
 	ENABLE_EMAIL_FOR_REPORT_ISSUE: {
 		message: 'Required true or false',
-		optional: false,
+		optional: true,
+		default: true,
 	},
 	SUPPORT_EMAIL_ID: {
 		message: 'Required email id of support',
@@ -112,18 +135,26 @@ let enviromentVariables = {
 	REPORT_ISSUE_EMAIL_TEMPLATE_CODE: {
 		message: 'Required reported issue email template code',
 		optional: process.env.ENABLE_EMAIL_FOR_REPORT_ISSUE === 'true' ? false : true,
+		default: 'user_issue_reported',
+	},
+	BIG_BLUE_BUTTON_BASE_URL: {
+		message: 'Big blue button base url',
+		optional: process.env.DEFAULT_MEETING_SERVICE === 'BBB' ? false : true,
+		default: '/bigbluebutton/',
 	},
 	BIG_BLUE_BUTTON_SESSION_END_URL: {
 		message: 'Big blue button session end url.',
-		optional: false,
+		optional: process.env.DEFAULT_MEETING_SERVICE === 'BBB' ? false : true,
 	},
 	ERROR_LOG_LEVEL: {
 		message: 'Required Error log level',
-		optional: false,
+		optional: true,
+		default: 'silly',
 	},
 	DISABLE_LOG: {
 		message: 'Required disable log level',
-		optional: false,
+		optional: true,
+		default: true,
 	},
 	DEFAULT_MEETING_SERVICE: {
 		message: 'Required default meeting service',
@@ -131,11 +162,13 @@ let enviromentVariables = {
 	},
 	SESSION_EDIT_WINDOW_MINUTES: {
 		message: 'Required session edit window timeout',
-		optional: false,
+		optional: true,
+		default: 0,
 	},
 	SESSION_MENTEE_LIMIT: {
 		message: 'Required session mentee limit',
-		optional: false,
+		optional: true,
+		default: 20,
 	},
 	SCHEDULER_SERVICE_HOST: {
 		message: 'Required scheduler service host',
@@ -143,21 +176,38 @@ let enviromentVariables = {
 	},
 	SCHEDULER_SERVICE_BASE_URL: {
 		message: 'Required scheduler service base url',
-		optional: false,
+		optional: true,
+		default: '/scheduler/',
 	},
 	DEFAULT_ORGANISATION_CODE: {
 		message: 'Required default organisation code',
-		optional: false,
-		default: 'sl',
+		optional: true,
+		default: 'default_code',
 	},
 	REFRESH_VIEW_INTERVAL: {
 		message: 'Interval to refresh views in milliseconds',
-		optional: false,
-		default: 540000,
+		optional: true,
+		default: 30000,
 	},
 	DEFAULT_ORG_ID: {
 		message: 'Default organization ID',
-		optional: false,
+		optional: true,
+		default: 1,
+	},
+	MENTEE_SESSION_CANCELLATION_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentee session cancellation',
+		optional: true,
+		default: 'mentee_session_cancel',
+	},
+	MENTEE_SESSION_ENROLLMENT_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentee session enrollment',
+		optional: true,
+		default: 'mentee_session_enrollment',
+	},
+	MENTOR_SESSION_DELETE_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentor session delete',
+		optional: true,
+		default: 'mentor_session_delete',
 	},
 	MENTEE_SESSION_EDITED_BY_MANAGER_EMAIL_TEMPLATE: {
 		message: 'Required email template name for mentee session edited by manager',
@@ -184,6 +234,11 @@ let enviromentVariables = {
 		optional: true,
 		default: 'mentor_session_edited_by_manager_email_template',
 	},
+	MENTOR_SESSION_RESCHEDULE_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentor session reschedule',
+		optional: true,
+		default: 'mentor_session_reschedule',
+	},
 	MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE: {
 		message: 'Required email template name for mentor session deleted by manager',
 		optional: true,
@@ -202,7 +257,7 @@ let enviromentVariables = {
 	DOWNLOAD_URL_EXPIRATION_DURATION: {
 		message: 'Required downloadable url expiration time',
 		optional: true,
-		default: 3600000,
+		default: 300000,
 	},
 	SESSION_UPLOAD_EMAIL_TEMPLATE_CODE: {
 		message: 'Required email template name for bulk session upload by session manager',
@@ -211,7 +266,8 @@ let enviromentVariables = {
 	},
 	DEFAULT_QUEUE: {
 		message: 'Required default queue',
-		optional: false,
+		optional: true,
+		default: 'mentoring-queue',
 	},
 	SAMPLE_CSV_FILE_PATH: {
 		message: 'Required sample csv file path',
@@ -243,35 +299,35 @@ let enviromentVariables = {
 		optional: true,
 		default: true,
 	},
-	DOWNLOAD_URL_EXPIRATION_DURATION: {
-		message: 'Required downloadable url expiration time',
-		optional: true,
-		default: 300,
-	},
 	SIGNED_URL_EXPIRY_DURATION: {
 		message: 'Required signed url expiration time in seconds',
 		optional: true,
 		default: 900,
 	},
+	SIGNED_URL_EXPIRY_IN_MILLISECONDS: {
+		message: 'Required signed url expiration time in milliseconds',
+		optional: true,
+		default: 120000,
+	},
 	CLOUD_STORAGE_PROVIDER: {
 		message: 'Require cloud storage provider, in azure,aws, gcloud,oci and s3',
-		optional: false,
+		optional: true,
 	},
 	CLOUD_STORAGE_SECRET: {
 		message: 'Require client storage provider identity',
-		optional: false,
+		optional: true,
 	},
 	CLOUD_STORAGE_BUCKETNAME: {
 		message: 'Require client storage bucket name',
-		optional: false,
+		optional: true,
 	},
 	CLOUD_STORAGE_BUCKET_TYPE: {
 		message: 'Require storage bucket type',
-		optional: false,
+		optional: true,
 	},
 	PUBLIC_ASSET_BUCKETNAME: {
 		message: 'Require asset storage bucket name',
-		optional: false,
+		optional: true,
 	},
 	CLOUD_STORAGE_REGION: {
 		message: 'Require storage region',
@@ -342,6 +398,11 @@ let enviromentVariables = {
 		message: 'Required Default External Mentee Visibility Policy',
 		optional: true,
 		default: 'CURRENT',
+	},
+	CLEAR_INTERNAL_CACHE: {
+		message: 'Required Default Internal Cache',
+		optional: true,
+		default: 'internalmentoring',
 	},
 }
 
