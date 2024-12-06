@@ -23,5 +23,7 @@ module.exports = {
 	COMMUNICATION_LOGIN: 'v1/communication/login',
 	COMMUNICATION_LOGOUT: 'v1/communication/logout',
 	COMMUNICATION_CREATE_CHAT_ROOM: 'v1/communication/createRoom',
+	COMMUNICATION_UPDATE_AVATAR: 'v1/communication/updateAvatar',
+	COMMUNICATION_UPDATE_USER: 'v1/communication/updateUser',
 	DOWNLOAD_IMAGE_URL: 'v1/cloud-services/file/getDownloadableUrl',
 }

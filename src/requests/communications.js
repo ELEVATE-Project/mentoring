@@ -40,8 +40,10 @@ apiClient.interceptors.response.use(
 exports.signup = async ({ userId, name, email, image }) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_SIGNUP
-		const body = { user_id: userId, name, email, image_url: image }
-
+		const body = { user_id: userId, name, email }
+		if (image) {
+			body.image_url = image
+		}
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
@@ -110,6 +112,48 @@ exports.createChatRoom = async ({ userIds, initialMessage }) => {
 		return response.data
 	} catch (err) {
 		console.error('Create Chat Room error:', err.message)
+		throw err
+	}
+}
+
+/**
+ * Updates a user's avatar in the communication service.
+ * @async
+ * @param {string} userId - The unique identifier for the user.
+ * @param {string} imageUrl - The new avatar URL.
+ * @returns {Promise<Object>} The response data from the update avatar request.
+ * @throws Will throw an error if the request fails.
+ */
+exports.updateAvatar = async (userId, imageUrl) => {
+	try {
+		const url = apiEndpoints.COMMUNICATION_UPDATE_AVATAR
+		const body = { user_id: userId, image_url: imageUrl }
+
+		const response = await apiClient.post(url, body)
+		return response.data
+	} catch (err) {
+		console.error('Update Avatar error:', err.message)
+		throw err
+	}
+}
+
+/**
+ * Updates a user's details in the communication service.
+ * @async
+ * @param {string} userId - The unique identifier for the user.
+ * @param {string} name - The new name of the user.
+ * @returns {Promise<Object>} The response data from the update user request.
+ * @throws Will throw an error if the request fails.
+ */
+exports.updateUser = async (userId, name) => {
+	try {
+		const url = apiEndpoints.COMMUNICATION_UPDATE_USER
+		const body = { user_id: userId, name }
+
+		const response = await apiClient.post(url, body)
+		return response.data
+	} catch (err) {
+		console.error('Update User error:', err.message)
 		throw err
 	}
 }

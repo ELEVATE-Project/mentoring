@@ -11,6 +11,7 @@ const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const utils = require('@generics/utils')
 const communicationHelper = require('@helpers/communications')
+const userRequests = require('@requests/user')
 
 module.exports = class ConnectionHelper {
 	/**
@@ -128,6 +129,7 @@ module.exports = class ConnectionHelper {
 					'meta',
 					'is_mentor',
 					'experience',
+					'image',
 				]),
 			])
 
@@ -137,6 +139,7 @@ module.exports = class ConnectionHelper {
 					message: 'USER_NOT_FOUND',
 				})
 			}
+			userDetails.image = (await userRequests.getDownloadableUrl(userDetails.image))?.result
 
 			// Fetch entity types associated with the user
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
@@ -148,9 +151,6 @@ module.exports = class ConnectionHelper {
 			})
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_id)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
-
-			//To be removed later.
-			processedUserDetails.image = 'https://picsum.photos/200'
 
 			if (!connection) {
 				return responses.successResponse({
@@ -210,6 +210,7 @@ module.exports = class ConnectionHelper {
 					'meta',
 					'experience',
 					'is_mentor',
+					'image',
 				],
 			})
 
@@ -235,9 +236,18 @@ module.exports = class ConnectionHelper {
 				}
 			})
 
-			//To be removed later
-			connectionsWithDetails.forEach((detail) => {
-				detail.user_details.image = 'https://picsum.photos/200'
+			const userIds = connectionsWithDetails.map((item) => item.friend_id)
+			const userDetails = await userRequests.getListOfUserDetails(userIds, true)
+			const userDetailsMap = new Map(userDetails.result.map((userDetail) => [String(userDetail.id), userDetail]))
+			connectionsWithDetails = connectionsWithDetails.filter((connectionsWithDetail) => {
+				const user_id = String(connectionsWithDetail.friend_id)
+
+				if (userDetailsMap.has(user_id)) {
+					const userDetail = userDetailsMap.get(user_id)
+					connectionsWithDetail.user_details.image = userDetail.image
+					return true
+				}
+				return false
 			})
 
 			return responses.successResponse({
@@ -413,10 +423,17 @@ module.exports = class ConnectionHelper {
 					'organization_id'
 				)
 			}
-
-			//To be removed later
-			extensionDetails.data.forEach((detail) => {
-				detail.image = 'https://picsum.photos/200'
+			const userIds = extensionDetails.data.map((item) => item.user_id)
+			const userDetails = await userRequests.getListOfUserDetails(userIds, true)
+			const userDetailsMap = new Map(userDetails.result.map((userDetail) => [String(userDetail.id), userDetail]))
+			extensionDetails.data = extensionDetails.data.filter((extensionDetail) => {
+				const user_id = String(extensionDetail.user_id)
+				if (userDetailsMap.has(user_id)) {
+					const userDetail = userDetailsMap.get(user_id)
+					extensionDetail.image = userDetail.image
+					return true
+				}
+				return false
 			})
 
 			return responses.successResponse({

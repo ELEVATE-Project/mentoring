@@ -297,6 +297,7 @@ exports.getConnectionsDetails = async (
 		is_mentor,
 		area_of_expertise,
 		education_qualification,
+		image,
 		custom_entity_text::JSONB AS custom_entity_text,
 		meta::JSONB AS meta
 		`

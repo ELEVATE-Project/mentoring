@@ -49,6 +49,8 @@ module.exports = class MenteeExtensionQueries {
 						true
 					)
 				}
+			} else {
+				delete data.meta
 			}
 
 			return await MenteeExtension.update(data, {
@@ -170,7 +172,7 @@ module.exports = class MenteeExtensionQueries {
 			} else {
 				mentee = await MenteeExtension.findOne(queryOptions)
 			}
-			if (mentee.email) {
+			if (mentee?.email) {
 				mentee.email = await emailEncryption.decrypt(mentee.email.toLowerCase())
 			}
 			return mentee

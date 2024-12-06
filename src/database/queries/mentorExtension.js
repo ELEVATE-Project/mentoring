@@ -52,7 +52,6 @@ module.exports = class MentorExtensionQueries {
 			}
 
 			const whereClause = _.isEmpty(customFilter) ? { user_id: userId } : customFilter
-
 			// If `meta` is included in `data`, use `jsonb_set` to merge changes safely
 			if (data.meta) {
 				for (const [key, value] of Object.entries(data.meta)) {
@@ -64,6 +63,8 @@ module.exports = class MentorExtensionQueries {
 						true
 					)
 				}
+			} else {
+				delete data.meta
 			}
 
 			const result = unscoped
@@ -100,7 +101,8 @@ module.exports = class MentorExtensionQueries {
 			} else {
 				mentor = await MentorExtension.findOne(queryOptions)
 			}
-			if (mentor.email) {
+
+			if (mentor?.email) {
 				mentor.email = await emailEncryption.decrypt(mentor.email.toLowerCase())
 			}
 			return mentor

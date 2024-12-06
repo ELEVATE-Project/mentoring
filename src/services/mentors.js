@@ -432,6 +432,14 @@ module.exports = class MentorsHelper {
 	 */
 	static async updateMentorExtension(data, userId, orgId) {
 		try {
+			// Fetch current mentee extension data
+			const currentUser = await mentorQueries.getMentorExtension(userId)
+			if (!currentUser) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'MENTOR_EXTENSION_NOT_FOUND',
+				})
+			}
 			if (data.email) data.email = emailEncryption.encrypt(data.email.toLowerCase())
 			let skipValidation = data.skipValidation ? data.skipValidation : false
 			// Remove certain data in case it is getting passed
@@ -505,11 +513,25 @@ module.exports = class MentorsHelper {
 					new Set([...userOrgDetails.data.result.related_orgs, data.organization.id])
 				)
 			}
-			console.log('UPDATED MENTOR EXTENSIONS: ', data)
+
 			const [updateCount, updatedMentor] = await mentorQueries.updateMentorExtension(userId, data, {
 				returning: true,
 				raw: true,
 			})
+
+			if (currentUser?.meta?.communications_user_id) {
+				const promises = []
+				if (data.name && data.name !== currentUser.name) {
+					promises.push(communicationHelper.updateUser(userId, data.name))
+				}
+
+				if (data.image && data.image !== currentUser.image) {
+					const downloadableUrl = (await userRequests.getDownloadableUrl(data.image))?.result
+					promises.push(communicationHelper.updateAvatar(userId, downloadableUrl))
+				}
+
+				await Promise.all(promises)
+			}
 
 			if (updateCount === 0) {
 				const fallbackUpdatedUser = await mentorQueries.getMentorExtension(userId)

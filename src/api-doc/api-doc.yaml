@@ -4826,7 +4826,7 @@ paths:
   /mentoring/v1/profile/create:
     post:
       summary: Create details
-      tags:
+      tags: &ref_13
         - Profile
       description: |-
         This API is associated with the profile API
@@ -4834,7 +4834,8 @@ paths:
          - It is mandatory to provide values for parameters marked with `required` 
          - Mandatory parameter cannot be empty or null
       parameters:
-        - name: x-auth-token
+        - &ref_14
+          name: x-auth-token
           required: true
           in: header
           description: >-
@@ -5009,7 +5010,7 @@ paths:
                       formsVersion: []
                       correlation: 4bc32289-a646-40c5-8229-adfa3a92faa6
                       meeting_platform: BBB
-        '400':
+        '400': &ref_15
           description: Bad Request. Mentor Not Found
           content:
             application.json:
@@ -5103,7 +5104,7 @@ paths:
                   configs:
                     notification: true
                     visibility: public
-    parameters: []
+    parameters: &ref_16 []
   /mentoring/v1/profile/update:
     post:
       summary: Update details
@@ -9379,6 +9380,1076 @@ paths:
                     meta:
                       correlation: 0e57651e-4f49-4b9c-b264-6c1b3107c904
                     message: The default rule was not found.
+  /mentoring/v1/connections/initiate:
+    post:
+      summary: Initiate connection with a user
+      description: ''
+      operationId: ''
+      tags: &ref_8
+        - Connections
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: object
+                    properties:
+                      created_at:
+                        type: string
+                      updated_at:
+                        type: string
+                      id:
+                        type: number
+                      user_id:
+                        type: string
+                      friend_id:
+                        type: string
+                      status:
+                        type: string
+                      created_by:
+                        type: string
+                      updated_by:
+                        type: string
+                      meta:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                      deleted_at:
+                        type: 'null'
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                Connection initiated:
+                  value:
+                    responseCode: OK
+                    message: Your connection request has been sent successfully!
+                    result:
+                      created_at: '2024-12-05T09:22:55.298Z'
+                      updated_at: '2024-12-05T09:22:55.298Z'
+                      id: 19
+                      user_id: '3'
+                      friend_id: '35'
+                      status: REQUESTED
+                      created_by: '3'
+                      updated_by: '3'
+                      meta:
+                        message: Hey i would like to connect with you.
+                      deleted_at: null
+                    meta:
+                      formsVersion:
+                        - id: 4
+                          type: termsAndConditions
+                          version: 0
+                        - id: 6
+                          type: helpVideos
+                          version: 0
+                        - id: 7
+                          type: platformApp
+                          version: 0
+                        - id: 8
+                          type: helpApp
+                          version: 0
+                        - id: 9
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 1
+                          type: session
+                          version: 1
+                        - id: 2
+                          type: editProfile
+                          version: 0
+                        - id: 10
+                          type: mentorQuestionnaire
+                          version: 0
+                        - id: 5
+                          type: faq
+                          version: 1
+                        - id: 11
+                          type: termsAndConditions
+                          version: 1
+                        - id: 3
+                          type: session
+                          version: 3
+                        - id: 12
+                          type: test
+                          version: 0
+                      correlation: e368b950-b475-4d9d-a73d-58d02f4e5fee
+                      meetingPlatform: BBB
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                message:
+                  type: string
+            examples:
+              Initiate Connection:
+                value:
+                  user_id: '2'
+                  message: Hey i would like to connect with you.
+  /mentoring/v1/connections/pending:
+    get:
+      summary: Get all pending requests
+      description: ''
+      operationId: ''
+      tags: *ref_8
+      parameters: &ref_10
+        - in: query
+          name: page
+          description: ''
+          schema: &ref_9
+            type: number
+        - in: query
+          name: limit
+          description: ''
+          schema: *ref_9
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            user_id:
+                              type: string
+                            friend_id:
+                              type: string
+                            status:
+                              type: string
+                            meta:
+                              type: object
+                              properties:
+                                message:
+                                  type: string
+                            created_at:
+                              type: string
+                            updated_at:
+                              type: string
+                            deleted_at:
+                              type: 'null'
+                            updated_by:
+                              type: string
+                            created_by:
+                              type: string
+                            user_details:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                                user_id:
+                                  type: string
+                                mentee_visibility:
+                                  type: string
+                                organization_id:
+                                  type: string
+                                designation:
+                                  type: 'null'
+                                area_of_expertise:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      value:
+                                        type: string
+                                      label:
+                                        type: string
+                                    required:
+                                      - value
+                                      - label
+                                education_qualification:
+                                  type: string
+                                experience:
+                                  type: 'null'
+                                is_mentor:
+                                  type: boolean
+                                image:
+                                  type: string
+                                communications_user_id:
+                                  type: string
+                      count:
+                        type: number
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                Pending requests:
+                  value:
+                    responseCode: OK
+                    message: Successfully retrieved your connection list!
+                    result:
+                      data:
+                        - id: 19
+                          user_id: '3'
+                          friend_id: '35'
+                          status: REQUESTED
+                          meta:
+                            message: Hey i would like to connect with you.
+                          created_at: '2024-12-05T09:22:55.298Z'
+                          updated_at: '2024-12-05T09:22:55.298Z'
+                          deleted_at: null
+                          updated_by: '3'
+                          created_by: '3'
+                          user_details:
+                            name: 'Nika '
+                            user_id: '35'
+                            mentee_visibility: CURRENT
+                            organization_id: '1'
+                            designation: null
+                            area_of_expertise:
+                              - value: educational_leadership
+                                label: Educational leadership
+                              - value: sqaa
+                                label: SQAA
+                            education_qualification: MBA
+                            experience: null
+                            is_mentor: false
+                            image: >-
+                              https://storage.googleapis.com/mentoring-dev-storage-private/users/266-1733229493508-logo_3_photoroom_png?GoogleAccessId=sl-mentoring-dev-storage%40sl-dev-project.iam.gserviceaccount.com&Expires=1733445969&Signature=t4pmaTMz2fmLynvelWUJHWD54ZEdhGBiQ6uFbtzxz1Z49mLGf48q4gKFW7l%2BNI4tTWAZxB9ZA3r6ZkahkEpT99FV1VQBdSvkTNJManyz%2FE62ybhQb9%2FF3U5474xICciXDBUoA%2Bipv8Bt50j9KtvHzj1nvYBILvkR7QH%2BycGXp%2FZCDcABcaKXWVO8iwgjBVtkWuD%2Bpjwf2%2BOAy2kAR4FtCaM8WivI21%2Bnqn7byMm69AcJ7vODWQWwZU7BPlR384XAAjK4Su7XP3b7gz8kYpvLdCGHVVH%2BEpUFuwlZx4I4mHvPF2IoiHEFPmrZdj7zBf06BFmYe%2B%2BheQubIgCRB7uo9g%3D%3D
+                            communications_user_id: z5t2YLpYfAMbyaZ2n
+                      count: 1
+                    meta:
+                      formsVersion:
+                        - id: 4
+                          type: termsAndConditions
+                          version: 0
+                        - id: 6
+                          type: helpVideos
+                          version: 0
+                        - id: 7
+                          type: platformApp
+                          version: 0
+                        - id: 8
+                          type: helpApp
+                          version: 0
+                        - id: 9
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 1
+                          type: session
+                          version: 1
+                        - id: 2
+                          type: editProfile
+                          version: 0
+                        - id: 10
+                          type: mentorQuestionnaire
+                          version: 0
+                        - id: 5
+                          type: faq
+                          version: 1
+                        - id: 11
+                          type: termsAndConditions
+                          version: 1
+                        - id: 3
+                          type: session
+                          version: 3
+                        - id: 12
+                          type: test
+                          version: 0
+                      correlation: f0774609-4446-4f26-93da-a54ef0cd96e0
+                      meetingPlatform: BBB
+  /mentoring/v1/connections/list:
+    get:
+      summary: Get all active connections
+      description: ''
+      operationId: ''
+      tags: *ref_8
+      parameters: *ref_10
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            user_id:
+                              type: string
+                            mentee_visibility:
+                              type: string
+                            organization_id:
+                              type: string
+                            designation:
+                              type: 'null'
+                            experience:
+                              type: 'null'
+                            is_mentor:
+                              type: boolean
+                            area_of_expertise:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  value:
+                                    type: string
+                                  label:
+                                    type: string
+                                required:
+                                  - value
+                                  - label
+                            education_qualification:
+                              type: string
+                            image:
+                              type: string
+                            communications_user_id:
+                              type: string
+                      count:
+                        type: number
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                Connected users:
+                  value:
+                    responseCode: OK
+                    message: Connections retrieved successfully.
+                    result:
+                      data:
+                        - name: 'Nika '
+                          user_id: '35'
+                          mentee_visibility: CURRENT
+                          organization_id: '1'
+                          designation: null
+                          experience: null
+                          is_mentor: false
+                          area_of_expertise:
+                            - value: educational_leadership
+                              label: Educational leadership
+                            - value: sqaa
+                              label: SQAA
+                          education_qualification: MBA
+                          image: >-
+                            https://storage.googleapis.com/mentoring-dev-storage-private/users/266-1733229493508-logo_3_photoroom_png?GoogleAccessId=sl-mentoring-dev-storage%40sl-dev-project.iam.gserviceaccount.com&Expires=1733446482&Signature=h%2FpjjGBGqU%2FBVNNMmcAv7%2FZ0MdXA7248Z7B8GLysxzA0GBEFRjECvnlTbOhrpKAwpoE7JbNzlyCnX0YnCt8tthBnOpgxgi2MNbwlMg92EiJ7sljh3PDh5%2FUxuS%2F7NU5nt7oL7oJ0gX0xBz4AksicR6xX25BshSbY%2BLv5u9aGqWEsj8vwcNONutuJXkBCbWhFic7KWbQQ90AbuLM5jRfKRgNUQ5xx5SysOeF3VylqpSgLz%2F3evhrXd7sWgibtJwIb5xtQfg7zwvhjFIT9MNx1n2Hsy5AYco4cYCRMgXiV3i2mlPCmfiZDCd1qgjwDdAjEKAdBxOvrPuA%2B5r9SBbS8Gw%3D%3D
+                          communications_user_id: z5t2YLpYfAMbyaZ2n
+                      count: 1
+                    meta:
+                      formsVersion:
+                        - id: 4
+                          type: termsAndConditions
+                          version: 0
+                        - id: 6
+                          type: helpVideos
+                          version: 0
+                        - id: 7
+                          type: platformApp
+                          version: 0
+                        - id: 8
+                          type: helpApp
+                          version: 0
+                        - id: 9
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 1
+                          type: session
+                          version: 1
+                        - id: 2
+                          type: editProfile
+                          version: 0
+                        - id: 10
+                          type: mentorQuestionnaire
+                          version: 0
+                        - id: 5
+                          type: faq
+                          version: 1
+                        - id: 11
+                          type: termsAndConditions
+                          version: 1
+                        - id: 3
+                          type: session
+                          version: 3
+                        - id: 12
+                          type: test
+                          version: 0
+                      correlation: 07d7e0ae-3d98-4407-b66f-520d67376a6a
+                      meetingPlatform: BBB
+  /mentoring/v1/connections/getInfo:
+    post:
+      summary: Get connection info
+      description: ''
+      operationId: ''
+      tags: *ref_8
+      parameters: &ref_11 []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: object
+                    properties:
+                      id:
+                        type: number
+                      user_id:
+                        type: string
+                      friend_id:
+                        type: string
+                      status:
+                        type: string
+                      meta:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                          room_id:
+                            type: string
+                      created_at:
+                        type: string
+                      updated_at:
+                        type: string
+                      deleted_at:
+                        type: 'null'
+                      updated_by:
+                        type: string
+                      created_by:
+                        type: string
+                      user_details:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          user_id:
+                            type: string
+                          mentee_visibility:
+                            type: string
+                          organization_id:
+                            type: string
+                          designation:
+                            type: 'null'
+                          area_of_expertise:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                value:
+                                  type: string
+                                label:
+                                  type: string
+                              required:
+                                - value
+                                - label
+                          education_qualification:
+                            type: string
+                          is_mentor:
+                            type: boolean
+                          experience:
+                            type: 'null'
+                          image:
+                            type: string
+                          communications_user_id:
+                            type: string
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                Connection info:
+                  value:
+                    responseCode: OK
+                    message: Connection details fetched successfully.
+                    result:
+                      id: 128
+                      user_id: '36'
+                      friend_id: '35'
+                      status: ACCEPTED
+                      meta:
+                        message: Hey i would like to connect with you.
+                        room_id: LwtqPenpfQFaw6cC7z5t2YLpYfAMbyaZ2n
+                      created_at: '2024-12-03T14:30:01.483Z'
+                      updated_at: '2024-12-03T14:30:02.674Z'
+                      deleted_at: null
+                      updated_by: '35'
+                      created_by: '36'
+                      user_details:
+                        name: 'Nika '
+                        user_id: '35'
+                        mentee_visibility: CURRENT
+                        organization_id: '1'
+                        designation: null
+                        area_of_expertise:
+                          - value: educational_leadership
+                            label: Educational leadership
+                          - value: sqaa
+                            label: SQAA
+                        education_qualification: MBA
+                        is_mentor: false
+                        experience: null
+                        image: >-
+                          https://storage.googleapis.com/266-1733229493508-logo_3_photoroom_png
+                        communications_user_id: z5t2YLpYfAMbyaZ2n
+                    meta:
+                      formsVersion:
+                        - id: 4
+                          type: termsAndConditions
+                          version: 0
+                        - id: 6
+                          type: helpVideos
+                          version: 0
+                        - id: 7
+                          type: platformApp
+                          version: 0
+                        - id: 8
+                          type: helpApp
+                          version: 0
+                        - id: 9
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 1
+                          type: session
+                          version: 1
+                        - id: 2
+                          type: editProfile
+                          version: 0
+                        - id: 10
+                          type: mentorQuestionnaire
+                          version: 0
+                        - id: 5
+                          type: faq
+                          version: 1
+                        - id: 11
+                          type: termsAndConditions
+                          version: 1
+                        - id: 3
+                          type: session
+                          version: 3
+                        - id: 12
+                          type: test
+                          version: 0
+                      correlation: 26c90de8-8b82-4e40-af7e-5efd12539788
+                      meetingPlatform: BBB
+      requestBody: &ref_12
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+            examples:
+              example:
+                value:
+                  user_id: '35'
+  /mentoring/v1/connections/reject:
+    post:
+      summary: Reject Connection
+      description: ''
+      operationId: ''
+      tags: *ref_8
+      parameters: *ref_11
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: array
+                    items:
+                      type: string
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                Reject connection:
+                  value:
+                    responseCode: OK
+                    message: Your connection request has been rejected.
+                    result: []
+                    meta:
+                      formsVersion:
+                        - id: 4
+                          type: termsAndConditions
+                          version: 0
+                        - id: 6
+                          type: helpVideos
+                          version: 0
+                        - id: 7
+                          type: platformApp
+                          version: 0
+                        - id: 8
+                          type: helpApp
+                          version: 0
+                        - id: 9
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 1
+                          type: session
+                          version: 1
+                        - id: 2
+                          type: editProfile
+                          version: 0
+                        - id: 10
+                          type: mentorQuestionnaire
+                          version: 0
+                        - id: 5
+                          type: faq
+                          version: 1
+                        - id: 11
+                          type: termsAndConditions
+                          version: 1
+                        - id: 3
+                          type: session
+                          version: 3
+                        - id: 12
+                          type: test
+                          version: 0
+                      correlation: 45c04985-4ae0-4ddb-8047-c9eab7976993
+                      meetingPlatform: BBB
+      requestBody: *ref_12
+  /mentoring/v1/connections/accept:
+    post:
+      summary: Accept connection
+      description: ''
+      operationId: ''
+      tags: *ref_8
+      parameters: *ref_11
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: object
+                    properties:
+                      id:
+                        type: number
+                      user_id:
+                        type: string
+                      friend_id:
+                        type: string
+                      status:
+                        type: string
+                      meta:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                          room_id:
+                            type: string
+                      created_at:
+                        type: string
+                      updated_at:
+                        type: string
+                      deleted_at:
+                        type: 'null'
+                      updated_by:
+                        type: string
+                      created_by:
+                        type: string
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                Accept connection:
+                  value:
+                    responseCode: OK
+                    message: Your connection request has been approved.
+                    result:
+                      id: 131
+                      user_id: '37'
+                      friend_id: '36'
+                      status: ACCEPTED
+                      meta:
+                        message: Hey i would like to connect with you.
+                        room_id: CjHN4R7TLT5Bvjz8uLwtqPenpfQFaw6cC7
+                      created_at: '2024-12-05T10:01:45.593Z'
+                      updated_at: '2024-12-05T10:01:47.310Z'
+                      deleted_at: null
+                      updated_by: '37'
+                      created_by: '36'
+                    meta:
+                      formsVersion:
+                        - id: 4
+                          type: termsAndConditions
+                          version: 0
+                        - id: 6
+                          type: helpVideos
+                          version: 0
+                        - id: 7
+                          type: platformApp
+                          version: 0
+                        - id: 8
+                          type: helpApp
+                          version: 0
+                        - id: 9
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 1
+                          type: session
+                          version: 1
+                        - id: 2
+                          type: editProfile
+                          version: 0
+                        - id: 10
+                          type: mentorQuestionnaire
+                          version: 0
+                        - id: 5
+                          type: faq
+                          version: 1
+                        - id: 11
+                          type: termsAndConditions
+                          version: 1
+                        - id: 3
+                          type: session
+                          version: 3
+                        - id: 12
+                          type: test
+                          version: 0
+                      correlation: 32c8a7af-70fb-474a-b115-505686bf9e0b
+                      meetingPlatform: BBB
+      requestBody: *ref_12
+  /mentoring/v1/profile/details:
+    get:
+      summary: Get user profile details
+      tags: *ref_13
+      description: |-
+        This API is associated with the profile API
+         - Endpoint for listing session `/mentoring/v1/profile/create/` 
+         - It is mandatory to provide values for parameters marked with `required` 
+         - Mandatory parameter cannot be empty or null
+      parameters:
+        - *ref_14
+        - in: path
+          name: id
+          description: ID of the user
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: ok
+          content:
+            application.json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: object
+                    properties:
+                      designation:
+                        type: 'null'
+                      area_of_expertise:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                            label:
+                              type: string
+                          required:
+                            - value
+                            - label
+                      education_qualification:
+                        type: string
+                      rating:
+                        type: 'null'
+                      stats:
+                        type: 'null'
+                      tags:
+                        type: 'null'
+                      configs:
+                        type: 'null'
+                      external_session_visibility:
+                        type: string
+                      experience:
+                        type: 'null'
+                      organization_id:
+                        type: string
+                      external_mentee_visibility:
+                        type: string
+                      mentee_visibility:
+                        type: string
+                      external_mentor_visibility:
+                        type: string
+                      mentor_visibility:
+                        type: string
+                      is_mentor:
+                        type: boolean
+                      created_at:
+                        type: string
+                      updated_at:
+                        type: string
+                      deleted_at:
+                        type: 'null'
+                      communications_user_id:
+                        type: string
+                      profile_mandatory_fields:
+                        type: array
+                        items:
+                          type: string
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                example1:
+                  value:
+                    responseCode: OK
+                    message: Profile fetched successfully.
+                    result:
+                      designation: null
+                      area_of_expertise:
+                        - value: educational_leadership
+                          label: Educational leadership
+                        - value: sqaa
+                          label: SQAA
+                      education_qualification: MBA
+                      rating: null
+                      stats: null
+                      tags: null
+                      configs: null
+                      external_session_visibility: CURRENT
+                      experience: null
+                      organization_id: '1'
+                      external_mentee_visibility: CURRENT
+                      mentee_visibility: CURRENT
+                      external_mentor_visibility: CURRENT
+                      mentor_visibility: CURRENT
+                      is_mentor: true
+                      created_at: '2024-12-03T11:28:46.912Z'
+                      updated_at: '2024-12-03T14:48:44.239Z'
+                      deleted_at: null
+                      communications_user_id: LwtqPenpfQFaw6cC7
+                      profile_mandatory_fields: []
+                    meta:
+                      formsVersion:
+                        - id: 4
+                          type: termsAndConditions
+                          version: 0
+                        - id: 6
+                          type: helpVideos
+                          version: 0
+                        - id: 7
+                          type: platformApp
+                          version: 0
+                        - id: 8
+                          type: helpApp
+                          version: 0
+                        - id: 9
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 1
+                          type: session
+                          version: 1
+                        - id: 2
+                          type: editProfile
+                          version: 0
+                        - id: 10
+                          type: mentorQuestionnaire
+                          version: 0
+                        - id: 5
+                          type: faq
+                          version: 1
+                        - id: 11
+                          type: termsAndConditions
+                          version: 1
+                        - id: 3
+                          type: session
+                          version: 3
+                        - id: 12
+                          type: test
+                          version: 0
+                      correlation: 53bc9d00-3b1b-4032-a2e9-7538d7f1a3d6
+                      meetingPlatform: BBB
+        '400': *ref_15
+    parameters: *ref_16
 components:
   schemas:
     form:
@@ -12049,6 +13120,11 @@ tags:
       description: ''
       url: ''
   - name: Issues
+    description: ''
+    externalDocs:
+      description: ''
+      url: ''
+  - name: Connections
     description: ''
     externalDocs:
       description: ''
