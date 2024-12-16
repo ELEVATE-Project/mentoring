@@ -6,7 +6,7 @@
  */
 
 // Dependencies
-const bigBlueButtonUrl = process.env.BIG_BLUE_BUTTON_URL + process.env.BIB_BLUE_BUTTON_BASE_URL
+const bigBlueButtonUrl = process.env.BIG_BLUE_BUTTON_URL + process.env.BIG_BLUE_BUTTON_BASE_URL
 const endpoints = require('@constants/endpoints')
 const utils = require('@generics/utils')
 

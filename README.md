@@ -1162,7 +1162,7 @@ USER_SERVICE_BASE_URL='/user/'
 BIG_BLUE_BUTTON_URL=https://dev.some.temp.org
 
 # Big blue button base URL
-BIB_BLUE_BUTTON_BASE_URL=/bigbluebutton/
+BIG_BLUE_BUTTON_BASE_URL=/bigbluebutton/
 
 # Meeting end callback events endpoint
 MEETING_END_CALLBACK_EVENTS=https%3A%2F%2Fdev.some-apis.temp.org%2Fmentoring%2Fv1%2Fsessions%2Fcompleted
