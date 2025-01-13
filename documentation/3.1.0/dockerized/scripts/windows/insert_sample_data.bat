@@ -106,34 +106,4 @@ if errorlevel 1 (
 
 echo Sample Data Insertion Completed
 
-:: New code to push `forms.sql` data into the database
-set "DEFAULT_ORG_ID=%~1"
-set "FORMS_SQL_FILE=forms.sql"
-
-
-:: Check if the create_default_form_sql.sh script exists
-if not exist "create_default_form_sql.bat" (
-    echo Error: create_default_form_sql.bat not found.
-    exit /b 1
-)
-
-:: Run the create_default_form_sql.sh script with the provided arguments
-echo Running create_default_form_sql.bat...
-bash create_default_form_sql.bat "%ORGANIZATION_ID%" "%FOLDER_NAME%"
-
-if errorlevel 1 (
-    echo Error running create_default_form_sql.bat.
-    exit /b 1
-) else (
-    echo create_default_form_sql.bat executed successfully.
-)
-
-echo Copying forms.sql to container '%CONTAINER_NAME%'...
-docker cp "%FORMS_SQL_FILE%" "%CONTAINER_NAME%:/forms.sql"
-
-echo Inserting Forms Data from forms.sql...
-docker exec --user "%DB_USER%" "%CONTAINER_NAME%" bash -c "PGPASSWORD='%DB_PASSWORD%' psql -h localhost -U %DB_USER% -d %DB_NAME% -p %DB_PORT% -f /forms.sql"
-
-echo Forms Data Insertion Completed
-
 endlocal

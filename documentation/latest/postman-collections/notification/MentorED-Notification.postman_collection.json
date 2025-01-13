@@ -1,36 +1,33 @@
 {
 	"info": {
-		"_postman_id": "c208eafb-8d59-4414-8b02-41bde6580ca9",
+		"_postman_id": "3587a4bd-a10a-4155-ab8a-2b5fdf13ae0a",
 		"name": "MentorED-Notification",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "7997930"
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "24204448",
+		"_collection_link": "https://dark-astronaut-764227.postman.co/workspace/Elevate-Workspace~39b977d8-9e5b-4232-87f3-3da4bed3a67c/collection/24204448-3587a4bd-a10a-4155-ab8a-2b5fdf13ae0a?action=share&source=collection_link&creator=24204448"
 	},
 	"item": [
 		{
-			"name": "Send Email",
+			"name": "SendEmail",
 			"request": {
 				"method": "POST",
 				"header": [
 					{
 						"key": "internal_access_token",
-						"value": "bsj82AHBxahusub12yexlashsbxAXADHBlaj",
+						"value": "{{internal_access_token}}",
 						"type": "text"
 					}
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"type\":\"email\",\n    \"email\":{\n        \"to\": \"ankitstar00786@gmail.com\",\n\t\t\"subject\": \"MentorED - Reset Otp\",\n\t    \"body\": \"<p>Dear Ankit,</p> Your OTP to reset your password is <strong>123456</strong>. Please enter the OTP to reset your password. For your security, please do not share this OTP with anyone.\"\n    }\n}",
+					"raw": "{\n    \"type\": \"email\",\n    \"email\": {\n        \"to\": \"nevil@tunerlabs.com\",\n        \"subject\": \"Testing email logs\",\n        \"body\": \"Sample Data\",\n        \"attachments\": [\n            {\n                \"url\": \"https://www.clickdimensions.com/links/TestPDFfile.pdf\",\n                \"filename\": \"some-pdf.pdf\",\n                \"type\": \"application/pdf\",\n                \"disposition\": \"attachment\",\n                \"content_id\": \"mytext\"\n            },\n            {\n                \"url\": \"https://sample-videos.com/csv/Sample-Spreadsheet-10-rows.csv\",\n                \"filename\": \"some-csv.csv\",\n                \"type\": \"application/csv\",\n                \"disposition\": \"attachment\",\n                \"content_id\": \"mytext\"\n            }\n        ]\n    }\n}",
 					"options": {
 						"raw": {
 							"language": "json"
 						}
 					}
 				},
-				"url": {
-					"raw": "{{notificationBaseUrl}}notification/v1/email/send",
-					"host": ["{{notificationBaseUrl}}notification"],
-					"path": ["v1", "email", "send"]
-				}
+				"url": "{{notificationBaseUrl}}notification/v1/email/send"
 			},
 			"response": []
 		}
