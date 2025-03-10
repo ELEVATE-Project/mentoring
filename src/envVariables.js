@@ -419,6 +419,21 @@ let enviromentVariables = {
 		optional: true,
 		default: 'internalmentoring',
 	},
+	POST_RESOURCE_EMAIL_TEMPLATE_CODE: {
+		message: 'Required resource update email template code',
+		optional: true,
+		default: 'post_session_resource_email',
+	},
+	RESOURCE_ADD_EMAIL_TEMPLATE_CODE: {
+		message: 'Required resource add email template code',
+		optional: true,
+		default: 'new_session_resource_email',
+	},
+	POST_RESOURCE_DELETE_TIMEOUT: {
+		message: 'Required post resource delete timeout',
+		optional: true,
+		default: 1440,
+	},
 }
 
 let success = true
