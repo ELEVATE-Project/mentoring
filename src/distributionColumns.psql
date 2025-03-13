@@ -17,3 +17,5 @@ SELECT create_distributed_table('sessions', 'id');
 SELECT create_distributed_table('user_extensions', 'user_id');
 SELECT create_distributed_table('connection_requests', 'user_id');
 SELECT create_distributed_table('connections', 'user_id');
+SELECT create_distributed_table('request_sessions', 'user_id');
+SELECT create_distributed_table('request_session_requests', 'user_id');
