@@ -243,17 +243,25 @@ module.exports = class ReportsHelper {
 
 					let query = reportQuery[0].query.replace(/:sort_type/g, replacements.sort_type)
 					const sessionModel = await sessionQueries.getModelName()
+					if (!entityTypesColumns && !entityTypesValues) {
+						query = query.includes('DYNAMIC_WHERE_CLAUSE')
+							? query.replace('DYNAMIC_WHERE_CLAUSE', '')
+							: query.replace('DYNAMIC_AND_CLAUSE', '')
+					}
 
 					if (entityTypesColumns && entityTypesValues) {
 						const entityConditions = await utils.getDynamicEntityCondition(
 							Object.fromEntries(entityTypesColumns.map((col, idx) => [col, entityTypesValues[idx]])),
-							sessionModel.toLowerCase()
+							sessionModel.toLowerCase(),
+							query
 						)
 
 						// Add dynamic entity conditions to the query
 						if (entityConditions) {
 							query = reportQuery[0].query.replace(';', '')
-							query += entityConditions
+							query = query.includes('DYNAMIC_WHERE_CLAUSE')
+								? query.replace('DYNAMIC_WHERE_CLAUSE', entityConditions)
+								: query.replace('DYNAMIC_AND_CLAUSE', entityConditions)
 						}
 					}
 					// Execute query with the current date range
@@ -281,7 +289,6 @@ module.exports = class ReportsHelper {
 					userId: userId || null,
 					start_date: startDate || null,
 					end_date: endDate || null,
-					//	entities_value: entitiesValue ? `{${entitiesValue}}` : null,
 					session_type: sessionType ? utils.convertToTitleCase(sessionType) : null,
 					limit: limit || defaultLimit,
 					offset: common.getPaginationOffset(page, limit),
@@ -296,38 +303,25 @@ module.exports = class ReportsHelper {
 					sort_column: sortColumn || '',
 					sort_type: sortType.toUpperCase() || 'ASC',
 				}
-
 				const sessionModel = await sessionQueries.getModelName()
-
+				let filterCompleteQuery = ''
 				let query = reportQuery[0].query
-
 				if (entityTypesColumns && entityTypesValues) {
 					const entityConditions = await utils.getDynamicEntityCondition(
 						Object.fromEntries(entityTypesColumns.map((col, idx) => [col, entityTypesValues[idx]])),
 						sessionModel,
 						query
 					)
-
 					// Add dynamic entity conditions to the query
 					if (entityConditions) {
 						query = reportQuery[0].query.replace(';', '')
-
-						// Check if the query contains 'GROUP BY'
-						const groupByIndex = query.toUpperCase().indexOf('GROUP BY')
-						if (groupByIndex !== -1) {
-							// Insert entityConditions before 'GROUP BY'
-							query = query.slice(0, groupByIndex) + entityConditions + ' ' + query.slice(groupByIndex)
-						} else {
-							// Append entityConditions if 'GROUP BY' is not present
-							query += entityConditions
-						}
+						filterCompleteQuery = entityConditions
 					}
 				}
 
 				if (reportConfig[0].report_type_title === common.REPORT_TABLE) {
 					query = query.replace(';', '') // Base query for report table
 					const columnMappings = await utils.extractColumnMappings(query)
-
 					// Generate dynamic WHERE conditions for filters
 					if (filterColumns && filterValues) {
 						const filterConditions = await utils.getDynamicFilterCondition(
@@ -337,7 +331,13 @@ module.exports = class ReportsHelper {
 							columnConfig.columns
 						)
 						if (filterConditions) {
-							query += filterConditions
+							if (filterCompleteQuery.includes('WHERE')) {
+								if (filterConditions.includes('WHERE')) {
+									filterCompleteQuery += filterConditions.replace('WHERE', 'AND')
+								}
+							} else {
+								filterCompleteQuery += filterConditions
+							}
 						}
 					}
 
@@ -350,10 +350,18 @@ module.exports = class ReportsHelper {
 							columnConfig.columns
 						)
 						if (searchConditions) {
-							query += searchConditions
+							if (filterCompleteQuery.includes('WHERE')) {
+								if (searchConditions.includes('WHERE')) {
+									filterCompleteQuery += searchConditions.replace('WHERE', 'AND')
+								}
+							} else {
+								filterCompleteQuery += searchConditions
+							}
 						}
 					}
-
+					query = query.includes('DYNAMIC_WHERE_CLAUSE')
+						? query.replace('DYNAMIC_WHERE_CLAUSE', filterCompleteQuery)
+						: query.replace('DYNAMIC_AND_CLAUSE', filterCompleteQuery)
 					// Add sorting
 					if (sortColumn && columnMappings[sortColumn]) {
 						query += ` ORDER BY 
@@ -366,6 +374,9 @@ module.exports = class ReportsHelper {
 					// Add pagination
 					query += ` LIMIT :limit OFFSET :offset;`
 				}
+				query = query.includes('DYNAMIC_WHERE_CLAUSE')
+					? query.replace('DYNAMIC_WHERE_CLAUSE', filterCompleteQuery)
+					: query.replace('DYNAMIC_AND_CLAUSE', filterCompleteQuery)
 
 				// Replace sort type placeholder in query
 				query = query.replace(/:sort_type/g, replacements.sort_type)
@@ -379,7 +390,6 @@ module.exports = class ReportsHelper {
 				])
 
 				const sessionModelName = await sessionQueries.getModelName()
-
 				let entityTypesDataWithPagination = await getOrgIdAndEntityTypes.getEntityTypeWithEntitiesBasedOnOrg(
 					orgId,
 					'',
