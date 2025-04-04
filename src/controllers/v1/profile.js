@@ -130,6 +130,72 @@ module.exports = class Mentees {
 		}
 	}
 
+	/**
+	 * Get mentor or mentee extension by user ID.
+	 * @method
+	 * @name getExtension
+	 * @param {Object} req - Request data.
+	 * @param {String} req.params.id - User ID of the user.
+	 * @returns {Promise<Object>} - user extension details.
+	 */
+	async getCommunicationToken(req) {
+		try {
+			return await menteesService.getCommunicationToken(req.decodedToken.id) // params since read will be public for mentees
+		} catch (error) {
+			return error
+		}
+	}
+
+	/**
+	 * Logs out a mentee by terminating their session.
+	 *
+	 * This function retrieves the mentee's ID from the decoded token in the request
+	 * and calls the `logout` method in `menteesService` to handle session termination.
+	 * Any errors during the process are caught and returned.
+	 *
+	 * @async
+	 * @function logout
+	 * @param {Object} req - The request object containing authentication details.
+	 * @param {Object} req.decodedToken - The decoded token from the authenticated request.
+	 * @param {string} req.decodedToken.id - The ID of the mentee extracted from the decoded token.
+	 * @returns {Promise<*>} Returns a promise that resolves with the result of `menteesService.logout` if successful,
+	 * or the caught error if an error occurs.
+	 */
+	async logout(req) {
+		try {
+			return await menteesService.logout(req.decodedToken.id) // Params since read will be public for mentees
+		} catch (error) {
+			return error
+		}
+	}
+	/**
+	 * Fetches user profile details.
+	 * @method
+	 * @name details
+	 * @param {Object} req - Request object.
+	 * @param {Object} req.params - Route parameters.
+	 * @param {String} req.params.id - The mentor's ID.
+	 * @param {Object} req.decodedToken - Decoded token from authentication.
+	 * @param {String} req.decodedToken.id - The user's ID.
+	 * @param {String} req.decodedToken.organization_id - The user's organization ID.
+	 * @param {Array} req.decodedToken.roles - The user's roles.
+	 * @param {Boolean} isAMentor - Indicates whether the user is a mentor.
+	 * @returns {Promise<Object>} - The mentor's profile details.
+	 */
+	async details(req) {
+		try {
+			return await menteesService.details(
+				req.params.id,
+				req.decodedToken.organization_id,
+				req.decodedToken.id,
+				isAMentor(req.decodedToken.roles),
+				req.decodedToken.roles
+			)
+		} catch (error) {
+			return error
+		}
+	}
+
 	//To be enabled when delete flow is needed.
 	// /**
 	//  * Delete a mentee extension by user ID.
