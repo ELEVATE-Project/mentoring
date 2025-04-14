@@ -219,4 +219,5 @@ module.exports = {
 	COMMUNICATION: {
 		UNAUTHORIZED: 'Unauthorized',
 	},
+	SESSION_RESOURCE_TYPE: 'post',
 }
