@@ -8234,6 +8234,179 @@ paths:
                       correlation: 8d1d9ec0-68c4-4def-9dad-2cac06ed71a2
                       meetingPlatform: BBB
         '400': *ref_1
+  /mentoring/v1/org-admin/updateTheme:
+    post:
+      tags:
+        - Organization Admin
+      summary: update theme
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                primaryColor: '#E74C3C'
+                secondaryColor: '#F1C40F'
+                backgroundColor: '#FFFFFF'
+                textColor: '#34495E'
+      parameters:
+        - name: X-auth-token
+          in: header
+          schema:
+            type: string
+          example: bearer {{token}}
+      responses:
+        '200':
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |-
+                {
+                    "responseCode": "OK",
+                    "message": "Organization theme updated successfully.",
+                    "result": [],
+                    "meta": {
+                        "formsVersion": [
+                            {
+                                "id": 3,
+                                "type": "session",
+                                "version": 0
+                            },
+                            {
+                                "id": 4,
+                                "type": "termsAndConditions",
+                                "version": 0
+                            },
+                            {
+                                "id": 5,
+                                "type": "faq",
+                                "version": 0
+                            },
+                            {
+                                "id": 6,
+                                "type": "helpVideos",
+                                "version": 0
+                            },
+                            {
+                                "id": 7,
+                                "type": "platformApp",
+                                "version": 0
+                            },
+                            {
+                                "id": 8,
+                                "type": "helpApp",
+                                "version": 0
+                            },
+                            {
+                                "id": 9,
+                                "type": "sampleCsvDownload",
+                                "version": 0
+                            },
+                            {
+                                "id": 1,
+                                "type": "managersSession",
+                                "version": 0
+                            },
+                            {
+                                "id": 2,
+                                "type": "editProfile",
+                                "version": 0
+                            },
+                            {
+                                "id": 10,
+                                "type": "mentorQuestionnaire",
+                                "version": 0
+                            }
+                        ],
+                        "correlation": "180891f9-6c41-4fbe-ab60-5b1db6afd3c0",
+                        "meetingPlatform": "OFF"
+                    }
+                }
+  /mentoring/v1/org-admin/themeDetails:
+    get:
+      tags:
+        - Organization Admin
+      summary: get theme Deatails
+      parameters:
+        - name: x-auth-token
+          in: header
+          schema:
+            type: string
+          example: bearer {{token}}
+      responses:
+        '200':
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |-
+                {
+                    "responseCode": "OK",
+                    "message": "Organization theme fetched successfully.",
+                    "result": {
+                        "textColor": "#34495E",
+                        "primaryColor": "#E74C3C",
+                        "secondaryColor": "#F1C40F",
+                        "backgroundColor": "#FFFFFF"
+                    },
+                    "meta": {
+                        "formsVersion": [
+                            {
+                                "id": 3,
+                                "type": "session",
+                                "version": 0
+                            },
+                            {
+                                "id": 4,
+                                "type": "termsAndConditions",
+                                "version": 0
+                            },
+                            {
+                                "id": 5,
+                                "type": "faq",
+                                "version": 0
+                            },
+                            {
+                                "id": 6,
+                                "type": "helpVideos",
+                                "version": 0
+                            },
+                            {
+                                "id": 7,
+                                "type": "platformApp",
+                                "version": 0
+                            },
+                            {
+                                "id": 8,
+                                "type": "helpApp",
+                                "version": 0
+                            },
+                            {
+                                "id": 9,
+                                "type": "sampleCsvDownload",
+                                "version": 0
+                            },
+                            {
+                                "id": 1,
+                                "type": "managersSession",
+                                "version": 0
+                            },
+                            {
+                                "id": 2,
+                                "type": "editProfile",
+                                "version": 0
+                            },
+                            {
+                                "id": 10,
+                                "type": "mentorQuestionnaire",
+                                "version": 0
+                            }
+                        ],
+                        "correlation": "7dfb1899-f4a7-4070-9e2f-b6adbd8c0f91",
+                        "meetingPlatform": "OFF"
+                    }
+                }
   /mentoring/v1/sessions/getSampleCSV:
     post:
       summary: Get Sample CSV

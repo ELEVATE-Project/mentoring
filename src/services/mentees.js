@@ -32,6 +32,7 @@ const menteeExtensionQueries = require('@database/queries/userExtension')
 const { checkIfUserIsAccessible } = require('@helpers/saasUserAccessibility')
 const connectionQueries = require('@database/queries/connection')
 const getOrgIdAndEntityTypes = require('@helpers/getOrgIdAndEntityTypewithEntitiesBasedOnPolicy')
+const moment = require('moment')
 
 module.exports = class MenteesHelper {
 	/**
@@ -213,7 +214,7 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Mentees homeFeed.
 	 */
 
-	static async homeFeed(userId, isAMentor, page, limit, search, queryParams, roles, orgId) {
+	static async homeFeed(userId, isAMentor, page, limit, search, queryParams, roles, orgId, start_date, end_date) {
 		try {
 			/* All Sessions */
 
@@ -238,7 +239,7 @@ module.exports = class MenteesHelper {
 			}
 
 			/* My Sessions */
-			let mySessions = await this.getMySessions(page, limit, search, userId)
+			let mySessions = await this.getMySessions(page, limit, search, userId, start_date, end_date)
 
 			const result = {
 				all_sessions: allSessions.rows,
@@ -534,9 +535,16 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - List of enrolled sessions
 	 */
 
-	static async getMySessions(page, limit, search, userId) {
+	static async getMySessions(page, limit, search, userId, startDate, endDate) {
 		try {
-			const upcomingSessions = await sessionQueries.getUpcomingSessions(page, limit, search, userId)
+			const upcomingSessions = await sessionQueries.getUpcomingSessions(
+				page,
+				limit,
+				search,
+				userId,
+				startDate,
+				endDate
+			)
 			const upcomingSessionIds = upcomingSessions.rows.map((session) => session.id)
 			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
 				userId,
