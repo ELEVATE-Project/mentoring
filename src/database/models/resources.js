@@ -29,6 +29,11 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.STRING,
 				allowNull: false,
 			},
+			mime_type: {
+				type: DataTypes.STRING,
+				allowNull: true,
+				defaultValue: null,
+			},
 			created_by: {
 				type: DataTypes.STRING,
 				allowNull: true,

@@ -46,10 +46,22 @@ module.exports = class ResourcessData {
 		}
 	}
 
+	static async deleteResourceById(resourceId, sessionId) {
+		try {
+			const ResourcesData = await Resources.destroy({
+				where: { id: resourceId, session_id: sessionId },
+				raw: true,
+			})
+			return ResourcesData
+		} catch (error) {
+			return error
+		}
+	}
+
 	static async find(filter, projection = {}) {
 		try {
 			const ResourcesData = await Resources.findAll({
-				where: filter,
+				where: { ...filter, deleted_at: null },
 				attributes: projection,
 				raw: true,
 			})

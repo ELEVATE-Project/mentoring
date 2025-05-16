@@ -392,7 +392,7 @@ module.exports = class MenteeExtensionQueries {
 	) {
 		try {
 			const excludeUserIds = ids.length === 0
-			const userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.join(',')})`
+			const userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.map((id) => `'${id}'`).join(',')})`
 			let additionalFilter = ''
 
 			if (searchText) {
