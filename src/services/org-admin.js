@@ -603,4 +603,55 @@ module.exports = class OrgAdminService {
 			responseCode: 'CLIENT_ERROR',
 		})
 	}
+
+	/**
+	 * Update the theme for a specific organization.
+	 * @method
+	 * @name updateTheme
+	 * @param {Object} data - The theme data to be updated.
+	 * @param {String} orgId - The organization ID for which the theme needs to be updated.
+	 * @returns {Object} - The result of the theme update, either success or error details.
+	 */
+	static async updateTheme(data, orgId) {
+		let organizationDetails = await userRequests.fetchOrgDetails({ organizationId: orgId })
+		if (!(organizationDetails.success && organizationDetails.data && organizationDetails.data.result)) {
+			return responses.failureResponse({
+				message: 'ORGANIZATION_NOT_FOUND',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		}
+
+		const newData = { theme: data }
+		let result = await organisationExtensionQueries.update(newData, orgId)
+		if (!result) {
+			return responses.failureResponse({
+				message: 'FAILED_TO_UPDATED_ORG_THEME',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		}
+		return responses.successResponse({
+			statusCode: httpStatusCode.ok,
+			message: 'ORG_THEME_UPDATED_SUCCESSFULLY',
+		})
+	}
+
+	static async themeDetails(orgId) {
+		let organizationDetails = await organisationExtensionQueries.getById(orgId)
+
+		if (!organizationDetails) {
+			return responses.failureResponse({
+				message: 'ORGANIZATION_NOT_FOUND',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		}
+
+		return responses.successResponse({
+			statusCode: httpStatusCode.ok,
+			message: 'ORG_THEME_FETCHED_SUCCESSFULLY',
+			result: organizationDetails.theme,
+		})
+	}
 }

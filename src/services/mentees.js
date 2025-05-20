@@ -32,6 +32,7 @@ const menteeExtensionQueries = require('@database/queries/userExtension')
 const { checkIfUserIsAccessible } = require('@helpers/saasUserAccessibility')
 const connectionQueries = require('@database/queries/connection')
 const getOrgIdAndEntityTypes = require('@helpers/getOrgIdAndEntityTypewithEntitiesBasedOnPolicy')
+const moment = require('moment')
 
 module.exports = class MenteesHelper {
 	/**
@@ -213,7 +214,7 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Mentees homeFeed.
 	 */
 
-	static async homeFeed(userId, isAMentor, page, limit, search, queryParams, roles, orgId) {
+	static async homeFeed(userId, isAMentor, page, limit, search, queryParams, roles, orgId, start_date, end_date) {
 		try {
 			/* All Sessions */
 
@@ -238,7 +239,7 @@ module.exports = class MenteesHelper {
 			}
 
 			/* My Sessions */
-			let mySessions = await this.getMySessions(page, limit, search, userId)
+			let mySessions = await this.getMySessions(page, limit, search, userId, start_date, end_date)
 
 			const result = {
 				all_sessions: allSessions.rows,
@@ -534,9 +535,16 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - List of enrolled sessions
 	 */
 
-	static async getMySessions(page, limit, search, userId) {
+	static async getMySessions(page, limit, search, userId, startDate, endDate) {
 		try {
-			const upcomingSessions = await sessionQueries.getUpcomingSessions(page, limit, search, userId)
+			const upcomingSessions = await sessionQueries.getUpcomingSessions(
+				page,
+				limit,
+				search,
+				userId,
+				startDate,
+				endDate
+			)
 			const upcomingSessionIds = upcomingSessions.rows.map((session) => session.id)
 			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
 				userId,
@@ -1114,6 +1122,43 @@ module.exports = class MenteesHelper {
 			const query = utils.processQueryParametersWithExclusions(queryParams)
 			const userExtensionModelName = await menteeQueries.getModelName()
 
+			let connectedMenteeIds = []
+
+			if (queryParams.connected_mentees === 'true') {
+				const connectedQueryParams = { ...queryParams }
+				delete connectedQueryParams.connected_mentees
+				const connectedQuery = utils.processQueryParametersWithExclusions(connectedQueryParams)
+
+				const connectionDetails = await connectionQueries.getConnectionsDetails(
+					pageNo,
+					pageSize,
+					connectedQuery,
+					searchText,
+					queryParams.mentorId ? queryParams.mentorId : userId,
+					organization_ids,
+					[] // roles can be passed if needed
+				)
+
+				if (connectionDetails?.data?.length > 0) {
+					connectedMenteeIds = connectionDetails.data.map((item) => item.user_id)
+					if (!connectedMenteeIds.includes(userId)) {
+						connectedMenteeIds.push(userId)
+					}
+				}
+
+				// If there are no connected mentees, short-circuit and return empty
+				if (connectedMenteeIds.length === 0) {
+					return responses.successResponse({
+						statusCode: httpStatusCode.ok,
+						message: 'MENTEE_LIST',
+						result: {
+							data: [],
+							count: 0,
+						},
+					})
+				}
+			}
+
 			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities({
 				status: common.ACTIVE_STATUS,
 				model_names: { [Op.overlap]: [userExtensionModelName] },
@@ -1137,7 +1182,7 @@ module.exports = class MenteesHelper {
 
 			const saasFilter = await this.filterMenteeListBasedOnSaasPolicy(userId, isAMentor, organization_ids)
 			let extensionDetails = await menteeQueries.getAllUsers(
-				[],
+				connectedMenteeIds ? connectedMenteeIds : [],
 				pageNo,
 				pageSize,
 				filteredQuery,

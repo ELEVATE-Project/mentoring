@@ -202,7 +202,7 @@ module.exports = class MentorExtensionQueries {
 	) {
 		try {
 			const excludeUserIds = ids.length === 0
-			let userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.join(',')})`
+			let userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.map((id) => `'${id}'`).join(',')})`
 			let additionalFilter = ''
 			if (searchText) {
 				additionalFilter = `AND name ILIKE :search`
