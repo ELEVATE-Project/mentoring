@@ -392,7 +392,7 @@ module.exports = class MenteeExtensionQueries {
 	) {
 		try {
 			const excludeUserIds = ids.length === 0
-			const userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.join(',')})`
+			const userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.map((id) => `'${id}'`).join(',')})`
 			let additionalFilter = ''
 
 			if (searchText) {
@@ -411,11 +411,13 @@ module.exports = class MenteeExtensionQueries {
 
 			let projectionClause = `
 				user_id,
-				mentee_visibility,
+				name,
+				email,
 				organization_id,
 				designation,
 				area_of_expertise,
 				education_qualification,
+				mentee_visibility,
 				custom_entity_text::JSONB AS custom_entity_text,
 				meta::JSONB AS meta
 			`

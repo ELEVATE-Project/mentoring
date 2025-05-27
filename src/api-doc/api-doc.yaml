@@ -8234,6 +8234,179 @@ paths:
                       correlation: 8d1d9ec0-68c4-4def-9dad-2cac06ed71a2
                       meetingPlatform: BBB
         '400': *ref_1
+  /mentoring/v1/org-admin/updateTheme:
+    post:
+      tags:
+        - Organization Admin
+      summary: update theme
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                primaryColor: '#E74C3C'
+                secondaryColor: '#F1C40F'
+                backgroundColor: '#FFFFFF'
+                textColor: '#34495E'
+      parameters:
+        - name: X-auth-token
+          in: header
+          schema:
+            type: string
+          example: bearer {{token}}
+      responses:
+        '200':
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |-
+                {
+                    "responseCode": "OK",
+                    "message": "Organization theme updated successfully.",
+                    "result": [],
+                    "meta": {
+                        "formsVersion": [
+                            {
+                                "id": 3,
+                                "type": "session",
+                                "version": 0
+                            },
+                            {
+                                "id": 4,
+                                "type": "termsAndConditions",
+                                "version": 0
+                            },
+                            {
+                                "id": 5,
+                                "type": "faq",
+                                "version": 0
+                            },
+                            {
+                                "id": 6,
+                                "type": "helpVideos",
+                                "version": 0
+                            },
+                            {
+                                "id": 7,
+                                "type": "platformApp",
+                                "version": 0
+                            },
+                            {
+                                "id": 8,
+                                "type": "helpApp",
+                                "version": 0
+                            },
+                            {
+                                "id": 9,
+                                "type": "sampleCsvDownload",
+                                "version": 0
+                            },
+                            {
+                                "id": 1,
+                                "type": "managersSession",
+                                "version": 0
+                            },
+                            {
+                                "id": 2,
+                                "type": "editProfile",
+                                "version": 0
+                            },
+                            {
+                                "id": 10,
+                                "type": "mentorQuestionnaire",
+                                "version": 0
+                            }
+                        ],
+                        "correlation": "180891f9-6c41-4fbe-ab60-5b1db6afd3c0",
+                        "meetingPlatform": "OFF"
+                    }
+                }
+  /mentoring/v1/org-admin/themeDetails:
+    get:
+      tags:
+        - Organization Admin
+      summary: get theme Deatails
+      parameters:
+        - name: x-auth-token
+          in: header
+          schema:
+            type: string
+          example: bearer {{token}}
+      responses:
+        '200':
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |-
+                {
+                    "responseCode": "OK",
+                    "message": "Organization theme fetched successfully.",
+                    "result": {
+                        "textColor": "#34495E",
+                        "primaryColor": "#E74C3C",
+                        "secondaryColor": "#F1C40F",
+                        "backgroundColor": "#FFFFFF"
+                    },
+                    "meta": {
+                        "formsVersion": [
+                            {
+                                "id": 3,
+                                "type": "session",
+                                "version": 0
+                            },
+                            {
+                                "id": 4,
+                                "type": "termsAndConditions",
+                                "version": 0
+                            },
+                            {
+                                "id": 5,
+                                "type": "faq",
+                                "version": 0
+                            },
+                            {
+                                "id": 6,
+                                "type": "helpVideos",
+                                "version": 0
+                            },
+                            {
+                                "id": 7,
+                                "type": "platformApp",
+                                "version": 0
+                            },
+                            {
+                                "id": 8,
+                                "type": "helpApp",
+                                "version": 0
+                            },
+                            {
+                                "id": 9,
+                                "type": "sampleCsvDownload",
+                                "version": 0
+                            },
+                            {
+                                "id": 1,
+                                "type": "managersSession",
+                                "version": 0
+                            },
+                            {
+                                "id": 2,
+                                "type": "editProfile",
+                                "version": 0
+                            },
+                            {
+                                "id": 10,
+                                "type": "mentorQuestionnaire",
+                                "version": 0
+                            }
+                        ],
+                        "correlation": "7dfb1899-f4a7-4070-9e2f-b6adbd8c0f91",
+                        "meetingPlatform": "OFF"
+                    }
+                }
   /mentoring/v1/sessions/getSampleCSV:
     post:
       summary: Get Sample CSV
@@ -15526,6 +15699,1173 @@ paths:
                       meetingPlatform: BBB
         '400': *ref_20
     parameters: *ref_21
+  /mentoring/v1/requestSessions/create:
+    post:
+      summary: Request session request with a mentor
+      description: >-
+        You can use this API to create request session
+
+
+        * The API Endpoint for create request session 
+        /mentoring/v1/requestSessions/create
+
+        * It is mandatory to provide values for parameters that are marked as
+        `required`
+
+        * This is a mandatory parameter and cannot be empty or null.
+      operationId: ''
+      tags: &ref_22
+        - RequestSessions
+      parameters: &ref_23
+        - in: query
+          name: pageNo
+          description: Enter the number of page
+          schema:
+            type: integer
+            default: 1
+          required: true
+        - in: query
+          name: pageSize
+          description: Enter the Limit for the page
+          schema:
+            type: integer
+            default: 5
+          required: true
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: object
+                    properties:
+                      created_at:
+                        type: string
+                      updated_at:
+                        type: string
+                      id:
+                        type: number
+                      requestor_id:
+                        type: string
+                      requestee_id:
+                        type: string
+                      status:
+                        type: string
+                      title:
+                        type: string
+                      agenda:
+                        type: string
+                      start_date:
+                        type: number
+                      end_date:
+                        type: number
+                      created_by:
+                        type: string
+                      updated_by:
+                        type: string
+                      meta:
+                        type: object
+                        properties: {}
+                      session_id:
+                        type: 'null'
+                      reject_reason:
+                        type: 'null'
+                      deleted_at:
+                        type: 'null'
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                example1:
+                  value:
+                    responseCode: OK
+                    message: Your request has been sent successfully.
+                    result:
+                      created_at: '2025-05-13T11:40:05.860Z'
+                      updated_at: '2025-05-13T11:40:05.860Z'
+                      id: 1
+                      requestor_id: '2'
+                      requestee_id: '1'
+                      status: REQUESTED
+                      title: Sample Request Creation
+                      agenda: Sample Agenda
+                      start_date: 1745229600
+                      end_date: 1745233200
+                      created_by: '2'
+                      updated_by: '2'
+                      meta: {}
+                      session_id: null
+                      reject_reason: null
+                      deleted_at: null
+                    meta:
+                      formsVersion:
+                        - id: 3
+                          type: termsAndConditions
+                          version: 0
+                        - id: 4
+                          type: faq
+                          version: 0
+                        - id: 5
+                          type: helpVideos
+                          version: 0
+                        - id: 8
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 7
+                          type: helpApp
+                          version: 0
+                        - id: 6
+                          type: platformApp
+                          version: 30
+                        - id: 9
+                          type: mentorQuestionnaire
+                          version: 2
+                        - id: 2
+                          type: session
+                          version: 47
+                        - id: 10
+                          type: managersSession
+                          version: 12
+                        - id: 1
+                          type: editProfile
+                          version: 23
+                        - id: 25
+                          type: dashboard
+                          version: 0
+                        - id: 31
+                          type: bignumberDashboard
+                          version: 39
+                        - id: 14
+                          type: editProfile
+                          version: 10
+                        - id: 12
+                          type: session
+                          version: 1
+                        - id: 11
+                          type: session
+                          version: 3
+                        - id: 18
+                          type: session
+                          version: 225
+                        - id: 15
+                          type: editProfile
+                          version: 240
+                        - id: 21
+                          type: managersSession
+                          version: 196
+                        - id: 23
+                          type: session
+                          version: 9
+                        - id: 24
+                          type: managersSession
+                          version: 0
+                        - id: 22
+                          type: editProfile
+                          version: 7
+                      correlation: 304cc503-b805-40c7-9ecb-529313b0af3b
+                      meetingPlatform: 'OFF'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                requestee_id:
+                  type: string
+                  description: 'mentorId should be given '
+                title:
+                  type: string
+                  description: title of the session
+                agenda:
+                  type: string
+                  description: description of the session
+                start_date:
+                  type: string
+                  description: start time and date in epoch format
+                end_date:
+                  type: string
+                  description: end time and date in epoch format
+              required:
+                - requestee_id
+                - title
+                - agenda
+                - start_date
+                - end_date
+            examples:
+              example1:
+                value:
+                  requestee_id: '1'
+                  title: Sample Request Creation
+                  agenda: Sample Agenda
+                  start_date: '1745229600'
+                  end_date: '1745233200'
+      security: &ref_24
+        - bearer: []
+  /mentoring/v1/requestSessions/list:
+    get:
+      summary: List of session requests
+      description: >-
+        You can use this API to list request session
+
+
+        * The API Endpoint for list request session 
+        /mentoring/v1/requestSessions/list
+
+        * It is mandatory to provide values for parameters that are marked as
+        `required`
+
+        * This is a mandatory parameter and cannot be empty or null.
+      operationId: ''
+      tags: *ref_22
+      parameters: *ref_23
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            requestor_id:
+                              type: string
+                            requestee_id:
+                              type: string
+                            status:
+                              type: string
+                            meta:
+                              type: object
+                              properties: {}
+                            title:
+                              type: string
+                            agenda:
+                              type: string
+                            start_date:
+                              type: number
+                            end_date:
+                              type: number
+                            session_id:
+                              type: 'null'
+                            reject_reason:
+                              type: 'null'
+                            updated_by:
+                              type: string
+                            created_by:
+                              type: string
+                            created_at:
+                              type: string
+                            updated_at:
+                              type: string
+                            deleted_at:
+                              type: 'null'
+                            user_details:
+                              type: object
+                              properties:
+                                user_id:
+                                  type: string
+                                image:
+                                  type: 'null'
+                                name:
+                                  type: string
+                                experience:
+                                  type: string
+                                designation:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      value:
+                                        type: string
+                                      label:
+                                        type: string
+                                organization_id:
+                                  type: string
+                      count:
+                        type: number
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                example1:
+                  value:
+                    responseCode: OK
+                    message: Successfully retrieved your session request list!
+                    result:
+                      data:
+                        - id: '1'
+                          requestor_id: '2'
+                          requestee_id: '1'
+                          status: REQUESTED
+                          meta: {}
+                          title: Sample Request Creation
+                          agenda: Sample Agenda
+                          start_date: 1745229600
+                          end_date: 1745233200
+                          session_id: null
+                          reject_reason: null
+                          updated_by: '2'
+                          created_by: '2'
+                          created_at: '2025-05-13T09:25:18.795Z'
+                          updated_at: '2025-05-13T09:32:26.857Z'
+                          deleted_at: null
+                          user_details:
+                            user_id: '2'
+                            image: null
+                            name: Dashboard Mentor
+                            experience: '21'
+                            designation:
+                              - value: beo
+                                label: Block education officer
+                            organization_id: '1'
+                      count: 1
+                    meta:
+                      formsVersion:
+                        - id: 3
+                          type: termsAndConditions
+                          version: 0
+                        - id: 4
+                          type: faq
+                          version: 0
+                        - id: 5
+                          type: helpVideos
+                          version: 0
+                        - id: 8
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 7
+                          type: helpApp
+                          version: 0
+                        - id: 6
+                          type: platformApp
+                          version: 30
+                        - id: 9
+                          type: mentorQuestionnaire
+                          version: 2
+                        - id: 2
+                          type: session
+                          version: 47
+                        - id: 10
+                          type: managersSession
+                          version: 12
+                        - id: 1
+                          type: editProfile
+                          version: 23
+                        - id: 25
+                          type: dashboard
+                          version: 0
+                        - id: 31
+                          type: bignumberDashboard
+                          version: 39
+                        - id: 14
+                          type: editProfile
+                          version: 10
+                        - id: 12
+                          type: session
+                          version: 1
+                        - id: 11
+                          type: session
+                          version: 3
+                        - id: 18
+                          type: session
+                          version: 225
+                        - id: 15
+                          type: editProfile
+                          version: 240
+                        - id: 21
+                          type: managersSession
+                          version: 196
+                        - id: 23
+                          type: session
+                          version: 9
+                        - id: 24
+                          type: managersSession
+                          version: 0
+                        - id: 22
+                          type: editProfile
+                          version: 7
+                      correlation: 64900c7f-344f-45ac-b56f-3939428924f5
+                      meetingPlatform: 'OFF'
+      requestBody: &ref_25 {}
+      security: *ref_24
+  /mentoring/v1/requestSessions/getDetails:
+    get:
+      summary: List of session requests
+      description: >-
+        You can use this API to list request session
+
+
+        * The API Endpoint for list request session 
+        /mentoring/v1/requestSessions/list
+
+        * It is mandatory to provide values for parameters that are marked as
+        `required`
+
+        * This is a mandatory parameter and cannot be empty or null.
+      operationId: ''
+      tags: *ref_22
+      parameters:
+        - in: query
+          name: request_session_id
+          description: Enter the requestSessionId
+          schema: &ref_26
+            type: string
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      requestor_id:
+                        type: string
+                      requestee_id:
+                        type: string
+                      status:
+                        type: string
+                      meta:
+                        type: object
+                        properties: {}
+                      title:
+                        type: string
+                      agenda:
+                        type: string
+                      start_date:
+                        type: number
+                      end_date:
+                        type: number
+                      session_id:
+                        type: 'null'
+                      reject_reason:
+                        type: 'null'
+                      updated_by:
+                        type: string
+                      created_by:
+                        type: string
+                      created_at:
+                        type: string
+                      updated_at:
+                        type: string
+                      deleted_at:
+                        type: 'null'
+                      user_details:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          user_id:
+                            type: string
+                          mentee_visibility:
+                            type: string
+                          organization_id:
+                            type: string
+                          designation:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                value:
+                                  type: string
+                                label:
+                                  type: string
+                              required:
+                                - value
+                                - label
+                          area_of_expertise:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                value:
+                                  type: string
+                                label:
+                                  type: string
+                              required:
+                                - value
+                                - label
+                          education_qualification:
+                            type: string
+                          meta:
+                            type: 'null'
+                          is_mentor:
+                            type: boolean
+                          experience:
+                            type: string
+                          image:
+                            type: 'null'
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                example1:
+                  value:
+                    responseCode: OK
+                    message: request session details fetched successfully.
+                    result:
+                      id: '1'
+                      requestor_id: '2'
+                      requestee_id: '1'
+                      status: REQUESTED
+                      meta: {}
+                      title: Sample Request Creation
+                      agenda: Sample Agenda
+                      start_date: 1745229600
+                      end_date: 1745233200
+                      session_id: null
+                      reject_reason: null
+                      updated_by: '2'
+                      created_by: '2'
+                      created_at: '2025-05-13T09:25:18.795Z'
+                      updated_at: '2025-05-13T09:32:26.857Z'
+                      deleted_at: null
+                      user_details:
+                        name: mentee march
+                        user_id: '2'
+                        mentee_visibility: ALL
+                        organization_id: '1'
+                        designation:
+                          - value: beo
+                            label: Block education officer
+                          - value: co
+                            label: Cluster officials
+                          - value: deo
+                            label: District education officer
+                          - value: hm
+                            label: Head master
+                          - value: te
+                            label: Teacher
+                        area_of_expertise:
+                          - value: communication
+                            label: Communication
+                          - value: educational_leadership
+                            label: Educational leadership
+                          - value: professional_development
+                            label: Professional development
+                          - value: school_process
+                            label: School process
+                          - value: sqaa
+                            label: SQAA
+                        education_qualification: BA LLB
+                        meta: null
+                        is_mentor: false
+                        experience: '99'
+                        image: null
+                    meta:
+                      formsVersion:
+                        - id: 3
+                          type: termsAndConditions
+                          version: 0
+                        - id: 4
+                          type: faq
+                          version: 0
+                        - id: 5
+                          type: helpVideos
+                          version: 0
+                        - id: 8
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 7
+                          type: helpApp
+                          version: 0
+                        - id: 6
+                          type: platformApp
+                          version: 30
+                        - id: 9
+                          type: mentorQuestionnaire
+                          version: 2
+                        - id: 2
+                          type: session
+                          version: 47
+                        - id: 10
+                          type: managersSession
+                          version: 12
+                        - id: 1
+                          type: editProfile
+                          version: 23
+                        - id: 25
+                          type: dashboard
+                          version: 0
+                        - id: 31
+                          type: bignumberDashboard
+                          version: 39
+                        - id: 14
+                          type: editProfile
+                          version: 10
+                        - id: 12
+                          type: session
+                          version: 1
+                        - id: 11
+                          type: session
+                          version: 3
+                        - id: 18
+                          type: session
+                          version: 225
+                        - id: 15
+                          type: editProfile
+                          version: 240
+                        - id: 21
+                          type: managersSession
+                          version: 196
+                        - id: 23
+                          type: session
+                          version: 9
+                        - id: 24
+                          type: managersSession
+                          version: 0
+                        - id: 22
+                          type: editProfile
+                          version: 7
+                      correlation: 793f3bf6-311d-43bd-908f-d954d7cfc600
+                      meetingPlatform: 'OFF'
+      requestBody: *ref_25
+      security: *ref_24
+  /mentoring/v1/requestSessions/userAvailability:
+    get:
+      summary: get the user availability of session requests
+      description: >-
+        You can use this API to user availability 
+
+
+        * The API Endpoint for user availability 
+        /mentoring/v1/requestSessions/userAvailability
+
+        * It is mandatory to provide values for parameters that are marked as
+        `required`
+
+        * This is a mandatory parameter and cannot be empty or null.
+      operationId: ''
+      tags: *ref_22
+      parameters:
+        - in: query
+          name: pageNo
+          description: Enter the Page number
+          schema: *ref_26
+          required: true
+        - in: query
+          name: pageSize
+          description: Enter the limit
+          schema: *ref_26
+          required: true
+        - in: query
+          name: status
+          description: Status of the session
+          schema: *ref_26
+          required: true
+        - in: query
+          name: start_date
+          description: Start date and time of the session
+          schema: *ref_26
+          required: true
+        - in: query
+          name: end_date
+          description: End date and time of the session
+          schema: *ref_26
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                        bookedSlots:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              startTime:
+                                type: string
+                              endTime:
+                                type: string
+                              title:
+                                type: string
+                            required:
+                              - startTime
+                              - endTime
+                              - title
+                      required:
+                        - date
+                        - bookedSlots
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                example1:
+                  value:
+                    responseCode: OK
+                    message: mentor availibilty featched successfully
+                    result:
+                      - date: '2025-05-13'
+                        bookedSlots:
+                          - startTime: '17:50:00'
+                            endTime: '18:50:00'
+                            title: Test 13
+                      - date: '2025-05-11'
+                        bookedSlots:
+                          - startTime: '17:47:00'
+                            endTime: '18:47:00'
+                            title: Test 12
+                      - date: '2025-05-27'
+                        bookedSlots:
+                          - startTime: '17:27:00'
+                            endTime: '18:27:00'
+                            title: Test 11
+                      - date: '2025-05-21'
+                        bookedSlots:
+                          - startTime: '17:24:00'
+                            endTime: '18:24:00'
+                            title: Test 10
+                      - date: '2025-05-30'
+                        bookedSlots:
+                          - startTime: '17:20:00'
+                            endTime: '18:20:00'
+                            title: Test 9
+                    meta:
+                      formsVersion:
+                        - id: 3
+                          type: termsAndConditions
+                          version: 0
+                        - id: 4
+                          type: faq
+                          version: 0
+                        - id: 5
+                          type: helpVideos
+                          version: 0
+                        - id: 8
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 6
+                          type: platformApp
+                          version: 13
+                        - id: 7
+                          type: helpApp
+                          version: 4
+                        - id: 9
+                          type: mentorQuestionnaire
+                          version: 7
+                        - id: 17
+                          type: theme
+                          version: 1
+                        - id: 15
+                          type: dashboard
+                          version: 0
+                        - id: 16
+                          type: dashboardReport
+                          version: 0
+                        - id: 1
+                          type: editProfile
+                          version: 30
+                        - id: 2
+                          type: session
+                          version: 34
+                        - id: 18
+                          type: bignumberDashboard
+                          version: 2
+                        - id: 10
+                          type: managersSession
+                          version: 35
+                        - id: 14
+                          type: sessionTest
+                          version: 1
+                        - id: 12
+                          type: session
+                          version: 1
+                        - id: 11
+                          type: session
+                          version: 4
+                      correlation: 0835056c-96a1-4a13-828e-dd693e3be916
+                      meetingPlatform: BBB
+      requestBody: *ref_25
+      security: *ref_24
+  /mentoring/v1/requestSessions/accept:
+    post:
+      summary: Accept session request with a mentor
+      description: >-
+        You can use this API to accept request session
+
+
+        * The API Endpoint for create request session 
+        /mentoring/v1/requestSessions/accept
+
+        * It is mandatory to provide values for parameters that are marked as
+        `required`
+
+        * This is a mandatory parameter and cannot be empty or null.
+      operationId: ''
+      tags: *ref_22
+      parameters: &ref_27 []
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: string
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                example1:
+                  value:
+                    responseCode: OK
+                    message: Your session request has been approved.
+                    result: ACCEPTED
+                    meta:
+                      formsVersion:
+                        - id: 3
+                          type: termsAndConditions
+                          version: 0
+                        - id: 4
+                          type: faq
+                          version: 0
+                        - id: 5
+                          type: helpVideos
+                          version: 0
+                        - id: 8
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 7
+                          type: helpApp
+                          version: 0
+                        - id: 6
+                          type: platformApp
+                          version: 30
+                        - id: 9
+                          type: mentorQuestionnaire
+                          version: 2
+                        - id: 2
+                          type: session
+                          version: 47
+                        - id: 10
+                          type: managersSession
+                          version: 12
+                        - id: 1
+                          type: editProfile
+                          version: 23
+                        - id: 25
+                          type: dashboard
+                          version: 0
+                        - id: 31
+                          type: bignumberDashboard
+                          version: 39
+                        - id: 14
+                          type: editProfile
+                          version: 10
+                        - id: 12
+                          type: session
+                          version: 1
+                        - id: 11
+                          type: session
+                          version: 3
+                        - id: 18
+                          type: session
+                          version: 225
+                        - id: 15
+                          type: editProfile
+                          version: 240
+                        - id: 21
+                          type: managersSession
+                          version: 196
+                        - id: 23
+                          type: session
+                          version: 9
+                        - id: 24
+                          type: managersSession
+                          version: 0
+                        - id: 22
+                          type: editProfile
+                          version: 7
+                      correlation: 16f25b5a-8100-4378-98ae-3fd544ecff9e
+                      meetingPlatform: 'OFF'
+      requestBody: &ref_28
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                request_session_id:
+                  type: string
+              required:
+                - request_session_id
+            examples:
+              example1:
+                value:
+                  request_session_id: '1'
+      security: *ref_24
+  /mentoring/v1/requestSessions/reject:
+    post:
+      summary: Reject session request with a mentor
+      description: >-
+        You can use this API to reject request session
+
+
+        * The API Endpoint for reject request session 
+        /mentoring/v1/requestSessions/reject
+
+        * It is mandatory to provide values for parameters that are marked as
+        `required`
+
+        * This is a mandatory parameter and cannot be empty or null.
+      operationId: ''
+      tags: *ref_22
+      parameters: *ref_27
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                  message:
+                    type: string
+                  result:
+                    type: array
+                    items:
+                      type: string
+                  meta:
+                    type: object
+                    properties:
+                      formsVersion:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                            type:
+                              type: string
+                            version:
+                              type: number
+                          required:
+                            - id
+                            - type
+                            - version
+                      correlation:
+                        type: string
+                      meetingPlatform:
+                        type: string
+              examples:
+                example1:
+                  value:
+                    responseCode: OK
+                    message: You have rejected the session request.
+                    result: []
+                    meta:
+                      formsVersion:
+                        - id: 3
+                          type: termsAndConditions
+                          version: 0
+                        - id: 4
+                          type: faq
+                          version: 0
+                        - id: 5
+                          type: helpVideos
+                          version: 0
+                        - id: 8
+                          type: sampleCsvDownload
+                          version: 0
+                        - id: 7
+                          type: helpApp
+                          version: 0
+                        - id: 6
+                          type: platformApp
+                          version: 30
+                        - id: 9
+                          type: mentorQuestionnaire
+                          version: 2
+                        - id: 2
+                          type: session
+                          version: 47
+                        - id: 10
+                          type: managersSession
+                          version: 12
+                        - id: 1
+                          type: editProfile
+                          version: 23
+                        - id: 25
+                          type: dashboard
+                          version: 0
+                        - id: 31
+                          type: bignumberDashboard
+                          version: 39
+                        - id: 14
+                          type: editProfile
+                          version: 10
+                        - id: 12
+                          type: session
+                          version: 1
+                        - id: 11
+                          type: session
+                          version: 3
+                        - id: 18
+                          type: session
+                          version: 225
+                        - id: 15
+                          type: editProfile
+                          version: 240
+                        - id: 21
+                          type: managersSession
+                          version: 196
+                        - id: 23
+                          type: session
+                          version: 9
+                        - id: 24
+                          type: managersSession
+                          version: 0
+                        - id: 22
+                          type: editProfile
+                          version: 7
+                      correlation: 159219a0-7dd4-4792-ba67-7c5fb8c21c6e
+                      meetingPlatform: 'OFF'
+      requestBody: *ref_28
+      security: *ref_24
 components:
   schemas:
     form:
@@ -18206,6 +19546,11 @@ tags:
       description: ''
       url: ''
   - name: Connections
+    description: ''
+    externalDocs:
+      description: ''
+      url: ''
+  - name: RequestSessions
     description: ''
     externalDocs:
       description: ''

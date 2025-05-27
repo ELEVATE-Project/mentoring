@@ -419,6 +419,40 @@ let enviromentVariables = {
 		optional: true,
 		default: 'internalmentoring',
 	},
+	MENTOR_ACCEPT_SESSION_REQUEST_EMAIL_TEMPLATE: {
+		message: 'Required email template name for request session accepted',
+		optional: true,
+		default: 'request_session_accepted_email_template',
+	},
+	MENTOR_REJECT_SESSION_REQUEST_EMAIL_TEMPLATE: {
+		message: 'Required email template name for request session accepted',
+		optional: true,
+		default: 'request_session_rejected_email_template',
+	},
+	POST_RESOURCE_EMAIL_TEMPLATE_CODE: {
+		message: 'Required post resource update email template code',
+		optional: true,
+		default: 'post_session_resource_email',
+	},
+	PRE_RESOURCE_EMAIL_TEMPLATE_CODE: {
+		message: 'Required pre resource update email template code',
+		optional: true,
+		default: 'pre_session_resource_email',
+	},
+	RESOURCE_ADD_EMAIL_TEMPLATE_CODE: {
+		message: 'Required resource add email template code',
+		optional: true,
+		default: 'new_session_resource_email',
+	},
+	POST_RESOURCE_DELETE_TIMEOUT: {
+		message: 'Required post resource delete timeout',
+		optional: true,
+		default: 1440,
+	},
+	PORTAL_BASE_URL: {
+		message: 'Required portal base url',
+		optional: false,
+	},
 	DB_POOL_MAX_CONNECTIONS: {
 		message: 'Required DB Pool Max number of connections',
 		optional: true,

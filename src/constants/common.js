@@ -54,6 +54,7 @@ module.exports = {
 		'/organization/eventListener',
 		'/users/update',
 		'/sessions/removeAllSessions',
+		'/mentoring/v1/users/add',
 	],
 	COMPLETED_STATUS: 'COMPLETED',
 	UNFULFILLED_STATUS: 'UNFULFILLED',
@@ -116,7 +117,7 @@ module.exports = {
 	],
 	jobPrefixToMarkSessionAsCompleted: 'job_to_mark_session_as_completed_',
 	ORG_ADMIN_ROLE: 'org_admin',
-
+	expireSessionRequest: 'job_to_mark_session_as_expired',
 	// Default organization policies
 	getDefaultOrgPolicies: defaultOrgPolicies,
 	REPORT_TABLE: 'table',
@@ -134,6 +135,7 @@ module.exports = {
 	sessionModelName: 'Session',
 	notificationEndPoint: '/mentoring/v1/notifications/emailCronJob',
 	sessionCompleteEndpoint: '/mentoring/v1/sessions/completed/',
+	expireSessionRequestEndpoint: '/mentoring/v1/requestSessions/expire',
 	INACTIVE_STATUS: 'INACTIVE',
 	ACTIVE_STATUS: 'ACTIVE',
 	SEARCH: '',
@@ -222,8 +224,12 @@ module.exports = {
 		PENDING: 'PENDING',
 		REQUESTED: 'REQUESTED',
 		BLOCKED: 'BLOCKED',
+		EXPIRED: 'EXPIRED',
 	},
+	CONNECTIONS_DEFAULT_MESSAGE: 'Hi, I would like to connect with you.',
 	COMMUNICATION: {
 		UNAUTHORIZED: 'Unauthorized',
 	},
+	SESSION_POST_RESOURCE_TYPE: 'post',
+	SESSION_PRE_RESOURCE_TYPE: 'pre',
 }

@@ -94,7 +94,9 @@ module.exports = class Mentees {
 				req.searchText,
 				req.query,
 				req.decodedToken.roles,
-				req.decodedToken.organization_id
+				req.decodedToken.organization_id,
+				req.query.start_date,
+				req.query.end_date
 			)
 			return homeFeed
 		} catch (error) {

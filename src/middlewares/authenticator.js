@@ -8,6 +8,8 @@ const responses = require('@helpers/responses')
 const { Op } = require('sequelize')
 const fs = require('fs')
 const MenteeExtensionQueries = require('@database/queries/userExtension')
+const utils = require('@generics/utils')
+const path = require('path')
 
 module.exports = async function (req, res, next) {
 	try {
@@ -18,7 +20,7 @@ module.exports = async function (req, res, next) {
 		const isInternalAccess = common.internalAccessUrls.some((path) => {
 			if (req.path.includes(path)) {
 				if (req.headers.internal_access_token === process.env.INTERNAL_ACCESS_TOKEN) return true
-				throw createUnauthorizedResponse()
+				// throw createUnauthorizedResponse()
 			}
 			return false
 		})
@@ -30,7 +32,98 @@ module.exports = async function (req, res, next) {
 			else throw createUnauthorizedResponse('PERMISSION_DENIED')
 		}
 
-		const [decodedToken, skipFurtherChecks] = await authenticateUser(authHeader, req)
+		let [decodedToken, skipFurtherChecks] = await authenticateUser(authHeader, req)
+
+		// Path to config.json
+		const configFilePath = path.resolve(__dirname, '../', 'config.json')
+
+		// Initialize variables
+		let configData = {}
+		let defaultTokenExtraction = false
+		req.decodedToken = {}
+
+		// Check if config.json exists
+		if (fs.existsSync(configFilePath)) {
+			 console.log(" config exit");
+			// Read and parse the config.json file
+			const rawData = fs.readFileSync(configFilePath)
+			try {
+				configData = JSON.parse(rawData)
+				if (!configData.authTokenUserInformation) {
+					defaultTokenExtraction = true
+				}
+				configData = configData.authTokenUserInformation
+			} catch (error) {
+				console.error('Error parsing config.json:', error)
+			}
+		} else {
+			// If file doesn't exist, set defaultTokenExtraction to true
+			defaultTokenExtraction = true
+		}
+
+		let organizationKey = 'organization_id'
+
+		// defaultTokenExtraction = true
+		// performing default token data extraction
+		if (defaultTokenExtraction) {
+			// decodedToken[organizationKey] = getOrgId(req.headers, decodedToken, 'data.organization_ids[0]')
+			// decodedToken.data[organizationKey] = decodedToken[organizationKey]
+
+			// const resolvedRolePath = resolvePathTemplate(
+			// 	'data.organizations[?organization_id={{organization_id}}].roles',
+			// 	decodedToken
+			// )
+			// const roles = getNestedValue(decodedToken, resolvedRolePath) || []
+			// decodedToken.data['roles'] = roles
+
+			req.decodedToken = {
+				...decodedToken.data,
+			}
+		} else {
+			// Iterate through each key in the config object
+			for (let key in configData) {
+				if (configData.hasOwnProperty(key)) {
+					let keyValue = getNestedValue(decodedToken, configData[key])
+					if (key === 'id') {
+						keyValue = keyValue?.toString()
+					}
+					if (key === organizationKey) {
+						req.decodedToken[key] = getOrgId(req.headers, decodedToken, configData[key])
+						continue
+					}
+					if (key === 'roles') {
+						let orgId = getOrgId(req.headers, decodedToken, configData[organizationKey])
+
+						// Now extract roles using fully dynamic path
+						const rolePathTemplate = configData['roles']
+
+						decodedToken[organizationKey] = orgId
+						const resolvedRolePath = resolvePathTemplate(rolePathTemplate, decodedToken)
+						const roles = getNestedValue(decodedToken, resolvedRolePath) || []
+						req.decodedToken[key] = roles
+						continue
+					}
+
+					// For each key in config, assign the corresponding value from decodedToken
+					req.decodedToken[key] = keyValue
+				}
+			}
+		}
+
+ console.log(" decoded tokenen ",req.decodedToken);
+
+		req.decodedToken.id =
+			typeof req.decodedToken?.id === 'number' ? req.decodedToken?.id?.toString() : req.decodedToken?.id
+		req.decodedToken.organization_id =
+			typeof req.decodedToken?.organization_id === 'number'
+				? req.decodedToken?.organization_id?.toString()
+				: req.decodedToken?.organization_id
+
+		console.log(" req decoded tokenen ",req.decodedToken);
+    if (!req.decodedToken[organizationKey]) {
+			throw createUnauthorizedResponse()
+		}
+		req.decodedToken.token = authHeader
 
 		if (adminHeader) {
 			if (adminHeader != process.env.ADMIN_ACCESS_TOKEN) throw createUnauthorizedResponse()
@@ -49,8 +142,8 @@ module.exports = async function (req, res, next) {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			decodedToken.data.organization_id = organizationId.toString()
-			decodedToken.data.roles.push({ title: common.ADMIN_ROLE })
+			req.decodedToken.organization_id = organizationId.toString()
+			req.decodedToken.roles.push({ title: common.ADMIN_ROLE })
 		}
 
 		if (!skipFurtherChecks) {
@@ -60,29 +153,18 @@ module.exports = async function (req, res, next) {
 			const roleValidation = common.roleValidationPaths.some((path) => req.path.includes(path))
 
 			if (roleValidation) {
-				if (process.env.AUTH_METHOD === common.AUTH_METHOD.NATIVE) await nativeRoleValidation(decodedToken)
+				if (process.env.AUTH_METHOD === common.AUTH_METHOD.NATIVE) await nativeRoleValidation(decodedToken, authHeader)
 				else if (process.env.AUTH_METHOD === common.AUTH_METHOD.KEYCLOAK_PUBLIC_KEY)
 					await dbBasedRoleValidation(decodedToken)
 			}
 
 			const isPermissionValid = await checkPermissions(
-				decodedToken.data.roles.map((role) => role.title),
+				req.decodedToken.roles.map((role) => role.title),
 				req.path,
 				req.method
 			)
 
 			if (!isPermissionValid) throw createUnauthorizedResponse('PERMISSION_DENIED')
-		}
-
-		req.decodedToken = {
-			id: typeof decodedToken.data.id === 'number' ? decodedToken.data.id.toString() : decodedToken.data.id,
-			roles: decodedToken.data.roles,
-			name: decodedToken.data.name,
-			token: authHeader,
-			organization_id:
-				typeof decodedToken.data.organization_id === 'number'
-					? decodedToken.data.organization_id.toString()
-					: decodedToken.data.organization_id,
 		}
 
 		console.log('DECODED TOKEN:', req.decodedToken)
@@ -98,6 +180,55 @@ module.exports = async function (req, res, next) {
 		console.error(err)
 		next(err)
 	}
+}
+
+function getOrgId(headers, decodedToken, orgConfigData) {
+	if (headers['organization_id']) {
+		return (orgId = headers['organization_id'].toString())
+	} else {
+		const orgIdPath = orgConfigData
+		return (orgId = getNestedValue(decodedToken, orgIdPath)?.toString())
+	}
+}
+function getNestedValue(obj, path) {
+	const parts = path.split('.')
+	let current = obj
+
+	for (const part of parts) {
+		if (!current) return undefined
+
+		// Match conditional array access: key[?field=value]
+		const conditionalMatch = part.match(/^(\w+)\[\?(\w+)=([^\]]+)\]$/)
+		if (conditionalMatch) {
+			const [, arrayKey, field, expected] = conditionalMatch
+			const array = current[arrayKey]
+			if (!Array.isArray(array)) return undefined
+			current = array.find((item) => item[field]?.toString() === expected)
+			continue
+		}
+
+		// Match array index: key[0]
+		const indexMatch = part.match(/^(\w+)\[(\d+)\]$/)
+		if (indexMatch) {
+			const [, key, index] = indexMatch
+			const array = current[key]
+			if (!Array.isArray(array)) return undefined
+			current = array[parseInt(index)]
+			continue
+		}
+
+		// Simple object property
+		current = current[part]
+	}
+
+	return current
+}
+
+function resolvePathTemplate(template, contextObject) {
+	return template.replace(/\{\{(.*?)\}\}/g, (_, path) => {
+		const value = getNestedValue(contextObject, path.trim())
+		return value?.toString?.() ?? ''
+	})
 }
 
 function createUnauthorizedResponse(message = 'UNAUTHORIZED_REQUEST') {
@@ -155,10 +286,10 @@ async function validateSession(authHeader) {
 		throw new Error('USER_SERVICE_DOWN')
 }
 
-async function fetchUserProfile(userId) {
+async function fetchUserProfile(authHeader) {
 	const userBaseUrl = `${process.env.USER_SERVICE_HOST}${process.env.USER_SERVICE_BASE_URL}`
-	const profileUrl = `${userBaseUrl}${endpoints.USER_PROFILE_DETAILS}/${userId}`
-	const user = await requests.get(profileUrl, null, true)
+	const profileUrl = `${userBaseUrl}${endpoints.USER_PROFILE_DETAILS}`
+	const user = await requests.get(profileUrl, authHeader, false)
 
 	if (!user || !user.success) throw createUnauthorizedResponse('USER_NOT_FOUND')
 	if (user.data.result.deleted_at !== null) throw createUnauthorizedResponse('USER_ROLE_UPDATED')
@@ -200,7 +331,6 @@ async function authenticateUser(authHeader, req) {
 	else if (process.env.AUTH_METHOD === common.AUTH_METHOD.KEYCLOAK_PUBLIC_KEY)
 		decodedToken = await keycloakPublicKeyAuthentication(token)
 	if (!decodedToken) throw createUnauthorizedResponse()
-
 	if (decodedToken.data.roles && isAdminRole(decodedToken.data.roles)) {
 		req.decodedToken = decodedToken.data
 		return [decodedToken, true]
@@ -209,8 +339,8 @@ async function authenticateUser(authHeader, req) {
 	return [decodedToken, false]
 }
 
-async function nativeRoleValidation(decodedToken) {
-	const userProfile = await fetchUserProfile(decodedToken.data.id)
+async function nativeRoleValidation(decodedToken,authHeader) {
+	const userProfile = await fetchUserProfile(authHeader)
 	decodedToken.data.roles = userProfile.user_roles
 	decodedToken.data.organization_id = userProfile.organization_id
 }
@@ -246,13 +376,24 @@ async function keycloakPublicKeyAuthentication(token) {
 		let roles = []
 
 		if (verifiedClaims.user_roles) {
-			roles = verifiedClaims.user_roles.reduce((acc, role) => {
-				role = role.toLowerCase()
-				if (validRoles.has(role)) {
+			const rawRoles = Array.isArray(verifiedClaims.user_roles)
+				? verifiedClaims.user_roles
+				: [verifiedClaims.user_roles] // wrap single string in array
+
+			roles = rawRoles.reduce((acc, item) => {
+				const role =
+					typeof item === 'string'
+						? item.toLowerCase()
+						: item && typeof item.role === 'string'
+						? item.role.toLowerCase()
+						: null
+
+				if (role && validRoles.has(role)) {
 					if (role === common.MENTOR_ROLE) isMentor = true
 					else if (role === common.MENTEE_ROLE) isMenteeRolePresent = true
 					acc.push({ title: role })
 				}
+
 				return acc
 			}, [])
 		}

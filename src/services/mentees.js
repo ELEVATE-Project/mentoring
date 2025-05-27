@@ -98,6 +98,7 @@ module.exports = class MenteesHelper {
 			communications,
 		}
 
+
 		if (!menteeDetails.data.result.organization) {
 			const orgDetails = await organisationExtensionQueries.findOne(
 				{ organization_id: orgId },
@@ -213,7 +214,7 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Mentees homeFeed.
 	 */
 
-	static async homeFeed(userId, isAMentor, page, limit, search, queryParams, roles, orgId) {
+	static async homeFeed(userId, isAMentor, page, limit, search, queryParams, roles, orgId, start_date, end_date) {
 		try {
 			/* All Sessions */
 
@@ -238,7 +239,7 @@ module.exports = class MenteesHelper {
 			}
 
 			/* My Sessions */
-			let mySessions = await this.getMySessions(page, limit, search, userId)
+			let mySessions = await this.getMySessions(page, limit, search, userId, start_date, end_date)
 
 			const result = {
 				all_sessions: allSessions.rows,
@@ -534,9 +535,16 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - List of enrolled sessions
 	 */
 
-	static async getMySessions(page, limit, search, userId) {
+	static async getMySessions(page, limit, search, userId, startDate, endDate) {
 		try {
-			const upcomingSessions = await sessionQueries.getUpcomingSessions(page, limit, search, userId)
+			const upcomingSessions = await sessionQueries.getUpcomingSessions(
+				page,
+				limit,
+				search,
+				userId,
+				startDate,
+				endDate
+			)
 			const upcomingSessionIds = upcomingSessions.rows.map((session) => session.id)
 			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
 				userId,
@@ -1114,6 +1122,43 @@ module.exports = class MenteesHelper {
 			const query = utils.processQueryParametersWithExclusions(queryParams)
 			const userExtensionModelName = await menteeQueries.getModelName()
 
+			let connectedMenteeIds = []
+
+			if (queryParams.connected_mentees === 'true') {
+				const connectedQueryParams = { ...queryParams }
+				delete connectedQueryParams.connected_mentees
+				const connectedQuery = utils.processQueryParametersWithExclusions(connectedQueryParams)
+
+				const connectionDetails = await connectionQueries.getConnectionsDetails(
+					pageNo,
+					pageSize,
+					connectedQuery,
+					searchText,
+					queryParams.mentorId ? queryParams.mentorId : userId,
+					organization_ids,
+					[] // roles can be passed if needed
+				)
+
+				if (connectionDetails?.data?.length > 0) {
+					connectedMenteeIds = connectionDetails.data.map((item) => item.user_id)
+					if (!connectedMenteeIds.includes(userId)) {
+						connectedMenteeIds.push(userId)
+					}
+				}
+
+				// If there are no connected mentees, short-circuit and return empty
+				if (connectedMenteeIds.length === 0) {
+					return responses.successResponse({
+						statusCode: httpStatusCode.ok,
+						message: 'MENTEE_LIST',
+						result: {
+							data: [],
+							count: 0,
+						},
+					})
+				}
+			}
+
 			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities({
 				status: common.ACTIVE_STATUS,
 				model_names: { [Op.overlap]: [userExtensionModelName] },
@@ -1137,7 +1182,7 @@ module.exports = class MenteesHelper {
 
 			const saasFilter = await this.filterMenteeListBasedOnSaasPolicy(userId, isAMentor, organization_ids)
 			let extensionDetails = await menteeQueries.getAllUsers(
-				[],
+				connectedMenteeIds ? connectedMenteeIds : [],
 				pageNo,
 				pageSize,
 				filteredQuery,
@@ -1155,45 +1200,55 @@ module.exports = class MenteesHelper {
 				})
 			}
 
-			const menteeIds = extensionDetails.data.map((item) => item.user_id)
-			const userDetails = await userRequests.getUserDetailedList(menteeIds)
+			const organizationIds = [...new Set(extensionDetails.data.map((user) => user.organization_id))]
 
+			// Step 2: Query organization table (only if there are IDs to query)
+			let organizationDetails = []
+			if (organizationIds.length > 0) {
+				const orgFilter = {
+					organization_id: {
+						[Op.in]: organizationIds,
+					},
+				}
+				organizationDetails = await organisationExtensionQueries.findAll(orgFilter, {
+					attributes: ['name', 'organization_id'],
+					raw: true,
+				})
+			}
+
+			// Step 3: Create a map of organization_id to organization details
+			const orgMap = {}
+			organizationDetails.forEach((org) => {
+				orgMap[org.organization_id] = {
+					id: org.organization_id,
+					name: org.name,
+				}
+			})
+
+			//Attach organization details and decrypt email for each user
+			extensionDetails.data = await Promise.all(
+				extensionDetails.data.map(async (user) => ({
+					...user,
+					id: user.user_id, // Add 'id' key, to be removed later
+					email: user.email ? await emailEncryption.decrypt(user.email) : null, // Decrypt email
+					organization: orgMap[user.organization_id] || null,
+				}))
+			)
+
+			// Step 5: Process entity types (reuse organizationIds)
 			if (extensionDetails.data.length > 0) {
-				const uniqueOrgIds = [...new Set(extensionDetails.data.map((obj) => obj.organization_id))]
 				extensionDetails.data = await entityTypeService.processEntityTypesToAddValueLabels(
 					extensionDetails.data,
-					uniqueOrgIds,
+					organizationIds,
 					userExtensionModelName,
 					'organization_id'
 				)
 			}
-			const extensionDataMap = new Map(extensionDetails.data.map((newItem) => [newItem.user_id, newItem]))
-			userDetails.result = userDetails.result
-				.map((value) => {
-					// Map over each value in the values array of the current group
-					const user_id = value.user_id
-					// Check if extensionDataMap has an entry with the key equal to the user_id
-					if (extensionDataMap.has(user_id)) {
-						const newItem = extensionDataMap.get(user_id)
-						value = { ...value, ...newItem }
-						value.id = user_id
-						delete value.user_id
-						delete value.mentor_visibility
-						delete value.mentee_visibility
-						delete value.organization_id
-						delete value.meta
-						delete value.rating
-						delete value.permissions
-						return value
-					}
-					return null
-				})
-				.filter((value) => value !== null)
 
+			// Step 6: Handle session enrollment
 			if (queryParams.session_id) {
 				const enrolledMentees = await getEnrolledMentees(queryParams.session_id, '', userId)
-
-				userDetails.result.forEach((user) => {
+				extensionDetails.data.forEach((user) => {
 					user.is_enrolled = false
 					const enrolledUser = _.find(enrolledMentees, { id: user.id })
 					if (enrolledUser) {
@@ -1203,22 +1258,20 @@ module.exports = class MenteesHelper {
 				})
 			}
 
-			// Check if sortBy have values before applying sorting
+			// Step 7: Apply sorting if sortBy is provided
 			if (sortBy) {
-				userDetails.result = userDetails.result.sort((a, b) => {
-					// Determine the sorting order based on the 'order' value
+				extensionDetails.data = extensionDetails.data.sort((a, b) => {
 					const sortOrder = order.toLowerCase() === 'asc' ? 1 : order.toLowerCase() === 'desc' ? -1 : 1
-
-					// Customize the sorting based on the provided sortBy field
 					return sortOrder * a[sortBy].localeCompare(b[sortBy])
 				})
 			}
 
+			// Return enriched response
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
-				message: userDetails.message,
+				message: 'MENTEE_LIST',
 				result: {
-					data: userDetails.result,
+					data: extensionDetails.data,
 					count: extensionDetails.count,
 				},
 			})

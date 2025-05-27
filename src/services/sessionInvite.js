@@ -1064,6 +1064,7 @@ module.exports = class UserInviteHelper {
 							: templateData.subject,
 					body: utils.composeEmailBody(templateData.body, {
 						name: userData.name,
+						file_link: sessionUploadURL,
 					}),
 				},
 			}

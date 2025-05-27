@@ -48,6 +48,7 @@ const { validateDefaultRulesFilter } = require('@helpers/defaultRules')
 const adminService = require('@services/admin')
 const mentorQueries = require('@database/queries/mentorExtension')
 const emailEncryption = require('@utils/emailEncryption')
+const resourceQueries = require('@database/queries/resources')
 
 module.exports = class SessionsHelper {
 	/**
@@ -65,6 +66,7 @@ module.exports = class SessionsHelper {
 
 	static async create(bodyData, loggedInUserId, orgId, isAMentor, notifyUser) {
 		try {
+			let skipValidation = bodyData.type == common.SESSION_TYPE.PRIVATE ? true : false
 			// check if session mentor is added in the mentee list
 			if (bodyData?.mentees?.includes(bodyData?.mentor_id)) {
 				return responses.failureResponse({
@@ -209,8 +211,7 @@ module.exports = class SessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			const sessionModelName = await sessionQueries.getModelName()
-
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
 				organization_id: {
 					[Op.in]: [orgId, defaultOrgId],
@@ -221,7 +222,7 @@ module.exports = class SessionsHelper {
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
 			bodyData.status = common.PUBLISHED_STATUS
-			let res = utils.validateInput(bodyData, validationData, sessionModelName)
+			let res = utils.validateInput(bodyData, validationData, sessionModelName, skipValidation)
 			if (!res.success) {
 				return responses.failureResponse({
 					message: 'SESSION_CREATION_FAILED',
@@ -274,7 +275,6 @@ module.exports = class SessionsHelper {
 				bodyData.mentor_feedback_question_set = organisationPolicy.mentor_feedback_question_set
 
 			// Create session
-
 			const data = await sessionQueries.create(bodyData)
 
 			if (!data?.id) {
@@ -285,15 +285,69 @@ module.exports = class SessionsHelper {
 					result: res.errors,
 				})
 			}
+
 			// If menteeIds are provided in the req body enroll them
 			if (menteeIdsToEnroll.length > 0) {
 				await this.addMentees(data.id, menteeIdsToEnroll, bodyData.time_zone)
+			}
+
+			if (bodyData?.resources) {
+				await this.addResources(bodyData.resources, loggedInUserId, data.id)
+				if (notifyUser) {
+					const sessionAttendees = await sessionAttendeesQueries.findAll({
+						session_id: data.id,
+					})
+					let sessionAttendeesIds = []
+					sessionAttendees.forEach((attendee) => {
+						sessionAttendeesIds.push(attendee.mentee_id)
+					})
+
+					const attendeesAccounts = await userRequests.getUserDetailedList(sessionAttendeesIds)
+
+					sessionAttendees.map((attendee) => {
+						for (let index = 0; index < attendeesAccounts.result.length; index++) {
+							const element = attendeesAccounts.result[index]
+							if (element.user_id == attendee.mentee_id) {
+								attendee.attendeeEmail = element.email
+								attendee.attendeeName = element.name
+								break
+							}
+						}
+					})
+
+					let resourceTemplate = process.env.RESOURCE_ADD_EMAIL_TEMPLATE_CODE
+					// This is the template used to send email to session mentees when resource added
+					let templateData = await notificationQueries.findOneEmailTemplate(resourceTemplate, orgId)
+
+					sessionAttendees.forEach(async (attendee) => {
+						const payload = {
+							type: 'email',
+							email: {
+								to: attendee.attendeeEmail,
+								subject: templateData.subject,
+								body: utils.composeEmailBody(templateData.body, {
+									mentorName: data.mentor_name,
+									sessionTitle: data.title,
+									sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + data.id,
+									startDate: utils.getTimeZone(data.start_date, common.dateFormat, data.time_zone),
+									startTime: utils.getTimeZone(data.start_date, common.timeFormat, data.time_zone),
+								}),
+							},
+						}
+
+						let kafkaRes = await kafkaCommunication.pushEmailToKafka(payload)
+						console.log('Kafka payload:', payload)
+						console.log('Session creation email for resource and kafka res: ', kafkaRes)
+					})
+				}
 			}
 
 			await this.setMentorPassword(data.id, data.mentor_id)
 			await this.setMenteePassword(data.id, data.created_at)
 
 			const processDbResponse = utils.processDbResponse(data.toJSON(), validationData)
+
+			processDbResponse['resources'] = await this.getResources(data.id)
 
 			// Set notification schedulers for the session
 			// Deep clone to avoid unintended modifications to the original object.
@@ -406,6 +460,20 @@ module.exports = class SessionsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			}
+
+			sessionDetail.status = common.COMPLETED_STATUS
+			if (sessionDetail.status == common.COMPLETED_STATUS && bodyData?.resources) {
+				const completedDate = moment(sessionDetail.completed_at)
+				const currentDate = moment.utc()
+				let diffInMinutes = currentDate.diff(completedDate, 'minutes')
+				if (diffInMinutes > process.env.POST_RESOURCE_DELETE_TIMEOUT) {
+					return responses.failureResponse({
+						message: 'SESSION_RESOURCE_CANT_UPDATE',
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
 			}
 
 			if (bodyData.mentor_id && bodyData.type) {
@@ -557,6 +625,8 @@ module.exports = class SessionsHelper {
 				}
 			}
 
+			let preResourceSendEmail = false
+
 			let message
 			const sessionRelatedJobIds = common.notificationJobIdPrefixes.map((element) => element + sessionDetail.id)
 			if (method == common.DELETE_METHOD) {
@@ -607,6 +677,16 @@ module.exports = class SessionsHelper {
 						await this.removeMentees(sessionId, menteesToRemove, bodyData.time_zone)
 					}
 				}
+				if (bodyData?.resources) {
+					await this.addResources(bodyData.resources, userId, sessionId)
+
+					bodyData.resources.forEach((element) => {
+						if ((element.type = common.SESSION_PRE_RESOURCE_TYPE)) {
+							preResourceSendEmail = true
+						}
+					})
+				}
+
 				const { rowsAffected, updatedRows } = await sessionQueries.updateOne({ id: sessionId }, bodyData, {
 					returning: true,
 				})
@@ -632,7 +712,7 @@ module.exports = class SessionsHelper {
 				}
 				// If new start date is passed update session notification jobs
 
-				if (bodyData.start_date && bodyData.start_date !== Number(sessionDetail.start_date)) {
+				if (bodyData.start_date && Number(bodyData.start_date) !== Number(sessionDetail.start_date)) {
 					isSessionReschedule = true
 
 					const updateDelayData = sessionRelatedJobIds.map((jobId) => ({ id: jobId }))
@@ -659,7 +739,7 @@ module.exports = class SessionsHelper {
 						await schedulerRequest.updateDelayOfScheduledJob(updateDelayData[jobIndex])
 					}
 				}
-				if (bodyData.end_date && bodyData.end_date !== Number(sessionDetail.end_date)) {
+				if (bodyData.end_date && Number(bodyData.end_date) !== Number(sessionDetail.end_date)) {
 					isSessionReschedule = true
 
 					const jobId = common.jobPrefixToMarkSessionAsCompleted + sessionDetail.id
@@ -670,7 +750,7 @@ module.exports = class SessionsHelper {
 				}
 			}
 
-			if (method == common.DELETE_METHOD || isSessionReschedule || isSessionDataChanged) {
+			if (method == common.DELETE_METHOD || isSessionReschedule || isSessionDataChanged || preResourceSendEmail) {
 				const sessionAttendees = await sessionAttendeesQueries.findAll({
 					session_id: sessionId,
 				})
@@ -717,6 +797,11 @@ module.exports = class SessionsHelper {
 					templateData = await notificationQueries.findOneEmailTemplate(sessionUpdateByMangerTemplate, orgId)
 					// This is the email template code we have to use to send email to mentor of a session
 					mentorEmailTemplate = process.env.MENTOR_SESSION_EDITED_BY_MANAGER_EMAIL_TEMPLATE
+				}
+
+				if (preResourceSendEmail) {
+					let preResourceTemplate = process.env.PRE_RESOURCE_EMAIL_TEMPLATE_CODE
+					templateData = await notificationQueries.findOneEmailTemplate(preResourceTemplate, orgId)
 				}
 
 				// send mail associated with action to session mentees
@@ -856,6 +941,34 @@ module.exports = class SessionsHelper {
 							console.log('Session attendee mapped, isSessionReschedule true and kafka res: ', kafkaRes)
 						}
 					}
+					if (preResourceSendEmail) {
+						const payload = {
+							type: 'email',
+							email: {
+								to: attendee.attendeeEmail,
+								subject: templateData.subject,
+								body: utils.composeEmailBody(templateData.body, {
+									mentorName: sessionDetail.mentor_name,
+									sessionTitle: sessionDetail.title,
+									sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetail.id,
+									startDate: utils.getTimeZone(
+										sessionDetail.start_date,
+										common.dateFormat,
+										sessionDetail.time_zone
+									),
+									startTime: utils.getTimeZone(
+										sessionDetail.start_date,
+										common.timeFormat,
+										sessionDetail.time_zone
+									),
+								}),
+							},
+						}
+
+						let kafkaRes = await kafkaCommunication.pushEmailToKafka(payload)
+						console.log('Kafka payload:', payload)
+						console.log('Session attendee mapped, preResourceSendEmail true and kafka res: ', kafkaRes)
+					}
 				})
 				// send mail to mentor if session is created and handled by a manager and if there is any data change
 				// send notification only if front end request for user notification
@@ -920,6 +1033,7 @@ module.exports = class SessionsHelper {
 				session_id: sessionDetails.id,
 				mentee_id: userId,
 			})
+
 			if (!sessionAttendee) {
 				let validateDefaultRules
 				if (userId != sessionDetails.mentor_id) {
@@ -956,9 +1070,28 @@ module.exports = class SessionsHelper {
 				isInvited = sessionAttendee.type === common.INVITED
 			}
 
+			const mentorExtension = await mentorExtensionQueries.getMentorExtension(
+				sessionDetails.mentor_id,
+				[
+					'user_id',
+					'name',
+					'designation',
+					'organization_id',
+					'custom_entity_text',
+					'external_session_visibility',
+					'organization_id',
+				],
+				true
+			)
+
 			// check for accessibility
 			if (userId !== '' && isAMentor !== '') {
-				let isAccessible = await this.checkIfSessionIsAccessible(sessionDetails, userId, isAMentor)
+				let isAccessible = await this.checkIfSessionIsAccessible(
+					sessionDetails,
+					userId,
+					isAMentor,
+					mentorExtension
+				)
 
 				// Throw access error
 				if (!isAccessible) {
@@ -992,12 +1125,6 @@ module.exports = class SessionsHelper {
 				sessionDetails.image = await Promise.all(sessionDetails.image)
 			}
 
-			const mentorExtension = await mentorExtensionQueries.getMentorExtension(
-				sessionDetails.mentor_id,
-				['user_id', 'name', 'designation', 'organization_id', 'custom_entity_text'],
-				true
-			)
-
 			if (isInvited || sessionDetails.is_assigned) {
 				const managerDetails = await menteeExtensionQueries.getMenteeExtension(sessionDetails.created_by, [
 					'name',
@@ -1025,18 +1152,27 @@ module.exports = class SessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
+			// Prepare unique orgIds
+			const orgIds = [
+				...new Set(
+					[mentorExtension?.organization_id, sessionDetails.mentor_organization_id, defaultOrgId].filter(
+						Boolean
+					)
+				),
+			]
+
+			const mentorExtensionsModelName = await mentorExtensionQueries.getModelName()
+			const sessionModelName = await sessionQueries.getModelName()
+			const modelNames = [mentorExtensionsModelName, sessionModelName].filter(Boolean)
+
+			let entityTypeData = await entityTypeQueries.findUserEntityTypesAndEntities({
+				status: 'ACTIVE',
+				organization_id: { [Op.in]: orgIds },
+				model_names: { [Op.overlap]: modelNames },
+			})
+
 			if (mentorExtension?.user_id) {
-				const mentorExtensionsModelName = await mentorExtensionQueries.getModelName()
-
-				let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-					status: 'ACTIVE',
-					organization_id: {
-						[Op.in]: [mentorExtension.organization_id, defaultOrgId],
-					},
-					model_names: { [Op.contains]: [mentorExtensionsModelName] },
-				})
-				const validationData = removeDefaultOrgEntityTypes(entityTypes, mentorExtension.organization_id)
-
+				const validationData = removeDefaultOrgEntityTypes(entityTypeData, mentorExtension.organization_id)
 				const processedEntityType = utils.processDbResponse(
 					{
 						designation: mentorExtension.designation,
@@ -1047,7 +1183,9 @@ module.exports = class SessionsHelper {
 				sessionDetails.mentor_designation = processedEntityType.designation
 			}
 
-			const sessionModelName = await sessionQueries.getModelName()
+
+			sessionDetails['resources'] = await this.getResources(sessionDetails.id)
+
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
 				organization_id: {
@@ -1058,6 +1196,7 @@ module.exports = class SessionsHelper {
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, sessionDetails.mentor_organization_id)
+
 			const processDbResponse = utils.processDbResponse(sessionDetails, validationData)
 
 			return responses.successResponse({
@@ -1080,22 +1219,27 @@ module.exports = class SessionsHelper {
 	 * @param {Boolean} isAMentor 				- user mentor or not.
 	 * @returns {JSON} 							- List of filtered sessions
 	 */
-	static async checkIfSessionIsAccessible(session, userId, isAMentor) {
+	static async checkIfSessionIsAccessible(session, userId, isAMentor, policyDetails = '') {
 		try {
 			if ((isAMentor && session.mentor_id === userId) || session.created_by == userId) return true
 
 			// Check if session is private and user is not enrolled
 			if (session.type === common.SESSION_TYPE.PRIVATE && session.is_enrolled === false) return false
 
-			const userPolicyDetails = isAMentor
-				? await mentorExtensionQueries.getMentorExtension(userId, [
-						'external_session_visibility',
-						'organization_id',
-				  ])
-				: await menteeExtensionQueries.getMenteeExtension(userId, [
-						'external_session_visibility',
-						'organization_id',
-				  ])
+			let userPolicyDetails
+			if (policyDetails) {
+				userPolicyDetails = policyDetails
+			} else {
+				userPolicyDetails = isAMentor
+					? await mentorExtensionQueries.getMentorExtension(userId, [
+							'external_session_visibility',
+							'organization_id',
+					  ])
+					: await menteeExtensionQueries.getMenteeExtension(userId, [
+							'external_session_visibility',
+							'organization_id',
+					  ])
+			}
 
 			// Throw error if mentor/mentee extension not found
 			if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
@@ -1254,7 +1398,7 @@ module.exports = class SessionsHelper {
 				name = userDetails.name
 				enrollmentType = common.ENROLLED
 			} else {
-				userId = userTokenData.id
+				userId = userTokenData.user_id
 				email = userTokenData.email
 				name = userTokenData.name
 				emailTemplateCode = process.env.MENTEE_SESSION_ENROLLMENT_BY_MANAGER_EMAIL_TEMPLATE // update with new template
@@ -1801,6 +1945,51 @@ module.exports = class SessionsHelper {
 				})
 			}
 
+			let resourceInfo = await resourceQueries.find({
+				session_id: sessionId,
+				type: common.SESSION_POST_RESOURCE_TYPE,
+			})
+			if (resourceInfo && resourceInfo.length > 0) {
+				let postResourceTemplate = process.env.POST_RESOURCE_EMAIL_TEMPLATE_CODE
+				let templateData = await notificationQueries.findOneEmailTemplate(
+					postResourceTemplate,
+					sessionDetails.mentor_organization_id
+				)
+
+				let sessionAttendees = await sessionAttendeesQueries.findAll({
+					session_id: sessionId,
+				})
+
+				sessionAttendees.forEach(async (attendee) => {
+					const payload = {
+						type: 'email',
+						email: {
+							to: attendee.attendeeEmail,
+							subject: templateData.subject,
+							body: utils.composeEmailBody(templateData.body, {
+								mentorName: sessionDetail.mentor_name,
+								sessionTitle: sessionDetail.title,
+								sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetail.id,
+								startDate: utils.getTimeZone(
+									sessionDetail.start_date,
+									common.dateFormat,
+									sessionDetail.time_zone
+								),
+								startTime: utils.getTimeZone(
+									sessionDetail.start_date,
+									common.timeFormat,
+									sessionDetail.time_zone
+								),
+							}),
+						},
+					}
+
+					let kafkaRes = await kafkaCommunication.pushEmailToKafka(payload)
+					console.log('Kafka payload:', payload)
+					console.log('Session attendee mapped, postResourceSendEmail true and kafka res: ', kafkaRes)
+				})
+			}
+
 			if (sessionDetails.meeting_info.value == common.BBB_VALUE && sessionDetails.started_at != null && !isBBB) {
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
@@ -2324,7 +2513,7 @@ module.exports = class SessionsHelper {
 
 	static async addMentees(sessionId, menteeIds, timeZone) {
 		try {
-			// check if session exists or not
+			// Check if session exists
 			const sessionDetails = await sessionQueries.findOne({ id: sessionId })
 			if (!sessionDetails || Object.keys(sessionDetails).length === 0) {
 				return responses.failureResponse({
@@ -2334,47 +2523,42 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			// Get mentee name and email from user service
-			const menteeAccounts = await userRequests.getListOfUserDetails(menteeIds, true)
-			if (!menteeAccounts.result || !menteeAccounts.result.length > 0) {
+			// Fetch mentee details
+			const mentees = await menteeExtensionQueries.getUsersByUserIds(menteeIds, {
+				attributes: ['user_id', 'email', 'name', 'is_mentor'],
+			})
+			if (!mentees) {
 				return responses.failureResponse({
 					message: 'USER_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			const menteeDetails = menteeAccounts.result.map((element) => ({
-				id: element.id,
-				email: element.email,
-				name: element.name,
-				roles: element.user_roles,
-			}))
-
-			// Enroll mentees to the given session
-			const failedIds = []
+			// Enroll mentees
 			const successIds = []
+			const failedIds = []
+			const enrollPromises = mentees.map((menteeData) =>
+				this.enroll(sessionId, menteeData, timeZone, menteeData.is_mentor, false, sessionDetails)
+					.then((response) => ({
+						id: menteeData.user_id,
+						status: response.statusCode === httpStatusCode.created ? 'fulfilled' : 'rejected',
+					}))
+					.catch(() => ({ id: menteeData.id, status: 'rejected' }))
+			)
 
-			const enrollPromises = menteeDetails.map((menteeData) => {
-				let isAMentor = utils.isAMentor(menteeData.roles)
-				return this.enroll(sessionId, menteeData, timeZone, isAMentor, false, sessionDetails)
-					.then((response) => {
-						if (response.statusCode == httpStatusCode.created) {
-							// Enrolled successfully
-							successIds.push(menteeData.id)
-						} else {
-							// Enrollment failed
-							failedIds.push(menteeData.id)
-						}
-					})
-					.catch((error) => {
-						// mentee enroll error
-						failedIds.push(menteeData.id)
-					})
+			// Wait for all enrollments to settle
+			const results = await Promise.allSettled(enrollPromises)
+			console.log(results)
+			results.forEach((result, index) => {
+				if (result.status === 'fulfilled' && result.value.status === 'fulfilled') {
+					console.log(result)
+					successIds.push(mentees[index].id)
+				} else {
+					failedIds.push(mentees[index].id)
+				}
 			})
 
-			// Wait for all promises to settle
-			await Promise.all(enrollPromises)
-
+			// Handle results
 			if (failedIds.length > 0) {
 				return responses.failureResponse({
 					message: 'FAILED_TO_ADD_MENTEES',
@@ -2388,7 +2572,7 @@ module.exports = class SessionsHelper {
 				message: 'MENTEES_ARE_ADDED_SUCCESSFULLY',
 			})
 		} catch (error) {
-			console.log(error)
+			console.error(`Error in addMentees for session ${sessionId}:`, error)
 			throw error
 		}
 	}
@@ -2910,6 +3094,38 @@ module.exports = class SessionsHelper {
 				return mentor.user_id
 			})
 		)
+	}
+
+	static async addResources(data, userId, sessionId) {
+		let resoucesList = []
+		data.map((resource) => {
+			resource['created_by'] = userId
+			resource['updated_by'] = userId
+			resource['session_id'] = sessionId
+		})
+		let resourceInfo = await resourceQueries.bulkCreate(data)
+		return resourceInfo
+	}
+	static async getResources(sessionId) {
+		let resourceInfo = await resourceQueries.find({ session_id: sessionId })
+
+		if (resourceInfo && resourceInfo.length > 0) {
+			await Promise.all(
+				resourceInfo.map(async function (resource) {
+					if (resource && resource.link) {
+						if (/^http/i.test(resource.link)) {
+							return resource
+						} else {
+							resource.link = await utils.getDownloadableUrl(resource.link)
+							return resource
+						}
+					}
+				})
+			)
+			return resourceInfo
+		} else {
+			return []
+		}
 	}
 }
 

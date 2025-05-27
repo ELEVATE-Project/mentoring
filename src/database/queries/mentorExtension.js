@@ -202,7 +202,7 @@ module.exports = class MentorExtensionQueries {
 	) {
 		try {
 			const excludeUserIds = ids.length === 0
-			let userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.join(',')})`
+			let userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.map((id) => `'${id}'`).join(',')})`
 			let additionalFilter = ''
 			if (searchText) {
 				additionalFilter = `AND name ILIKE :search`
@@ -224,7 +224,7 @@ module.exports = class MentorExtensionQueries {
 			}
 
 			let projectionClause =
-				'user_id,rating,meta,mentor_visibility,mentee_visibility,organization_id,designation,area_of_expertise,education_qualification,custom_entity_text,name'
+				'name,email,designation,organization_id,area_of_expertise,education_qualification,custom_entity_text,user_id,rating,mentor_visibility,mentee_visibility,meta'
 
 			if (returnOnlyUserId) {
 				projectionClause = 'user_id'

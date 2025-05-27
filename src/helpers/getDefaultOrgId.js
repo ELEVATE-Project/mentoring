@@ -1,18 +1,26 @@
 'use strict'
+
 const userRequests = require('@requests/user')
 
+/**
+ * Retrieves the default organization ID.
+ * First checks environment variable, else fetches from org service.
+ * @returns {Promise<string|null>} Default organization ID or null if not found.
+ */
 exports.getDefaultOrgId = async () => {
 	try {
-		let defaultOrgId = process.env.DEFAULT_ORG_ID
-		if (defaultOrgId) return defaultOrgId.toString()
+		const { DEFAULT_ORG_ID, DEFAULT_ORGANISATION_CODE } = process.env
+		if (DEFAULT_ORG_ID) {
+			return DEFAULT_ORG_ID
+		}
 
-		let defaultOrgDetails = await userRequests.fetchOrgDetails({
-			organizationCode: process.env.DEFAULT_ORGANISATION_CODE,
+		const { success, data } = await userRequests.fetchOrgDetails({
+			organizationCode: DEFAULT_ORGANISATION_CODE,
 		})
-		if (defaultOrgDetails.success && defaultOrgDetails.data && defaultOrgDetails.data.result)
-			return defaultOrgDetails.data.result.id
-		else return null
+
+		return success && data?.result?.id ? data.result.id.toString() : null
 	} catch (err) {
-		console.log(err)
+		console.error('Error in getDefaultOrgId:', err)
+		return null
 	}
 }

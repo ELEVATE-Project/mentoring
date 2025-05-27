@@ -549,21 +549,36 @@ exports.getMentorsUpcomingSessions = async (page, limit, search, mentorId) => {
 		return error
 	}
 }
-exports.getUpcomingSessions = async (page, limit, search, userId) => {
+
+exports.getUpcomingSessions = async (page, limit, search, userId, startDate, endDate) => {
 	try {
 		const currentEpochTime = moment().unix()
-		const sessionData = await Session.findAndCountAll({
-			where: {
-				[Op.or]: [{ title: { [Op.iLike]: `%${search}%` } }], // Case-insensitive search
-				mentor_id: { [Op.ne]: userId },
-				end_date: {
-					[Op.gt]: currentEpochTime,
-				},
-				status: {
-					[Op.in]: [common.PUBLISHED_STATUS, common.LIVE_STATUS],
-				},
+		let whereCondition = {
+			[Op.or]: [{ title: { [Op.iLike]: `%${search}%` } }],
+			mentor_id: { [Op.ne]: userId },
+			end_date: {
+				[Op.gt]: currentEpochTime,
 			},
-			// order: [['created_at', 'DESC']],
+			status: {
+				[Op.in]: [common.PUBLISHED_STATUS, common.LIVE_STATUS],
+			},
+		}
+
+		if (startDate && endDate) {
+			const startEpoch = startDate
+			const endEpoch = endDate
+
+			// Log to debug
+			console.log('Filtering sessions between:', startEpoch, 'and', endEpoch)
+
+			whereCondition.start_date = {
+				[Op.gte]: startEpoch,
+				[Op.lte]: endEpoch,
+			}
+		}
+
+		const sessionData = await Session.findAndCountAll({
+			where: whereCondition,
 			order: [['start_date', 'ASC']],
 			attributes: [
 				'id',

@@ -29,11 +29,7 @@ module.exports = {
 				.matches(/^[a-zA-Z0-9\-.,\s]+$/)
 				.withMessage('invalid description')
 
-			req.checkBody('medium')
-				.notEmpty()
-				.withMessage('medium field is empty')
-				.isArray({ min: 1 })
-				.withMessage('medium must be an array')
+			req.checkBody('medium').optional().isArray({ min: 1 }).withMessage('medium must be an array')
 
 			req.checkBody('image').optional().isArray().withMessage('image must be an array')
 

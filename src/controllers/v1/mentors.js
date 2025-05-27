@@ -56,7 +56,8 @@ module.exports = class Mentors {
 				req.decodedToken.organization_id,
 				req.decodedToken.id,
 				isAMentor(req.decodedToken.roles),
-				req.decodedToken.roles
+				req.decodedToken.roles,
+				req.decodedToken.tenant_code
 			)
 		} catch (error) {
 			return error
