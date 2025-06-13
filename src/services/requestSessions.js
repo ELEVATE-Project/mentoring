@@ -177,7 +177,7 @@ module.exports = class requestSessionsHelper {
 	 * @param {number} pageSize - The number of records per page.
 	 * @returns {Promise<Object>} The list of pending session requests.
 	 */
-	static async list(userId, pageNo, pageSize, status) {
+	static async list(userId, pageNo, pageSize, status, deleteUser = false) {
 		try {
 			const allRequestSession = await sessionRequestQueries.getAllRequests(userId, status)
 
@@ -206,7 +206,7 @@ module.exports = class requestSessionsHelper {
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'SESSION_REQUESTS_LIST',
-					result: { data: [], count: 0, pageNo, pageSize },
+					result: { data: [], count: 0, sent: [], received: [] },
 				})
 			}
 
@@ -239,23 +239,43 @@ module.exports = class requestSessionsHelper {
 			const userDetails = await userExtensionQueries.getUsersByUserIds(userIds, {}, true)
 			const userDetailsFullMap = new Map(userDetails.map((u) => [String(u.user_id), u]))
 
+			const sentSessions = []
+			const receivedSessions = []
 			const requestSessionWithDetails = paginatedData
 				.map((session) => {
-					const oppositeUserId = session.requestor_id === userId ? session.requestee_id : session.requestor_id
+					const isSent = session.requestor_id === userId
+					const oppositeUserId = isSent ? session.requestee_id : session.requestor_id
 					const baseDetails = userDetailsMap[oppositeUserId] || null
 
 					if (baseDetails && userDetailsFullMap.has(String(oppositeUserId))) {
 						baseDetails.image = userDetailsFullMap.get(String(oppositeUserId)).image
-						return {
+						const sessionData = {
 							...session,
 							id: session.id?.toString(),
 							user_details: baseDetails,
 						}
+
+						if (isSent) sentSessions.push(sessionData)
+						else receivedSessions.push(sessionData)
+
+						return sessionData
 					}
 					return null
 				})
 				.filter(Boolean)
 
+			if (deleteUser === true) {
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'SESSION_REQUESTS_LIST',
+					result: {
+						data: requestSessionWithDetails,
+						count: totalCount,
+						sent: sentSessions,
+						received: receivedSessions,
+					},
+				})
+			}
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'SESSION_REQUESTS_LIST',

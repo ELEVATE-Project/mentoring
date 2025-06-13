@@ -13,6 +13,7 @@ module.exports = {
 	SEARCH_USERS: 'v1/account/search',
 	USERS_ROLE_LIST: 'v1/user-role/default',
 	VALIDATE_EMAIL: 'v1/account/validatingEmailIds',
+	USER_DELETE: 'v1/admin/deleteUser',
 	// Endpoints of the scheduler service
 	CREATE_SCHEDULER_JOB: 'jobs/create', // Create scheduler job endpoint
 	UPDATE_DELAY: 'jobs/updateDelay', // Update delay of scheduled job endpoint
@@ -28,4 +29,5 @@ module.exports = {
 	COMMUNICATION_UPDATE_USER: 'v1/communication/updateUser',
 	COMMUNICATION_GET_USER_ID: 'v1/communication/userMapping',
 	DOWNLOAD_IMAGE_URL: 'v1/cloud-services/file/getDownloadableUrl',
+	COMMUNICATION_USERS_SET_ACTIVE_STATUS: 'v1/communication/setActiveStatus',
 }

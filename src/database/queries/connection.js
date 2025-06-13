@@ -300,7 +300,9 @@ exports.getConnectionsDetails = async (
 		mv.image,
 		mv.custom_entity_text::JSONB AS custom_entity_text,
 		mv.meta::JSONB AS user_meta,
-		c.meta::JSONB AS connection_meta
+		c.meta::JSONB AS connection_meta,
+		mv.deleted_at AS user_deleted_at,
+		c.deleted_at AS connections_deleted_at
 		`
 
 		let query = `

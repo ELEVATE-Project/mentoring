@@ -222,5 +222,7 @@
 	"SESSION_RESOURCE_CANT_UPDATE": "Session Resources can't be updated",
 	"ORG_THEME_UPDATED_SUCCESSFULLY": "Organization theme updated successfully.",
 	"MENTOR_AVAILABILITY": "mentor availibilty featched successfully",
-	"SESSION_REQUEST_EXPIRED": "Session request expired successfully."
+	"SESSION_REQUEST_EXPIRED": "Session request expired successfully.",
+	"USER_UNDER_DELETION": "User deletion is intiated.",
+	"USER_ALREADY_UNDER_DELETION": "User deletion is already intiated."
 }

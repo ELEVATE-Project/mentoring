@@ -73,4 +73,15 @@ module.exports = class admin {
 			console.log(err)
 		}
 	}
+
+	//Session Manager Deletion Flow Codes
+
+	// async assignNewSessionManager(req) {
+	// 	try {
+	// 		const assignNewSessionManager = await adminService.assignNewSessionManager(req.decodedToken, req.query.oldSessionManagerId, req.query.newSessionManagerId, req.query.orgAdminUserId)
+	// 		return assignNewSessionManager
+	// 	} catch (error) {
+	// 		return error
+	// 	}
+	// }
 }

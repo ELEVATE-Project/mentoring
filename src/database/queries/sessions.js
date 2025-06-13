@@ -7,6 +7,7 @@ const moment = require('moment')
 const SessionOwnership = require('../models/index').SessionOwnership
 const Sequelize = require('@database/models/index').sequelize
 const sessionOwnership = require('@database/queries/sessionOwnership')
+const Sessions = require('@controllers/v1/manage-sessions')
 
 exports.getColumns = async () => {
 	try {
@@ -919,3 +920,278 @@ exports.deactivateAndReturnMentorSessions = async (userId) => {
 		return error
 	}
 }
+
+// Session Manager Deletion Flow Codes
+
+// exports.replaceSessionManagerAndReturn = async (userId, newUserId, orgAdminUserId) => {
+// 	try {
+// 		const currentEpochTime = moment().unix()
+// 		const currentDateTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
+
+// 		// Get session_ids where user is CREATOR
+// 		const creatorSessions = await sessionOwnership.findAll(
+// 			{ user_id: userId, type: common.SESSION_OWNERSHIP_TYPE.CREATOR },
+// 			{ attributes: ['session_id'] },
+// 			true
+// 		)
+// 		const creatorSessionIds = creatorSessions.map((s) => s.session_id)
+
+// 		// Get session_ids where user is MENTOR
+// 		const mentorSessions = await sessionOwnership.findAll(
+// 			{ user_id: userId, type: common.SESSION_OWNERSHIP_TYPE.MENTOR },
+// 			{ attributes: ['session_id'] },
+// 			true
+// 		)
+// 		const mentorSessionIds = mentorSessions.map((s) => s.session_id)
+
+// 		// Sessions where user is both MENTOR and CREATOR
+// 		const bothRolesSessionIds = creatorSessionIds.filter((id) => mentorSessionIds.includes(id))
+
+// 		// Sessions where user is only CREATOR
+// 		const onlyCreatorSessionIds = creatorSessionIds.filter((id) => !bothRolesSessionIds.includes(id))
+
+// 		// ----- Handle bothRolesSessionIds -----
+// 		let removedSessions = []
+
+// 		if (bothRolesSessionIds.length > 0) {
+// 			const foundSessions = await Session.findAll({
+// 				where: {
+// 					id: { [Op.in]: bothRolesSessionIds },
+// 					[Op.or]: [
+// 						{ start_date: { [Op.gt]: currentEpochTime } },
+// 						{ status: common.PUBLISHED_STATUS },
+// 					],
+// 				},
+// 				raw: true,
+// 			})
+
+// 			const sessionIdAndTitle = foundSessions.map((session) => ({
+// 				id: session.id,
+// 				title: session.title,
+// 			}))
+// 			const upcomingSessionIds = foundSessions.map((session) => session.id)
+
+// 			if (upcomingSessionIds.length > 0) {
+// 				await Session.update(
+// 					{ deleted_at: currentDateTime },
+// 					{ where: { id: { [Op.in]: upcomingSessionIds } } }
+// 				)
+// 				await SessionOwnership.update(
+// 					{ deleted_at: currentDateTime },
+// 					{ where: { session_id: { [Op.in]: upcomingSessionIds } } }
+// 				)
+// 			}
+
+// 			removedSessions = sessionIdAndTitle
+// 		}
+
+// 		// ----- Handle onlyCreatorSessionIds -----
+// 		if (onlyCreatorSessionIds.length > 0) {
+// 			const onlyCreatorSessions = await Session.findAll({
+// 				where: {
+// 					id: { [Op.in]: onlyCreatorSessionIds },
+// 				},
+// 				attributes: ['id', 'status'],
+// 				raw: true,
+// 			})
+
+// 			const publishedOrLiveSessionIds = onlyCreatorSessions
+// 				.filter((s) => [common.PUBLISHED_STATUS, common.LIVE_STATUS].includes(s.status))
+// 				.map((s) => s.id)
+
+// 			const completedSessionIds = onlyCreatorSessions
+// 				.filter((s) => s.status === common.COMPLETED_STATUS)
+// 				.map((s) => s.id)
+
+// 			// Update user_id to newUserId for PUBLISHED or LIVE sessions
+// 			if (publishedOrLiveSessionIds.length > 0) {
+// 				await SessionOwnership.update(
+// 					{ user_id: newUserId },
+// 					{
+// 						where: {
+// 							user_id: userId,
+// 							session_id: { [Op.in]: publishedOrLiveSessionIds },
+// 							type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
+// 						},
+// 					}
+// 				)
+
+// 				await Session.update(
+// 					{ created_by: newUserId ,
+// 					  updated_by: newUserId },
+// 					{
+// 						where: {
+// 							id: { [Op.in]: publishedOrLiveSessionIds }
+// 						},
+// 					}
+// 				)
+// 			}
+
+// 			// Update user_id to orgAdminUserId for COMPLETED sessions
+// 			if (completedSessionIds.length > 0) {
+// 				await SessionOwnership.update(
+// 					{ user_id: orgAdminUserId },
+// 					{
+// 						where: {
+// 							user_id: userId,
+// 							session_id: { [Op.in]: completedSessionIds },
+// 							type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
+// 						},
+// 					}
+// 				)
+// 				await Session.update(
+// 					{
+// 					  created_by: orgAdminUserId ,
+// 					  updated_by: orgAdminUserId
+// 					},
+// 					{
+// 						where: {
+// 							id: { [Op.in]: completedSessionIds }						},
+// 					}
+// 				)
+// 			}
+// 		}
+
+// 		return {
+// 			removedSessions,
+// 			bothRolesSessionIds,
+// 			onlyCreatorSessionIds,
+// 		}
+// 	} catch (error) {
+// 		console.error('Error in removeAndReturnMentorSessions:', error)
+// 		return error
+// 	}
+// }
+
+// exports.replaceSessionManagerAndReturn = async (oldSMUserId, newSMUserId, orgUserId) => {
+// 	try {
+// 		const currentEpochTime = moment().unix()
+// 		const currentDateTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
+
+// 		const getSessionIds = async (type) => {
+// 			const filter = {
+// 			  user_id: oldSMUserId, // Ensure it's a string
+// 			  type: type,
+// 			}
+
+// 			const options = {
+// 			  attributes: ['session_id'],
+// 			}
+
+// 			const sessionIds = await sessionOwnership.findAll(filter, options, true) // third param = true to get only session_ids
+// 			return sessionIds
+// 		  }
+
+// 		const updateSessionOwnerships = async (ids, uid) => {
+// 			try {
+// 				return await SessionOwnership.update(
+// 					{ user_id: uid },
+// 					{
+// 						where: {
+// 							user_id: oldSMUserId,
+// 							session_id: { [Op.in]: ids },
+// 							type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
+// 						},
+// 					}
+// 				);
+// 			} catch (error) {
+// 				console.error('Error updating session ownerships:', error);
+// 				throw error;
+// 			}
+// 		};
+
+// 		const updateSessions = (ids, uid) => {
+// 			return Session.update(
+// 				{ created_by: uid, updated_by: uid },
+// 				{ where: { id: { [Op.in]: ids } } }
+// 			)
+// 		}
+
+// 		const softDeleteSessions = (ids) => {
+// 			return Promise.all([
+// 				Session.update(
+// 					{ deleted_at: currentDateTime },
+// 					{ where: { id: { [Op.in]: ids } } }
+// 				),
+// 				SessionOwnership.update(
+// 					{ deleted_at: currentDateTime },
+// 					{ where: { session_id: { [Op.in]: ids } } }
+// 				)
+// 			])
+// 		}
+
+// 		// Fetch creator and mentor session IDs
+// 		const [creatorSessionIds, mentorSessionIds] = await Promise.all([
+// 			getSessionIds(common.SESSION_OWNERSHIP_TYPE.CREATOR),
+// 			getSessionIds(common.SESSION_OWNERSHIP_TYPE.MENTOR),
+// 		])
+
+// 		// Identify bothRoles and onlyCreator session IDs
+// 		const bothRolesSessionIds = creatorSessionIds.filter(id => mentorSessionIds.includes(id))
+// 		const onlyCreatorSessionIds = creatorSessionIds.filter(id => !mentorSessionIds.includes(id))
+
+// 		let removedSessions = []
+
+// 		// Handle sessions where user is both MENTOR and CREATOR
+// 		if (bothRolesSessionIds.length > 0) {
+// 			const foundSessions = await Session.findAll({
+// 				where: {
+// 					id: { [Op.in]: bothRolesSessionIds },
+// 					[Op.or]: [
+// 						{ start_date: { [Op.gt]: currentEpochTime } },
+// 						{ status: common.PUBLISHED_STATUS },
+// 					],
+// 				},
+// 				raw: true,
+// 			})
+
+// 			const upcomingSessionIds = foundSessions.map(s => s.id)
+// 			removedSessions = foundSessions.map(({ id, title }) => ({ id, title }))
+
+// 			if (upcomingSessionIds.length > 0) {
+// 				await softDeleteSessions(upcomingSessionIds);
+// 			}
+// 		}
+
+// 		// Handle sessions where user is only CREATOR
+// 		if (onlyCreatorSessionIds.length > 0) {
+// 			const onlyCreatorSessions = await Session.findAll({
+// 				where: { id: { [Op.in]: onlyCreatorSessionIds } },
+// 				attributes: ['id', 'status'],
+// 				raw: true,
+// 			})
+
+// 			const publishedOrLiveSessionIds = []
+// 			const completedSessionIds = []
+
+// 			for (const s of onlyCreatorSessions) {
+// 				if ([common.PUBLISHED_STATUS, common.LIVE_STATUS].includes(s.status)) {
+// 					publishedOrLiveSessionIds.push(s.id)
+// 				} else if (s.status === common.COMPLETED_STATUS) {
+// 					completedSessionIds.push(s.id)
+// 				}
+// 			}
+// 			if (publishedOrLiveSessionIds.length > 0) {
+// 				const result1 = await updateSessionOwnerships(publishedOrLiveSessionIds, newSMUserId);
+
+// 				const result2 = await updateSessions(publishedOrLiveSessionIds, newSMUserId);
+// 			}
+
+// 			if (completedSessionIds.length > 0) {
+// 				const result3 = await updateSessionOwnerships(completedSessionIds, orgUserId);
+
+// 				const result4 = await updateSessions(completedSessionIds, orgUserId);
+// 			}
+
+// 		}
+
+// 		return {
+// 			removedSessions,
+// 			bothRolesSessionIds,
+// 			onlyCreatorSessionIds,
+// 		};
+// 	} catch (error) {
+// 		console.error('Error in replaceSessionManagerAndReturn:', error)
+// 		return error
+// 	}
+// }

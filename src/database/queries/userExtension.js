@@ -212,6 +212,7 @@ module.exports = class MenteeExtensionQueries {
 					external_mentee_visibility: null,
 					mentee_visibility: null,
 					deleted_at: Date.now(),
+					name: common.USER_NOT_FOUND,
 				},
 				{
 					where: {

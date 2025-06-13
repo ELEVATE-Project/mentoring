@@ -93,6 +93,10 @@ module.exports = (sequelize, DataTypes) => {
 			gender: {
 				type: DataTypes.STRING,
 			},
+			status: {
+				type: DataTypes.STRING,
+				defaultValue: 'ACTIVE',
+			},
 		},
 		{
 			sequelize,

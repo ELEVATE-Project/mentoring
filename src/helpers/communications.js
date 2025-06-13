@@ -224,3 +224,31 @@ exports.resolve = async (userId) => {
 		throw error
 	}
 }
+
+/**
+ * Sets the active status of a Rocket.Chat user.
+ *
+ * Sends a request to the Rocket.Chat API to activate or deactivate a user.
+ * If the operation is successful, the response will contain `{ result: { success: true } }`.
+ *
+ * @async
+ * @function setActiveStatus
+ * @param {string} userId - The Rocket.Chat user ID whose active status should be changed.
+ * @param {boolean} activeStatus - `true` to activate the user, `false` to deactivate.
+ * @param {boolean} confirmRelinquish - If true, confirms any relinquish prompt during deactivation.
+ * @returns {Promise<boolean>} Returns `true` if status was successfully updated, otherwise `false`.
+ * @throws {Error} If the API call fails or returns an unexpected result.
+ *
+ * @example
+ * const wasUpdated = await setActiveStatus('abc123', false, true);
+ * // wasUpdated => true if successful
+ */
+exports.setActiveStatus = async (userId, activeStatus, confirmRelinquish) => {
+	try {
+		const setUserActiveStatus = await communicationRequests.setActiveStatus(userId, activeStatus, confirmRelinquish)
+		return setUserActiveStatus
+	} catch (error) {
+		console.error(`Error updating user ${userId}:`, error.message)
+		throw error
+	}
+}

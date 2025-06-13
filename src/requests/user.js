@@ -815,6 +815,35 @@ const getProfileDetails = async ({ tenantCode, userId }) => {
 	}
 }
 
+/**
+ * Delete User Details from user service
+ * @method
+ * @name deleteUser
+ * @param {String} userId - User id.
+ * @returns {boolean}
+ */
+
+const deleteUser = function (userId, token) {
+	return new Promise(async (resolve, reject) => {
+		const apiUrl = userBaseUrl + endpoints.USER_DELETE + '/' + userId
+		try {
+			let userDelete = await requests.del(apiUrl, token)
+			if (userDelete.data.responseCode === 'CLIENT_ERROR') {
+				return resolve(
+					responses.failureResponse({
+						message: userDelete.data.message,
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				)
+			}
+			return true
+		} catch (error) {
+			reject(error)
+		}
+	})
+}
+
 module.exports = {
 	fetchOrgDetails, // dependent on releated orgs  And query on code
 	fetchUserDetails, // dependendt on languages and prefered lang etc
@@ -832,4 +861,5 @@ module.exports = {
 	organizationList,
 	getOrgDetails,
 	getProfileDetails,
+	deleteUser,
 }

@@ -81,7 +81,44 @@ var post = function (url, body, token = '', internal_access_token = false) {
 	})
 }
 
+var del = function (url, token = '', internal_access_token = false) {
+	return new Promise((resolve, reject) => {
+		try {
+			let headers = {
+				'content-type': 'application/json',
+			}
+			if (internal_access_token) headers['internal_access_token'] = process.env.INTERNAL_ACCESS_TOKEN
+			if (token) headers[process.env.AUTH_TOKEN_HEADER_NAME] = token
+
+			const options = {
+				headers: headers,
+			}
+
+			request.delete(url, options, (err, data) => {
+				if (err) return resolve({ success: false })
+
+				let result = {
+					success: true,
+				}
+				let response = data.body
+				if (data.headers['content-type'].includes('application/json')) {
+					response = JSON.parse(response)
+				} else if (/text\/xml|application\/xml/.test(data.headers['content-type'])) {
+					response = parser.toJson(response, { object: true })
+				}
+
+				result.data = response
+				return resolve(result)
+			})
+		} catch (error) {
+			console.log(error)
+			return resolve({ success: false })
+		}
+	})
+}
+
 module.exports = {
 	get: get,
 	post: post,
+	del: del,
 }
