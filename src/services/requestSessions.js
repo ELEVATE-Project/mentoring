@@ -9,7 +9,7 @@ const httpStatusCode = require('@generics/http-status')
 const notificationQueries = require('@database/queries/notificationTemplate')
 const entityTypeService = require('@services/entity-type')
 const userRequests = require('@requests/user')
-const sessionService = require('@services/sessions')
+const SessionCreationHelper = require('@helpers/sessionCreationHelper')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const utils = require('@generics/utils')
 const kafkaCommunication = require('@generics/kafka-communication')
@@ -17,11 +17,10 @@ const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
 const entityTypeQueries = require('@database/queries/entityType')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
-const menteeServices = require('@services/mentees')
-const mentorService = require('@services/mentors')
 const mentorQueries = require('@database/queries/mentorExtension')
 const schedulerRequest = require('@requests/scheduler')
 const communicationHelper = require('@helpers/communications')
+const sessionFetcher = require('@helpers/sessionFetcher')
 
 module.exports = class requestSessionsHelper {
 	static async checkConnectionRequestExists(userId, targetUserId) {
@@ -334,7 +333,14 @@ module.exports = class requestSessionsHelper {
 			})
 
 			// Create session
-			const sessionCreation = await sessionService.create(bodyData, mentorUserId, orgId, isMentor, true, true)
+			const sessionCreation = await SessionCreationHelper.createSessionFromRequest(
+				bodyData,
+				mentorUserId,
+				orgId,
+				isMentor,
+				true,
+				true
+			)
 
 			// If session creation fails
 			if (sessionCreation.statusCode !== httpStatusCode.created) {
@@ -532,6 +538,13 @@ module.exports = class requestSessionsHelper {
 		try {
 			const requestSessions = await sessionRequestQueries.getRequestSessions(requestSessionId, userId)
 
+			if (!requestSessions) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'REQUEST_SESSION_NOT_FOUND',
+				})
+			}
+
 			const defaultOrgId = await getDefaultOrgId()
 			if (!defaultOrgId) {
 				return responses.failureResponse({
@@ -569,8 +582,13 @@ module.exports = class requestSessionsHelper {
 				})
 			}
 			if (userDetails.image) {
-				const imageData = await userRequests.getDownloadableUrl(userDetails.image)
-				userDetails.image = imageData?.result
+				try {
+					const imageData = await userRequests.getDownloadableUrl(userDetails.image)
+					userDetails.image = imageData?.result
+				} catch (imageError) {
+					console.error('Failed to process user image:', imageError)
+					userDetails.image = null // Set to null if image processing fails
+				}
 			}
 
 			// Fetch entity types associated with the user
@@ -608,20 +626,101 @@ module.exports = class requestSessionsHelper {
 
 	static async userAvailability(userId, page, limit, search, status, roles, startDate, endDate) {
 		try {
-			// Fetch both mentor and mentee sessions in parallel
-			const [enrolledSessions, mentoringSessions] = await Promise.all([
-				menteeServices.getMySessions(page, limit, search, userId, startDate, endDate),
-				mentorService.createdSessions(userId, page, limit, search, status, roles, startDate, endDate),
-			])
+			const { Op } = require('sequelize')
+			const sessions = require('@database/models/index').Session
+			const sessionAttendees = require('@database/models/index').SessionAttendee
 
-			// Merge the two session arrays into one
-			const allSessions = [...(mentoringSessions?.result?.data || []), ...(enrolledSessions?.rows || [])]
+			// Set pagination defaults
+			const currentPage = page ? parseInt(page) : 1
+			const pageSize = limit ? parseInt(limit) : 10
+			const offset = (currentPage - 1) * pageSize
+
+			// Add search condition
+			let searchCondition = {}
+			if (search && search.trim()) {
+				searchCondition = {
+					[Op.or]: [{ title: { [Op.iLike]: `%${search}%` } }, { description: { [Op.iLike]: `%${search}%` } }],
+				}
+			}
+
+			// Add status condition for sessions
+			let statusCondition = {}
+			if (status && status.length > 0) {
+				const statusArray = Array.isArray(status) ? status : status.split(',').map((s) => s.trim())
+				statusCondition = { status: { [Op.in]: statusArray } }
+			}
+
+			// Build base where condition for date range
+			const dateRangeCondition = {
+				[Op.and]: [
+					{ start_date: { [Op.lte]: endDate } }, // Session starts before or at the end of our range
+					{ end_date: { [Op.gte]: startDate } }, // Session ends after or at the start of our range
+				],
+				deleted_at: null,
+				...searchCondition,
+				...statusCondition,
+			}
+
+			// Get sessions where user is mentor (created/mentoring sessions)
+			const mentorSessions = await sessions.findAndCountAll({
+				where: {
+					mentor_id: userId,
+					...dateRangeCondition,
+				},
+				order: [['start_date', 'ASC']],
+				limit: pageSize,
+				offset: offset,
+				raw: true,
+			})
+
+			// Find sessions where user is enrolled as attendee
+			const enrolledSessionIds = await sessionAttendees.findAll({
+				where: {
+					mentee_id: userId,
+					deleted_at: null,
+				},
+				attributes: ['session_id'],
+				raw: true,
+			})
+
+			const enrolledIds = enrolledSessionIds.map((item) => item.session_id)
+
+			let enrolledSessions = { rows: [], count: 0 }
+			if (enrolledIds.length > 0) {
+				enrolledSessions = await sessions.findAndCountAll({
+					where: {
+						id: { [Op.in]: enrolledIds },
+						...dateRangeCondition,
+					},
+					order: [['start_date', 'ASC']],
+					limit: pageSize,
+					offset: offset,
+					raw: true,
+				})
+			}
+
+			// Combine both session types
+			const mentorSessionsList = mentorSessions.rows || []
+			const enrolledSessionsList = enrolledSessions.rows || []
+
+			// Merge sessions and remove duplicates based on session ID
+			const allUserSessions = [...mentorSessionsList, ...enrolledSessionsList]
+			const uniqueSessions = allUserSessions.filter(
+				(session, index, self) => index === self.findIndex((s) => s.id === session.id)
+			)
+
+			// Sort by start_date
+			uniqueSessions.sort((a, b) => parseInt(a.start_date) - parseInt(b.start_date))
+
+			// Apply pagination to combined results
+			const totalCount = mentorSessions.count + enrolledSessions.count
+			const paginatedSessions = uniqueSessions.slice(0, pageSize)
 
 			// Generate combined availability
-			const availability = await createMentorAvailabilityResponse(allSessions)
+			const availability = createMentorAvailabilityResponse(paginatedSessions)
 
 			return responses.successResponse({
-				statusCode: httpStatusCode.created,
+				statusCode: httpStatusCode.ok,
 				message: 'MENTOR_AVAILABILITY',
 				result: availability.result,
 			})
@@ -667,6 +766,15 @@ module.exports = class requestSessionsHelper {
 
 function createMentorAvailabilityResponse(data) {
 	const availability = {}
+
+	// Ensure data is an array
+	if (!Array.isArray(data)) {
+		console.error('createMentorAvailabilityResponse: Expected array but received:', typeof data)
+		return {
+			Message: 'mentor availibilty featched successfully',
+			result: [],
+		}
+	}
 
 	data.forEach((session) => {
 		const startDate = moment.unix(Number(session.start_date))

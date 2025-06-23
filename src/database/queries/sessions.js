@@ -453,38 +453,6 @@ exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate)
 	}
 }
 
-/* exports.getMentorsUpcomingSessions = async (mentorId) => {
-	try {
-		const foundSessionOwnerships = await SessionOwnership.findAll({
-			attributes: ['session_id'],
-			where: {
-				mentor_id: mentorId,
-			},
-			raw: true,
-		})
-
-		const sessionIds = foundSessionOwnerships.map((ownership) => ownership.session_id)
-		const currentEpochTime = moment().unix()
-		console.log(sessionIds)
-		console.log(currentEpochTime)
-		return await Session.findAll({
-			where: {
-				id: { [Op.in]: sessionIds },
-				status: 'PUBLISHED',
-				start_date: {
-					[Op.gt]: currentEpochTime,
-				},
-				started_at: {
-					[Op.eq]: null,
-				},
-			},
-			raw: true,
-		})
-	} catch (error) {
-		throw error
-	}
-} */
-
 exports.getMentorsUpcomingSessions = async (page, limit, search, mentorId) => {
 	try {
 		const filter = {
@@ -554,7 +522,7 @@ exports.getUpcomingSessions = async (page, limit, search, userId, startDate, end
 	try {
 		const currentEpochTime = moment().unix()
 		let whereCondition = {
-			[Op.or]: [{ title: { [Op.iLike]: `%${search}%` } }],
+			[Op.or]: [{ title: { [Op.iLike]: `%${search || ''}%` } }],
 			mentor_id: { [Op.ne]: userId },
 			end_date: {
 				[Op.gt]: currentEpochTime,
@@ -577,6 +545,7 @@ exports.getUpcomingSessions = async (page, limit, search, userId, startDate, end
 			}
 		}
 
+		// Fetch sessions with pagination
 		const sessionData = await Session.findAndCountAll({
 			where: whereCondition,
 			order: [['start_date', 'ASC']],

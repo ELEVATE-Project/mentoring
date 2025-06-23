@@ -32,6 +32,7 @@ const menteeExtensionQueries = require('@database/queries/userExtension')
 const { checkIfUserIsAccessible } = require('@helpers/saasUserAccessibility')
 const connectionQueries = require('@database/queries/connection')
 const getOrgIdAndEntityTypes = require('@helpers/getOrgIdAndEntityTypewithEntitiesBasedOnPolicy')
+const sessionFetcher = require('@helpers/sessionFetcher')
 
 module.exports = class MenteesHelper {
 	/**
@@ -138,7 +139,7 @@ module.exports = class MenteesHelper {
 				delays in starting session then status will remain published for that particular interval so fetch that also */
 
 			/* TODO: Need to write cron job that will change the status of expired sessions from published to cancelled if not hosted by mentor */
-			const sessions = await this.getMySessions(page, limit, search, userId)
+			const sessions = await sessionFetcher.getMySessions(page, limit, search, userId)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -238,7 +239,7 @@ module.exports = class MenteesHelper {
 			}
 
 			/* My Sessions */
-			let mySessions = await this.getMySessions(page, limit, search, userId, start_date, end_date)
+			let mySessions = await sessionFetcher.getMySessions(page, limit, search, userId, start_date, end_date)
 
 			const result = {
 				all_sessions: allSessions.rows,
@@ -523,70 +524,70 @@ module.exports = class MenteesHelper {
 		}
 	}
 
-	/**
-	 * Get all enrolled session.
-	 * @method
-	 * @name getMySessions
-	 * @param {Number} page - page No.
-	 * @param {Number} limit - page limit.
-	 * @param {String} search - search session.
-	 * @param {String} userId - user id.
-	 * @returns {JSON} - List of enrolled sessions
-	 */
+	// /**
+	//  * Get all enrolled session.
+	//  * @method
+	//  * @name getMySessions
+	//  * @param {Number} page - page No.
+	//  * @param {Number} limit - page limit.
+	//  * @param {String} search - search session.
+	//  * @param {String} userId - user id.
+	//  * @returns {JSON} - List of enrolled sessions
+	//  */
 
-	static async getMySessions(page, limit, search, userId, startDate, endDate) {
-		try {
-			const upcomingSessions = await sessionQueries.getUpcomingSessions(
-				page,
-				limit,
-				search,
-				userId,
-				startDate,
-				endDate
-			)
-			const upcomingSessionIds = upcomingSessions.rows.map((session) => session.id)
-			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
-				userId,
-				upcomingSessionIds
-			)
+	// static async getMySessions(page, limit, search, userId, startDate, endDate) {
+	// 	try {
+	// 		const upcomingSessions = await sessionQueries.getUpcomingSessions(
+	// 			page,
+	// 			limit,
+	// 			search,
+	// 			userId,
+	// 			startDate,
+	// 			endDate
+	// 		)
+	// 		const upcomingSessionIds = upcomingSessions.rows.map((session) => session.id)
+	// 		const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
+	// 			userId,
+	// 			upcomingSessionIds
+	// 		)
 
-			let sessionAndMenteeMap = {}
-			usersUpcomingSessions.forEach((session) => {
-				sessionAndMenteeMap[session.session_id] = session.type
-			})
+	// 		let sessionAndMenteeMap = {}
+	// 		usersUpcomingSessions.forEach((session) => {
+	// 			sessionAndMenteeMap[session.session_id] = session.type
+	// 		})
 
-			const usersUpcomingSessionIds = usersUpcomingSessions.map(
-				(usersUpcomingSession) => usersUpcomingSession.session_id
-			)
+	// 		const usersUpcomingSessionIds = usersUpcomingSessions.map(
+	// 			(usersUpcomingSession) => usersUpcomingSession.session_id
+	// 		)
 
-			const attributes = { exclude: ['mentee_password', 'mentor_password'] }
-			let sessionDetails = await sessionQueries.findAndCountAll(
-				{ id: usersUpcomingSessionIds },
-				{ order: [['start_date', 'ASC']] },
-				{ attributes: attributes }
-			)
-			if (sessionDetails.rows.length > 0) {
-				sessionDetails.rows.forEach((session) => {
-					if (sessionAndMenteeMap.hasOwnProperty(session.id)) {
-						session.enrolled_type = sessionAndMenteeMap[session.id]
-					}
-				})
+	// 		const attributes = { exclude: ['mentee_password', 'mentor_password'] }
+	// 		let sessionDetails = await sessionQueries.findAndCountAll(
+	// 			{ id: usersUpcomingSessionIds },
+	// 			{ order: [['start_date', 'ASC']] },
+	// 			{ attributes: attributes }
+	// 		)
+	// 		if (sessionDetails.rows.length > 0) {
+	// 			sessionDetails.rows.forEach((session) => {
+	// 				if (sessionAndMenteeMap.hasOwnProperty(session.id)) {
+	// 					session.enrolled_type = sessionAndMenteeMap[session.id]
+	// 				}
+	// 			})
 
-				const uniqueOrgIds = [...new Set(sessionDetails.rows.map((obj) => obj.mentor_organization_id))]
-				sessionDetails.rows = await entityTypeService.processEntityTypesToAddValueLabels(
-					sessionDetails.rows,
-					uniqueOrgIds,
-					common.sessionModelName,
-					'mentor_organization_id'
-				)
-			}
-			sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows)
+	// 			const uniqueOrgIds = [...new Set(sessionDetails.rows.map((obj) => obj.mentor_organization_id))]
+	// 			sessionDetails.rows = await entityTypeService.processEntityTypesToAddValueLabels(
+	// 				sessionDetails.rows,
+	// 				uniqueOrgIds,
+	// 				common.sessionModelName,
+	// 				'mentor_organization_id'
+	// 			)
+	// 		}
+	// 		sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows)
 
-			return sessionDetails
-		} catch (error) {
-			throw error
-		}
-	}
+	// 		return sessionDetails
+	// 	} catch (error) {
+	// 		throw error
+	// 	}
+	// }
 
 	static async menteeSessionDetails(sessions, userId) {
 		try {
@@ -679,7 +680,9 @@ module.exports = class MenteesHelper {
 			throw error
 		}
 	}
+
 	// Functions for new APIs
+
 	/**
 	 * Create a new mentee extension.
 	 * @method
