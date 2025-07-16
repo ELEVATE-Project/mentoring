@@ -25,11 +25,6 @@ class MentoringDataMigrator {
 			},
 		})
 
-		// Default values from environment
-		this.defaultTenantCode = process.env.DEFAULT_ORGANISATION_CODE || 'DEFAULT_TENANT'
-		this.defaultOrgCode = process.env.DEFAULT_ORG_CODE || 'DEFAULT_ORG'
-		this.defaultOrgId = process.env.DEFAULT_ORG_ID || '1'
-
 		// Centralized batch processing configuration
 		this.BATCH_SIZE = 5000
 		this.maxRetries = 3
@@ -183,24 +178,6 @@ class MentoringDataMigrator {
 				hasPartitionKey: true,
 				useSessionLookup: true,
 			},
-			{
-				name: 'modules',
-				updateColumns: ['tenant_code'],
-				hasPartitionKey: true,
-				useDefaultValues: true,
-			},
-			{
-				name: 'report_role_mapping',
-				updateColumns: ['tenant_code', 'organization_code'],
-				hasPartitionKey: true,
-				useDefaultValues: true,
-			},
-			{
-				name: 'report_types',
-				updateColumns: ['tenant_code', 'organization_code'],
-				hasPartitionKey: true,
-				useDefaultValues: true,
-			},
 		]
 	}
 
@@ -223,6 +200,146 @@ class MentoringDataMigrator {
 			console.error('❌ Failed to load lookup data:', error)
 			throw error
 		}
+	}
+
+	/**
+	 * Validate that all organization_ids in database tables exist in the CSV file
+	 * Fails the migration if any database organization_ids are missing from CSV
+	 */
+	async validateDatabaseOrgsCoveredByCSV() {
+		console.log('\n🔍 Validating database organization_ids coverage in CSV...')
+
+		const missingOrgs = new Set()
+		const csvOrgIds = new Set(this.orgLookupCache.keys())
+
+		// Get all organization_ids from tables that have organization_id column
+		const tablesWithOrgId = [
+			'availabilities',
+			'default_rules',
+			'entity_types',
+			'file_uploads',
+			'forms',
+			'notification_templates',
+			'organization_extension',
+			'report_queries',
+			'report_role_mapping',
+			'report_types',
+			'reports',
+			'resources',
+			'role_extensions',
+			'sessions',
+			'user_extensions',
+		]
+
+		for (const tableName of tablesWithOrgId) {
+			try {
+				// Check if table exists first
+				const tableExists = await this.sequelize.query(
+					`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${tableName}')`,
+					{ type: Sequelize.QueryTypes.SELECT }
+				)
+
+				if (!tableExists[0].exists) {
+					console.log(`⚠️  Table ${tableName} does not exist, skipping`)
+					continue
+				}
+
+				// Get distinct organization_ids from this table
+				const orgResults = await this.sequelize.query(
+					`SELECT DISTINCT organization_id::text as org_id
+					 FROM ${tableName}
+					 WHERE organization_id IS NOT NULL`,
+					{ type: Sequelize.QueryTypes.SELECT }
+				)
+
+				// Check each organization_id against CSV data
+				for (const row of orgResults) {
+					const orgId = row.org_id
+					if (!csvOrgIds.has(orgId)) {
+						missingOrgs.add(orgId)
+					}
+				}
+
+				console.log(`✅ Checked ${tableName}: ${orgResults.length} distinct organization_ids`)
+			} catch (error) {
+				console.warn(`⚠️  Failed to check ${tableName}: ${error.message}`)
+			}
+		}
+
+		// Also check user_id based tables via user_extensions
+		const userIdTables = [
+			'connection_requests',
+			'connections',
+			'entities',
+			'feedbacks',
+			'issues',
+			'modules',
+			'post_session_details',
+			'question_sets',
+			'questions',
+			'session_attendees',
+			'session_request',
+		]
+
+		for (const tableName of userIdTables) {
+			try {
+				// Check if table exists first
+				const tableExists = await this.sequelize.query(
+					`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${tableName}')`,
+					{ type: Sequelize.QueryTypes.SELECT }
+				)
+
+				if (!tableExists[0].exists) {
+					console.log(`⚠️  Table ${tableName} does not exist, skipping`)
+					continue
+				}
+
+				// Get organization_ids via user_extensions
+				const orgResults = await this.sequelize.query(
+					`SELECT DISTINCT ue.organization_id::text as org_id
+					 FROM user_extensions ue
+					 INNER JOIN ${tableName} t ON t.user_id = ue.user_id
+					 WHERE ue.organization_id IS NOT NULL`,
+					{ type: Sequelize.QueryTypes.SELECT }
+				)
+
+				// Check each organization_id against CSV data
+				for (const row of orgResults) {
+					const orgId = row.org_id
+					if (!csvOrgIds.has(orgId)) {
+						missingOrgs.add(orgId)
+					}
+				}
+
+				console.log(
+					`✅ Checked ${tableName} (via user_extensions): ${orgResults.length} distinct organization_ids`
+				)
+			} catch (error) {
+				console.warn(`⚠️  Failed to check ${tableName}: ${error.message}`)
+			}
+		}
+
+		// Report results
+		if (missingOrgs.size > 0) {
+			const missingOrgsList = Array.from(missingOrgs).sort()
+			console.error('\n❌ VALIDATION FAILED: Missing organization_ids in CSV')
+			console.error('='.repeat(60))
+			console.error(`Found ${missingOrgs.size} organization_ids in database that are missing from CSV:`)
+			missingOrgsList.forEach((orgId) => {
+				console.error(`   - organization_id: ${orgId}`)
+			})
+			console.error('\n📝 Required action:')
+			console.error(
+				'   - Add missing organization_ids to data_codes.csv with proper tenant_code and organization_code'
+			)
+			console.error('   - Or verify if these organization_ids should be removed from database')
+
+			throw new Error(
+				`Migration cannot proceed: ${missingOrgs.size} organization_ids missing from CSV. See details above.`
+			)
+		}
+
+		console.log('✅ Validation passed: All database organization_ids are covered in CSV')
 	}
 
 	async loadTenantAndOrgCsv() {
@@ -439,84 +556,28 @@ class MentoringDataMigrator {
 	}
 
 	/**
-	 * Process organization_id table using GROUP BY + CSV lookup hybrid approach
+	 * Process organization_id table using individual organization updates
 	 */
 	async processOrgIdTableWithCSV(tableName, availableUpdateColumns) {
-		console.log(`📊 Processing ${tableName} using GROUP BY + CSV lookup hybrid...`)
+		console.log(`📊 Processing ${tableName} using individual organization updates...`)
 
-		// Strategy 1: Try GROUP BY bulk update with CSV data (most efficient)
 		let totalUpdated = 0
 		try {
-			totalUpdated = await this.processOrgIdTableWithGroupBy(tableName, availableUpdateColumns)
-			console.log(`✅ Updated ${totalUpdated} rows in ${tableName} using GROUP BY + CSV`)
-		} catch (error) {
-			console.warn(
-				`⚠️  GROUP BY approach failed for ${tableName}, falling back to individual updates:`,
-				error.message
-			)
-			// Strategy 2: Fallback to individual org processing
-			totalUpdated = await this.processOrgIdTableIndividually(tableName, availableUpdateColumns)
+			totalUpdated = await this.processOrgIdTable(tableName, availableUpdateColumns)
 			console.log(`✅ Updated ${totalUpdated} rows in ${tableName} using individual updates`)
+		} catch (error) {
+			console.error(`❌ Failed to process ${tableName}:`, error.message)
+			this.stats.failedUpdates++
+			throw error
 		}
 
 		this.stats.successfulUpdates += totalUpdated
 	}
 
 	/**
-	 * Strategy 1: GROUP BY bulk update with CSV data injection
+	 * Process table with organization_id using individual organization updates
 	 */
-	async processOrgIdTableWithGroupBy(tableName, availableUpdateColumns) {
-		console.log(`🚀 Attempting GROUP BY bulk update for ${tableName}...`)
-
-		const transaction = await this.sequelize.transaction()
-		let totalUpdated = 0
-
-		try {
-			// Build VALUES clause from CSV data for efficient JOIN
-			const csvValues = Array.from(this.orgLookupCache.entries())
-				.map(([orgId, data]) => `('${orgId}', '${data.tenant_code}', '${data.organization_code}')`)
-				.join(', ')
-
-			if (csvValues.length === 0) {
-				throw new Error('No CSV data available for bulk update')
-			}
-
-			// Build SET clause
-			const setClauses = []
-			if (availableUpdateColumns.includes('tenant_code')) {
-				setClauses.push('tenant_code = csv_data.tenant_code')
-			}
-			if (availableUpdateColumns.includes('organization_code')) {
-				setClauses.push('organization_code = csv_data.organization_code')
-			}
-			setClauses.push('updated_at = NOW()')
-
-			// Execute GROUP BY bulk update with CSV data
-			const [, metadata] = await this.sequelize.query(
-				`
-				UPDATE ${tableName}
-				SET ${setClauses.join(', ')}
-				FROM (
-					VALUES ${csvValues}
-				) AS csv_data(organization_id, tenant_code, organization_code)
-				WHERE ${tableName}.organization_id::text = csv_data.organization_id
-			`,
-				{ transaction }
-			)
-
-			totalUpdated = metadata.rowCount || 0
-			await transaction.commit()
-			return totalUpdated
-		} catch (error) {
-			await transaction.rollback()
-			throw error
-		}
-	}
-
-	/**
-	 * Strategy 2: Individual organization processing (fallback)
-	 */
-	async processOrgIdTableIndividually(tableName, availableUpdateColumns) {
+	async processOrgIdTable(tableName, availableUpdateColumns) {
 		console.log(`🔄 Processing ${tableName} with individual organization updates...`)
 
 		// Get distinct organization_ids from table
@@ -598,72 +659,28 @@ class MentoringDataMigrator {
 	}
 
 	/**
-	 * Process user_extensions using GROUP BY + CSV lookup hybrid
+	 * Process user_extensions using individual organization updates
 	 */
 	async processUserExtensions(tableConfig) {
-		console.log(`\n🔄 Processing user_extensions using GROUP BY + CSV hybrid...`)
+		console.log(`\n🔄 Processing user_extensions using individual organization updates...`)
 
 		// Undistribute table first if it's distributed
 		await this.undistributeTableIfNeeded('user_extensions')
 
-		// Strategy 1: Try GROUP BY bulk update first
 		let totalUpdated = 0
 		try {
-			totalUpdated = await this.processUserExtensionsWithGroupBy()
-			console.log(`✅ Updated ${totalUpdated} user_extensions using GROUP BY + CSV`)
-		} catch (error) {
-			console.warn(`⚠️  GROUP BY failed for user_extensions, using individual updates:`, error.message)
-			// Strategy 2: Fallback to individual processing
 			totalUpdated = await this.processUserExtensionsIndividually()
 			console.log(`✅ Updated ${totalUpdated} user_extensions using individual updates`)
+		} catch (error) {
+			console.error(`❌ Failed to process user_extensions:`, error.message)
+			this.stats.failedUpdates++
+			throw error
 		}
 
 		// Redistribute table with tenant_code as partition key
 		await this.redistributeTableIfNeeded('user_extensions', 'tenant_code', tableConfig.hasPartitionKey)
 
 		this.stats.successfulUpdates += totalUpdated
-	}
-
-	/**
-	 * GROUP BY bulk update for user_extensions
-	 */
-	async processUserExtensionsWithGroupBy() {
-		console.log(`🚀 Attempting GROUP BY bulk update for user_extensions...`)
-
-		const transaction = await this.sequelize.transaction()
-
-		try {
-			// Build VALUES clause from CSV data
-			const csvValues = Array.from(this.orgLookupCache.entries())
-				.map(([orgId, data]) => `('${orgId}', '${data.tenant_code}', '${data.organization_code}')`)
-				.join(', ')
-
-			if (csvValues.length === 0) {
-				throw new Error('No CSV data available for user_extensions bulk update')
-			}
-
-			// Execute GROUP BY bulk update
-			const [, metadata] = await this.sequelize.query(
-				`
-				UPDATE user_extensions
-				SET 
-					tenant_code = csv_data.tenant_code,
-					organization_code = csv_data.organization_code,
-					updated_at = NOW()
-				FROM (
-					VALUES ${csvValues}
-				) AS csv_data(organization_id, tenant_code, organization_code)
-				WHERE user_extensions.organization_id::text = csv_data.organization_id
-			`,
-				{ transaction }
-			)
-
-			await transaction.commit()
-			return metadata.rowCount || 0
-		} catch (error) {
-			await transaction.rollback()
-			throw error
-		}
 	}
 
 	/**
@@ -730,7 +747,7 @@ class MentoringDataMigrator {
 	 * Process table with user_id using inner joins and CSV lookup
 	 */
 	async processTableWithUserId(tableConfig) {
-		const { name, updateColumns, hasPartitionKey, useSessionLookup, useDefaultValues } = tableConfig
+		const { name, updateColumns, hasPartitionKey, useSessionLookup } = tableConfig
 		console.log(`\n🔄 Processing table with user_id: ${name}`)
 
 		try {
@@ -753,8 +770,6 @@ class MentoringDataMigrator {
 			try {
 				if (useSessionLookup) {
 					await this.processSessionLookupTable(name, tableConfig)
-				} else if (useDefaultValues) {
-					await this.processDefaultValuesTable(name, tableConfig)
 				} else {
 					await this.processUserIdTable(name, tableConfig)
 				}
@@ -777,80 +792,23 @@ class MentoringDataMigrator {
 
 	/**
 	 * Process table that needs session lookup (post_session_details)
-	 * Uses GROUP BY + Inner Join + CSV hybrid approach
+	 * Uses individual organization updates
 	 */
 	async processSessionLookupTable(tableName, tableConfig) {
 		const sessionIdColumn = tableConfig.sessionIdColumn
-		console.log(`🔄 Processing ${tableName} using GROUP BY + Inner Join + CSV hybrid...`)
+		console.log(`🔄 Processing ${tableName} using individual organization updates...`)
 
-		// Strategy 1: Try GROUP BY with inner join + CSV data
 		let totalUpdated = 0
 		try {
-			totalUpdated = await this.processSessionLookupWithGroupBy(tableName, tableConfig)
-			console.log(`✅ Updated ${totalUpdated} rows in ${tableName} using GROUP BY + Inner Join + CSV`)
-		} catch (error) {
-			console.warn(`⚠️  GROUP BY approach failed for ${tableName}, using individual processing:`, error.message)
-			// Strategy 2: Fallback to individual organization processing
 			totalUpdated = await this.processSessionLookupIndividually(tableName, tableConfig)
 			console.log(`✅ Updated ${totalUpdated} rows in ${tableName} using individual updates`)
+		} catch (error) {
+			console.error(`❌ Failed to process ${tableName}:`, error.message)
+			this.stats.failedUpdates++
+			throw error
 		}
 
 		this.stats.successfulUpdates += totalUpdated
-	}
-
-	/**
-	 * GROUP BY approach with inner join for session lookup tables
-	 */
-	async processSessionLookupWithGroupBy(tableName, tableConfig) {
-		const sessionIdColumn = tableConfig.sessionIdColumn
-		console.log(`🚀 Attempting GROUP BY + Inner Join for ${tableName}...`)
-
-		const transaction = await this.sequelize.transaction()
-
-		try {
-			// Build VALUES clause from CSV data
-			const csvValues = Array.from(this.orgLookupCache.entries())
-				.map(([orgId, data]) => `('${orgId}', '${data.tenant_code}', '${data.organization_code}')`)
-				.join(', ')
-
-			if (csvValues.length === 0) {
-				throw new Error(`No CSV data available for ${tableName} bulk update`)
-			}
-
-			// Build SET clause using CSV data
-			const setClauses = []
-			if (tableConfig.updateColumns.includes('tenant_code')) {
-				setClauses.push('tenant_code = csv_data.tenant_code')
-			}
-			if (tableConfig.updateColumns.includes('organization_code')) {
-				setClauses.push('organization_code = csv_data.organization_code')
-			}
-			setClauses.push('updated_at = NOW()')
-
-			// Execute GROUP BY bulk update with inner joins + CSV
-			const [, metadata] = await this.sequelize.query(
-				`
-				UPDATE ${tableName}
-				SET ${setClauses.join(', ')}
-				FROM 
-					sessions s,
-					user_extensions ue,
-					(
-						VALUES ${csvValues}
-					) AS csv_data(organization_id, tenant_code, organization_code)
-				WHERE ${tableName}.${sessionIdColumn} = s.id
-				AND ue.user_id = s.created_by
-				AND ue.organization_id::text = csv_data.organization_id
-			`,
-				{ transaction }
-			)
-
-			await transaction.commit()
-			return metadata.rowCount || 0
-		} catch (error) {
-			await transaction.rollback()
-			throw error
-		}
 	}
 
 	/**
@@ -918,107 +876,23 @@ class MentoringDataMigrator {
 	}
 
 	/**
-	 * Process table with default values (modules)
-	 */
-	async processDefaultValuesTable(tableName, tableConfig) {
-		console.log(`🔄 Processing ${tableName} with default values`)
-
-		const transaction = await this.sequelize.transaction()
-
-		try {
-			const [, metadata] = await this.sequelize.query(
-				`
-				UPDATE ${tableName}
-				SET tenant_code = '${this.defaultTenantCode}', updated_at = NOW()
-				WHERE tenant_code IS NULL OR tenant_code = ''
-			`,
-				{ transaction }
-			)
-
-			const totalUpdated = metadata.rowCount || 0
-			console.log(`✅ Updated ${totalUpdated} rows in ${tableName} with default values`)
-			this.stats.successfulUpdates += totalUpdated
-
-			await transaction.commit()
-		} catch (error) {
-			await transaction.rollback()
-			throw error
-		}
-	}
-
-	/**
-	 * Process table with user_id using GROUP BY + Inner Join + CSV hybrid
+	 * Process table with user_id using individual organization updates
 	 */
 	async processUserIdTable(tableName, tableConfig) {
 		const userIdColumn = tableConfig.userIdColumn
-		console.log(`🔄 Processing ${tableName} using GROUP BY + Inner Join + CSV hybrid...`)
+		console.log(`🔄 Processing ${tableName} using individual organization updates...`)
 
-		// Strategy 1: Try GROUP BY with inner join + CSV data
 		let totalUpdated = 0
 		try {
-			totalUpdated = await this.processUserIdTableWithGroupBy(tableName, tableConfig)
-			console.log(`✅ Updated ${totalUpdated} rows in ${tableName} using GROUP BY + Inner Join + CSV`)
-		} catch (error) {
-			console.warn(`⚠️  GROUP BY approach failed for ${tableName}, using individual processing:`, error.message)
-			// Strategy 2: Fallback to individual organization processing
 			totalUpdated = await this.processUserIdTableIndividually(tableName, tableConfig)
 			console.log(`✅ Updated ${totalUpdated} rows in ${tableName} using individual updates`)
+		} catch (error) {
+			console.error(`❌ Failed to process ${tableName}:`, error.message)
+			this.stats.failedUpdates++
+			throw error
 		}
 
 		this.stats.successfulUpdates += totalUpdated
-	}
-
-	/**
-	 * GROUP BY approach for user_id tables
-	 */
-	async processUserIdTableWithGroupBy(tableName, tableConfig) {
-		const userIdColumn = tableConfig.userIdColumn
-		console.log(`🚀 Attempting GROUP BY + Inner Join for ${tableName}...`)
-
-		const transaction = await this.sequelize.transaction()
-
-		try {
-			// Build VALUES clause from CSV data
-			const csvValues = Array.from(this.orgLookupCache.entries())
-				.map(([orgId, data]) => `('${orgId}', '${data.tenant_code}', '${data.organization_code}')`)
-				.join(', ')
-
-			if (csvValues.length === 0) {
-				throw new Error(`No CSV data available for ${tableName} bulk update`)
-			}
-
-			// Build SET clause using CSV data
-			const setClauses = []
-			if (tableConfig.updateColumns.includes('tenant_code')) {
-				setClauses.push('tenant_code = csv_data.tenant_code')
-			}
-			if (tableConfig.updateColumns.includes('organization_code')) {
-				setClauses.push('organization_code = csv_data.organization_code')
-			}
-			setClauses.push('updated_at = NOW()')
-
-			// Execute GROUP BY bulk update with inner join + CSV
-			const [, metadata] = await this.sequelize.query(
-				`
-				UPDATE ${tableName}
-				SET ${setClauses.join(', ')}
-				FROM 
-					user_extensions ue,
-					(
-						VALUES ${csvValues}
-					) AS csv_data(organization_id, tenant_code, organization_code)
-				WHERE ${tableName}.${userIdColumn} = ue.user_id
-				AND ue.organization_id::text = csv_data.organization_id
-			`,
-				{ transaction }
-			)
-
-			await transaction.commit()
-			return metadata.rowCount || 0
-		} catch (error) {
-			await transaction.rollback()
-			throw error
-		}
 	}
 
 	/**
@@ -1170,6 +1044,9 @@ class MentoringDataMigrator {
 			console.log(`🔧 Citus enabled: ${citusEnabled ? 'Yes' : 'No'}`)
 
 			await this.loadLookupData()
+
+			// Validate CSV data coverage before proceeding
+			await this.validateDatabaseOrgsCoveredByCSV()
 
 			// PHASE 1: Process tables with organization_id using CSV lookup
 			await this.processTablesWithOrgId()
