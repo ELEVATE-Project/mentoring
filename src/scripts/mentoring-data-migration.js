@@ -203,120 +203,47 @@ class MentoringDataMigrator {
 	}
 
 	/**
-	 * Validate that all organization_ids in database tables exist in the CSV file
-	 * Fails the migration if any database organization_ids are missing from CSV
+	 * Validate that all organization_ids from organization_extension table exist in the CSV file
+	 * Fails the migration if any organization_extension organization_ids are missing from CSV
 	 */
 	async validateDatabaseOrgsCoveredByCSV() {
-		console.log('\n🔍 Validating database organization_ids coverage in CSV...')
+		console.log('\n🔍 Validating organization_extension organization_ids coverage in CSV...')
 
 		const missingOrgs = new Set()
 		const csvOrgIds = new Set(this.orgLookupCache.keys())
 
-		// Get all organization_ids from tables that have organization_id column
-		const tablesWithOrgId = [
-			'availabilities',
-			'default_rules',
-			'entity_types',
-			'file_uploads',
-			'forms',
-			'notification_templates',
-			'organization_extension',
-			'report_queries',
-			'report_role_mapping',
-			'report_types',
-			'reports',
-			'resources',
-			'role_extensions',
-			'sessions',
-			'user_extensions',
-		]
+		// Only get organization_ids from organization_extension table (source of truth)
+		try {
+			// Check if organization_extension table exists first
+			const tableExists = await this.sequelize.query(
+				`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'organization_extension')`,
+				{ type: Sequelize.QueryTypes.SELECT }
+			)
 
-		for (const tableName of tablesWithOrgId) {
-			try {
-				// Check if table exists first
-				const tableExists = await this.sequelize.query(
-					`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${tableName}')`,
-					{ type: Sequelize.QueryTypes.SELECT }
-				)
-
-				if (!tableExists[0].exists) {
-					console.log(`⚠️  Table ${tableName} does not exist, skipping`)
-					continue
-				}
-
-				// Get distinct organization_ids from this table
-				const orgResults = await this.sequelize.query(
-					`SELECT DISTINCT organization_id::text as org_id
-					 FROM ${tableName}
-					 WHERE organization_id IS NOT NULL`,
-					{ type: Sequelize.QueryTypes.SELECT }
-				)
-
-				// Check each organization_id against CSV data
-				for (const row of orgResults) {
-					const orgId = row.org_id
-					if (!csvOrgIds.has(orgId)) {
-						missingOrgs.add(orgId)
-					}
-				}
-
-				console.log(`✅ Checked ${tableName}: ${orgResults.length} distinct organization_ids`)
-			} catch (error) {
-				console.warn(`⚠️  Failed to check ${tableName}: ${error.message}`)
+			if (!tableExists[0].exists) {
+				throw new Error('organization_extension table does not exist')
 			}
-		}
 
-		// Also check user_id based tables via user_extensions
-		const userIdTables = [
-			'connection_requests',
-			'connections',
-			'entities',
-			'feedbacks',
-			'issues',
-			'modules',
-			'post_session_details',
-			'question_sets',
-			'questions',
-			'session_attendees',
-			'session_request',
-		]
+			// Get distinct organization_ids from organization_extension table only
+			const orgResults = await this.sequelize.query(
+				`SELECT DISTINCT organization_id::text as org_id
+				 FROM organization_extension
+				 WHERE organization_id IS NOT NULL`,
+				{ type: Sequelize.QueryTypes.SELECT }
+			)
 
-		for (const tableName of userIdTables) {
-			try {
-				// Check if table exists first
-				const tableExists = await this.sequelize.query(
-					`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${tableName}')`,
-					{ type: Sequelize.QueryTypes.SELECT }
-				)
-
-				if (!tableExists[0].exists) {
-					console.log(`⚠️  Table ${tableName} does not exist, skipping`)
-					continue
+			// Check each organization_id against CSV data
+			for (const row of orgResults) {
+				const orgId = row.org_id
+				if (!csvOrgIds.has(orgId)) {
+					missingOrgs.add(orgId)
 				}
-
-				// Get organization_ids via user_extensions
-				const orgResults = await this.sequelize.query(
-					`SELECT DISTINCT ue.organization_id::text as org_id
-					 FROM user_extensions ue
-					 INNER JOIN ${tableName} t ON t.user_id = ue.user_id
-					 WHERE ue.organization_id IS NOT NULL`,
-					{ type: Sequelize.QueryTypes.SELECT }
-				)
-
-				// Check each organization_id against CSV data
-				for (const row of orgResults) {
-					const orgId = row.org_id
-					if (!csvOrgIds.has(orgId)) {
-						missingOrgs.add(orgId)
-					}
-				}
-
-				console.log(
-					`✅ Checked ${tableName} (via user_extensions): ${orgResults.length} distinct organization_ids`
-				)
-			} catch (error) {
-				console.warn(`⚠️  Failed to check ${tableName}: ${error.message}`)
 			}
+
+			console.log(`✅ Checked organization_extension: ${orgResults.length} distinct organization_ids`)
+		} catch (error) {
+			console.error(`❌ Failed to check organization_extension: ${error.message}`)
+			throw error
 		}
 
 		// Report results
@@ -324,7 +251,9 @@ class MentoringDataMigrator {
 			const missingOrgsList = Array.from(missingOrgs).sort()
 			console.error('\n❌ VALIDATION FAILED: Missing organization_ids in CSV')
 			console.error('='.repeat(60))
-			console.error(`Found ${missingOrgs.size} organization_ids in database that are missing from CSV:`)
+			console.error(
+				`Found ${missingOrgs.size} organization_ids from organization_extension table that are missing from CSV:`
+			)
 			missingOrgsList.forEach((orgId) => {
 				console.error(`   - organization_id: ${orgId}`)
 			})
@@ -332,14 +261,16 @@ class MentoringDataMigrator {
 			console.error(
 				'   - Add missing organization_ids to data_codes.csv with proper tenant_code and organization_code'
 			)
-			console.error('   - Or verify if these organization_ids should be removed from database')
+			console.error(
+				'   - Or verify if these organization_ids should be removed from organization_extension table'
+			)
 
 			throw new Error(
-				`Migration cannot proceed: ${missingOrgs.size} organization_ids missing from CSV. See details above.`
+				`Migration cannot proceed: ${missingOrgs.size} organization_ids from organization_extension missing from CSV. See details above.`
 			)
 		}
 
-		console.log('✅ Validation passed: All database organization_ids are covered in CSV')
+		console.log('✅ Validation passed: All organization_extension organization_ids are covered in CSV')
 	}
 
 	async loadTenantAndOrgCsv() {
@@ -348,6 +279,16 @@ class MentoringDataMigrator {
 			console.log('⚠️  data_codes.csv not found, using defaults')
 			return
 		}
+
+		// Get organization_ids only from organization_extension table (source of truth)
+		console.log('🔍 Getting organization_ids from organization_extension table...')
+		const orgExtensionIds = await this.sequelize.query(
+			`SELECT DISTINCT organization_id::text as org_id FROM organization_extension WHERE organization_id IS NOT NULL`,
+			{ type: Sequelize.QueryTypes.SELECT }
+		)
+
+		const validOrgIds = new Set(orgExtensionIds.map((row) => row.org_id))
+		console.log(`📊 Found ${validOrgIds.size} organization_ids in organization_extension table`)
 
 		const requiredHeaders = ['tenant_code', 'organization_code', 'organization_id']
 		let isHeaderValidated = false
@@ -376,13 +317,23 @@ class MentoringDataMigrator {
 				.on('data', (row) => {
 					if (!isHeaderValidated) return
 
-					if (row.organization_id && row.organization_code && row.tenant_code) {
+					// Only load CSV data for organization_ids that exist in organization_extension table
+					if (
+						row.organization_id &&
+						row.organization_code &&
+						row.tenant_code &&
+						validOrgIds.has(row.organization_id)
+					) {
 						this.orgLookupCache.set(row.organization_id, {
 							organization_code: row.organization_code,
 							tenant_code: row.tenant_code,
 						})
+					} else if (row.organization_id && !validOrgIds.has(row.organization_id)) {
+						console.log(
+							`ℹ️  Skipping CSV row for organization_id ${row.organization_id} - not found in organization_extension table`
+						)
 					} else {
-						console.warn('⚠️  Skipping invalid row:', row)
+						console.warn('⚠️  Skipping invalid CSV row:', row)
 					}
 				})
 				.on('end', () => {
@@ -390,7 +341,9 @@ class MentoringDataMigrator {
 						reject(new Error('❌ CSV headers could not be validated'))
 						return
 					}
-					console.log(`✅ Loaded ${this.orgLookupCache.size} organization codes`)
+					console.log(
+						`✅ Loaded ${this.orgLookupCache.size} organization codes (filtered by organization_extension table)`
+					)
 					resolve()
 				})
 				.on('error', reject)
