@@ -28,6 +28,14 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.STRING,
 				allowNull: false,
 			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 		},
 		{
 			modelName: 'RolePermission',

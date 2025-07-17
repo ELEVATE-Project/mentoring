@@ -52,6 +52,14 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.STRING,
 				allowNull: false,
 			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 			created_at: {
 				allowNull: false,
 				type: DataTypes.DATE,

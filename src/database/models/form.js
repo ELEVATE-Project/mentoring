@@ -29,6 +29,14 @@ module.exports = (sequelize, DataTypes) => {
 				allowNull: false,
 				primaryKey: true,
 			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 		},
 		{ sequelize, modelName: 'Form', tableName: 'forms', freezeTableName: true, paranoid: true }
 	)

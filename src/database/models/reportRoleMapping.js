@@ -19,6 +19,14 @@ module.exports = (sequelize, DataTypes) => {
 				primaryKey: true,
 				allowNull: false,
 			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 			created_at: {
 				type: DataTypes.DATE,
 				allowNull: false,

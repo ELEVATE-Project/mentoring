@@ -16,6 +16,14 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.JSON,
 			},
 			user_id: { type: DataTypes.STRING, allowNull: false, primaryKey: true },
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 		},
 		{ sequelize, modelName: 'Feedback', tableName: 'feedbacks', freezeTableName: true, paranoid: true }
 	)

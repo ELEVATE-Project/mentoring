@@ -14,6 +14,14 @@ module.exports = (sequelize, DataTypes) => {
 			status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'ACTIVE' },
 			created_by: { type: DataTypes.STRING, allowNull: true },
 			updated_by: { type: DataTypes.STRING, allowNull: true },
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 			allow_filtering: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
 			data_type: { type: DataTypes.STRING, allowNull: false, defaultValue: 'STRING' },
 			organization_id: { type: DataTypes.STRING, allowNull: false, defaultValue: 0, primaryKey: true },

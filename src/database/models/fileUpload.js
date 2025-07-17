@@ -41,6 +41,14 @@ module.exports = (sequelize, DataTypes) => {
 			updated_by: {
 				type: DataTypes.STRING,
 			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 		},
 		{ sequelize, modelName: 'FileUpload', tableName: 'file_uploads', freezeTableName: true, paranoid: true }
 	)

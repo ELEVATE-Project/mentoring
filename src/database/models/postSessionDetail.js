@@ -23,6 +23,14 @@ module.exports = (sequelize, DataTypes) => {
 			meta: {
 				type: DataTypes.JSON,
 			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 		},
 		{
 			sequelize,

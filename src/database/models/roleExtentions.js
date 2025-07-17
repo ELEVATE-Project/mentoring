@@ -44,6 +44,14 @@ module.exports = (sequelize, DataTypes) => {
 				allowNull: false,
 				defaultValue: DataTypes.NOW,
 			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 		},
 		{
 			modelName: 'RoleExtension',

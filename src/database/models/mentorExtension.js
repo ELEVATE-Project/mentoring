@@ -73,6 +73,14 @@ module.exports = (sequelize, DataTypes) => {
 			phone: {
 				type: DataTypes.STRING,
 			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 		},
 		{
 			sequelize,

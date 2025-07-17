@@ -16,6 +16,14 @@ module.exports = (sequelize, DataTypes) => {
 			type: { type: DataTypes.STRING },
 			created_by: { type: DataTypes.STRING, allowNull: true },
 			updated_by: { type: DataTypes.STRING, allowNull: true },
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 		},
 		{ sequelize, modelName: 'Entity', tableName: 'entities', freezeTableName: true, paranoid: true }
 	)

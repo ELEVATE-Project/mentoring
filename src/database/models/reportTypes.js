@@ -8,11 +8,20 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.INTEGER,
 				allowNull: false,
 				autoIncrement: true,
-				primaryKey: true,
 			},
 			title: {
 				type: DataTypes.STRING,
 				allowNull: false,
+				primaryKey: true,
+			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+				primaryKey: true,
 			},
 			created_at: {
 				type: DataTypes.DATE,

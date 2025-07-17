@@ -1,5 +1,5 @@
 module.exports = (sequelize, DataTypes) => {
-	const Question = sequelize.define(
+	const Resource = sequelize.define(
 		'Resources',
 		{
 			id: {
@@ -42,6 +42,14 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.STRING,
 				allowNull: true,
 			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 			created_at: {
 				allowNull: false,
 				type: DataTypes.DATE,
@@ -56,5 +64,5 @@ module.exports = (sequelize, DataTypes) => {
 		{ sequelize, modelName: 'Resources', tableName: 'resources', freezeTableName: true, paranoid: true }
 	)
 
-	return Question
+	return Resource
 }
