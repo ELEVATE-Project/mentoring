@@ -37,6 +37,7 @@ module.exports = {
 				'modules',
 				'notification_templates',
 				'organization_extension',
+				'permissions',
 				'post_session_details',
 				'question_sets',
 				'questions',
@@ -79,7 +80,7 @@ module.exports = {
 						await queryInterface.addColumn(tableName, 'tenant_code', {
 							type: Sequelize.STRING(255),
 							allowNull: false,
-							defaultValue: process.env.DEFAULT_ORGANISATION_CODE || 'default',
+							defaultValue: process.env.DEFAULT_ORGANISATION_CODE || 'DEFAULT_TENANT',
 						})
 						console.log(`✅ Added tenant_code to ${tableName}`)
 					} else {
@@ -344,7 +345,8 @@ module.exports = {
 						if (!columnExists[0].exists) {
 							await queryInterface.addColumn(tableName, 'organization_code', {
 								type: Sequelize.STRING(255),
-								allowNull: true,
+								allowNull: false,
+								defaultValue: process.env.DEFAULT_ORG_CODE || 'DEFAULT_ORG',
 							})
 							console.log(`✅ Added organization_code to ${tableName}`)
 						} else {
@@ -1174,9 +1176,146 @@ module.exports = {
 			}
 
 			// =============================================================================
-			// PHASE 4: CLEANUP OBSOLETE TABLES
+			// PHASE 4: CREATE FOREIGN KEY CONSTRAINTS
 			// =============================================================================
-			console.log('\n🗑️  PHASE 4: Cleaning up obsolete tables...')
+			console.log('\n🔑 PHASE 4: Creating foreign key constraints...')
+			console.log('='.repeat(70))
+
+			// Helper function to safely add foreign key constraint
+			async function addForeignKeyConstraint(
+				tableName,
+				columnName,
+				referencedTable,
+				referencedColumn,
+				constraintName
+			) {
+				try {
+					// Check if constraint already exists
+					const [existingConstraint] = await queryInterface.sequelize.query(`
+						SELECT constraint_name 
+						FROM information_schema.table_constraints 
+						WHERE table_name = '${tableName}' 
+						AND constraint_name = '${constraintName}'
+						AND constraint_type = 'FOREIGN KEY'
+					`)
+
+					if (existingConstraint.length > 0) {
+						console.log(`✅ Foreign key ${constraintName} already exists`)
+						return true
+					}
+
+					// Check if tables and columns exist
+					const [tableCheck] = await queryInterface.sequelize.query(`
+						SELECT 
+							EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '${tableName}') as table_exists,
+							EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '${referencedTable}') as ref_table_exists,
+							EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = '${tableName}' AND column_name = '${columnName}') as column_exists,
+							EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = '${referencedTable}' AND column_name = '${referencedColumn}') as ref_column_exists
+					`)
+
+					if (!tableCheck[0].table_exists) {
+						console.log(`⚠️  Table ${tableName} does not exist, skipping constraint`)
+						return false
+					}
+
+					if (!tableCheck[0].ref_table_exists) {
+						console.log(`⚠️  Referenced table ${referencedTable} does not exist, skipping constraint`)
+						return false
+					}
+
+					if (!tableCheck[0].column_exists) {
+						console.log(`⚠️  Column ${columnName} does not exist in ${tableName}, skipping constraint`)
+						return false
+					}
+
+					if (!tableCheck[0].ref_column_exists) {
+						console.log(
+							`⚠️  Referenced column ${referencedColumn} does not exist in ${referencedTable}, skipping constraint`
+						)
+						return false
+					}
+
+					// Add foreign key constraint
+					await queryInterface.sequelize.query(`
+						ALTER TABLE ${tableName} 
+						ADD CONSTRAINT ${constraintName} 
+						FOREIGN KEY (${columnName}) 
+						REFERENCES ${referencedTable}(${referencedColumn}) 
+						ON DELETE SET NULL 
+						ON UPDATE CASCADE
+					`)
+
+					console.log(`✅ Added foreign key constraint: ${constraintName}`)
+					return true
+				} catch (error) {
+					console.log(`❌ Failed to add foreign key ${constraintName}: ${error.message}`)
+					return false
+				}
+			}
+
+			// Add entities -> entity_types foreign key constraint
+			await addForeignKeyConstraint(
+				'entities',
+				'entity_type_id',
+				'entity_types',
+				'id',
+				'fk_entities_entity_type_id'
+			)
+
+			// Add role_permission_mapping -> permissions foreign key constraint
+			await addForeignKeyConstraint(
+				'role_permission_mapping',
+				'permission_id',
+				'permissions',
+				'id',
+				'fk_role_permission_mapping_permission_id'
+			)
+
+			// Add session-related foreign key constraints (only for tables that will exist after migration)
+			const sessionRelatedTables = [
+				{ table: 'session_attendees', column: 'session_id' },
+				{ table: 'feedbacks', column: 'session_id' },
+				{ table: 'resources', column: 'session_id' },
+				{ table: 'post_session_details', column: 'session_id' },
+				{ table: 'availabilities', column: 'session_id' },
+			]
+
+			console.log('\n🔗 Adding session foreign key constraints...')
+			for (const tableConfig of sessionRelatedTables) {
+				await addForeignKeyConstraint(
+					tableConfig.table,
+					tableConfig.column,
+					'sessions',
+					'id',
+					`fk_${tableConfig.table}_session_id`
+				)
+			}
+
+			// Add questionnaire-related foreign key constraints (complex relationships)
+			console.log('\n📋 Adding questionnaire-related foreign key constraints...')
+
+			// Check if questionnaire_responses table exists and add its constraints
+			const [questionnaireCheck] = await queryInterface.sequelize.query(`
+				SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'questionnaire_responses') as exists
+			`)
+
+			if (questionnaireCheck[0].exists) {
+				// questionnaire_responses -> sessions foreign key
+				await addForeignKeyConstraint(
+					'questionnaire_responses',
+					'session_id',
+					'sessions',
+					'id',
+					'fk_questionnaire_responses_session_id'
+				)
+			}
+
+			console.log('\n✅ Phase 4 Complete: Foreign key constraints created')
+
+			// =============================================================================
+			// PHASE 5: CLEANUP OBSOLETE TABLES
+			// =============================================================================
+			console.log('\n🗑️  PHASE 5: Cleaning up obsolete tables...')
 			console.log('='.repeat(70))
 
 			const obsoleteTables = ['session_enrollments', 'session_ownerships', 'session_request_mapping']
@@ -1207,9 +1346,9 @@ module.exports = {
 			}
 
 			// =============================================================================
-			// PHASE 5: FINAL VERIFICATION
+			// PHASE 6: FINAL VERIFICATION
 			// =============================================================================
-			console.log('\n📊 PHASE 5: Final verification...')
+			console.log('\n📊 PHASE 6: Final verification...')
 			console.log('='.repeat(70))
 
 			// Count tables with tenant_code columns
@@ -1234,6 +1373,15 @@ module.exports = {
 				FROM information_schema.columns 
 				WHERE table_schema = 'public' 
 				AND column_name = 'organization_code'
+			`)
+
+			// Count foreign key constraints created
+			const [foreignKeyCount] = await queryInterface.sequelize.query(`
+				SELECT COUNT(*) as count 
+				FROM information_schema.table_constraints 
+				WHERE table_schema = 'public' 
+				AND constraint_type = 'FOREIGN KEY'
+				AND constraint_name LIKE 'fk_%'
 			`)
 
 			// Check data population status for key tables
@@ -1264,6 +1412,7 @@ module.exports = {
 			console.log('='.repeat(70))
 			console.log(`✅ Tables with tenant_code columns: ${tenantCodeTables[0].count}`)
 			console.log(`✅ Tables with organization_code columns: ${orgCodeTables[0].count}`)
+			console.log(`✅ Foreign key constraints created: ${foreignKeyCount[0].count}`)
 			if (citusEnabled[0].exists) {
 				console.log(`✅ Distributed tables: ${distributedCount}`)
 				console.log(`✅ Distribution success rate: ${Math.round((distributedCount / 28) * 100)}%`)
@@ -1307,6 +1456,7 @@ module.exports = {
 				'modules',
 				'notification_templates',
 				'organization_extension',
+				'permissions',
 				'post_session_details',
 				'question_sets',
 				'questions',
@@ -1340,6 +1490,41 @@ module.exports = {
 					console.log(`✅ Undistributed: role_permission_mapping`)
 				} catch (error) {
 					console.log(`⚠️  Could not undistribute role_permission_mapping: ${error.message}`)
+				}
+			}
+
+			// Remove foreign key constraints first
+			console.log('\n🔑 Removing foreign key constraints...')
+			const foreignKeyConstraints = [
+				'fk_entities_entity_type_id',
+				'fk_role_permission_mapping_permission_id',
+				'fk_session_attendees_session_id',
+				'fk_feedbacks_session_id',
+				'fk_resources_session_id',
+				'fk_post_session_details_session_id',
+				'fk_availabilities_session_id',
+				'fk_questionnaire_responses_session_id',
+			]
+
+			for (const constraintName of foreignKeyConstraints) {
+				try {
+					// Find the table that has this constraint
+					const [constraintInfo] = await queryInterface.sequelize.query(`
+						SELECT table_name 
+						FROM information_schema.table_constraints 
+						WHERE constraint_name = '${constraintName}' 
+						AND constraint_type = 'FOREIGN KEY'
+					`)
+
+					if (constraintInfo.length > 0) {
+						const tableName = constraintInfo[0].table_name
+						await queryInterface.sequelize.query(`
+							ALTER TABLE ${tableName} DROP CONSTRAINT IF EXISTS ${constraintName}
+						`)
+						console.log(`✅ Removed foreign key constraint: ${constraintName}`)
+					}
+				} catch (error) {
+					console.log(`⚠️  Could not remove foreign key constraint ${constraintName}: ${error.message}`)
 				}
 			}
 

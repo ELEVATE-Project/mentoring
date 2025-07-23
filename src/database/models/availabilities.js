@@ -42,15 +42,27 @@ module.exports = (sequelize, DataTypes) => {
 			organization_id: { type: DataTypes.STRING, allowNull: false, defaultValue: 0, primaryKey: true },
 			organization_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_ORG',
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_TENANT',
 			},
 		},
 		{ sequelize, modelName: 'Availability', tableName: 'availabilities', freezeTableName: true, paranoid: true }
 	)
+
+	Availability.associate = (models) => {
+		Availability.belongsTo(models.Session, {
+			foreignKey: 'session_id',
+			as: 'session',
+			scope: {
+				deleted_at: null,
+			},
+		})
+	}
 
 	return Availability
 }

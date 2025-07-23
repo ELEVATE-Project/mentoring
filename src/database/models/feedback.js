@@ -18,14 +18,27 @@ module.exports = (sequelize, DataTypes) => {
 			user_id: { type: DataTypes.STRING, allowNull: false, primaryKey: true },
 			organization_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_ORG',
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_TENANT',
 			},
 		},
 		{ sequelize, modelName: 'Feedback', tableName: 'feedbacks', freezeTableName: true, paranoid: true }
 	)
+
+	Feedback.associate = (models) => {
+		Feedback.belongsTo(models.Session, {
+			foreignKey: 'session_id',
+			as: 'session',
+			scope: {
+				deleted_at: null,
+			},
+		})
+	}
+
 	return Feedback
 }

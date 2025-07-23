@@ -145,14 +145,64 @@ module.exports = (sequelize, DataTypes) => {
 			},
 			organization_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_ORG',
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_TENANT',
 			},
 		},
 		{ sequelize, modelName: 'Session', tableName: 'sessions', freezeTableName: true, paranoid: true }
 	)
+
+	Session.associate = (models) => {
+		// Session has many attendees
+		Session.hasMany(models.SessionAttendee, {
+			foreignKey: 'session_id',
+			as: 'attendees',
+			scope: {
+				deleted_at: null,
+			},
+		})
+
+		// Session has many feedbacks
+		Session.hasMany(models.Feedback, {
+			foreignKey: 'session_id',
+			as: 'feedbacks',
+			scope: {
+				deleted_at: null,
+			},
+		})
+
+		// Session has many resources
+		Session.hasMany(models.Resources, {
+			foreignKey: 'session_id',
+			as: 'resources',
+			scope: {
+				deleted_at: null,
+			},
+		})
+
+		// Session has one post session detail
+		Session.hasOne(models.PostSessionDetail, {
+			foreignKey: 'session_id',
+			as: 'post_session_detail',
+			scope: {
+				deleted_at: null,
+			},
+		})
+
+		// Session has many availabilities (optional relationship)
+		Session.hasMany(models.Availability, {
+			foreignKey: 'session_id',
+			as: 'availabilities',
+			scope: {
+				deleted_at: null,
+			},
+		})
+	}
+
 	return Session
 }

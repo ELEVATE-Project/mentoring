@@ -11,12 +11,14 @@ module.exports = (sequelize, DataTypes) => {
 			},
 			organization_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_ORG',
 				primaryKey: true,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_TENANT',
 				primaryKey: true,
 			},
 			session_visibility_policy: { type: DataTypes.STRING },

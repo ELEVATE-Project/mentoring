@@ -44,11 +44,13 @@ module.exports = (sequelize, DataTypes) => {
 			},
 			organization_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_ORG',
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_TENANT',
 			},
 			created_at: {
 				allowNull: false,
@@ -63,6 +65,16 @@ module.exports = (sequelize, DataTypes) => {
 		},
 		{ sequelize, modelName: 'Resources', tableName: 'resources', freezeTableName: true, paranoid: true }
 	)
+
+	Resource.associate = (models) => {
+		Resource.belongsTo(models.Session, {
+			foreignKey: 'session_id',
+			as: 'session',
+			scope: {
+				deleted_at: null,
+			},
+		})
+	}
 
 	return Resource
 }

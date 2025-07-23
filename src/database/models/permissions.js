@@ -32,11 +32,13 @@ module.exports = (sequelize, DataTypes) => {
 			},
 			organization_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_ORG',
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_TENANT',
 			},
 		},
 		{
@@ -56,6 +58,14 @@ module.exports = (sequelize, DataTypes) => {
 			paranoid: true,
 		}
 	)
+
+	Permission.associate = (models) => {
+		// Permission has many role mappings
+		Permission.hasMany(models.RolePermission, {
+			foreignKey: 'permission_id',
+			as: 'role_mappings',
+		})
+	}
 
 	return Permission
 }

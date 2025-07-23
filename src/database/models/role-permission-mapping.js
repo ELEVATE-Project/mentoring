@@ -30,11 +30,13 @@ module.exports = (sequelize, DataTypes) => {
 			},
 			organization_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_ORG',
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_TENANT',
 			},
 		},
 		{
@@ -44,6 +46,14 @@ module.exports = (sequelize, DataTypes) => {
 			paranoid: false,
 		}
 	)
+
+	RolePermission.associate = (models) => {
+		// RolePermission belongs to Permission
+		RolePermission.belongsTo(models.Permission, {
+			foreignKey: 'permission_id',
+			as: 'permission',
+		})
+	}
 
 	return RolePermission
 }

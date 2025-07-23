@@ -25,11 +25,13 @@ module.exports = (sequelize, DataTypes) => {
 			},
 			organization_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_ORG',
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
-				allowNull: true,
+				allowNull: false,
+				defaultValue: 'DEFAULT_TENANT',
 			},
 		},
 		{
@@ -40,6 +42,16 @@ module.exports = (sequelize, DataTypes) => {
 			paranoid: true,
 		}
 	)
+
+	PostSessionDetail.associate = (models) => {
+		PostSessionDetail.belongsTo(models.Session, {
+			foreignKey: 'session_id',
+			as: 'session',
+			scope: {
+				deleted_at: null,
+			},
+		})
+	}
 
 	return PostSessionDetail
 }
