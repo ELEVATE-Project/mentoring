@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Production Migration Runner for Mentoring Service
+ * Migration Runner for Mentoring Service
  * Handles 30+ lakh records with Citus distribution
  */
 
@@ -9,14 +9,14 @@ require('dotenv').config({ path: '../.env' })
 const MentoringDataMigrator = require('./helper')
 const readline = require('readline')
 
-console.log('🎯 Production Mentoring Service Data Migration')
+console.log('🎯 Mentoring Service Data Migration')
 console.log('==============================================')
 
 // Configuration check
 console.log('\n📋 Environment Configuration:')
 console.log(`   Database URL: ${process.env.DEV_DATABASE_URL ? '✅ Set' : '❌ Missing'}`)
-console.log(`   Default Tenant: ${process.env.DEFAULT_ORGANISATION_CODE || 'DEFAULT_TENANT'}`)
-console.log(`   Default Org Code: ${process.env.DEFAULT_ORG_CODE || 'DEFAULT_ORG'}`)
+console.log(`   Default Tenant: ${process.env.DEFAULT_TENANT_CODE}`)
+console.log(`   Default Org Code: ${process.env.DEFAULT_ORG_CODE}`)
 console.log(`   Default Org ID: ${process.env.DEFAULT_ORG_ID || '1'}`)
 
 // Check CSV files
@@ -80,30 +80,30 @@ const rl = readline.createInterface({
 	output: process.stdout,
 })
 
-rl.question('\n🤔 Proceed with production migration? (y/N): ', async (answer) => {
+rl.question('\n🤔 Proceed with migration? (y/N): ', async (answer) => {
 	if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-		console.log('\n🚀 Starting production migration...')
+		console.log('\n🚀 Starting migration...')
 		console.log('   ⏰ Started at:', new Date().toISOString())
 		rl.close()
 
 		try {
 			const migrator = new MentoringDataMigrator()
 
-			// Production configuration - can be overridden via environment variables
+			// Migration configuration - can be overridden via environment variables
 			migrator.batchSize = parseInt(process.env.BATCH_SIZE) || 5000
 			migrator.progressInterval = parseInt(process.env.PROGRESS_INTERVAL) || 10000
 
-			console.log('\n📊 Production Settings:')
+			console.log('\n📊 Migration Settings:')
 			console.log(`   Batch size: ${migrator.batchSize}`)
 			console.log(`   Progress updates: Every ${migrator.progressInterval} records`)
 
 			await migrator.execute()
 
-			console.log('\n🎉 Production migration completed successfully!')
+			console.log('\n🎉 Migration completed successfully!')
 			console.log('   ⏰ Finished at:', new Date().toISOString())
 			process.exit(0)
 		} catch (error) {
-			console.error('\n❌ Production migration failed:', error)
+			console.error('\n❌ Migration failed:', error)
 			console.log('   ⏰ Failed at:', new Date().toISOString())
 			console.log('\n🔧 Troubleshooting:')
 			console.log('   • Check database connectivity')

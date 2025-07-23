@@ -1,4 +1,5 @@
-'use strict'
+require('dotenv').config({ path: '../../.env' })
+;('use strict')
 const Sequelize = require('sequelize')
 const Op = Sequelize.Op
 const defaultChatEnabled = process.env.ENABLE_CHAT === 'true'
@@ -100,12 +101,12 @@ module.exports = (sequelize, DataTypes) => {
 			organization_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: 'DEFAULT_ORG',
+				defaultValue: process.env.DEFAULT_ORG_CODE,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: 'DEFAULT_TENANT',
+				defaultValue: process.env.DEFAULT_TENANT_CODE,
 			},
 		},
 		{

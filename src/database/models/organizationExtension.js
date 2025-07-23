@@ -1,4 +1,5 @@
 'use strict'
+require('dotenv').config({ path: '../../.env' })
 const { Model } = require('sequelize')
 module.exports = (sequelize, DataTypes) => {
 	const OrganizationExtension = sequelize.define(
@@ -12,13 +13,13 @@ module.exports = (sequelize, DataTypes) => {
 			organization_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: 'DEFAULT_ORG',
+				defaultValue: process.env.DEFAULT_ORG_CODE,
 				primaryKey: true,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: 'DEFAULT_TENANT',
+				defaultValue: process.env.DEFAULT_TENANT_CODE,
 				primaryKey: true,
 			},
 			session_visibility_policy: { type: DataTypes.STRING },

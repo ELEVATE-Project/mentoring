@@ -1,4 +1,5 @@
 'use strict'
+require('dotenv').config({ path: '../../.env' })
 module.exports = (sequelize, DataTypes) => {
 	const Form = sequelize.define(
 		'Form',
@@ -32,12 +33,12 @@ module.exports = (sequelize, DataTypes) => {
 			organization_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: 'DEFAULT_ORG',
+				defaultValue: process.env.DEFAULT_ORG_CODE,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: 'DEFAULT_TENANT',
+				defaultValue: process.env.DEFAULT_TENANT_CODE,
 			},
 		},
 		{ sequelize, modelName: 'Form', tableName: 'forms', freezeTableName: true, paranoid: true }

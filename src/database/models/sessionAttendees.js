@@ -1,3 +1,4 @@
+require('dotenv').config({ path: '../../.env' })
 module.exports = (sequelize, DataTypes) => {
 	const SessionAttendee = sequelize.define(
 		'SessionAttendee',
@@ -45,12 +46,12 @@ module.exports = (sequelize, DataTypes) => {
 			organization_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: 'DEFAULT_ORG',
+				defaultValue: process.env.DEFAULT_ORG_CODE,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: 'DEFAULT_TENANT',
+				defaultValue: process.env.DEFAULT_TENANT_CODE,
 			},
 		},
 		{
