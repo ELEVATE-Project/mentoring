@@ -15,7 +15,10 @@ module.exports = {
 			{
 				code: 'request_session_rejected_email_template',
 				subject: 'Request Session Rejected',
-				body: '<p>Dear {name},</p> Mentor {mentorName} has rejected your session request. Thanks!',
+				body: `<p>Dear {name},</p>
+					   <p> Mentor {mentorName} has rejected your session request.</p>
+					   <p>Reason: {reason} </p>
+					   <p>Thanks! </p>`,
 			},
 		]
 

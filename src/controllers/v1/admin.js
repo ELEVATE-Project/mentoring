@@ -23,7 +23,7 @@ module.exports = class admin {
 
 	async userDelete(req) {
 		try {
-			const userDelete = await adminService.userDelete(req.decodedToken, req.query.userId)
+			const userDelete = await adminService.userDelete(req.query.userId)
 			return userDelete
 		} catch (error) {
 			return error

@@ -514,7 +514,13 @@ module.exports = class requestSessionsHelper {
 			}
 
 			const templateCode = process.env.MENTOR_REJECT_SESSION_REQUEST_EMAIL_TEMPLATE
-			emailForAcceptAndReject(templateCode, orgId.toString(), rejectedData[0].dataValues.requestor_id, userId)
+			emailForAcceptAndReject(
+				templateCode,
+				orgId.toString(),
+				rejectedData[0].dataValues.requestor_id,
+				userId,
+				bodyData.reason
+			)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -706,7 +712,7 @@ function createMentorAvailabilityResponse(data) {
 	}
 }
 
-async function emailForAcceptAndReject(templateCode, orgId, requestor_id, mentorUserId) {
+async function emailForAcceptAndReject(templateCode, orgId, requestor_id, mentorUserId, rejectReason = '') {
 	const menteeDetails = await userExtensionQueries.getUsersByUserIds(requestor_id, {
 		attributes: ['name', 'email'],
 	})
@@ -733,6 +739,7 @@ async function emailForAcceptAndReject(templateCode, orgId, requestor_id, mentor
 				body: utils.composeEmailBody(templateData.body, {
 					name: name,
 					mentorName: mentorDetails.name,
+					reason: rejectReason,
 				}),
 			},
 		}

@@ -434,6 +434,11 @@ let enviromentVariables = {
 		optional: true,
 		default: 'internalmentoring',
 	},
+	KAFKA_INTERNAL_CACHE_GROUP_ID: {
+		message: 'Required Default Internal Cache',
+		optional: true,
+		default: 'mentoring.cache',
+	},
 	MENTOR_ACCEPT_SESSION_REQUEST_EMAIL_TEMPLATE: {
 		message: 'Required email template name for request session accepted',
 		optional: true,
@@ -547,6 +552,16 @@ let enviromentVariables = {
 		message: 'Request Session Allowed Limit in months',
 		optional: true,
 		default: 3,
+	},
+	CONNECTION_REQUEST_ACCEPT_EMAIL_TEMPLATE: {
+		message: 'Required email template name for chat request accepted',
+		optional: true,
+		default: 'connection_request_accept',
+	},
+	SESSION_MEETLINK_ADDED_EMAIL_TEMPLATE: {
+		message: 'Required email template name for session meet link added',
+		optional: true,
+		default: 'session_meeting_link_added',
 	},
 }
 
