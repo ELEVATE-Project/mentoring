@@ -1,5 +1,6 @@
-const { Sequelize } = require('sequelize')
-require('dotenv').config({ path: '.env' })
+require('module-alias/register')
+require('dotenv').config({ path: '../.env' })
+const db = require('@database/models/index')
 
 /**
  * Script for Tenant Code Migration
@@ -11,16 +12,7 @@ require('dotenv').config({ path: '.env' })
 
 class TenantMigrationFinalizer {
 	constructor() {
-		this.sequelize = new Sequelize(process.env.DEV_DATABASE_URL, {
-			dialect: 'postgres',
-			logging: false,
-			pool: {
-				max: 10,
-				min: 2,
-				acquire: 30000,
-				idle: 10000,
-			},
-		})
+		this.sequelize = db.sequelize
 
 		// Tables configuration from helper.js
 		this.allTables = [
@@ -127,16 +119,6 @@ class TenantMigrationFinalizer {
 					continue
 				}
 
-				// Check for NULL values
-				const [nullCount] = await this.sequelize.query(`
-					SELECT COUNT(*) as count FROM ${tableName} WHERE tenant_code IS NULL
-				`)
-
-				if (nullCount[0].count > 0) {
-					console.log(`❌ ${tableName} has ${nullCount[0].count} NULL tenant_code values - backfill required`)
-					continue
-				}
-
 				// Set NOT NULL constraint
 				await this.sequelize.query(`
 					ALTER TABLE ${tableName} ALTER COLUMN tenant_code SET NOT NULL
@@ -159,18 +141,6 @@ class TenantMigrationFinalizer {
 
 				if (!tableInfo[0].table_exists || !tableInfo[0].has_org_code) {
 					console.log(`⚠️  ${tableName} missing table or organization_code column, skipping`)
-					continue
-				}
-
-				// Check for NULL values
-				const [nullCount] = await this.sequelize.query(`
-					SELECT COUNT(*) as count FROM ${tableName} WHERE organization_code IS NULL
-				`)
-
-				if (nullCount[0].count > 0) {
-					console.log(
-						`❌ ${tableName} has ${nullCount[0].count} NULL organization_code values - backfill required`
-					)
 					continue
 				}
 
@@ -283,6 +253,13 @@ class TenantMigrationFinalizer {
 				refTable: 'sessions',
 				refColumn: 'id',
 				name: 'fk_post_session_details_session_id',
+			},
+			{
+				table: 'question_sets',
+				column: 'questions',
+				refTable: 'questions',
+				refColumn: 'id',
+				name: 'fk_question_sets_questions',
 			},
 		]
 
@@ -399,35 +376,90 @@ class TenantMigrationFinalizer {
 		console.log('\n📊 PHASE 5: Creating unique indexes...')
 		console.log('='.repeat(50))
 
+		// Based on "Unique constraints" column from provided data - ONLY what was specified
 		const indexConfigs = [
 			{
-				table: 'connections',
-				name: 'unique_user_friend_tenant_connections',
-				columns: 'tenant_code, user_id, friend_id',
+				table: 'availabilities',
+				name: 'unique_availabilities_event_name',
+				columns: 'event_name',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
 				table: 'connection_requests',
-				name: 'unique_user_friend_tenant_connection_requests',
-				columns: 'tenant_code, user_id, friend_id',
+				name: 'unique_connection_requests_friend_user_tenant',
+				columns: 'friend_id, user_id, tenant_code',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
+				table: 'connections',
+				name: 'unique_connections_friend_user_tenant',
+				columns: 'friend_id, user_id, tenant_code',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
+				table: 'default_rules',
+				name: 'unique_default_rules_type_org_tenant',
+				columns: 'type, organization_id, tenant_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
 				table: 'entities',
-				name: 'unique_entities_value_tenant',
-				columns: 'tenant_code, value, entity_type_id',
+				name: 'unique_entities_entity_type_tenant',
+				columns: 'entity_type_id, tenant_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
 				table: 'entity_types',
-				name: 'unique_entity_types_value_org_tenant',
-				columns: 'tenant_code, value, organization_id',
+				name: 'unique_entity_types_value_tenant',
+				columns: 'value, tenant_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
 				table: 'forms',
-				name: 'unique_forms_type_subtype_org_tenant',
-				columns: 'tenant_code, type, sub_type, organization_id',
+				name: 'unique_forms_type_subtype_org',
+				columns: 'type, sub_type, organization_id',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
+				table: 'modules',
+				name: 'unique_modules_code',
+				columns: 'code',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
+				table: 'notification_templates',
+				name: 'unique_notification_templates_code_org',
+				columns: 'code, organization_id',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
+				table: 'organization_extension',
+				name: 'unique_organization_extension_org_tenant',
+				columns: 'organization_code, tenant_code, organization_code',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
+				table: 'report_role_mapping',
+				name: 'unique_report_role_mapping_role_code',
+				columns: 'role_title, report_code',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
+				table: 'report_types',
+				name: 'unique_report_types_title_tenant',
+				columns: 'title, tenant_code',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
+				table: 'role_extensions',
+				name: 'unique_role_extensions_title',
+				columns: 'title',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
+				table: 'user_extensions',
+				name: 'unique_user_extensions_user_tenant_email_phone_name',
+				columns: 'user_id, tenant_code, email, phone, user_name',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 		]
