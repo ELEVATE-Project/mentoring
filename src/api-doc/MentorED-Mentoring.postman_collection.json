@@ -5920,6 +5920,24 @@
 					]
 				}
 			]
+		},
+		{
+			"name": "healthCheck",
+			"item": [
+				{
+					"name": "health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/health",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["health"]
+						}
+					},
+					"response": []
+				}
+			]
 		}
 	]
 }

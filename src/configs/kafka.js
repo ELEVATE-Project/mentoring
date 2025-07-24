@@ -18,7 +18,7 @@ module.exports = async () => {
 	})
 
 	const producer = KafkaClient.producer()
-	const consumer = KafkaClient.consumer({ groupId: process.env.KAFKA_GROUP_ID })
+	const consumer = KafkaClient.consumer({ groupId: process.env.KAFKA_INTERNAL_CACHE_GROUP_ID })
 
 	await producer.connect()
 	await consumer.connect()

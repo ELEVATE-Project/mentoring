@@ -1524,6 +1524,7 @@ module.exports = class MenteesHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+			let totalSessionHosted
 			if (requestedUserExtension.is_mentor == true) {
 				// Get mentor visibility and org id
 				const validateDefaultRules = await validateDefaultRulesFilter({
@@ -1547,6 +1548,7 @@ module.exports = class MenteesHelper {
 						responseCode: 'CLIENT_ERROR',
 					})
 				}
+				totalSessionHosted = await sessionQueries.countHostedSessions(id)
 			}
 			// Check for accessibility for reading shared mentor profile
 			const isAccessible = await checkIfUserIsAccessible(userId, requestedUserExtension)
@@ -1598,6 +1600,20 @@ module.exports = class MenteesHelper {
 			processDbResponse.profile_mandatory_fields = profileMandatoryFields
 
 			const connection = await connectionQueries.getConnection(userId, id)
+
+			const orgDetails = await organisationExtensionQueries.findOne(
+				{ organization_id: orgId },
+				{ attributes: ['name'] }
+			)
+			processDbResponse['organization'] = {
+				id: orgId,
+				name: orgDetails.name,
+			}
+
+			const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id)
+
+			processDbResponse.sessions_attended = totalSession
+			processDbResponse.sessions_hosted = totalSessionHosted
 
 			processDbResponse.is_connected = Boolean(connection)
 

@@ -240,15 +240,19 @@ module.exports = class ConnectionHelper {
 			})
 
 			const userIds = connectionsWithDetails.map((item) => item.friend_id)
-			const userDetails = await userRequests.getListOfUserDetails(userIds, true)
-			const userDetailsMap = new Map(userDetails.result.map((userDetail) => [String(userDetail.id), userDetail]))
+			const userDetails = await userRequests.getUserDetailedList(userIds)
+			const userDetailsMap = new Map(
+				userDetails.result.map((userDetail) => [String(userDetail.user_id), userDetail])
+			)
 			connectionsWithDetails = connectionsWithDetails.filter((connectionsWithDetail) => {
 				const user_id = String(connectionsWithDetail.friend_id)
 
 				if (userDetailsMap.has(user_id)) {
 					const userDetail = userDetailsMap.get(user_id)
-					connectionsWithDetail.user_details.image = userDetail.image
-					return true
+					if (userDetail && connectionsWithDetail.user_details) {
+						connectionsWithDetail.user_details.image = userDetail.image
+						return true
+					}
 				}
 				return false
 			})
@@ -271,7 +275,7 @@ module.exports = class ConnectionHelper {
 	 * @param {string} userId - The ID of the authenticated user.
 	 * @returns {Promise<Object>} A success response indicating the request was accepted.
 	 */
-	static async accept(bodyData, userId) {
+	static async accept(bodyData, userId, orgId) {
 		try {
 			const connectionRequest = await this.checkConnectionRequestExists(userId, bodyData.user_id)
 			if (!connectionRequest)
@@ -312,6 +316,8 @@ module.exports = class ConnectionHelper {
 			const updateConnection = await connectionQueries.updateConnection(userId, bodyData.user_id, {
 				meta: metaUpdate,
 			})
+
+			await this.sendConnectionAcceptNotification(bodyData.user_id, userId, orgId)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -431,8 +437,10 @@ module.exports = class ConnectionHelper {
 				)
 			}
 			const userIds = extensionDetails.data.map((item) => item.user_id)
-			const userDetails = await userRequests.getListOfUserDetails(userIds, true)
-			const userDetailsMap = new Map(userDetails.result.map((userDetail) => [String(userDetail.id), userDetail]))
+			const userDetails = await userRequests.getUserDetailedList(userIds)
+			const userDetailsMap = new Map(
+				userDetails.result.map((userDetail) => [String(userDetail.user_id), userDetail])
+			)
 			extensionDetails.data = extensionDetails.data.filter((extensionDetail) => {
 				const user_id = String(extensionDetail.user_id)
 				if (userDetailsMap.has(user_id)) {
@@ -508,6 +516,65 @@ module.exports = class ConnectionHelper {
 			}
 		} catch (error) {
 			console.error('Error sending connection rejection notification:', error)
+			// Don't throw error to avoid breaking the main rejection flow
+		}
+	}
+
+	/**
+	 * @name sendConnectionAcceptNotification
+	 * Send email notification to mentee when connection request is accepted
+	 * @param {string} menteeId - ID of the mentee who sent the connection request
+	 * @param {string} mentorId - ID of the mentor who accepted the request
+	 * @param {string} orgId - Organization ID
+	 */
+	static async sendConnectionAcceptNotification(menteeId, mentorId, orgId) {
+		try {
+			const templateCode = process.env.CONNECTION_REQUEST_ACCEPT_EMAIL_TEMPLATE
+			if (!templateCode) {
+				console.log('CONNECTION_REQUEST_ACCEPT_EMAIL_TEMPLATE not configured, skipping notification')
+				return
+			}
+
+			// Get mentee details
+			const menteeDetails = await userExtensionQueries.getUsersByUserIds([menteeId], {
+				attributes: ['name', 'email', 'user_id'],
+			})
+
+			// Get mentor details
+			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true)
+
+			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
+				console.log('Unable to fetch user details for connection rejection notification')
+				return
+			}
+
+			// Get email template
+			const templateData = await notificationQueries.findOneEmailTemplate(templateCode, orgId.toString())
+
+			if (templateData) {
+				const menteeName = menteeDetails[0].name
+				const mentorName = mentorDetails.name
+
+				// Create email payload
+				const payload = {
+					type: 'email',
+					email: {
+						to: menteeDetails[0].email,
+						subject: templateData.subject,
+						body: utils.composeEmailBody(templateData.body, {
+							menteeName: menteeName,
+							mentorName: mentorName,
+						}),
+					},
+				}
+
+				console.log('CONNECTION ACCEPT EMAIL PAYLOAD: ', payload)
+				await kafkaCommunication.pushEmailToKafka(payload)
+			} else {
+				console.log(`Email template not found for code: ${templateCode}`)
+			}
+		} catch (error) {
+			console.error('Error sending connection accept notification:', error)
 			// Don't throw error to avoid breaking the main rejection flow
 		}
 	}

@@ -129,12 +129,11 @@ module.exports = class AdminHelper {
 	 * userDelete
 	 * @method
 	 * @name userDelete
-	 * @param {decodedToken} decodedToken - decoded token of admin.
 	 * @param {userId} userId - UserId of the user that needs to be deleted
 	 * @returns {JSON} - List of users
 	 */
 
-	static async userDelete(decodedToken, userId) {
+	static async userDelete(userId) {
 		try {
 			let result = {}
 
@@ -192,9 +191,7 @@ module.exports = class AdminHelper {
 			}
 
 			// Step 4: Check for user connections
-			const connectionCount = await connectionQueries.getConnectionsCount('', userId, [
-				decodedToken.organization_id,
-			]) // filter, userId = "1", organizationIds = ["1", "2"]
+			const connectionCount = await connectionQueries.getConnectionsCount('', userId) // filter, userId = "1", organizationIds = ["1", "2"]
 
 			if (connectionCount > 0) {
 				// Get connected mentors before deleting connections (for notifications)

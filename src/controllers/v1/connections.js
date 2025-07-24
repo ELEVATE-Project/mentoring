@@ -65,7 +65,7 @@ module.exports = class Connection {
 	 */
 	async accept(req) {
 		try {
-			return await connectionsService.accept(req.body, req.decodedToken.id)
+			return await connectionsService.accept(req.body, req.decodedToken.id, req.decodedToken.organization_id)
 		} catch (error) {
 			throw error
 		}

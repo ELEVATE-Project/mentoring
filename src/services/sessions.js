@@ -462,6 +462,15 @@ module.exports = class SessionsHelper {
 				})
 			}
 
+			let triggerSessionMeetinkAddEmail = false
+			if (
+				sessionDetail.meeting_info.platform == 'OFF' &&
+				bodyData.meeting_info &&
+				bodyData.meeting_info.platform
+			) {
+				triggerSessionMeetinkAddEmail = true
+			}
+
 			if (sessionDetail.status == common.COMPLETED_STATUS && bodyData?.resources) {
 				const completedDate = moment(sessionDetail.completed_at)
 				const currentDate = moment.utc()
@@ -749,7 +758,13 @@ module.exports = class SessionsHelper {
 				}
 			}
 
-			if (method == common.DELETE_METHOD || isSessionReschedule || isSessionDataChanged || preResourceSendEmail) {
+			if (
+				method == common.DELETE_METHOD ||
+				isSessionReschedule ||
+				isSessionDataChanged ||
+				preResourceSendEmail ||
+				triggerSessionMeetinkAddEmail
+			) {
 				const sessionAttendees = await sessionAttendeesQueries.findAll({
 					session_id: sessionId,
 				})
@@ -801,6 +816,13 @@ module.exports = class SessionsHelper {
 				if (preResourceSendEmail) {
 					let preResourceTemplate = process.env.PRE_RESOURCE_EMAIL_TEMPLATE_CODE
 					templateData = await notificationQueries.findOneEmailTemplate(preResourceTemplate, orgId)
+				}
+
+				if (triggerSessionMeetinkAddEmail) {
+					templateData = await notificationQueries.findOneEmailTemplate(
+						process.env.SESSION_MEETLINK_ADDED_EMAIL_TEMPLATE,
+						orgId
+					)
 				}
 
 				// send mail associated with action to session mentees
@@ -956,6 +978,36 @@ module.exports = class SessionsHelper {
 										sessionDetail.time_zone
 									),
 									startTime: utils.getTimeZone(
+										sessionDetail.start_date,
+										common.timeFormat,
+										sessionDetail.time_zone
+									),
+								}),
+							},
+						}
+
+						let kafkaRes = await kafkaCommunication.pushEmailToKafka(payload)
+						console.log('Kafka payload:', payload)
+						console.log('Session attendee mapped, preResourceSendEmail true and kafka res: ', kafkaRes)
+					}
+					if (triggerSessionMeetinkAddEmail) {
+						const payload = {
+							type: 'email',
+							email: {
+								to: attendee.attendeeEmail,
+								subject: utils.composeEmailBody(templateData.subject, {
+									sessionTitle: sessionDetail.title,
+								}),
+								body: utils.composeEmailBody(templateData.body, {
+									mentorName: sessionDetail.mentor_name,
+									sessionTitle: sessionDetail.title,
+									sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetail.id,
+									Date: utils.getTimeZone(
+										sessionDetail.start_date,
+										common.dateFormat,
+										sessionDetail.time_zone
+									),
+									Time: utils.getTimeZone(
 										sessionDetail.start_date,
 										common.timeFormat,
 										sessionDetail.time_zone
