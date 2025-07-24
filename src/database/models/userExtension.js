@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../../.env' })
+require('dotenv').config()
 ;('use strict')
 const Sequelize = require('sequelize')
 const Op = Sequelize.Op

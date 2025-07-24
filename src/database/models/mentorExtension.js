@@ -1,5 +1,5 @@
 'use strict'
-require('dotenv').config({ path: '../../.env' })
+require('dotenv').config()
 const Sequelize = require('sequelize')
 const Op = Sequelize.Op
 module.exports = (sequelize, DataTypes) => {

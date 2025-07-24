@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../../.env' })
+require('dotenv').config()
 module.exports = (sequelize, DataTypes) => {
 	const RolePermission = sequelize.define(
 		'RolePermission',

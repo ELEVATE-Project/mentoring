@@ -68,7 +68,7 @@ class DatabaseIntegrityChecker {
 			}
 
 			try {
-				let whereClause = `t.${rel.column} IS NOT NULL AND r.${rel.refColumn} IS NULL AND t.deleted_at IS NULL`
+				let whereClause = `t.${rel.column} IS NOT NULL AND r.${rel.refColumn} IS NULL`
 
 				const orphans = await this.sequelize.query(
 					`

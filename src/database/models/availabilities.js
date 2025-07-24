@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../../.env' })
+require('dotenv').config()
 ;('use strict')
 module.exports = (sequelize, DataTypes) => {
 	const Availability = sequelize.define(
