@@ -1,5 +1,4 @@
 'use strict'
-require('dotenv').config()
 const Sequelize = require('sequelize')
 const Op = Sequelize.Op
 module.exports = (sequelize, DataTypes) => {
@@ -77,12 +76,10 @@ module.exports = (sequelize, DataTypes) => {
 			organization_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_ORG_CODE,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_TENANT_CODE,
 			},
 		},
 		{

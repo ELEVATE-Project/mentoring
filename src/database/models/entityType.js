@@ -1,5 +1,4 @@
 'use strict'
-require('dotenv').config()
 module.exports = (sequelize, DataTypes) => {
 	const EntityType = sequelize.define(
 		'EntityType',
@@ -18,12 +17,10 @@ module.exports = (sequelize, DataTypes) => {
 			organization_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_ORG_CODE,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_TENANT_CODE,
 			},
 			allow_filtering: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
 			data_type: { type: DataTypes.STRING, allowNull: false, defaultValue: 'STRING' },

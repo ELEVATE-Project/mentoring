@@ -1,6 +1,3 @@
-require('dotenv').config()
-;('use strict')
-
 module.exports = (sequelize, DataTypes) => {
 	const RoleExtension = sequelize.define(
 		'RoleExtension',
@@ -48,12 +45,10 @@ module.exports = (sequelize, DataTypes) => {
 			organization_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_ORG_CODE,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_TENANT_CODE,
 			},
 		},
 		{

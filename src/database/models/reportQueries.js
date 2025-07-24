@@ -1,6 +1,4 @@
 'use strict'
-require('dotenv').config()
-
 module.exports = (sequelize, DataTypes) => {
 	const ReportQuery = sequelize.define(
 		'ReportQuery',
@@ -21,13 +19,11 @@ module.exports = (sequelize, DataTypes) => {
 			organization_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_ORG_CODE,
 				primaryKey: true,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_TENANT_CODE,
 				primaryKey: true,
 			},
 			query: {

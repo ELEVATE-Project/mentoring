@@ -1,4 +1,3 @@
-require('dotenv').config()
 module.exports = (sequelize, DataTypes) => {
 	const Question = sequelize.define(
 		'Question',
@@ -57,12 +56,10 @@ module.exports = (sequelize, DataTypes) => {
 			organization_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_ORG_CODE,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_TENANT_CODE,
 			},
 		},
 		{ sequelize, modelName: 'Question', tableName: 'questions', freezeTableName: true, paranoid: true }

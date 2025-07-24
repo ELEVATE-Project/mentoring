@@ -9,7 +9,6 @@ require('dotenv').config({ path: '../.env' })
  * - Uses CSV lookup data directly (no temp tables)
  * - Consolidated batch processing
  * - Removes unnecessary code
- * - Follows Rakesh's PR comments
  */
 
 class MentoringDataMigrator {
@@ -427,9 +426,16 @@ class MentoringDataMigrator {
 	}
 
 	/**
-	 * Helper method to redistribute table if needed
+	 * Helper method to redistribute table if needed (only if Citus is enabled)
 	 */
 	async redistributeTableIfNeeded(tableName, partitionKey = 'tenant_code', shouldDistribute = true) {
+		const citusEnabled = await this.isCitusEnabled()
+
+		if (!citusEnabled) {
+			console.log(`✅ Skipping distribution for ${tableName} - Citus not enabled`)
+			return false
+		}
+
 		if (shouldDistribute) {
 			const isDistributed = await this.isTableDistributed(tableName)
 			if (!isDistributed) {

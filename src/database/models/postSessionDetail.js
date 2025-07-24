@@ -1,5 +1,3 @@
-require('dotenv').config()
-;('use strict')
 const { Model } = require('sequelize')
 module.exports = (sequelize, DataTypes) => {
 	const PostSessionDetail = sequelize.define(
@@ -27,12 +25,10 @@ module.exports = (sequelize, DataTypes) => {
 			organization_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_ORG_CODE,
 			},
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
-				defaultValue: process.env.DEFAULT_TENANT_CODE,
 			},
 		},
 		{
