@@ -5,7 +5,7 @@
  * Handles 30+ lakh records with Citus distribution
  */
 
-require('dotenv').config({ path: '../.env' })
+require('dotenv').config({ path: '../../.env' })
 const MentoringDataMigrator = require('./helper')
 const readline = require('readline')
 

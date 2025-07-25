@@ -2,7 +2,7 @@ const { Sequelize } = require('sequelize')
 const fs = require('fs')
 const path = require('path')
 const csv = require('csv-parser')
-require('dotenv').config({ path: '../.env' })
+require('dotenv').config({ path: '../../.env' })
 const DatabaseConnectionManager = require('./db-connection-utils')
 
 /**
