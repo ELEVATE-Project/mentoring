@@ -31,12 +31,17 @@ module.exports = class MenteeExtensionQueries {
 		}
 	}
 
-	static async updateMenteeExtension(userId, data, options = {}, customFilter = {}) {
+	static async updateMenteeExtension(userId, data, options = {}, customFilter = {}, tenantCode) {
 		try {
 			if (data.user_id) {
 				delete data['user_id']
 			}
-			const whereClause = _.isEmpty(customFilter) ? { user_id: userId } : customFilter
+			let whereClause
+			if (_.isEmpty(customFilter)) {
+				whereClause = { user_id: userId, tenant_code: tenantCode }
+			} else {
+				whereClause = customFilter
+			}
 
 			// If `meta` is included in `data`, use `jsonb_set` to merge changes safely
 			if (data.meta) {
@@ -156,10 +161,10 @@ module.exports = class MenteeExtensionQueries {
 			type: Sequelize.QueryTypes.UPDATE,
 		})
 	}
-	static async getMenteeExtension(userId, attributes = [], unScoped = false) {
+	static async getMenteeExtension(userId, attributes = [], unScoped = false, tenantCode) {
 		try {
 			const queryOptions = {
-				where: { user_id: userId },
+				where: { user_id: userId, tenant_code: tenantCode },
 				raw: true,
 			}
 			// If attributes are passed update query
@@ -181,9 +186,9 @@ module.exports = class MenteeExtensionQueries {
 		}
 	}
 
-	static async deleteMenteeExtension(userId, force = false) {
+	static async deleteMenteeExtension(userId, force = false, tenantCode) {
 		try {
-			const options = { where: { user_id: userId } }
+			const options = { where: { user_id: userId, tenant_code: tenantCode } }
 
 			if (force) {
 				options.force = true
@@ -193,7 +198,7 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
-	static async removeMenteeDetails(userId) {
+	static async removeMenteeDetails(userId, tenantCode) {
 		try {
 			const modelAttributes = MenteeExtension.rawAttributes
 
@@ -229,6 +234,7 @@ module.exports = class MenteeExtensionQueries {
 			return await MenteeExtension.update(fieldsToNullify, {
 				where: {
 					user_id: userId,
+					tenant_code: tenantCode,
 				},
 			})
 		} catch (error) {
@@ -237,12 +243,13 @@ module.exports = class MenteeExtensionQueries {
 		}
 	}
 
-	static async deleteMenteeExtension(userId) {
+	static async deleteMenteeExtension(userId, tenantCode) {
 		try {
 			// Completely delete the mentee extension record
 			const result = await MenteeExtension.destroy({
 				where: {
 					user_id: userId,
+					tenant_code: tenantCode,
 				},
 			})
 
@@ -374,9 +381,9 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
-	static async getMenteeExtensions(userIds, attributes = []) {
+	static async getMenteeExtensions(userIds, attributes = [], tenantCode) {
 		try {
-			const queryOptions = { where: { user_id: { [Op.in]: userIds } }, raw: true }
+			const queryOptions = { where: { user_id: { [Op.in]: userIds }, tenant_code: tenantCode }, raw: true }
 			// If attributes are passed update query
 			if (attributes.length > 0) {
 				queryOptions.attributes = attributes

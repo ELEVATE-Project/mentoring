@@ -1,5 +1,3 @@
-'use strict'
-
 module.exports = (sequelize, DataTypes) => {
 	const RoleExtension = sequelize.define(
 		'RoleExtension',
@@ -43,6 +41,14 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.DATE,
 				allowNull: false,
 				defaultValue: DataTypes.NOW,
+			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: false,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: false,
 			},
 		},
 		{
