@@ -68,7 +68,49 @@ class DatabaseIntegrityChecker {
 			}
 
 			try {
+				// Special handling for question_sets.questions array column
+				if (rel.table === 'question_sets' && rel.column === 'questions') {
+					await this.checkQuestionSetsArrayIntegrity(rel)
+					continue
+				}
+
+				// Check if the table has an 'id' column (required for this check)
+				const idColumnCheck = await this.sequelize.query(
+					`SELECT column_name FROM information_schema.columns 
+					 WHERE table_name = '${rel.table}' AND column_name = 'id'`,
+					{ type: QueryTypes.SELECT }
+				)
+
+				if (idColumnCheck.length === 0) {
+					this.warnings.push(`Table ${rel.table} does not have an 'id' column`)
+					continue
+				}
+
+				// Check if the column exists in the table before trying to query it
+				const columnCheck = await this.sequelize.query(
+					`SELECT column_name FROM information_schema.columns 
+					 WHERE table_name = '${rel.table}' AND column_name = '${rel.column}'`,
+					{ type: QueryTypes.SELECT }
+				)
+
+				if (columnCheck.length === 0) {
+					this.warnings.push(`Column ${rel.table}.${rel.column} does not exist`)
+					continue
+				}
+
 				let whereClause = `t.${rel.column} IS NOT NULL AND r.${rel.refColumn} IS NULL`
+
+				// Check if the reference column exists in the reference table
+				const refColumnCheck = await this.sequelize.query(
+					`SELECT column_name FROM information_schema.columns 
+					 WHERE table_name = '${rel.refTable}' AND column_name = '${rel.refColumn}'`,
+					{ type: QueryTypes.SELECT }
+				)
+
+				if (refColumnCheck.length === 0) {
+					this.warnings.push(`Reference column ${rel.refTable}.${rel.refColumn} does not exist`)
+					continue
+				}
 
 				const orphans = await this.sequelize.query(
 					`
@@ -111,6 +153,61 @@ class DatabaseIntegrityChecker {
 			} catch (error) {
 				this.warnings.push(`Could not check ${rel.table}.${rel.column}: ${error.message}`)
 			}
+		}
+	}
+
+	async checkQuestionSetsArrayIntegrity(rel) {
+		try {
+			// Proper integrity check for question_sets array column
+			const orphans = await this.sequelize.query(
+				`
+				SELECT DISTINCT qs.id, array_agg(missing_q.question_id) as missing_questions
+				FROM question_sets qs,
+				LATERAL (
+					SELECT unnest(qs.questions)::int as question_id
+				) as all_questions
+				LEFT JOIN questions q ON all_questions.question_id = q.id
+				LEFT JOIN LATERAL (
+					SELECT all_questions.question_id
+					WHERE q.id IS NULL
+				) as missing_q ON true
+				WHERE qs.questions IS NOT NULL 
+				AND missing_q.question_id IS NOT NULL
+				GROUP BY qs.id
+			`,
+				{ type: QueryTypes.SELECT }
+			)
+
+			if (orphans.length > 0) {
+				const totalCount = orphans.reduce((sum, row) => sum + row.missing_questions.length, 0)
+				const allIds = orphans
+					.map((row) => `id:${row.id}(questions:${row.missing_questions.join(',')})`)
+					.join(', ')
+
+				// Add to main issues array for console output
+				this.issues.push(
+					`${totalCount} orphaned records in ${rel.table}.${rel.column} → ${rel.refTable}.${rel.refColumn}. All records: ${allIds}`
+				)
+
+				// Add detailed records to log file data
+				this.detailedIssues.push({
+					type: 'ORPHANED_RECORDS',
+					table: rel.table,
+					column: rel.column,
+					refTable: rel.refTable,
+					refColumn: rel.refColumn,
+					totalCount: totalCount,
+					timestamp: new Date().toISOString(),
+					records: orphans.map((row) => ({
+						id: row.id,
+						invalidReference: row.missing_questions,
+					})),
+				})
+			} else {
+				this.passed.push(`No orphaned records in ${rel.table}.${rel.column}`)
+			}
+		} catch (error) {
+			this.warnings.push(`Could not check ${rel.table}.${rel.column} with array logic: ${error.message}`)
 		}
 	}
 
