@@ -170,4 +170,28 @@ module.exports = class Reports {
 			return error
 		}
 	}
+
+	/**
+	 * Handles a request to fetch report data using a raw SELECT SQL query.
+	 *
+	 * This method delegates the actual SQL execution to `reportService.fetchData`,
+	 * which validates the query and returns results only for SELECT statements.
+	 *
+	 * @param {Object} req - The Express request object.
+	 * @param {Object} req.body - The request body containing the query.
+	 * @param {string} req.body.query - The raw SQL SELECT query string.
+	 *
+	 * @returns {Promise<Object>} - The response returned by the report service.
+	 *
+	 * @throws {Error} - Returns the error object if execution fails.
+	 */
+	async fetchData(req) {
+		try {
+			const data = await reportService.fetchData(req.body)
+			return data
+		} catch (error) {
+			// Optionally, log the error here
+			return error
+		}
+	}
 }

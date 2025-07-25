@@ -595,4 +595,56 @@ module.exports = class ReportsHelper {
 		const uploadRes = await fileUploadPath.uploadFileToCloud(outputFilename, inviteeFileDir, userId, orgId)
 		return uploadRes.result.uploadDest
 	}
+
+	/**
+	 * Execute a raw SELECT SQL query passed by the user.
+	 *
+	 * ⚠️ Only SELECT queries are allowed.
+	 * Any attempt to run non-SELECT or multiple statements will be rejected.
+	 *
+	 * @param {Object} data - The input object.
+	 * @param {string} data.query - The raw SQL SELECT query string to execute.
+	 *
+	 * @returns {Promise<Object>} - Success response with query result.
+	 *
+	 * @throws {Error} - If the query is invalid, non-SELECT, or execution fails.
+	 */
+	static async fetchData(data) {
+		try {
+			const query = data.query?.trim()
+
+			if (!query || typeof query !== 'string') {
+				throw new Error('Query must be a valid string')
+			}
+
+			const lower = query.toLowerCase()
+
+			// 1. Must start with SELECT
+			if (!lower.startsWith('select')) {
+				throw new Error('Only SELECT queries are allowed')
+			}
+
+			// 2. Reject queries with semicolons (prevents multiple queries)
+			if (query.includes(';')) {
+				throw new Error('Multiple statements are not allowed')
+			}
+
+			// 3. Run query safely
+			const result = await sequelize.query(query, {
+				type: sequelize.QueryTypes.SELECT,
+			})
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.accepted,
+				message: 'Data fetched successfully',
+				result,
+			})
+		} catch (err) {
+			console.error('Query execution error:', err)
+			return responses.errorResponse({
+				statusCode: httpStatusCode.bad_request,
+				message: err.message || 'Invalid query',
+			})
+		}
+	}
 }
