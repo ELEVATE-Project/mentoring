@@ -17,6 +17,7 @@ const ProjectRootDir = path.join(__dirname, '../')
 const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const fileUploadPath = require('@helpers/uploadFileToCloud')
 const { Op } = require('sequelize')
+const { queryForbiddenPatterns } = require('@constants/blacklistConfig')
 
 module.exports = class ReportsHelper {
 	/**
@@ -609,42 +610,54 @@ module.exports = class ReportsHelper {
 	 *
 	 * @throws {Error} - If the query is invalid, non-SELECT, or execution fails.
 	 */
-	static async fetchData(data) {
+	static async fetchData(data, pageNo, pageSize) {
 		try {
-			const query = data.query?.trim()
-
-			if (!query || typeof query !== 'string') {
+			const rawQuery = data.query?.trim()
+			if (!rawQuery || typeof rawQuery !== 'string') {
 				throw new Error('Query must be a valid string')
 			}
 
-			const lower = query.toLowerCase()
-
-			// 1. Must start with SELECT
+			const lower = rawQuery.toLowerCase()
 			if (!lower.startsWith('select')) {
 				throw new Error('Only SELECT queries are allowed')
 			}
 
-			// 2. Reject queries with semicolons (prevents multiple queries)
-			if (query.includes(';')) {
-				throw new Error('Multiple statements are not allowed')
+			if (!this.isQuerySafe(rawQuery)) {
+				throw new Error('Query is not allowed or references restricted operations/tables')
 			}
 
-			// 3. Run query safely
-			const result = await sequelize.query(query, {
+			const offset = common.getPaginationOffset(pageNo, pageSize)
+
+			let paginatedQuery = rawQuery
+			paginatedQuery += ` LIMIT ${pageSize}`
+			paginatedQuery += ` OFFSET ${offset}`
+
+			// 1. Fetch paginated data
+			const queryData = await sequelize.query(paginatedQuery, {
 				type: sequelize.QueryTypes.SELECT,
 			})
 
+			// 2. Return with metadata
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
-				message: 'Data fetched successfully',
-				result,
+				message: 'DATA_FETCHED',
+				result: {
+					data: queryData,
+				},
 			})
 		} catch (err) {
 			console.error('Query execution error:', err)
-			return responses.errorResponse({
+			return responses.failureResponse({
 				statusCode: httpStatusCode.bad_request,
 				message: err.message || 'Invalid query',
 			})
 		}
+	}
+
+	static async isQuerySafe(query) {
+		const lowerQuery = query.toLowerCase()
+		if (!lowerQuery.startsWith('select')) return false
+
+		return !queryForbiddenPatterns.some((pattern) => lowerQuery.includes(pattern))
 	}
 }

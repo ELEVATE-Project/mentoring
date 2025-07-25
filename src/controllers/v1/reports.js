@@ -187,7 +187,7 @@ module.exports = class Reports {
 	 */
 	async fetchData(req) {
 		try {
-			const data = await reportService.fetchData(req.body)
+			const data = await reportService.fetchData(req.body, req.pageNo, req.pageSize)
 			return data
 		} catch (error) {
 			// Optionally, log the error here
