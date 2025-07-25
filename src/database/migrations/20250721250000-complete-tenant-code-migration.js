@@ -6,7 +6,7 @@ module.exports = {
 			console.log('🚀 Starting simplified tenant-code column addition migration...')
 			console.log('='.repeat(70))
 
-			// Tables that need tenant_code column (all 23 tables from helper.js)
+			// Tables that need tenant_code column (all 24 tables from helper.js)
 			const allTables = [
 				'availabilities',
 				'connection_requests',
@@ -18,12 +18,15 @@ module.exports = {
 				'file_uploads',
 				'forms',
 				'issues',
+				'modules',
 				'notification_templates',
 				'organization_extension',
 				'post_session_details',
 				'question_sets',
 				'questions',
 				'report_queries',
+				'report_role_mapping',
+				'report_types',
 				'reports',
 				'resources',
 				'role_extensions',
@@ -46,6 +49,8 @@ module.exports = {
 				'question_sets',
 				'questions',
 				'report_queries',
+				'report_role_mapping',
+				'report_types',
 				'reports',
 				'role_extensions',
 				'user_extensions',
@@ -125,6 +130,40 @@ module.exports = {
 				}
 			}
 
+			console.log('\n📝 PHASE 3: Adding user_name column to user_extensions...')
+			console.log('='.repeat(50))
+
+			// Add user_name column to user_extensions table specifically
+			try {
+				// Check if table exists
+				const tableExists = await queryInterface.sequelize.query(
+					`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'user_extensions')`,
+					{ type: Sequelize.QueryTypes.SELECT }
+				)
+
+				if (tableExists[0].exists) {
+					// Check if user_name column already exists
+					const columnExists = await queryInterface.sequelize.query(
+						`SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'user_extensions' AND column_name = 'user_name')`,
+						{ type: Sequelize.QueryTypes.SELECT }
+					)
+
+					if (!columnExists[0].exists) {
+						await queryInterface.addColumn('user_extensions', 'user_name', {
+							type: Sequelize.STRING(255),
+							allowNull: true, // NULLABLE - no constraints yet
+						})
+						console.log(`✅ Added nullable user_name to user_extensions`)
+					} else {
+						console.log(`✅ user_extensions already has user_name column`)
+					}
+				} else {
+					console.log(`⚠️  Table user_extensions does not exist, skipping`)
+				}
+			} catch (error) {
+				console.log(`❌ Error adding user_name to user_extensions: ${error.message}`)
+			}
+
 			console.log('\n🎯 SIMPLIFIED MIGRATION COMPLETED!')
 			console.log('='.repeat(70))
 			console.log('✅ Added nullable columns only - no data population or constraints')
@@ -153,12 +192,15 @@ module.exports = {
 				'file_uploads',
 				'forms',
 				'issues',
+				'modules',
 				'notification_templates',
 				'organization_extension',
 				'post_session_details',
 				'question_sets',
 				'questions',
 				'report_queries',
+				'report_role_mapping',
+				'report_types',
 				'reports',
 				'resources',
 				'role_extensions',
@@ -191,6 +233,8 @@ module.exports = {
 				'question_sets',
 				'questions',
 				'report_queries',
+				'report_role_mapping',
+				'report_types',
 				'reports',
 				'role_extensions',
 				'user_extensions',
@@ -203,6 +247,14 @@ module.exports = {
 				} catch (error) {
 					console.log(`⚠️  Could not remove organization_code from ${tableName}: ${error.message}`)
 				}
+			}
+
+			// Remove user_name column from user_extensions
+			try {
+				await queryInterface.removeColumn('user_extensions', 'user_name')
+				console.log(`✅ Removed user_name from user_extensions`)
+			} catch (error) {
+				console.log(`⚠️  Could not remove user_name from user_extensions: ${error.message}`)
 			}
 
 			console.log('✅ Rollback completed')

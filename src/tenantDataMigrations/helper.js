@@ -3,6 +3,7 @@ const fs = require('fs')
 const path = require('path')
 const csv = require('csv-parser')
 require('dotenv').config({ path: '../.env' })
+const DatabaseConnectionManager = require('./db-connection-utils')
 
 /**
  * Simplified Data Migration Script for Mentoring Service
@@ -13,16 +14,13 @@ require('dotenv').config({ path: '../.env' })
 
 class MentoringDataMigrator {
 	constructor() {
-		this.sequelize = new Sequelize(process.env.DEV_DATABASE_URL, {
-			dialect: 'postgres',
+		// Initialize database connection manager
+		this.dbManager = new DatabaseConnectionManager({
+			poolMax: 10,
+			poolMin: 2,
 			logging: false,
-			pool: {
-				max: 10,
-				min: 2,
-				acquire: 30000,
-				idle: 10000,
-			},
 		})
+		this.sequelize = this.dbManager.getSequelize()
 
 		// Centralized batch processing configuration
 		this.BATCH_SIZE = 5000
@@ -38,7 +36,18 @@ class MentoringDataMigrator {
 			tablesUndistributed: 0,
 			tablesRedistributed: 0,
 			startTime: Date.now(),
+			// Enhanced error tracking
+			missingOrgIdRecords: [],
+			systemRecordsFixed: [], // created_by = 0
+			nullUserIdErrors: [], // created_by = NULL - DATA INTEGRITY ERROR
+			orphanedUserIdRecordsFixed: [], // created_by not found in user_extensions
+			systemRecordsFixedWithDefaults: [],
+			validationErrors: [],
 		}
+
+		// Default values for fallback
+		this.defaultTenantCode = process.env.DEFAULT_TENANT_CODE || 'default'
+		this.defaultOrgCode = process.env.DEFAULT_ORG_CODE || 'default'
 
 		// Tables with organization_id - process using CSV lookup
 		this.tablesWithOrgId = [
@@ -289,6 +298,7 @@ class MentoringDataMigrator {
 
 		const requiredHeaders = ['tenant_code', 'organization_code', 'organization_id']
 		let isHeaderValidated = false
+		const skippedOrgIds = new Set()
 
 		return new Promise((resolve, reject) => {
 			fs.createReadStream(csvPath)
@@ -326,9 +336,7 @@ class MentoringDataMigrator {
 							tenant_code: row.tenant_code,
 						})
 					} else if (row.organization_id && !validOrgIds.has(row.organization_id)) {
-						console.log(
-							`ℹ️  Skipping CSV row for organization_id ${row.organization_id} - not found in organization_extension table`
-						)
+						skippedOrgIds.add(row.organization_id)
 					} else {
 						console.warn('⚠️  Skipping invalid CSV row:', row)
 					}
@@ -337,6 +345,15 @@ class MentoringDataMigrator {
 					if (!isHeaderValidated) {
 						reject(new Error('❌ CSV headers could not be validated'))
 						return
+					}
+					if (skippedOrgIds.size > 0) {
+						console.log(
+							`ℹ️  Skipped ${
+								skippedOrgIds.size
+							} CSV rows for organization_ids not found in organization_extension table: [${Array.from(
+								skippedOrgIds
+							).join(', ')}]`
+						)
 					}
 					console.log(
 						`✅ Loaded ${this.orgLookupCache.size} organization codes (filtered by organization_extension table)`
@@ -559,7 +576,21 @@ class MentoringDataMigrator {
 				for (const org of orgBatch) {
 					const orgData = this.orgLookupCache.get(org.organization_id)
 					if (!orgData) {
-						console.warn(`⚠️  No CSV data for organization_id: ${org.organization_id}`)
+						// Count records that will be left without tenant_code
+						const [countResult] = await this.sequelize.query(
+							`SELECT COUNT(*) as count FROM ${tableName} WHERE organization_id::text = '${org.organization_id}'`,
+							{ transaction }
+						)
+
+						this.stats.missingOrgIdRecords.push({
+							table: tableName,
+							orgId: org.organization_id,
+							count: parseInt(countResult[0].count),
+						})
+
+						console.warn(
+							`⚠️  No CSV data for organization_id: ${org.organization_id} in ${tableName} (${countResult[0].count} records affected)`
+						)
 						continue
 					}
 
@@ -583,6 +614,32 @@ class MentoringDataMigrator {
 					)
 
 					totalUpdated += metadata.rowCount || 0
+				}
+			}
+
+			// Handle records with NULL organization_id using defaults
+			if (availableUpdateColumns.includes('tenant_code')) {
+				const setClauses = []
+				setClauses.push(`tenant_code = '${this.defaultTenantCode}'`)
+				if (availableUpdateColumns.includes('organization_code')) {
+					setClauses.push(`organization_code = '${this.defaultOrgCode}'`)
+				}
+				setClauses.push('updated_at = NOW()')
+
+				const [, nullOrgMetadata] = await this.sequelize.query(
+					`
+					UPDATE ${tableName} 
+					SET ${setClauses.join(', ')}
+					WHERE organization_id IS NULL AND tenant_code IS NULL
+				`,
+					{ transaction }
+				)
+
+				if (nullOrgMetadata.rowCount > 0) {
+					console.log(
+						`✅ Applied defaults to ${nullOrgMetadata.rowCount} records with NULL organization_id in ${tableName}`
+					)
+					totalUpdated += nullOrgMetadata.rowCount
 				}
 			}
 
@@ -884,7 +941,27 @@ class MentoringDataMigrator {
 
 				for (const org of orgBatch) {
 					const orgData = this.orgLookupCache.get(org.org_id)
-					if (!orgData) continue
+					if (!orgData) {
+						// Count records that will be left without tenant_code
+						const [countResult] = await this.sequelize.query(
+							`SELECT COUNT(*) as count 
+							 FROM ${tableName} t 
+							 INNER JOIN user_extensions ue ON t.${userIdColumn} = ue.user_id 
+							 WHERE ue.organization_id::text = '${org.org_id}'`,
+							{ transaction }
+						)
+
+						this.stats.missingOrgIdRecords.push({
+							table: tableName,
+							orgId: org.org_id,
+							count: parseInt(countResult[0].count),
+						})
+
+						console.warn(
+							`⚠️  No CSV data for organization_id: ${org.org_id} in ${tableName} (${countResult[0].count} records affected)`
+						)
+						continue
+					}
 
 					// Build SET clause using CSV lookup data
 					const setClauses = []
@@ -908,6 +985,119 @@ class MentoringDataMigrator {
 					)
 
 					totalUpdated += metadata.rowCount || 0
+				}
+			}
+
+			// Handle records with created_by = '0' (system records) using defaults
+			if (tableConfig.updateColumns.includes('tenant_code')) {
+				const [systemRecordsCount] = await this.sequelize.query(
+					`SELECT COUNT(*) as count FROM ${tableName} WHERE ${userIdColumn}::text = '0' AND tenant_code IS NULL`,
+					{ transaction }
+				)
+
+				if (parseInt(systemRecordsCount[0].count) > 0) {
+					const setClauses = []
+					setClauses.push(`tenant_code = '${this.defaultTenantCode}'`)
+					if (tableConfig.updateColumns.includes('organization_code')) {
+						setClauses.push(`organization_code = '${this.defaultOrgCode}'`)
+					}
+					setClauses.push('updated_at = NOW()')
+
+					const [, systemMetadata] = await this.sequelize.query(
+						`
+						UPDATE ${tableName} 
+						SET ${setClauses.join(', ')}
+						WHERE ${userIdColumn}::text = '0' AND tenant_code IS NULL
+					`,
+						{ transaction }
+					)
+
+					if (systemMetadata.rowCount > 0) {
+						console.log(
+							`✅ Applied defaults to ${systemMetadata.rowCount} system records (${userIdColumn} = '0') in ${tableName}`
+						)
+						totalUpdated += systemMetadata.rowCount
+
+						this.stats.systemRecordsFixed.push({
+							table: tableName,
+							count: systemMetadata.rowCount,
+							reason: `${userIdColumn} = '0'`,
+						})
+					}
+				}
+
+				// Handle records with created_by = NULL - THROW ERROR (don't fix)
+				const [nullUserRecordsCount] = await this.sequelize.query(
+					`SELECT COUNT(*) as count FROM ${tableName} WHERE ${userIdColumn} IS NULL AND tenant_code IS NULL`,
+					{ transaction }
+				)
+
+				if (parseInt(nullUserRecordsCount[0].count) > 0) {
+					const nullRecordCount = parseInt(nullUserRecordsCount[0].count)
+					console.log(`❌ ERROR: Found ${nullRecordCount} records with NULL ${userIdColumn} in ${tableName}`)
+
+					this.stats.nullUserIdErrors.push({
+						table: tableName,
+						count: nullRecordCount,
+						reason: `${userIdColumn} IS NULL - DATA INTEGRITY ERROR`,
+					})
+
+					// This is a data integrity error - should cause migration to fail
+					throw new Error(
+						`Data integrity error: ${nullRecordCount} records in ${tableName} have NULL ${userIdColumn} - cannot determine tenant_code`
+					)
+				}
+
+				// Handle records with created_by that don't exist in user_extensions
+				const [orphanedUserRecords] = await this.sequelize.query(
+					`SELECT COUNT(*) as count 
+					 FROM ${tableName} t 
+					 LEFT JOIN user_extensions ue ON t.${userIdColumn} = ue.user_id 
+					 WHERE t.tenant_code IS NULL 
+					 AND t.${userIdColumn} IS NOT NULL 
+					 AND t.${userIdColumn}::text != '0' 
+					 AND ue.user_id IS NULL`,
+					{ transaction }
+				)
+
+				if (parseInt(orphanedUserRecords[0].count) > 0) {
+					const setClauses = []
+					setClauses.push(`tenant_code = '${this.defaultTenantCode}'`)
+					if (tableConfig.updateColumns.includes('organization_code')) {
+						setClauses.push(`organization_code = '${this.defaultOrgCode}'`)
+					}
+					setClauses.push('updated_at = NOW()')
+
+					const [, orphanedUserMetadata] = await this.sequelize.query(
+						`
+						UPDATE ${tableName} 
+						SET ${setClauses.join(', ')}
+						FROM (
+							SELECT t.id 
+							FROM ${tableName} t 
+							LEFT JOIN user_extensions ue ON t.${userIdColumn} = ue.user_id 
+							WHERE t.tenant_code IS NULL 
+							AND t.${userIdColumn} IS NOT NULL 
+							AND t.${userIdColumn}::text != '0' 
+							AND ue.user_id IS NULL
+						) as orphaned_records
+						WHERE ${tableName}.id = orphaned_records.id
+					`,
+						{ transaction }
+					)
+
+					if (orphanedUserMetadata.rowCount > 0) {
+						console.log(
+							`✅ Applied defaults to ${orphanedUserMetadata.rowCount} records with orphaned ${userIdColumn} in ${tableName}`
+						)
+						totalUpdated += orphanedUserMetadata.rowCount
+
+						this.stats.orphanedUserIdRecordsFixed.push({
+							table: tableName,
+							count: orphanedUserMetadata.rowCount,
+							reason: `${userIdColumn} not found in user_extensions`,
+						})
+					}
 				}
 			}
 
@@ -969,7 +1159,76 @@ class MentoringDataMigrator {
 	}
 
 	/**
-	 * Print final statistics
+	 * Comprehensive validation to ensure no NULL tenant_code values remain
+	 */
+	async validateNoNullTenantCodes() {
+		console.log('\n🔍 COMPREHENSIVE VALIDATION: Checking for NULL tenant_code values...')
+		console.log('='.repeat(70))
+
+		const allTables = [...this.tablesWithOrgId, ...this.tablesWithUserId]
+		let totalNullFound = 0
+		const failedTables = []
+
+		for (const tableConfig of allTables) {
+			const tableName = tableConfig.name
+			try {
+				const nullCount = await this.sequelize.query(
+					`SELECT COUNT(*) as count FROM ${tableName} WHERE tenant_code IS NULL`,
+					{ type: Sequelize.QueryTypes.SELECT }
+				)
+
+				const nullTenantCodes = parseInt(nullCount[0].count)
+				totalNullFound += nullTenantCodes
+
+				const status = nullTenantCodes === 0 ? '✅' : '❌'
+				console.log(`${status} ${tableName}: ${nullTenantCodes} NULL tenant_code values`)
+
+				if (nullTenantCodes > 0) {
+					failedTables.push(tableName)
+
+					// Get sample records for debugging
+					const sampleRecords = await this.sequelize.query(
+						`SELECT id, ${tableConfig.userIdColumn || 'organization_id'} as ref_id 
+						 FROM ${tableName} 
+						 WHERE tenant_code IS NULL 
+						 LIMIT 3`,
+						{ type: Sequelize.QueryTypes.SELECT }
+					)
+					console.log(
+						`    Sample NULL records:`,
+						sampleRecords.map((r) => `id:${r.id}(ref:${r.ref_id})`).join(', ')
+					)
+
+					this.stats.validationErrors.push({
+						table: tableName,
+						nullCount: nullTenantCodes,
+						sampleRecords,
+					})
+				}
+			} catch (error) {
+				console.error(`❌ Error validating ${tableName}: ${error.message}`)
+				this.stats.validationErrors.push({
+					table: tableName,
+					error: error.message,
+				})
+			}
+		}
+
+		console.log('='.repeat(70))
+		if (totalNullFound === 0) {
+			console.log('🎉 VALIDATION PASSED: No NULL tenant_code values found!')
+			return true
+		} else {
+			console.log(
+				`❌ VALIDATION FAILED: ${totalNullFound} NULL tenant_code values in ${failedTables.length} tables`
+			)
+			console.log(`Failed tables: ${failedTables.join(', ')}`)
+			return false
+		}
+	}
+
+	/**
+	 * Print comprehensive statistics including error details
 	 */
 	printStats() {
 		const duration = Math.round((Date.now() - this.stats.startTime) / 1000)
@@ -983,15 +1242,171 @@ class MentoringDataMigrator {
 		console.log(`❌ Failed updates: ${this.stats.failedUpdates.toLocaleString()}`)
 		console.log(`🔄 Tables undistributed: ${this.stats.tablesUndistributed}`)
 		console.log(`🔄 Tables redistributed: ${this.stats.tablesRedistributed}`)
+
+		// Enhanced error reporting
+		if (this.stats.missingOrgIdRecords.length > 0) {
+			console.log(`\n⚠️  Missing organization_id in CSV:`)
+			this.stats.missingOrgIdRecords.forEach((record) => {
+				console.log(`   - Table: ${record.table}, org_id: ${record.orgId}, records affected: ${record.count}`)
+			})
+		}
+
+		if (this.stats.systemRecordsFixed.length > 0) {
+			console.log(`\n✅ System records fixed (created_by = 0):`)
+			this.stats.systemRecordsFixed.forEach((record) => {
+				console.log(`   - Table: ${record.table}, records fixed: ${record.count}, reason: ${record.reason}`)
+			})
+		}
+
+		if (this.stats.nullUserIdErrors.length > 0) {
+			console.log(`\n❌ NULL user_id errors (data integrity issues):`)
+			this.stats.nullUserIdErrors.forEach((record) => {
+				console.log(`   - Table: ${record.table}, error count: ${record.count}, reason: ${record.reason}`)
+			})
+		}
+
+		if (this.stats.orphanedUserIdRecordsFixed.length > 0) {
+			console.log(`\n✅ Orphaned user_id records fixed:`)
+			this.stats.orphanedUserIdRecordsFixed.forEach((record) => {
+				console.log(`   - Table: ${record.table}, records fixed: ${record.count}, reason: ${record.reason}`)
+			})
+		}
+
+		if (this.stats.validationErrors.length > 0) {
+			console.log(`\n❌ Validation errors found:`)
+			this.stats.validationErrors.forEach((error) => {
+				if (error.nullCount) {
+					console.log(`   - Table: ${error.table}, NULL values: ${error.nullCount}`)
+				} else {
+					console.log(`   - Table: ${error.table}, Error: ${error.error}`)
+				}
+			})
+		}
 	}
 
 	/**
-	 * Main execution method
+	 * Create database snapshot before migration
+	 */
+	async createSnapshot() {
+		console.log('\n📸 Creating database snapshot for rollback capability...')
+
+		const allTables = [...this.tablesWithOrgId, ...this.tablesWithUserId]
+		const snapshotData = {}
+
+		try {
+			for (const tableConfig of allTables) {
+				const tableName = tableConfig.name
+
+				try {
+					// Check if table exists first
+					await this.sequelize.query(`SELECT 1 FROM ${tableName} LIMIT 1`, {
+						type: Sequelize.QueryTypes.SELECT,
+					})
+
+					// Store original tenant_code and organization_code values
+					const originalData = await this.sequelize.query(
+						`SELECT id, tenant_code, organization_code FROM ${tableName} WHERE tenant_code IS NULL OR organization_code IS NULL`,
+						{ type: Sequelize.QueryTypes.SELECT }
+					)
+
+					if (originalData.length > 0) {
+						snapshotData[tableName] = originalData
+						console.log(`📋 Snapshot created for ${tableName}: ${originalData.length} records`)
+					}
+				} catch (error) {
+					// Table doesn't exist or columns missing - skip snapshot for this table
+					console.log(
+						`⚠️  Skipping snapshot for ${tableName}: ${
+							error.message.includes('does not exist') ? 'table not found' : 'column missing'
+						}`
+					)
+					continue
+				}
+			}
+
+			this.snapshot = snapshotData
+			console.log(`✅ Snapshot completed for ${Object.keys(snapshotData).length} tables`)
+			return true
+		} catch (error) {
+			console.error(`❌ Failed to create snapshot: ${error.message}`)
+			return false
+		}
+	}
+
+	/**
+	 * Revert all backfilled data using snapshot
+	 */
+	async revertBackfilledData() {
+		console.log('\n🔄 REVERTING BACKFILLED DATA...')
+		console.log('='.repeat(50))
+
+		if (!this.snapshot || Object.keys(this.snapshot).length === 0) {
+			console.log('⚠️  No snapshot found - cannot revert changes')
+			return false
+		}
+
+		let totalReverted = 0
+
+		try {
+			// Start global transaction for rollback
+			const transaction = await this.sequelize.transaction()
+
+			try {
+				for (const [tableName, originalRecords] of Object.entries(this.snapshot)) {
+					console.log(`🔄 Reverting ${tableName}...`)
+
+					for (const record of originalRecords) {
+						const setClauses = []
+
+						// Revert tenant_code to original state (NULL)
+						if (record.tenant_code === null) {
+							setClauses.push(`tenant_code = NULL`)
+						}
+
+						// Revert organization_code to original state (NULL)
+						if (record.organization_code === null) {
+							setClauses.push(`organization_code = NULL`)
+						}
+
+						if (setClauses.length > 0) {
+							setClauses.push(`updated_at = NOW()`)
+
+							const [, metadata] = await this.sequelize.query(
+								`UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = ${record.id}`,
+								{ transaction }
+							)
+
+							totalReverted += metadata.rowCount || 0
+						}
+					}
+
+					console.log(`✅ Reverted ${originalRecords.length} records in ${tableName}`)
+				}
+
+				await transaction.commit()
+				console.log(`\n✅ ROLLBACK COMPLETED: ${totalReverted} records reverted to original state`)
+				console.log('🔄 Database restored to pre-migration state')
+				return true
+			} catch (error) {
+				await transaction.rollback()
+				throw error
+			}
+		} catch (error) {
+			console.error(`❌ Rollback failed: ${error.message}`)
+			return false
+		}
+	}
+
+	/**
+	 * Main execution method with rollback capability
 	 */
 	async execute() {
+		let migrationSuccess = false
+
 		try {
-			console.log('🚀 Starting Simplified Data Migration...')
-			console.log('='.repeat(60))
+			console.log('🚀 Starting Enhanced Data Migration with Rollback Support...')
+			console.log('='.repeat(70))
+			console.log(`🔧 Using defaults: tenant_code="${this.defaultTenantCode}", org_code="${this.defaultOrgCode}"`)
 
 			await this.sequelize.authenticate()
 			console.log('✅ Database connection established')
@@ -1004,6 +1419,12 @@ class MentoringDataMigrator {
 
 			// Validate CSV data coverage before proceeding
 			await this.validateDatabaseOrgsCoveredByCSV()
+
+			// Create snapshot before starting migration
+			const snapshotCreated = await this.createSnapshot()
+			if (!snapshotCreated) {
+				throw new Error('Failed to create database snapshot - aborting migration')
+			}
 
 			// PHASE 1: Process tables with organization_id using CSV lookup
 			await this.processTablesWithOrgId()
@@ -1018,12 +1439,47 @@ class MentoringDataMigrator {
 				console.log('\n⚠️  Citus not enabled, skipping distribution logic')
 			}
 
+			// PHASE 4: Comprehensive validation
+			const validationPassed = await this.validateNoNullTenantCodes()
+
 			this.printStats()
+
+			if (!validationPassed) {
+				console.log('\n❌ MIGRATION VALIDATION FAILED: NULL tenant_code values still exist')
+				console.log('📋 Check the detailed error report above for specific issues')
+
+				// Trigger rollback
+				const rollbackSuccess = await this.revertBackfilledData()
+				if (rollbackSuccess) {
+					console.log('\n🔄 All changes have been reverted due to validation failure')
+					console.log('✅ Database restored to original state')
+				} else {
+					console.log('\n❌ CRITICAL: Rollback failed - database may be in inconsistent state')
+				}
+
+				throw new Error('Migration validation failed - NULL values remain')
+			}
+
+			migrationSuccess = true
+			console.log('\n🎉 MIGRATION COMPLETED SUCCESSFULLY!')
+			console.log('✅ All tenant_code values properly assigned')
+			console.log('✅ Database ready for constraint application')
 		} catch (error) {
-			console.error('❌ Migration failed:', error)
+			console.error('❌ Migration failed:', error.message)
+
+			// If migration hadn't succeeded and we have a snapshot, attempt rollback
+			if (!migrationSuccess && this.snapshot) {
+				console.log('\n🔄 Attempting automatic rollback...')
+				const rollbackSuccess = await this.revertBackfilledData()
+				if (!rollbackSuccess) {
+					console.log('❌ CRITICAL: Automatic rollback failed - manual intervention required')
+				}
+			}
+
+			this.printStats()
 			process.exit(1)
 		} finally {
-			await this.sequelize.close()
+			await this.dbManager.close()
 		}
 	}
 }

@@ -74,7 +74,8 @@ class DatabaseIntegrityChecker {
 					continue
 				}
 
-				// Check if the table has an 'id' column (required for this check)
+				// For mapping tables like role_permission_mapping, we need to identify rows differently
+				let identifierColumn = 'id'
 				const idColumnCheck = await this.sequelize.query(
 					`SELECT column_name FROM information_schema.columns 
 					 WHERE table_name = '${rel.table}' AND column_name = 'id'`,
@@ -82,8 +83,14 @@ class DatabaseIntegrityChecker {
 				)
 
 				if (idColumnCheck.length === 0) {
-					this.warnings.push(`Table ${rel.table} does not have an 'id' column`)
-					continue
+					// For mapping tables, try to find a suitable identifier column
+					if (rel.table === 'role_permission_mapping') {
+						// Use a combination of role_title and permission_id as identifier
+						identifierColumn = 'role_title, permission_id'
+					} else {
+						this.warnings.push(`Table ${rel.table} does not have an 'id' column`)
+						continue
+					}
 				}
 
 				// Check if the column exists in the table before trying to query it
@@ -114,7 +121,7 @@ class DatabaseIntegrityChecker {
 
 				const orphans = await this.sequelize.query(
 					`
-					SELECT t.id, t.${rel.column} as invalid_reference
+					SELECT t.${identifierColumn}${identifierColumn !== 'id' ? '' : ' as id'}, t.${rel.column} as invalid_reference
 					FROM ${rel.table} t
 					LEFT JOIN ${rel.refTable} r ON t.${rel.column}::text = r.${rel.refColumn}::text
 					WHERE ${whereClause}
@@ -125,7 +132,13 @@ class DatabaseIntegrityChecker {
 				if (orphans.length > 0) {
 					const totalCount = orphans.length
 					const allIds = orphans
-						.map((row) => `id:${row.id}(${rel.column}:${row.invalid_reference})`)
+						.map((row) => {
+							const identifier =
+								identifierColumn === 'id'
+									? row.id
+									: `${row.role_title || 'N/A'},${row.permission_id || 'N/A'}`
+							return `id:${identifier}(${rel.column}:${row.invalid_reference})`
+						})
 						.join(', ')
 
 					// Add to main issues array for console output
@@ -143,7 +156,10 @@ class DatabaseIntegrityChecker {
 						totalCount: totalCount,
 						timestamp: new Date().toISOString(),
 						records: orphans.map((row) => ({
-							id: row.id,
+							id:
+								identifierColumn === 'id'
+									? row.id
+									: `${row.role_title || 'N/A'},${row.permission_id || 'N/A'}`,
 							invalidReference: row.invalid_reference,
 						})),
 					})

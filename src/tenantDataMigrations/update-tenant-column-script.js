@@ -1,6 +1,7 @@
 require('module-alias/register')
 require('dotenv').config({ path: '../.env' })
 const db = require('@database/models/index')
+const DatabaseConnectionManager = require('./db-connection-utils')
 
 /**
  * Script for Tenant Code Migration
@@ -32,6 +33,7 @@ class TenantMigrationFinalizer {
 			'question_sets',
 			'questions',
 			'report_queries',
+			'report_types',
 			'reports',
 			'resources',
 			'role_extensions',
@@ -163,17 +165,32 @@ class TenantMigrationFinalizer {
 		console.log('='.repeat(50))
 
 		const primaryKeyConfigs = {
-			connection_requests: 'tenant_code, user_id, friend_id',
-			connections: 'tenant_code, user_id, friend_id',
+			availabilities: 'tenant_code, id',
+			connection_requests: 'tenant_code, id',
+			connections: 'tenant_code, id',
+			default_rules: 'tenant_code, id',
 			entities: 'tenant_code, id, entity_type_id',
 			entity_types: 'tenant_code, id, organization_id',
+			feedbacks: 'tenant_code, id',
+			file_uploads: 'tenant_code, id',
 			forms: 'tenant_code, id, organization_id',
-			organization_extension: 'tenant_code, organization_id',
-			user_extensions: 'tenant_code, user_id',
-			question_sets: 'code, tenant_code',
+			issues: 'tenant_code, id',
+			modules: 'tenant_code, id',
+			notification_templates: 'tenant_code, id',
+			organization_extension: 'tenant_code, organization_code, organization_id',
+			user_extensions: 'tenant_code,user_id',
+			question_sets: 'id, tenant_code',
 			questions: 'id, tenant_code',
-			report_queries: 'report_code, tenant_code',
-			report_types: 'title, tenant_code',
+			report_queries: 'tenant_code,id,organization_code',
+			report_role_mapping: 'tenant_code,id',
+			report_types: 'tenant_code,id',
+			reports: 'tenant_code,id',
+			resources: 'tenant_code,id',
+			role_extensions: 'tenant_code,title',
+			session_attendees: 'tenant_code, id',
+			session_request: 'tenant_code, id',
+			sessions: 'tenant_code, id',
+
 			// Default for all other tables
 			default: 'tenant_code, id',
 		}
@@ -194,6 +211,17 @@ class TenantMigrationFinalizer {
 				await this.sequelize.query(`
 					ALTER TABLE ${tableName} DROP CONSTRAINT IF EXISTS ${tableName}_pkey CASCADE
 				`)
+
+				// Special handling for organization_extension table (different naming convention)
+				if (tableName === 'organization_extension') {
+					try {
+						await this.sequelize.query(`
+							ALTER TABLE organization_extension DROP CONSTRAINT IF EXISTS organisation_extension_pkey CASCADE
+						`)
+					} catch (error) {
+						// Constraint might not exist, continue
+					}
+				}
 
 				// Get primary key configuration
 				const primaryKeyColumns = primaryKeyConfigs[tableName] || primaryKeyConfigs['default']
@@ -220,46 +248,25 @@ class TenantMigrationFinalizer {
 
 		const foreignKeyConfigs = [
 			{
-				table: 'entities',
-				column: 'entity_type_id',
-				refTable: 'entity_types',
-				refColumn: 'id',
-				name: 'fk_entities_entity_type_id',
-			},
-			{
 				table: 'session_attendees',
-				column: 'session_id',
+				columns: 'session_id, tenant_code',
 				refTable: 'sessions',
-				refColumn: 'id',
+				refColumns: 'id, tenant_code',
 				name: 'fk_session_attendees_session_id',
 			},
 			{
-				table: 'feedbacks',
-				column: 'session_id',
-				refTable: 'sessions',
-				refColumn: 'id',
-				name: 'fk_feedbacks_session_id',
-			},
-			{
 				table: 'resources',
-				column: 'session_id',
+				columns: 'session_id, tenant_code',
 				refTable: 'sessions',
-				refColumn: 'id',
+				refColumns: 'id, tenant_code',
 				name: 'fk_resources_session_id',
 			},
 			{
 				table: 'post_session_details',
-				column: 'session_id',
+				columns: 'session_id, tenant_code',
 				refTable: 'sessions',
-				refColumn: 'id',
+				refColumns: 'id, tenant_code',
 				name: 'fk_post_session_details_session_id',
-			},
-			{
-				table: 'question_sets',
-				column: 'questions',
-				refTable: 'questions',
-				refColumn: 'id',
-				name: 'fk_question_sets_questions',
 			},
 		]
 
@@ -269,18 +276,11 @@ class TenantMigrationFinalizer {
 				const [tablesExist] = await this.sequelize.query(`
 					SELECT 
 						EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '${fkConfig.table}') as table_exists,
-						EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '${fkConfig.refTable}') as ref_table_exists,
-						EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = '${fkConfig.table}' AND column_name = '${fkConfig.column}') as column_exists,
-						EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = '${fkConfig.refTable}' AND column_name = '${fkConfig.refColumn}') as ref_column_exists
+						EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '${fkConfig.refTable}') as ref_table_exists
 				`)
 
-				if (
-					!tablesExist[0].table_exists ||
-					!tablesExist[0].ref_table_exists ||
-					!tablesExist[0].column_exists ||
-					!tablesExist[0].ref_column_exists
-				) {
-					console.log(`⚠️  Missing table/column for FK ${fkConfig.name}, skipping`)
+				if (!tablesExist[0].table_exists || !tablesExist[0].ref_table_exists) {
+					console.log(`⚠️  Missing table for FK ${fkConfig.name}, skipping`)
 					continue
 				}
 
@@ -303,8 +303,8 @@ class TenantMigrationFinalizer {
 				await this.sequelize.query(`
 					ALTER TABLE ${fkConfig.table} 
 					ADD CONSTRAINT ${fkConfig.name} 
-					FOREIGN KEY (${fkConfig.column}) 
-					REFERENCES ${fkConfig.refTable}(${fkConfig.refColumn}) 
+					FOREIGN KEY (${fkConfig.columns}) 
+					REFERENCES ${fkConfig.refTable}(${fkConfig.refColumns}) 
 					ON DELETE CASCADE 
 					ON UPDATE CASCADE
 				`)
@@ -459,7 +459,7 @@ class TenantMigrationFinalizer {
 			{
 				table: 'user_extensions',
 				name: 'unique_user_extensions_user_tenant_email_phone_name',
-				columns: 'user_id, tenant_code, email, phone, user_name',
+				columns: 'user_id, tenant_code, email, phone, name',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 		]
