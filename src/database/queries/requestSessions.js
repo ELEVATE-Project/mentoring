@@ -245,10 +245,7 @@ exports.markRequestsAsDeleted = async (requestSessionIds = [], tenantCode) => {
 			id: {
 				[Op.in]: requestSessionIds,
 			},
-		}
-
-		if (tenantCode) {
-			whereClause.tenant_code = tenantCode
+			tenant_code: tenantCode,
 		}
 
 		const [, updatedRows] = await requestSession.update(

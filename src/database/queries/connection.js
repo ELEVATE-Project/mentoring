@@ -210,10 +210,7 @@ exports.deleteUserConnectionsAndRequests = async (userId, tenantCode) => {
 			const whereClause = {
 				[Op.or]: [{ user_id: userId }, { friend_id: userId }],
 				status,
-			}
-
-			if (tenantCode) {
-				whereClause.tenant_code = tenantCode
+				tenant_code: tenantCode,
 			}
 
 			const [affectedRows] = await model.update({ deleted_at: now }, { where: whereClause })
@@ -417,9 +414,7 @@ exports.getConnectionsCount = async (filter, userId, organizationIds = [], tenan
 			orgFilter = `AND ue.organization_id IN (:organizationIds)`
 		}
 
-		if (tenantCode) {
-			tenantFilter = `AND ue.tenant_code = :tenantCode AND c.tenant_code = :tenantCode`
-		}
+		tenantFilter = `AND ue.tenant_code = :tenantCode AND c.tenant_code = :tenantCode`
 
 		if (filter?.query?.length > 0) {
 			filterClause = filter.query.startsWith('AND') ? filter.query : 'AND ' + filter.query
