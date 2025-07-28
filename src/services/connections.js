@@ -120,20 +120,25 @@ module.exports = class ConnectionHelper {
 
 			const [userExtensionsModelName, userDetails] = await Promise.all([
 				userExtensionQueries.getModelName(),
-				userExtensionQueries.getMenteeExtension(friendId, [
-					'name',
-					'user_id',
-					'mentee_visibility',
-					'organization_id',
-					'designation',
-					'area_of_expertise',
-					'education_qualification',
-					'custom_entity_text',
-					'meta',
-					'is_mentor',
-					'experience',
-					'image',
-				]),
+				userExtensionQueries.getMenteeExtension(
+					friendId,
+					[
+						'name',
+						'user_id',
+						'mentee_visibility',
+						'organization_id',
+						'designation',
+						'area_of_expertise',
+						'education_qualification',
+						'custom_entity_text',
+						'meta',
+						'is_mentor',
+						'experience',
+						'image',
+					],
+					false,
+					tenantCode
+				),
 			])
 
 			if (connection?.status === common.CONNECTIONS_STATUS.BLOCKED || !userDetails) {
@@ -275,9 +280,9 @@ module.exports = class ConnectionHelper {
 	 * @param {string} userId - The ID of the authenticated user.
 	 * @returns {Promise<Object>} A success response indicating the request was accepted.
 	 */
-	static async accept(bodyData, userId, orgId) {
+	static async accept(bodyData, userId, orgId, tenantCode) {
 		try {
-			const connectionRequest = await this.checkConnectionRequestExists(userId, bodyData.user_id)
+			const connectionRequest = await this.checkConnectionRequestExists(userId, bodyData.user_id, tenantCode)
 			if (!connectionRequest)
 				return responses.failureResponse({
 					message: 'CONNECTION_REQUEST_NOT_FOUND_OR_ALREADY_PROCESSED',
@@ -285,14 +290,15 @@ module.exports = class ConnectionHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			await connectionQueries.approveRequest(userId, bodyData.user_id, connectionRequest.meta)
+			await connectionQueries.approveRequest(userId, bodyData.user_id, connectionRequest.meta, tenantCode)
 
 			const userDetails = await userExtensionQueries.getUsersByUserIds(
 				[userId, bodyData.user_id],
 				{
 					attributes: ['settings', 'user_id'],
 				},
-				true
+				true,
+				tenantCode
 			)
 			let chatRoom
 			// Create room only if both users have enable chat option
@@ -313,11 +319,16 @@ module.exports = class ConnectionHelper {
 				? { ...connectionRequest.meta, room_id: chatRoom.result.room.room_id }
 				: connectionRequest.meta
 
-			const updateConnection = await connectionQueries.updateConnection(userId, bodyData.user_id, {
-				meta: metaUpdate,
-			})
+			const updateConnection = await connectionQueries.updateConnection(
+				userId,
+				bodyData.user_id,
+				{
+					meta: metaUpdate,
+				},
+				tenantCode
+			)
 
-			await this.sendConnectionAcceptNotification(bodyData.user_id, userId, orgId)
+			await this.sendConnectionAcceptNotification(bodyData.user_id, userId, orgId, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -337,9 +348,9 @@ module.exports = class ConnectionHelper {
 	 * @param {string} userId - The ID of the authenticated user.
 	 * @returns {Promise<Object>} A success response indicating the request was rejected.
 	 */
-	static async reject(bodyData, userId, orgId) {
+	static async reject(bodyData, userId, orgId, tenantCode) {
 		try {
-			const connectionRequest = await this.checkConnectionRequestExists(userId, bodyData.user_id)
+			const connectionRequest = await this.checkConnectionRequestExists(userId, bodyData.user_id, tenantCode)
 			if (!connectionRequest)
 				return responses.failureResponse({
 					message: 'CONNECTION_REQUEST_NOT_FOUND_OR_ALREADY_PROCESSED',
@@ -347,7 +358,11 @@ module.exports = class ConnectionHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			const [rejectedCount, rejectedData] = await connectionQueries.rejectRequest(userId, bodyData.user_id)
+			const [rejectedCount, rejectedData] = await connectionQueries.rejectRequest(
+				userId,
+				bodyData.user_id,
+				tenantCode
+			)
 
 			if (rejectedCount == 0) {
 				return responses.failureResponse({
@@ -358,7 +373,7 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Send notification to the mentee who requested the connection
-			await this.sendConnectionRejectionNotification(bodyData.user_id, userId, orgId)
+			await this.sendConnectionRejectionNotification(bodyData.user_id, userId, orgId, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -380,7 +395,7 @@ module.exports = class ConnectionHelper {
 	 * @param {string} orgId - The organization ID for filtering.
 	 * @returns {Promise<Object>} A list of filtered connections.
 	 */
-	static async list(pageNo, pageSize, searchText, queryParams, userId, orgId) {
+	static async list(pageNo, pageSize, searchText, queryParams, userId, orgId, tenantCode) {
 		try {
 			let organizationIds = []
 
@@ -412,7 +427,8 @@ module.exports = class ConnectionHelper {
 				searchText,
 				userId,
 				organizationIds,
-				roles
+				roles,
+				tenantCode
 			)
 
 			if (extensionDetails.count === 0 || extensionDetails.data.length === 0) {
@@ -490,7 +506,11 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get email template
-			const templateData = await notificationQueries.findOneEmailTemplate(templateCode, orgId.toString())
+			const templateData = await notificationQueries.findOneEmailTemplate(
+				templateCode,
+				orgId.toString(),
+				tenantCode
+			)
 
 			if (templateData) {
 				const menteeName = menteeDetails[0].name
@@ -549,7 +569,11 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get email template
-			const templateData = await notificationQueries.findOneEmailTemplate(templateCode, orgId.toString())
+			const templateData = await notificationQueries.findOneEmailTemplate(
+				templateCode,
+				orgId.toString(),
+				tenantCode
+			)
 
 			if (templateData) {
 				const menteeName = menteeDetails[0].name
