@@ -6,8 +6,9 @@ const { Op } = require('sequelize')
  * @param {Object} data - The data to create the DefaultRule with.
  * @returns {Promise<Object|Error>} The created DefaultRule or an error.
  */
-exports.create = async (data) => {
+exports.create = async (data, tenantCode) => {
 	try {
+		data.tenant_code = tenantCode
 		return await DefaultRule.create(data)
 	} catch (error) {
 		console.error('Error creating DefaultRule:', error)
@@ -21,8 +22,9 @@ exports.create = async (data) => {
  * @param {Object} [options={}] - Additional query options.
  * @returns {Promise<Object|Error>} The found DefaultRule or an error.
  */
-exports.findOne = async (filter, options = {}) => {
+exports.findOne = async (filter, tenantCode, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		const res = await DefaultRule.findOne({
 			where: filter,
 			...options,
@@ -42,8 +44,9 @@ exports.findOne = async (filter, options = {}) => {
  * @param {Object} [options={}] - Additional query options.
  * @returns {Promise<[number, number]|Error>} The number of affected rows and rows affected or an error.
  */
-exports.updateOne = async (filter, update, options = {}) => {
+exports.updateOne = async (filter, update, tenantCode, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		return await DefaultRule.update(update, {
 			where: filter,
 			...options,
@@ -60,8 +63,9 @@ exports.updateOne = async (filter, update, options = {}) => {
  * @param {Object} filter - The filter to find the DefaultRule.
  * @returns {Promise<number|Error>} The number of affected rows or an error.
  */
-exports.deleteOne = async (filter) => {
+exports.deleteOne = async (filter, tenantCode) => {
 	try {
+		filter.tenant_code = tenantCode
 		const result = await DefaultRule.destroy({
 			where: filter,
 		})
@@ -78,8 +82,9 @@ exports.deleteOne = async (filter) => {
  * @param {Object} [options={}] - Additional query options.
  * @returns {Promise<Array<Object>|Error>} The found DefaultRules or an error.
  */
-exports.findAndCountAll = async (filter, options = {}) => {
+exports.findAndCountAll = async (filter, tenantCode, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		return await DefaultRule.findAndCountAll({
 			where: filter,
 			...options,
@@ -97,8 +102,9 @@ exports.findAndCountAll = async (filter, options = {}) => {
  * @param {Object} [options={}] - Additional query options.
  * @returns {Promise<Array<Object>|Error>} The found DefaultRules or an error.
  */
-exports.findAll = async (filter, options = {}) => {
+exports.findAll = async (filter, tenantCode, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		return await DefaultRule.findAll({
 			where: filter,
 			...options,
