@@ -237,20 +237,26 @@ exports.getRequestSessions = async (requestSessionId) => {
 	}
 }
 
-exports.markRequestsAsDeleted = async (requestSessionIds = []) => {
+exports.markRequestsAsDeleted = async (requestSessionIds = [], tenantCode) => {
 	try {
 		const currentDateTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
+
+		const whereClause = {
+			id: {
+				[Op.in]: requestSessionIds,
+			},
+		}
+
+		if (tenantCode) {
+			whereClause.tenant_code = tenantCode
+		}
 
 		const [, updatedRows] = await requestSession.update(
 			{
 				deleted_at: currentDateTime,
 			},
 			{
-				where: {
-					id: {
-						[Op.in]: requestSessionIds,
-					},
-				},
+				where: whereClause,
 				returning: true, // Only works with PostgreSQL
 			}
 		)

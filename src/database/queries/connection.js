@@ -195,7 +195,7 @@ exports.checkPendingRequest = async (userId, friendId) => {
 	}
 }
 
-exports.deleteUserConnectionsAndRequests = async (userId) => {
+exports.deleteUserConnectionsAndRequests = async (userId, tenantCode) => {
 	try {
 		const now = new Date()
 
@@ -207,15 +207,16 @@ exports.deleteUserConnectionsAndRequests = async (userId) => {
 		let deleted = false
 
 		for (const { model, status } of modelsToUpdate) {
-			const [affectedRows] = await model.update(
-				{ deleted_at: now },
-				{
-					where: {
-						[Op.or]: [{ user_id: userId }, { friend_id: userId }],
-						status,
-					},
-				}
-			)
+			const whereClause = {
+				[Op.or]: [{ user_id: userId }, { friend_id: userId }],
+				status,
+			}
+
+			if (tenantCode) {
+				whereClause.tenant_code = tenantCode
+			}
+
+			const [affectedRows] = await model.update({ deleted_at: now }, { where: whereClause })
 
 			if (affectedRows > 0) {
 				deleted = true
@@ -406,13 +407,18 @@ exports.updateConnection = async (userId, friendId, updateBody) => {
 	}
 }
 
-exports.getConnectionsCount = async (filter, userId, organizationIds = []) => {
+exports.getConnectionsCount = async (filter, userId, organizationIds = [], tenantCode) => {
 	try {
 		let orgFilter = ''
 		let filterClause = ''
+		let tenantFilter = ''
 
 		if (organizationIds.length > 0) {
 			orgFilter = `AND ue.organization_id IN (:organizationIds)`
+		}
+
+		if (tenantCode) {
+			tenantFilter = `AND ue.tenant_code = :tenantCode AND c.tenant_code = :tenantCode`
 		}
 
 		if (filter?.query?.length > 0) {
@@ -428,13 +434,15 @@ exports.getConnectionsCount = async (filter, userId, organizationIds = []) => {
 			ON c.friend_id = ue.user_id AND c.user_id = :userId
 			WHERE ${userFilterClause}
 			${orgFilter}
-			${filterClause};
+			${filterClause}
+			${tenantFilter};
 		`
 
 		const replacements = {
 			...filter?.replacements,
 			userId,
 			organizationIds,
+			tenantCode,
 		}
 
 		const result = await sequelize.query(countQuery, {
