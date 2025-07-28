@@ -154,8 +154,33 @@ module.exports = {
 							allowNull: true, // NULLABLE - no constraints yet
 						})
 						console.log(`✅ Added nullable user_name to user_extensions`)
+
+						// Populate user_name with user_id values
+						await queryInterface.sequelize.query(
+							`UPDATE user_extensions SET user_name = user_id WHERE user_name IS NULL`,
+							{ type: Sequelize.QueryTypes.UPDATE }
+						)
+						console.log(`✅ Updated user_name values with user_id values in user_extensions`)
 					} else {
 						console.log(`✅ user_extensions already has user_name column`)
+
+						// Check if user_name needs to be populated
+						const emptyUserNames = await queryInterface.sequelize.query(
+							`SELECT COUNT(*) as count FROM user_extensions WHERE user_name IS NULL`,
+							{ type: Sequelize.QueryTypes.SELECT }
+						)
+
+						if (emptyUserNames[0].count > 0) {
+							await queryInterface.sequelize.query(
+								`UPDATE user_extensions SET user_name = user_id WHERE user_name IS NULL`,
+								{ type: Sequelize.QueryTypes.UPDATE }
+							)
+							console.log(
+								`✅ Updated ${emptyUserNames[0].count} user_name values with user_id values in user_extensions`
+							)
+						} else {
+							console.log(`✅ All user_name values already populated in user_extensions`)
+						}
 					}
 				} else {
 					console.log(`⚠️  Table user_extensions does not exist, skipping`)
