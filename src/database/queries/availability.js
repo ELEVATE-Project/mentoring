@@ -10,9 +10,8 @@ module.exports = class AvailabilityData {
 		}
 	}
 
-	static async findAvailability(filter, tenantCode, projection = {}) {
+	static async findAvailability(filter, projection = {}) {
 		try {
-			filter.tenant_code = tenantCode
 			return await Availability.findAll({
 				where: filter,
 				attributes: projection,
