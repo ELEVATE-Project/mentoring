@@ -40,9 +40,10 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findAllTypeFormVersion() {
+	static async findAllTypeFormVersion(tenantCode) {
 		try {
 			const formData = await Form.findAll({
+				where: { tenant_code: tenantCode },
 				attributes: ['id', 'type', 'version'],
 			})
 			return formData

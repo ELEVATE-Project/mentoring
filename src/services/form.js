@@ -20,9 +20,10 @@ module.exports = class FormsHelper {
 	 * @returns {JSON} - Form creation data.
 	 */
 
-	static async create(bodyData, orgId) {
+	static async create(bodyData, orgId, tenantCode) {
 		try {
 			bodyData['organization_id'] = orgId
+			bodyData['tenant_code'] = tenantCode
 			const form = await formQueries.createForm(bodyData)
 
 			await utils.internalDel('formVersion')
@@ -54,19 +55,21 @@ module.exports = class FormsHelper {
 	 * @returns {JSON} - Update form data.
 	 */
 
-	static async update(id, bodyData, orgId) {
+	static async update(id, bodyData, orgId, tenantCode) {
 		try {
 			let filter = {}
 			if (id) {
 				filter = {
 					id: id,
 					organization_id: orgId,
+					tenant_code: tenantCode,
 				}
 			} else {
 				filter = {
 					type: bodyData.type,
 					sub_type: bodyData.sub_type,
 					organization_id: orgId,
+					tenant_code: tenantCode,
 				}
 			}
 
@@ -111,13 +114,13 @@ module.exports = class FormsHelper {
 	 * @returns {JSON} - Read form data.
 	 */
 
-	static async read(id, bodyData, orgId) {
+	static async read(id, bodyData, orgId, tenantCode) {
 		try {
 			let filter = {}
 			if (id) {
-				filter = { id: id, organization_id: orgId }
+				filter = { id: id, organization_id: orgId, tenant_code: tenantCode }
 			} else {
-				filter = { ...bodyData, organization_id: orgId }
+				filter = { ...bodyData, organization_id: orgId, tenant_code: tenantCode }
 			}
 			const form = await formQueries.findOneForm(filter)
 			let defaultOrgForm
@@ -129,7 +132,9 @@ module.exports = class FormsHelper {
 						statusCode: httpStatusCode.bad_request,
 						responseCode: 'CLIENT_ERROR',
 					})
-				filter = id ? { id: id, organization_id: defaultOrgId } : { ...bodyData, organization_id: defaultOrgId }
+				filter = id
+					? { id: id, organization_id: defaultOrgId, tenant_code: tenantCode }
+					: { ...bodyData, organization_id: defaultOrgId, tenant_code: tenantCode }
 				defaultOrgForm = await formQueries.findOneForm(filter)
 			}
 			if (!form && !defaultOrgForm) {
@@ -150,12 +155,12 @@ module.exports = class FormsHelper {
 			throw error
 		}
 	}
-	static async readAllFormsVersion() {
+	static async readAllFormsVersion(tenantCode) {
 		try {
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'FORM_VERSION_FETCHED_SUCCESSFULLY',
-				result: (await form.getAllFormsVersion()) || {},
+				result: (await form.getAllFormsVersion(tenantCode)) || {},
 			})
 		} catch (error) {
 			return error
