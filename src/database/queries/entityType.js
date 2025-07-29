@@ -24,11 +24,12 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async findAllEntityTypes(orgIds, attributes, filter = {}) {
+	static async findAllEntityTypes(orgIds, tenantCode, attributes, filter = {}) {
 		try {
 			const entityData = await EntityType.findAll({
 				where: {
 					organization_id: orgIds,
+					tenant_code: tenantCode,
 					...filter,
 				},
 				attributes,
@@ -49,7 +50,7 @@ module.exports = class UserEntityData {
 			const entityTypeIds = entityTypes.map((entityType) => entityType.id)
 
 			const entities = await Entity.findAll({
-				where: { entity_type_id: entityTypeIds, status: 'ACTIVE' },
+				where: { entity_type_id: entityTypeIds, status: 'ACTIVE', tenant_code: filter.tenant_code },
 				raw: true,
 				//attributes: { exclude: ['entity_type_id'] },
 			})
@@ -95,12 +96,13 @@ module.exports = class UserEntityData {
 		}
 	} */
 
-	static async updateOneEntityType(id, orgId, update, options = {}) {
+	static async updateOneEntityType(id, orgId, tenantCode, update, options = {}) {
 		try {
 			return await EntityType.update(update, {
 				where: {
 					id: id,
 					organization_id: orgId,
+					tenant_code: tenantCode,
 				},
 				...options,
 			})
@@ -109,12 +111,13 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async deleteOneEntityType(id, organizationId) {
+	static async deleteOneEntityType(id, organizationId, tenantCode) {
 		try {
 			return await EntityType.destroy({
 				where: {
 					id: id,
 					organization_id: organizationId,
+					tenant_code: tenantCode,
 				},
 				individualHooks: true,
 			})
@@ -142,7 +145,7 @@ module.exports = class UserEntityData {
 
 			// Fetch all matching entities using the IDs
 			const entities = await Entity.findAll({
-				where: { entity_type_id: entityTypeIds, status: 'ACTIVE' },
+				where: { entity_type_id: entityTypeIds, status: 'ACTIVE', tenant_code: filter.tenant_code },
 				raw: true,
 				//attributes: { exclude: ['entity_type_id'] },
 			})
@@ -173,7 +176,7 @@ module.exports = class UserEntityData {
 			if (entityTypeIds.length > 0) {
 				// Step 2: Fetch all matching entities using the entityType IDs
 				const entities = await Entity.findAll({
-					where: { entity_type_id: entityTypeIds, status: 'ACTIVE' },
+					where: { entity_type_id: entityTypeIds, status: 'ACTIVE', tenant_code: filter.tenant_code },
 					raw: true,
 				})
 
@@ -188,12 +191,12 @@ module.exports = class UserEntityData {
 
 				// Step 4: Delete the entities and entityTypes
 				await Entity.destroy({
-					where: { entity_type_id: entityTypeIds },
+					where: { entity_type_id: entityTypeIds, tenant_code: filter.tenant_code },
 					individualHooks: true,
 				})
 
 				await EntityType.destroy({
-					where: { id: entityTypeIds },
+					where: { id: entityTypeIds, tenant_code: filter.tenant_code },
 					individualHooks: true,
 				})
 				return result
