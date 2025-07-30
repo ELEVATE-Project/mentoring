@@ -25,7 +25,7 @@ module.exports = class OrgAdminService {
 	 * @returns {Promise<Object>} 		- A Promise that resolves to a response object.
 	 */
 
-	static async roleChange(bodyData, updateData = {}) {
+	static async roleChange(bodyData, updateData = {}, decodedToken) {
 		try {
 			bodyData.user_id = bodyData.user_id.toString()
 			if (
@@ -114,7 +114,8 @@ module.exports = class OrgAdminService {
 			const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(bodyData.user_id)
 			const isAttendeesNotified = await adminService.unenrollAndNotifySessionAttendees(
 				removedSessionsDetail,
-				mentorDetails.organization_id ? mentorDetails.organization_id : ''
+				mentorDetails.organization_id ? mentorDetails.organization_id : '',
+				decodedToken.tenant_code
 			)
 
 			return responses.successResponse({
@@ -334,7 +335,7 @@ module.exports = class OrgAdminService {
 				organization_id: defaultOrgId,
 				allow_filtering: true,
 			}
-			let entityTypeDetails = await entityTypeQueries.findOneEntityType(filter)
+			let entityTypeDetails = await entityTypeQueries.findOneEntityType(filter, decodedToken.tenant_code)
 
 			// If no matching data found return failure response
 			if (!entityTypeDetails) {
@@ -354,7 +355,10 @@ module.exports = class OrgAdminService {
 			delete entityTypeDetails.id
 
 			// Create new inherited entity type
-			let inheritedEntityType = await entityTypeQueries.createEntityType(entityTypeDetails)
+			let inheritedEntityType = await entityTypeQueries.createEntityType(
+				entityTypeDetails,
+				decodedToken.tenant_code
+			)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_TYPE_CREATED_SUCCESSFULLY',
@@ -431,7 +435,7 @@ module.exports = class OrgAdminService {
 	 * @param {Object} bodyData
 	 * @returns {JSON} - User data.
 	 */
-	static async deactivateUpcomingSession(userIds) {
+	static async deactivateUpcomingSession(userIds, decodedToken) {
 		try {
 			userIds = userIds.map(String)
 			let deactivatedIdsList = []
@@ -442,14 +446,18 @@ module.exports = class OrgAdminService {
 				if (mentorDetails?.user_id) {
 					// Deactivate upcoming sessions of user as mentor
 					const removedSessionsDetail = await sessionQueries.deactivateAndReturnMentorSessions(userId)
-					await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail)
+					await adminService.unenrollAndNotifySessionAttendees(
+						removedSessionsDetail,
+						'',
+						decodedToken.tenant_code
+					)
 					deactivatedIdsList.push(userId)
 				}
 
 				//unenroll from upcoming session
 				const menteeDetails = await menteeQueries.getMenteeExtension(userId)
 				if (menteeDetails?.user_id) {
-					await adminService.unenrollFromUpcomingSessions(userId)
+					await adminService.unenrollFromUpcomingSessions(userId, decodedToken.tenant_code)
 					deactivatedIdsList.push(userId)
 				}
 

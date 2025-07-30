@@ -30,7 +30,7 @@ module.exports = class EntityHelper {
 				bodyData.allow_filtering = isAdmin ? bodyData.allow_filtering : false
 			}
 
-			const entityType = await entityTypeQueries.createEntityType(bodyData)
+			const entityType = await entityTypeQueries.createEntityType(bodyData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_TYPE_CREATED_SUCCESSFULLY',
