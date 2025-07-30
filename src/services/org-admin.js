@@ -25,19 +25,19 @@ module.exports = class OrgAdminService {
 	 * @returns {Promise<Object>} 		- A Promise that resolves to a response object.
 	 */
 
-	static async roleChange(bodyData, updateData = {}, decodedToken) {
+	static async roleChange(bodyData, updateData = {}, decodedToken, tenantCode) {
 		try {
 			bodyData.user_id = bodyData.user_id.toString()
 			if (
 				utils.validateRoleAccess(bodyData.current_roles, common.MENTOR_ROLE) &&
 				utils.validateRoleAccess(bodyData.new_roles, common.MENTEE_ROLE)
 			) {
-				return await this.changeRoleToMentee(bodyData, updateData)
+				return await this.changeRoleToMentee(bodyData, updateData, tenantCode)
 			} else if (
 				utils.validateRoleAccess(bodyData.current_roles, common.MENTEE_ROLE) &&
 				utils.validateRoleAccess(bodyData.new_roles, common.MENTOR_ROLE)
 			) {
-				return await this.changeRoleToMentor(bodyData, updateData)
+				return await this.changeRoleToMentor(bodyData, updateData, tenantCode)
 			}
 		} catch (error) {
 			console.log(error)
@@ -52,11 +52,11 @@ module.exports = class OrgAdminService {
 	 * @param {Object} bodyData 	- The request body.
 	 * @returns {Object} 			- A Promise that resolves to a response object.
 	 */
-	static async changeRoleToMentee(bodyData, updateData = {}) {
+	static async changeRoleToMentee(bodyData, updateData = {}, tenantCode) {
 		try {
 			// Check current role based on that swap data
 			// If current role is mentor validate data from mentor_extenion table
-			let mentorDetails = await mentorQueries.getMentorExtension(bodyData.user_id, [], true)
+			let mentorDetails = await mentorQueries.getMentorExtension(bodyData.user_id, [], true, tenantCode)
 			// If such mentor return error
 			if (!mentorDetails) {
 				return responses.failureResponse({
@@ -101,7 +101,13 @@ module.exports = class OrgAdminService {
 			mentorDetails.is_mentor = false
 			if (mentorDetails.email) delete mentorDetails.email
 			// Add fetched mentor details to user_extension table
-			const menteeCreationData = await menteeQueries.updateMenteeExtension(bodyData.user_id, mentorDetails)
+			const menteeCreationData = await menteeQueries.updateMenteeExtension(
+				bodyData.user_id,
+				mentorDetails,
+				{},
+				{},
+				tenantCode
+			)
 			if (!menteeCreationData) {
 				return responses.failureResponse({
 					message: 'MENTEE_EXTENSION_CREATION_FAILED',
@@ -140,10 +146,10 @@ module.exports = class OrgAdminService {
 	 * @returns {Promise<Object>} 	- A Promise that resolves to a response object.
 	 */
 
-	static async changeRoleToMentor(bodyData, updateData = {}) {
+	static async changeRoleToMentor(bodyData, updateData = {}, tenantCode) {
 		try {
 			// Get mentee_extension data
-			let menteeDetails = await menteeQueries.getMenteeExtension(bodyData.user_id, '', true)
+			let menteeDetails = await menteeQueries.getMenteeExtension(bodyData.user_id, '', true, tenantCode)
 
 			// If no mentee present return error
 			if (!menteeDetails) {
@@ -216,7 +222,7 @@ module.exports = class OrgAdminService {
 		}
 	}
 
-	static async setOrgPolicies(decodedToken, policies) {
+	static async setOrgPolicies(decodedToken, policies, tenantCode) {
 		try {
 			const orgPolicies = await organisationExtensionQueries.upsert({
 				organization_id: decodedToken.organization_id,
@@ -274,7 +280,7 @@ module.exports = class OrgAdminService {
 		}
 	}
 
-	static async getOrgPolicies(decodedToken) {
+	static async getOrgPolicies(decodedToken, tenantCode) {
 		try {
 			const orgPolicies = await organisationExtensionQueries.getById(decodedToken.organization_id)
 			if (orgPolicies) {
@@ -303,7 +309,7 @@ module.exports = class OrgAdminService {
 	 * @returns {Promise<Object>} 		- A Promise that resolves to a response object.
 	 */
 
-	static async inheritEntityType(entityValue, entityLabel, userOrgId, decodedToken) {
+	static async inheritEntityType(entityValue, entityLabel, userOrgId, decodedToken, tenantCode) {
 		try {
 			// Get default organisation details
 			let defaultOrgDetails = await userRequests.fetchOrgDetails({
@@ -377,7 +383,7 @@ module.exports = class OrgAdminService {
 	 * @param {Object} bodyData
 	 * @returns {JSON} - User data.
 	 */
-	static async updateOrganization(bodyData) {
+	static async updateOrganization(bodyData, tenantCode) {
 		try {
 			bodyData.user_id = bodyData.user_id.toString()
 			bodyData.organization_id = bodyData.organization_id.toString()
@@ -435,7 +441,7 @@ module.exports = class OrgAdminService {
 	 * @param {Object} bodyData
 	 * @returns {JSON} - User data.
 	 */
-	static async deactivateUpcomingSession(userIds, decodedToken) {
+	static async deactivateUpcomingSession(userIds, decodedToken, tenantCode) {
 		try {
 			userIds = userIds.map(String)
 			let deactivatedIdsList = []
@@ -520,7 +526,7 @@ module.exports = class OrgAdminService {
 	 * @param {Object} organizationDetails 		- Object of organization details of the related org from user service.
 	 * @returns {Object} 						- A object that reurn a response object.
 	 */
-	static async updateRelatedOrgs(deltaOrganizationIds, orgId, action) {
+	static async updateRelatedOrgs(deltaOrganizationIds, orgId, action, tenantCode) {
 		try {
 			orgId = orgId.toString()
 			deltaOrganizationIds = deltaOrganizationIds.map(String)
@@ -539,7 +545,7 @@ module.exports = class OrgAdminService {
 		}
 	}
 
-	static async setDefaultQuestionSets(bodyData, decodedToken) {
+	static async setDefaultQuestionSets(bodyData, decodedToken, tenantCode) {
 		try {
 			const questionSets = await questionSetQueries.findQuestionSets(
 				{
@@ -580,7 +586,7 @@ module.exports = class OrgAdminService {
 		}
 	}
 
-	static async uploadSampleCSV(filepath, orgId) {
+	static async uploadSampleCSV(filepath, orgId, tenantCode) {
 		const defaultOrgId = await getDefaultOrgId()
 		if (!defaultOrgId) {
 			return responses.failureResponse({
@@ -620,7 +626,7 @@ module.exports = class OrgAdminService {
 	 * @param {String} orgId - The organization ID for which the theme needs to be updated.
 	 * @returns {Object} - The result of the theme update, either success or error details.
 	 */
-	static async updateTheme(data, orgId) {
+	static async updateTheme(data, orgId, tenantCode) {
 		let organizationDetails = await userRequests.fetchOrgDetails({ organizationId: orgId })
 		if (!(organizationDetails.success && organizationDetails.data && organizationDetails.data.result)) {
 			return responses.failureResponse({
@@ -645,7 +651,7 @@ module.exports = class OrgAdminService {
 		})
 	}
 
-	static async themeDetails(orgId) {
+	static async themeDetails(orgId, tenantCode) {
 		let organizationDetails = await organisationExtensionQueries.getById(orgId)
 
 		if (!organizationDetails) {
