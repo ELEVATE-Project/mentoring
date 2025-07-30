@@ -18,13 +18,12 @@ exports.create = async (data, tenantCode) => {
 
 /**
  * Finds a single DefaultRule record based on the filter.
- * @param {Object} filter - The filter to find the DefaultRule.
+ * @param {Object} filter - The filter to find the DefaultRule (should include tenant_code).
  * @param {Object} [options={}] - Additional query options.
  * @returns {Promise<Object|Error>} The found DefaultRule or an error.
  */
-exports.findOne = async (filter, tenantCode, options = {}) => {
+exports.findOne = async (filter, options = {}) => {
 	try {
-		filter.tenant_code = tenantCode
 		const res = await DefaultRule.findOne({
 			where: filter,
 			...options,
@@ -39,14 +38,13 @@ exports.findOne = async (filter, tenantCode, options = {}) => {
 
 /**
  * Updates a DefaultRule record based on the filter and update data.
- * @param {Object} filter - The filter to find the DefaultRule.
+ * @param {Object} filter - The filter to find the DefaultRule (should include tenant_code).
  * @param {Object} update - The data to update the DefaultRule with.
  * @param {Object} [options={}] - Additional query options.
  * @returns {Promise<[number, number]|Error>} The number of affected rows and rows affected or an error.
  */
-exports.updateOne = async (filter, update, tenantCode, options = {}) => {
+exports.updateOne = async (filter, update, options = {}) => {
 	try {
-		filter.tenant_code = tenantCode
 		return await DefaultRule.update(update, {
 			where: filter,
 			...options,
@@ -60,12 +58,11 @@ exports.updateOne = async (filter, update, tenantCode, options = {}) => {
 
 /**
  * Deletes a DefaultRule record based on the filter.
- * @param {Object} filter - The filter to find the DefaultRule.
+ * @param {Object} filter - The filter to find the DefaultRule (should include tenant_code).
  * @returns {Promise<number|Error>} The number of affected rows or an error.
  */
-exports.deleteOne = async (filter, tenantCode) => {
+exports.deleteOne = async (filter) => {
 	try {
-		filter.tenant_code = tenantCode
 		const result = await DefaultRule.destroy({
 			where: filter,
 		})
@@ -78,13 +75,12 @@ exports.deleteOne = async (filter, tenantCode) => {
 
 /**
  * Finds all DefaultRule records that match the filter.
- * @param {Object} filter - The filter to find the DefaultRules.
+ * @param {Object} filter - The filter to find the DefaultRules (should include tenant_code).
  * @param {Object} [options={}] - Additional query options.
  * @returns {Promise<Array<Object>|Error>} The found DefaultRules or an error.
  */
-exports.findAndCountAll = async (filter, tenantCode, options = {}) => {
+exports.findAndCountAll = async (filter, options = {}) => {
 	try {
-		filter.tenant_code = tenantCode
 		return await DefaultRule.findAndCountAll({
 			where: filter,
 			...options,
@@ -98,13 +94,12 @@ exports.findAndCountAll = async (filter, tenantCode, options = {}) => {
 
 /**
  * Finds all DefaultRule records that match the filter.
- * @param {Object} filter - The filter to find the DefaultRules.
+ * @param {Object} filter - The filter to find the DefaultRules (should include tenant_code).
  * @param {Object} [options={}] - Additional query options.
  * @returns {Promise<Array<Object>|Error>} The found DefaultRules or an error.
  */
-exports.findAll = async (filter, tenantCode, options = {}) => {
+exports.findAll = async (filter, options = {}) => {
 	try {
-		filter.tenant_code = tenantCode
 		return await DefaultRule.findAll({
 			where: filter,
 			...options,
