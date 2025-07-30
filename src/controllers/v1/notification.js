@@ -37,25 +37,36 @@ module.exports = class NotificationTemplate {
 				})
 			}
 
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+
 			if (req.method === common.PATCH_METHOD) {
-				const updatedTemplate = await notificationService.update(req.params.id, req.body, req.decodedToken)
+				const updatedTemplate = await notificationService.update(
+					req.params.id,
+					req.body,
+					req.decodedToken,
+					tenantCode
+				)
 				return updatedTemplate
 			} else if (req.method === common.GET_METHOD) {
 				if (!req.params.id && !req.query.code) {
 					const templatesData = await notificationService.readAllNotificationTemplates(
-						req.decodedToken.organization_id
+						organizationId,
+						tenantCode
 					)
 					return templatesData
 				} else {
 					const templatesData = await notificationService.read(
 						req.params.id,
 						req.query.code,
-						req.decodedToken.organization_id
+						organizationId,
+						tenantCode
 					)
 					return templatesData
 				}
 			} else {
-				const createdTemplate = await notificationService.create(req.body, req.decodedToken)
+				const createdTemplate = await notificationService.create(req.body, req.decodedToken, tenantCode)
 				return createdTemplate
 			}
 		} catch (error) {

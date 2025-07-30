@@ -12,9 +12,9 @@ module.exports = class NotificationTemplateHelper {
 	 * @returns {JSON} - Notification template creation data.
 	 */
 
-	static async create(bodyData, tokenInformation) {
+	static async create(bodyData, tokenInformation, tenantCode) {
 		try {
-			const template = await notificationTemplateQueries.findOne({ code: bodyData.code })
+			const template = await notificationTemplateQueries.findOne({ code: bodyData.code, tenant_code: tenantCode })
 			if (template) {
 				return responses.failureResponse({
 					message: 'NOTIFICATION_TEMPLATE_ALREADY_EXISTS',
@@ -24,9 +24,11 @@ module.exports = class NotificationTemplateHelper {
 			}
 
 			bodyData['organization_id'] = tokenInformation.organization_id
+			bodyData['organization_code'] = tokenInformation.organization_id
+			bodyData['tenant_code'] = tenantCode
 			bodyData['created_by'] = tokenInformation.id
 
-			const createdNotification = await notificationTemplateQueries.create(bodyData)
+			const createdNotification = await notificationTemplateQueries.create(bodyData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'NOTIFICATION_TEMPLATE_CREATED_SUCCESSFULLY',
@@ -45,10 +47,11 @@ module.exports = class NotificationTemplateHelper {
 	 * @returns {JSON} - Update Notification template.
 	 */
 
-	static async update(id, bodyData, tokenInformation) {
+	static async update(id, bodyData, tokenInformation, tenantCode) {
 		try {
 			let filter = {
 				organization_id: tokenInformation.organization_id,
+				tenant_code: tenantCode,
 			}
 
 			if (id) {
@@ -60,7 +63,7 @@ module.exports = class NotificationTemplateHelper {
 			bodyData['organization_id'] = tokenInformation.organization_id
 			bodyData['updated_by'] = tokenInformation.id
 
-			const result = await notificationTemplateQueries.updateTemplate(filter, bodyData)
+			const result = await notificationTemplateQueries.updateTemplate(filter, bodyData, tenantCode)
 			if (result == 0) {
 				return responses.failureResponse({
 					message: 'NOTIFICATION_TEMPLATE_NOT_FOUND',
@@ -86,9 +89,9 @@ module.exports = class NotificationTemplateHelper {
 	 * @returns {JSON} - Read Notification template.
 	 */
 
-	static async read(id = null, code = null, organizationId) {
+	static async read(id = null, code = null, organizationId, tenantCode) {
 		try {
-			let filter = { organization_id: organizationId }
+			let filter = { organization_id: organizationId, tenant_code: tenantCode }
 
 			if (id) {
 				filter.id = id
@@ -96,7 +99,10 @@ module.exports = class NotificationTemplateHelper {
 				filter.code = code
 			}
 
-			const notificationTemplates = await notificationTemplateQueries.findAllNotificationTemplates(filter)
+			const notificationTemplates = await notificationTemplateQueries.findAllNotificationTemplates(
+				filter,
+				tenantCode
+			)
 			if (!notificationTemplates) {
 				return responses.failureResponse({
 					message: 'NOTIFICATION_TEMPLATE_NOT_FOUND',
@@ -113,11 +119,15 @@ module.exports = class NotificationTemplateHelper {
 			throw error
 		}
 	}
-	static async readAllNotificationTemplates(organizationId) {
+	static async readAllNotificationTemplates(organizationId, tenantCode) {
 		try {
-			const notificationTemplates = await notificationTemplateQueries.findAllNotificationTemplates({
-				organization_id: organizationId,
-			})
+			const notificationTemplates = await notificationTemplateQueries.findAllNotificationTemplates(
+				{
+					organization_id: organizationId,
+					tenant_code: tenantCode,
+				},
+				tenantCode
+			)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,

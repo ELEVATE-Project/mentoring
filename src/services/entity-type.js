@@ -18,10 +18,11 @@ module.exports = class EntityHelper {
 	 * @returns {JSON} - Created entity type response.
 	 */
 
-	static async create(bodyData, id, orgId, roles) {
+	static async create(bodyData, id, orgId, tenantCode, roles) {
 		bodyData.created_by = id
 		bodyData.updated_by = id
 		bodyData.organization_id = orgId
+		bodyData.tenant_code = tenantCode
 		bodyData.value = bodyData.value.toLowerCase()
 		try {
 			if (bodyData.allow_filtering) {
@@ -29,7 +30,7 @@ module.exports = class EntityHelper {
 				bodyData.allow_filtering = isAdmin ? bodyData.allow_filtering : false
 			}
 
-			const entityType = await entityTypeQueries.createEntityType(bodyData)
+			const entityType = await entityTypeQueries.createEntityType(bodyData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_TYPE_CREATED_SUCCESSFULLY',
@@ -57,7 +58,7 @@ module.exports = class EntityHelper {
 	 * @returns {JSON} - Updated Entity Type.
 	 */
 
-	static async update(bodyData, id, loggedInUserId, orgId, roles) {
+	static async update(bodyData, id, loggedInUserId, orgId, tenantCode, roles) {
 		bodyData.updated_by = loggedInUserId
 		if (bodyData.value) {
 			bodyData.value = bodyData.value.toLowerCase()
@@ -68,10 +69,16 @@ module.exports = class EntityHelper {
 				const isAdmin = roles.some((role) => role.title === common.ADMIN_ROLE)
 				bodyData.allow_filtering = isAdmin ? bodyData.allow_filtering : false
 			}
-			const [updateCount, updatedEntityType] = await entityTypeQueries.updateOneEntityType(id, orgId, bodyData, {
-				returning: true,
-				raw: true,
-			})
+			const [updateCount, updatedEntityType] = await entityTypeQueries.updateOneEntityType(
+				id,
+				orgId,
+				tenantCode,
+				bodyData,
+				{
+					returning: true,
+					raw: true,
+				}
+			)
 
 			if (updateCount === 0) {
 				return responses.failureResponse({
@@ -98,7 +105,7 @@ module.exports = class EntityHelper {
 		}
 	}
 
-	static async readAllSystemEntityTypes(orgId) {
+	static async readAllSystemEntityTypes(orgId, tenantCode) {
 		try {
 			const attributes = ['value', 'label', 'id']
 
@@ -110,7 +117,7 @@ module.exports = class EntityHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			const entities = await entityTypeQueries.findAllEntityTypes([orgId, defaultOrgId], attributes)
+			const entities = await entityTypeQueries.findAllEntityTypes([orgId, defaultOrgId], tenantCode, attributes)
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -129,7 +136,7 @@ module.exports = class EntityHelper {
 		}
 	}
 
-	static async readUserEntityTypes(body, userId, orgId) {
+	static async readUserEntityTypes(body, userId, orgId, tenantCode) {
 		try {
 			const defaultOrgId = await getDefaultOrgId()
 			if (!defaultOrgId)
@@ -145,6 +152,7 @@ module.exports = class EntityHelper {
 				organization_id: {
 					[Op.in]: [orgId, defaultOrgId],
 				},
+				tenant_code: tenantCode,
 			}
 			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
 
@@ -167,9 +175,9 @@ module.exports = class EntityHelper {
 	 * @returns {JSON} - Entity deleted response.
 	 */
 
-	static async delete(id, organizationId) {
+	static async delete(id, organizationId, tenantCode) {
 		try {
-			const deleteCount = await entityTypeQueries.deleteOneEntityType(id, organizationId)
+			const deleteCount = await entityTypeQueries.deleteOneEntityType(id, organizationId, tenantCode)
 			if (deleteCount === 0) {
 				return responses.failureResponse({
 					message: 'ENTITY_TYPE_NOT_FOUND',
@@ -198,7 +206,7 @@ module.exports = class EntityHelper {
 	 * @param {ARRAY} entityType 				- Array of entity types value
 	 * @returns {JSON} 							- modified response data
 	 */
-	static async processEntityTypesToAddValueLabels(responseData, orgIds, modelName, orgIdKey, entityType) {
+	static async processEntityTypesToAddValueLabels(responseData, orgIds, modelName, orgIdKey, entityType, tenantCode) {
 		try {
 			const defaultOrgId = await getDefaultOrgId()
 			if (!defaultOrgId)
@@ -221,6 +229,7 @@ module.exports = class EntityHelper {
 				model_names: {
 					[Op.contains]: Array.isArray(modelName) ? modelName : [modelName],
 				},
+				tenant_code: tenantCode,
 			}
 			if (entityType) filter.value = entityType
 			// get entityTypes with entities data
@@ -259,11 +268,12 @@ module.exports = class EntityHelper {
 	 * @returns {JSON} - Entity deleted response.
 	 */
 
-	static async deleteEntityTypesAndEntities(value) {
+	static async deleteEntityTypesAndEntities(value, tenantCode) {
 		try {
 			const deleteCount = await entityTypeQueries.deleteEntityTypesAndEntities({
 				status: 'ACTIVE',
 				value: { [Op.in]: value },
+				tenant_code: tenantCode,
 			})
 
 			if (deleteCount === 0) {

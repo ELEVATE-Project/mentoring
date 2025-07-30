@@ -14,7 +14,8 @@ module.exports = class Availability {
 	 */
 	async create(req) {
 		try {
-			const createdQuestion = await availabilityService.create(req.body, req.decodedToken)
+			const tenantCode = req.decodedToken.tenant_code
+			const createdQuestion = await availabilityService.create(req.body, req.decodedToken, tenantCode)
 			return createdQuestion
 		} catch (error) {
 			return error
@@ -30,7 +31,8 @@ module.exports = class Availability {
 	 */
 	async update(req) {
 		try {
-			return await availabilityService.update(req.params.id, req.body, req.decodedToken)
+			const tenantCode = req.decodedToken.tenant_code
+			return await availabilityService.update(req.params.id, req.body, req.decodedToken, tenantCode)
 		} catch (error) {
 			return error
 		}
@@ -44,7 +46,8 @@ module.exports = class Availability {
 	 */
 	async delete(req) {
 		try {
-			return await availabilityService.delete(req.params.id, req.decodedToken)
+			const tenantCode = req.decodedToken.tenant_code
+			return await availabilityService.delete(req.params.id, req.decodedToken, tenantCode)
 		} catch (error) {
 			return error
 		}
@@ -59,7 +62,8 @@ module.exports = class Availability {
 	 */
 	async read(req) {
 		try {
-			return await availabilityService.read(req.query, req.params.id)
+			const tenantCode = req.decodedToken.tenant_code
+			return await availabilityService.read(req.query, req.params.id, tenantCode)
 		} catch (error) {
 			return error
 		}
@@ -74,7 +78,8 @@ module.exports = class Availability {
 	 */
 	async isAvailable(req) {
 		try {
-			return await availabilityService.isAvailable(req.query, req.params.id)
+			const tenantCode = req.decodedToken.tenant_code
+			return await availabilityService.isAvailable(req.query, req.params.id, tenantCode)
 		} catch (error) {
 			return error
 		}
@@ -89,7 +94,8 @@ module.exports = class Availability {
 	 */
 	async users(req) {
 		try {
-			return await availabilityService.users(req.query, req.params.id)
+			const tenantCode = req.decodedToken.tenant_code
+			return await availabilityService.users(req.query, req.params.id, tenantCode)
 		} catch (error) {
 			return error
 		}

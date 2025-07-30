@@ -16,6 +16,7 @@ module.exports = class Entity {
 				req.body,
 				req.decodedToken.id,
 				req.decodedToken.organization_id,
+				req.decodedToken.tenant_code,
 				req.decodedToken.roles
 			)
 		} catch (error) {
@@ -38,6 +39,7 @@ module.exports = class Entity {
 				req.params.id,
 				req.decodedToken.id,
 				req.decodedToken.organization_id,
+				req.decodedToken.tenant_code,
 				req.decodedToken.roles
 			)
 		} catch (error) {
@@ -59,10 +61,14 @@ module.exports = class Entity {
 				return await entityTypeService.readUserEntityTypes(
 					req.body,
 					req.decodedToken.id,
-					req.decodedToken.organization_id
+					req.decodedToken.organization_id,
+					req.decodedToken.tenant_code
 				)
 			}
-			return await entityTypeService.readAllSystemEntityTypes(req.decodedToken.organization_id)
+			return await entityTypeService.readAllSystemEntityTypes(
+				req.decodedToken.organization_id,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
 			return error
 		}
@@ -79,9 +85,16 @@ module.exports = class Entity {
 	async delete(req) {
 		try {
 			if (req.body.value) {
-				return await entityTypeService.deleteEntityTypesAndEntities(req.body.value)
+				return await entityTypeService.deleteEntityTypesAndEntities(
+					req.body.value,
+					req.decodedToken.tenant_code
+				)
 			} else {
-				return await entityTypeService.delete(req.params.id, req.decodedToken.organization_id)
+				return await entityTypeService.delete(
+					req.params.id,
+					req.decodedToken.organization_id,
+					req.decodedToken.tenant_code
+				)
 			}
 		} catch (error) {
 			return error

@@ -5,7 +5,7 @@ const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
 
 module.exports = class NotificationTemplateData {
-	static async findOneEmailTemplate(code, orgId) {
+	static async findOneEmailTemplate(code, orgId, tenantCode) {
 		try {
 			const defaultOrgId = await getDefaultOrgId()
 			if (!defaultOrgId) {
@@ -24,6 +24,7 @@ module.exports = class NotificationTemplateData {
 				type: 'email',
 				status: 'active',
 				organization_id: orgId ? { [Op.or]: [orgId, defaultOrgId] } : defaultOrgId,
+				tenant_code: tenantCode,
 			}
 
 			let templateData = await NotificationTemplate.findAll({
@@ -35,14 +36,14 @@ module.exports = class NotificationTemplateData {
 			templateData = templateData.find((template) => template.organization_id === orgId) || templateData[0]
 
 			if (templateData && templateData.email_header) {
-				const header = await this.getEmailHeader(templateData.email_header)
+				const header = await this.getEmailHeader(templateData.email_header, tenantCode)
 				if (header && header.body) {
 					templateData.body = header.body + templateData.body
 				}
 			}
 
 			if (templateData && templateData.email_footer) {
-				const footer = await this.getEmailFooter(templateData.email_footer)
+				const footer = await this.getEmailFooter(templateData.email_footer, tenantCode)
 				if (footer && footer.body) {
 					templateData.body += footer.body
 				}
@@ -53,13 +54,14 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async getEmailHeader(header) {
+	static async getEmailHeader(header, tenantCode) {
 		try {
 			const headerData = await NotificationTemplate.findOne({
 				where: {
 					code: header,
 					type: 'emailHeader',
 					status: 'active',
+					tenant_code: tenantCode,
 				},
 				raw: true,
 			})
@@ -70,13 +72,14 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async getEmailFooter(footer) {
+	static async getEmailFooter(footer, tenantCode) {
 		try {
 			const footerData = await NotificationTemplate.findOne({
 				where: {
 					code: footer,
 					type: 'emailFooter',
 					status: 'active',
+					tenant_code: tenantCode,
 				},
 				raw: true,
 			})
@@ -87,8 +90,9 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async findOne(filter, options = {}) {
+	static async findOne(filter, tenantCode, options = {}) {
 		try {
+			filter.tenant_code = tenantCode
 			return await NotificationTemplate.findOne({
 				where: filter,
 				...options,
@@ -99,8 +103,9 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async updateTemplate(filter, update, options = {}) {
+	static async updateTemplate(filter, update, tenantCode, options = {}) {
 		try {
+			filter.tenant_code = tenantCode
 			const template = await NotificationTemplate.update(update, {
 				where: filter,
 				...options,
@@ -113,8 +118,9 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async findAllNotificationTemplates(filter, options = {}) {
+	static async findAllNotificationTemplates(filter, tenantCode, options = {}) {
 		try {
+			filter.tenant_code = tenantCode
 			const templates = await NotificationTemplate.findAll({
 				where: filter,
 				...options,
@@ -143,8 +149,9 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async create(data) {
+	static async create(data, tenantCode) {
 		try {
+			data.tenant_code = tenantCode
 			return await NotificationTemplate.create(data)
 		} catch (error) {
 			return error

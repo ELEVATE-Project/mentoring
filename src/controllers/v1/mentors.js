@@ -23,16 +23,21 @@ module.exports = class Mentors {
 	 */
 	async upcomingSessions(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+
 			return await mentorsService.upcomingSessions(
 				req.params.id,
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
-				req.params.menteeId ? req.params.menteeId : req?.decodedToken?.id,
+				req.params.menteeId ? req.params.menteeId : userId,
 				req.query,
 				isAMentor(req.decodedToken.roles),
 				req.decodedToken.roles,
-				req.decodedToken.organization_id
+				organizationId,
+				tenantCode
 			)
 		} catch (error) {
 			return error
@@ -78,10 +83,16 @@ module.exports = class Mentors {
 
 	async reports(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+
 			const reports = await mentorsService.reports(
-				req.decodedToken.id,
+				userId,
 				req.query.filterType,
-				req.decodedToken.roles
+				req.decodedToken.roles,
+				organizationId,
+				tenantCode
 			)
 			return reports
 		} catch (error) {
@@ -100,7 +111,11 @@ module.exports = class Mentors {
 
 	async share(req) {
 		try {
-			const shareLink = await mentorsService.share(req.params.id)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+
+			const shareLink = await mentorsService.share(req.params.id, userId, organizationId, tenantCode)
 			return shareLink
 		} catch (error) {
 			return error
@@ -121,16 +136,21 @@ module.exports = class Mentors {
 
 	async list(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+
 			return await mentorsService.list(
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
 				req.searchOn,
 				req.query,
-				req.decodedToken.id,
+				userId,
 				isAMentor(req.decodedToken.roles),
 				req.decodedToken.roles,
-				req.decodedToken.organization_id
+				organizationId,
+				tenantCode
 			)
 		} catch (error) {
 			return error
@@ -148,13 +168,19 @@ module.exports = class Mentors {
 
 	async createdSessions(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+
 			const sessionDetails = await mentorsService.createdSessions(
-				req.decodedToken.id,
+				userId,
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
 				req.query.status,
-				req.decodedToken.roles
+				req.decodedToken.roles,
+				organizationId,
+				tenantCode
 			)
 			return sessionDetails
 		} catch (error) {

@@ -22,13 +22,10 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async updateOneEntity(id, update, userId, options = {}) {
+	static async updateOneEntity(whereClause, update, options = {}) {
 		try {
 			return await Entity.update(update, {
-				where: {
-					id: id,
-					created_by: userId,
-				},
+				where: whereClause,
 				...options,
 			})
 		} catch (error) {
@@ -36,13 +33,10 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async deleteOneEntityType(id, userId) {
+	static async deleteOneEntityType(whereClause) {
 		try {
 			return await Entity.destroy({
-				where: {
-					id: id,
-					created_by: userId,
-				},
+				where: whereClause,
 			})
 		} catch (error) {
 			throw error

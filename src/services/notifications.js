@@ -16,7 +16,7 @@ module.exports = class Notifications {
 	 * @returns
 	 */
 
-	static async sendNotification(notificationJobId, notificataionTemplate, jobCreatorOrgId = '') {
+	static async sendNotification(notificationJobId, notificataionTemplate, jobCreatorOrgId = '', tenantCode) {
 		try {
 			// Data contains notificationJobId and notificationTemplate.
 			// Extract sessionId from incoming notificationJobId.
@@ -28,20 +28,27 @@ module.exports = class Notifications {
 			const sessionId = Number(lastPart)
 
 			// Find session data
-			let sessions = await sessionQueries.findOne({
-				id: sessionId,
-				status: common.PUBLISHED_STATUS,
-			})
+			let sessions = await sessionQueries.findOne(
+				{
+					id: sessionId,
+					status: common.PUBLISHED_STATUS,
+				},
+				tenantCode
+			)
 
 			// Get email template based on incoming request.
-			let emailTemplate = await notificationQueries.findOneEmailTemplate(notificataionTemplate, jobCreatorOrgId)
+			let emailTemplate = await notificationQueries.findOneEmailTemplate(
+				notificataionTemplate,
+				jobCreatorOrgId,
+				tenantCode
+			)
 
 			if (emailTemplate && sessions) {
 				// if notificataionTemplate is {MENTEE_SESSION_REMAINDER_EMAIL_CODE} then notification to all personal registered for the session has to be send.
 				if (notificataionTemplate === common.MENTEE_SESSION_REMAINDER_EMAIL_CODE) {
-					await this.sendNotificationToAttendees(sessions, emailTemplate)
+					await this.sendNotificationToAttendees(sessions, emailTemplate, tenantCode)
 				} else {
-					await this.sendNotificationsToMentor(sessions, emailTemplate)
+					await this.sendNotificationsToMentor(sessions, emailTemplate, tenantCode)
 				}
 			}
 		} catch (error) {
@@ -56,15 +63,18 @@ module.exports = class Notifications {
 	 * @returns
 	 */
 
-	static async sendNotificationToAttendees(session, emailTemplate) {
+	static async sendNotificationToAttendees(session, emailTemplate, tenantCode) {
 		try {
 			let allAttendees = []
 			let attendeesInfo = []
 
 			// Get all sessionAttendees joined for the session
-			const sessionAttendees = await sessionAttendeesQueries.findAll({
-				session_id: session.id,
-			})
+			const sessionAttendees = await sessionAttendeesQueries.findAll(
+				{
+					session_id: session.id,
+				},
+				tenantCode
+			)
 
 			// If sessionAttendees data is available process the data
 			if (sessionAttendees && sessionAttendees.length > 0) {
@@ -83,7 +93,8 @@ module.exports = class Notifications {
 				{
 					attributes: ['user_id', 'name', 'email'],
 				},
-				true
+				true,
+				tenantCode
 			)
 
 			// Get attendees accound details
@@ -119,7 +130,7 @@ module.exports = class Notifications {
 	 * @returns
 	 */
 
-	static async sendNotificationsToMentor(session, emailTemplate) {
+	static async sendNotificationsToMentor(session, emailTemplate, tenantCode) {
 		try {
 			const mentorIds = []
 			mentorIds.push(session.mentor_id.toString())

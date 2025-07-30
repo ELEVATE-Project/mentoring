@@ -84,7 +84,7 @@ module.exports = class Users {
 	 */
 	async add(req) {
 		try {
-			return await userService.add(req.body)
+			return await userService.add(req.body, req.decodedToken.tenant_code)
 		} catch (error) {
 			console.log(error)
 			return error
@@ -101,7 +101,7 @@ module.exports = class Users {
 	 */
 	async update(req) {
 		try {
-			return await userService.update(req.body)
+			return await userService.update(req.body, req.decodedToken)
 		} catch (error) {
 			console.log(error)
 			return error
@@ -119,7 +119,7 @@ module.exports = class Users {
 	 */
 	async delete(req) {
 		try {
-			return await adminService.userDelete(req.body.id.toString())
+			return await adminService.userDelete(req.decodedToken, req.body.id.toString())
 		} catch (error) {
 			console.log(error)
 			return error

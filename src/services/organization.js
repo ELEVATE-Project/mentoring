@@ -8,13 +8,15 @@ const { eventListenerRouter } = require('@helpers/eventListnerRouter')
 const responses = require('@helpers/responses')
 
 module.exports = class OrganizationService {
-	static async update(bodyData, decodedToken) {
+	static async update(bodyData, decodedToken, tenantCode) {
 		try {
 			const questionSets = await questionSetQueries.findQuestionSets(
 				{
 					code: { [Op.in]: [bodyData.mentee_feedback_question_set, bodyData.mentor_feedback_question_set] },
+					tenant_code: tenantCode,
 				},
-				['id', 'code']
+				['id', 'code'],
+				tenantCode
 			)
 			if (
 				questionSets.length === 0 ||
@@ -50,7 +52,7 @@ module.exports = class OrganizationService {
 		}
 	}
 
-	static async createOrgExtension(eventBody) {
+	static async createOrgExtension(eventBody, tenantCode) {
 		try {
 			console.log('EVENT BODY: ', eventBody)
 			console.log('DEFAULT ORGANISATION POLICY: ', common.getDefaultOrgPolicies())
@@ -60,6 +62,7 @@ module.exports = class OrganizationService {
 				created_by: eventBody.created_by,
 				updated_by: eventBody.created_by,
 				name: eventBody.name,
+				tenant_code: tenantCode,
 			}
 			console.log('EXTENSION DATA BEFORE INSERT: ', extensionData)
 			const orgExtension = await organisationExtensionQueries.upsert(extensionData)

@@ -70,12 +70,17 @@ module.exports = class UserHelper {
 
 	static async create(decodedToken) {
 		try {
-			const isNewUser = await this.#checkUserExistence(decodedToken.id)
+			const isNewUser = await this.#checkUserExistence(decodedToken.id, decodedToken.tenant_code)
 			if (isNewUser) {
-				const result = await this.#createOrUpdateUserAndOrg(decodedToken.id, isNewUser)
+				const result = await this.#createOrUpdateUserAndOrg(decodedToken.id, isNewUser, decodedToken)
 				return result
 			} else {
-				const menteeExtension = await menteeQueries.getMenteeExtension(decodedToken.id)
+				const menteeExtension = await menteeQueries.getMenteeExtension(
+					decodedToken.id,
+					[],
+					false,
+					decodedToken.tenant_code
+				)
 
 				if (!menteeExtension) {
 					return responses.failureResponse({
@@ -96,11 +101,11 @@ module.exports = class UserHelper {
 		}
 	}
 
-	static async update(updateData) {
+	static async update(updateData, decodedToken) {
 		try {
 			const userId = updateData.userId
-			const isNewUser = await this.#checkUserExistence(userId)
-			const result = await this.#createOrUpdateUserAndOrg(userId, isNewUser)
+			const isNewUser = await this.#checkUserExistence(userId, decodedToken.tenant_code)
+			const result = await this.#createOrUpdateUserAndOrg(userId, isNewUser, decodedToken)
 			return result
 		} catch (error) {
 			console.log(error)
@@ -108,10 +113,10 @@ module.exports = class UserHelper {
 		}
 	}
 
-	static async add(bodyData) {
+	static async add(bodyData, tenantCode) {
 		bodyData.id = bodyData.id.toString()
 		let result = {}
-		const isNewUser = await this.#checkUserExistence(bodyData.id)
+		const isNewUser = await this.#checkUserExistence(bodyData.id, tenantCode)
 		if (isNewUser) {
 			result = await this.#createUserWithBody(bodyData)
 		}
@@ -140,7 +145,7 @@ module.exports = class UserHelper {
 				result: createResult.result,
 			})
 	}
-	static async #createOrUpdateUserAndOrg(userId, isNewUser) {
+	static async #createOrUpdateUserAndOrg(userId, isNewUser, decodedToken) {
 		const userDetails = await userRequests.fetchUserDetails({ userId })
 		if (!userDetails?.data?.result) {
 			return responses.failureResponse({
@@ -173,7 +178,7 @@ module.exports = class UserHelper {
 
 		const createOrUpdateResult = isNewUser
 			? await this.#createUser(userExtensionData)
-			: await this.#updateUser(userExtensionData)
+			: await this.#updateUser(userExtensionData, decodedToken)
 		if (createOrUpdateResult.statusCode != httpStatusCode.ok) return createOrUpdateResult
 		else
 			return responses.successResponse({
@@ -239,7 +244,7 @@ module.exports = class UserHelper {
 
 	static #checkOrgChange = (existingOrgId, newOrgId) => existingOrgId !== newOrgId
 
-	static async #updateUser(userExtensionData) {
+	static async #updateUser(userExtensionData, decodedToken) {
 		const isAMentee = userExtensionData.roles.some((role) => role.title === common.MENTEE_ROLE)
 		const roleChangePayload = {
 			user_id: userExtensionData.id,
@@ -248,10 +253,12 @@ module.exports = class UserHelper {
 
 		let isRoleChanged = false
 
-		const menteeExtension = await menteeQueries.getMenteeExtension(userExtensionData.id, [
-			'organization_id',
-			'is_mentor',
-		])
+		const menteeExtension = await menteeQueries.getMenteeExtension(
+			userExtensionData.id,
+			['organization_id', 'is_mentor'],
+			false,
+			decodedToken.tenant_code
+		)
 
 		if (!menteeExtension) throw new Error('User Not Found')
 
@@ -268,7 +275,11 @@ module.exports = class UserHelper {
 		if (isRoleChanged) {
 			//If role is changed, the role change, org policy changes for that user
 			//and additional data update of the user is done by orgAdmin's roleChange workflow
-			const roleChangeResult = await orgAdminService.roleChange(roleChangePayload, userExtensionData)
+			const roleChangeResult = await orgAdminService.roleChange(
+				roleChangePayload,
+				userExtensionData,
+				decodedToken
+			)
 			return roleChangeResult
 		} else {
 			if (userExtensionData.email) delete userExtensionData.email
@@ -296,9 +307,14 @@ module.exports = class UserHelper {
 	 * @returns {Promise<boolean>} - Returns `true` if the user does not exist, `false` otherwise.
 	 * @throws {Error} - Throws an error if the query fails.
 	 */
-	static async #checkUserExistence(userId) {
+	static async #checkUserExistence(userId, tenantCode) {
 		try {
-			const menteeExtension = await menteeQueries.getMenteeExtension(userId, ['organization_id'])
+			const menteeExtension = await menteeQueries.getMenteeExtension(
+				userId,
+				['organization_id'],
+				false,
+				tenantCode
+			)
 
 			// Check if menteeExtension exists
 			const userExists = menteeExtension !== null

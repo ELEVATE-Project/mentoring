@@ -1,8 +1,9 @@
 const Form = require('../models/index').Form
 
 module.exports = class FormsData {
-	static async createForm(data) {
+	static async createForm(data, tenantCode) {
 		try {
+			data.tenant_code = tenantCode
 			let form = await Form.create(data, { returning: true })
 			return form
 		} catch (error) {
@@ -10,8 +11,12 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findOneForm(filter) {
+	static async findOneForm(filter, tenantCode, organizationId = null) {
 		try {
+			filter.tenant_code = tenantCode
+			if (organizationId) {
+				filter.organization_id = organizationId
+			}
 			const formData = await Form.findOne({
 				where: filter,
 				raw: true,
@@ -22,8 +27,12 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async updateOneForm(filter, update, options = {}) {
+	static async updateOneForm(filter, update, tenantCode, organizationId = null, options = {}) {
 		try {
+			filter.tenant_code = tenantCode
+			if (organizationId) {
+				filter.organization_id = organizationId
+			}
 			const [rowsAffected] = await Form.update(update, {
 				where: filter,
 				...options,
@@ -40,9 +49,14 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findAllTypeFormVersion() {
+	static async findAllTypeFormVersion(tenantCode, organizationId = null) {
 		try {
+			const whereClause = { tenant_code: tenantCode }
+			if (organizationId) {
+				whereClause.organization_id = organizationId
+			}
 			const formData = await Form.findAll({
+				where: whereClause,
 				attributes: ['id', 'type', 'version'],
 			})
 			return formData

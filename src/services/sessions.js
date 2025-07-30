@@ -2219,10 +2219,11 @@ module.exports = class SessionsHelper {
 	 * @throws {Error} - Throws an error if there's an issue during processing.
 	 */
 
-	static async downloadList(userId, queryParams, timezone, searchText) {
+	static async downloadList(userId, queryParams, timezone, searchText, tenantCode) {
 		try {
 			const filter = {
 				created_by: userId,
+				tenant_code: tenantCode,
 				...(queryParams.status && { status: queryParams.status.split(',') }),
 				...(queryParams.type && { type: queryParams.type.split(',') }),
 				...(searchText && {
@@ -2406,10 +2407,11 @@ module.exports = class SessionsHelper {
 	 * @throws {Error} - Throws an error if there's an issue during processing.
 	 */
 
-	static async createdSessions(userId, queryParams, timezone, page, limit, searchText) {
+	static async createdSessions(userId, queryParams, timezone, page, limit, searchText, tenantCode) {
 		try {
 			const filter = {
 				created_by: userId,
+				tenant_code: tenantCode,
 				...(queryParams.status && { status: queryParams.status.split(',') }),
 				...(queryParams.type && { type: queryParams.type.split(',') }),
 				...(searchText && {
