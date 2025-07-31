@@ -24,8 +24,8 @@ const schedulerRequest = require('@requests/scheduler')
 const communicationHelper = require('@helpers/communications')
 
 module.exports = class requestSessionsHelper {
-	static async checkConnectionRequestExists(userId, targetUserId) {
-		const connectionRequest = await connectionQueries.findOneRequest(userId, targetUserId)
+	static async checkConnectionRequestExists(userId, targetUserId, tenantCode) {
+		const connectionRequest = await connectionQueries.findOneRequest(userId, targetUserId, tenantCode)
 		if (!connectionRequest) {
 			return false
 		}
@@ -40,9 +40,14 @@ module.exports = class requestSessionsHelper {
 	 * @returns {Promise<Object>} A success or failure response.
 	 */
 
-	static async create(bodyData, userId, orgId, skipValidation) {
+	static async create(bodyData, userId, orgId, skipValidation, tenantCode) {
 		try {
-			const mentorUserExists = await mentorQueries.getMentorExtension(bodyData.requestee_id)
+			const mentorUserExists = await mentorQueries.getMentorExtension(
+				bodyData.requestee_id,
+				['user_id'],
+				false,
+				tenantCode
+			)
 			if (!mentorUserExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -51,11 +56,15 @@ module.exports = class requestSessionsHelper {
 			}
 
 			// Check if a connection already exists between the users
-			const connectionExists = await connectionQueries.getConnection(userId, bodyData.requestee_id)
+			const connectionExists = await connectionQueries.getConnection(userId, bodyData.requestee_id, tenantCode)
 
 			// If not connected, restrict mentee to a single pending request
 			if (!connectionExists) {
-				const pendingRequest = await sessionRequestQueries.checkPendingRequest(userId, bodyData.requestee_id)
+				const pendingRequest = await sessionRequestQueries.checkPendingRequest(
+					userId,
+					bodyData.requestee_id,
+					tenantCode
+				)
 				if (pendingRequest.count > 0) {
 					return responses.failureResponse({
 						statusCode: httpStatusCode.bad_request,
@@ -118,14 +127,17 @@ module.exports = class requestSessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			const requestSessionModelName = await sessionRequestQueries.getModelName()
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [orgId, defaultOrgId],
+			const requestSessionModelName = await sessionRequestQueries.getModelName(tenantCode)
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_id: {
+						[Op.in]: [orgId, defaultOrgId],
+					},
+					model_names: { [Op.contains]: [requestSessionModelName] },
 				},
-				model_names: { [Op.contains]: [requestSessionModelName] },
-			})
+				tenantCode
+			)
 
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
 			let res = utils.validateInput(bodyData, validationData, requestSessionModelName, skipValidation)
@@ -138,7 +150,7 @@ module.exports = class requestSessionsHelper {
 				})
 			}
 
-			let requestSessionModel = await sessionRequestQueries.getColumns()
+			let requestSessionModel = await sessionRequestQueries.getColumns(tenantCode)
 			bodyData = utils.restructureBody(bodyData, validationData, requestSessionModel)
 
 			// Create a new session request
@@ -149,12 +161,16 @@ module.exports = class requestSessionsHelper {
 				bodyData.start_date,
 				bodyData.end_date,
 				bodyData.title,
-				bodyData.meta ? bodyData.meta : null
+				bodyData.meta ? bodyData.meta : null,
+				orgId,
+				tenantCode
 			)
 
 			const SessionRequestMapping = await sessionRequestMappingQueries.addSessionRequest(
 				bodyData.requestee_id,
-				SessionRequestResult.id
+				SessionRequestResult.id,
+				orgId,
+				tenantCode
 			)
 
 			// Schedule a job to expire the session request after end_date
@@ -194,17 +210,18 @@ module.exports = class requestSessionsHelper {
 	 * @param {number} pageSize - The number of records per page.
 	 * @returns {Promise<Object>} The list of pending session requests.
 	 */
-	static async list(userId, pageNo, pageSize, status) {
+	static async list(userId, pageNo, pageSize, status, tenantCode) {
 		try {
-			const allRequestSession = await sessionRequestQueries.getAllRequests(userId, status)
+			const allRequestSession = await sessionRequestQueries.getAllRequests(userId, status, tenantCode)
 			const sessionRequestData = allRequestSession.rows
 
-			const sessionRequestMapping = await sessionRequestMappingQueries.getSessionsMapping(userId)
+			const sessionRequestMapping = await sessionRequestMappingQueries.getSessionsMapping(userId, tenantCode)
 			const sessionRequestIds = sessionRequestMapping.map((s) => s.request_session_id)
 
 			const sessionMappingDetails = await sessionRequestQueries.getSessionMappingDetails(
 				sessionRequestIds,
-				status
+				status,
+				tenantCode
 			)
 			const sessionMappingDetailsData = sessionMappingDetails.map((s) => s.dataValues)
 
@@ -237,12 +254,17 @@ module.exports = class requestSessionsHelper {
 				s.requestor_id === userId ? s.requestee_id : s.requestor_id
 			)
 
-			let oppositeUserDetails = await userExtensionQueries.getUsersByUserIds(oppositeUserIds, {
-				attributes: ['user_id', 'image', 'name', 'experience', 'designation', 'organization_id'],
-			})
+			let oppositeUserDetails = await userExtensionQueries.getUsersByUserIds(
+				oppositeUserIds,
+				{
+					attributes: ['user_id', 'image', 'name', 'experience', 'designation', 'organization_id'],
+				},
+				false,
+				tenantCode
+			)
 
 			const uniqueOrgIds = [...new Set(oppositeUserDetails.map((u) => u.organization_id))]
-			const modelName = await userExtensionQueries.getModelName()
+			const modelName = await userExtensionQueries.getModelName(tenantCode)
 
 			oppositeUserDetails = await entityTypeService.processEntityTypesToAddValueLabels(
 				oppositeUserDetails,
@@ -254,7 +276,7 @@ module.exports = class requestSessionsHelper {
 			const userDetailsMap = Object.fromEntries(oppositeUserDetails.map((u) => [u.user_id, u]))
 			const userIds = oppositeUserIds.map((id) => String(id))
 
-			const userDetails = await userExtensionQueries.getUsersByUserIds(userIds, {}, true)
+			const userDetails = await userExtensionQueries.getUsersByUserIds(userIds, {}, true, tenantCode)
 
 			await Promise.all(
 				userDetails.map(async (u) => {
@@ -306,10 +328,13 @@ module.exports = class requestSessionsHelper {
 	 * @param {string} organization_id - the ID of the user organization.
 	 * @returns {Promise<Object>} A success response indicating the request was accepted.
 	 */
-	static async accept(bodyData, mentorUserId, orgId, isMentor) {
+	static async accept(bodyData, mentorUserId, orgId, isMentor, tenantCode) {
 		try {
 			// Fetch session request details
-			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(bodyData.request_session_id)
+			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(
+				bodyData.request_session_id,
+				tenantCode
+			)
 
 			// If no session request found
 			if (!getRequestSessionDetails) {
@@ -342,7 +367,15 @@ module.exports = class requestSessionsHelper {
 			})
 
 			// Create session
-			const sessionCreation = await sessionService.create(bodyData, mentorUserId, orgId, isMentor, true, true)
+			const sessionCreation = await sessionService.create(
+				bodyData,
+				mentorUserId,
+				orgId,
+				isMentor,
+				true,
+				true,
+				tenantCode
+			)
 
 			// If session creation fails
 			if (sessionCreation.statusCode !== httpStatusCode.created) {
@@ -357,7 +390,8 @@ module.exports = class requestSessionsHelper {
 			const approveSessionRequest = await sessionRequestQueries.approveRequest(
 				mentorUserId,
 				bodyData.request_session_id,
-				sessionCreation.result.id
+				sessionCreation.result.id,
+				tenantCode
 			)
 
 			// If approval failed
@@ -374,7 +408,12 @@ module.exports = class requestSessionsHelper {
 			}
 
 			// Check if mentee user exists
-			const userExists = await userExtensionQueries.getMenteeExtension(getRequestSessionDetails.requestor_id)
+			const userExists = await userExtensionQueries.getMenteeExtension(
+				getRequestSessionDetails.requestor_id,
+				['name'],
+				false,
+				tenantCode
+			)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -385,7 +424,8 @@ module.exports = class requestSessionsHelper {
 			// Check if connection already exists
 			let connectionExists = await connectionQueries.getConnection(
 				mentorUserId,
-				getRequestSessionDetails.requestor_id
+				getRequestSessionDetails.requestor_id,
+				tenantCode
 			)
 
 			// If no connection, create one
@@ -393,7 +433,8 @@ module.exports = class requestSessionsHelper {
 				// Check for pending connection request
 				let connectionRequest = await this.checkConnectionRequestExists(
 					mentorUserId,
-					getRequestSessionDetails.requestor_id
+					getRequestSessionDetails.requestor_id,
+					tenantCode
 				)
 
 				// If no pending request, send a new request
@@ -401,13 +442,16 @@ module.exports = class requestSessionsHelper {
 					await connectionQueries.addFriendRequest(
 						getRequestSessionDetails.requestor_id,
 						mentorUserId,
-						common.CONNECTIONS_DEFAULT_MESSAGE
+						common.CONNECTIONS_DEFAULT_MESSAGE,
+						orgId,
+						tenantCode
 					)
 
 					// Re-check connection request after creating
 					connectionRequest = await this.checkConnectionRequestExists(
 						mentorUserId,
-						getRequestSessionDetails.requestor_id
+						getRequestSessionDetails.requestor_id,
+						tenantCode
 					)
 				}
 
@@ -415,14 +459,16 @@ module.exports = class requestSessionsHelper {
 				await connectionQueries.approveRequest(
 					mentorUserId,
 					getRequestSessionDetails.requestor_id,
-					connectionRequest?.meta
+					connectionRequest?.meta,
+					tenantCode
 				)
 
 				// Fetch user chat settings
 				const userDetails = await userExtensionQueries.getUsersByUserIds(
 					[mentorUserId, getRequestSessionDetails.requestor_id],
 					{ attributes: ['settings', 'user_id'] },
-					true
+					true,
+					tenantCode
 				)
 
 				const bothChatEnabled =
@@ -446,9 +492,14 @@ module.exports = class requestSessionsHelper {
 					? { ...connectionRequest?.meta, room_id: chatRoom.result.room.room_id }
 					: connectionRequest?.meta
 
-				await connectionQueries.updateConnection(getRequestSessionDetails.requestor_id, mentorUserId, {
-					meta: updatedMeta,
-				})
+				await connectionQueries.updateConnection(
+					getRequestSessionDetails.requestor_id,
+					mentorUserId,
+					{
+						meta: updatedMeta,
+					},
+					tenantCode
+				)
 			}
 
 			// Send Email
@@ -458,7 +509,9 @@ module.exports = class requestSessionsHelper {
 					templateCode,
 					orgId.toString(),
 					getRequestSessionDetails.requestor_id,
-					mentorUserId
+					mentorUserId,
+					'',
+					tenantCode
 				)
 			}
 
@@ -485,10 +538,13 @@ module.exports = class requestSessionsHelper {
 	 * @param {string} organization_id - the ID of the user organization.
 	 * @returns {Promise<Object>} A success response indicating the request was rejected.
 	 */
-	static async reject(bodyData, userId, orgId) {
+	static async reject(bodyData, userId, orgId, tenantCode) {
 		try {
 			// Fetch session request details
-			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(bodyData.request_session_id)
+			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(
+				bodyData.request_session_id,
+				tenantCode
+			)
 
 			// If no session request found
 			if (!getRequestSessionDetails) {
@@ -502,7 +558,8 @@ module.exports = class requestSessionsHelper {
 			const [rejectedCount, rejectedData] = await sessionRequestQueries.rejectRequest(
 				userId,
 				bodyData.request_session_id,
-				bodyData.reason
+				bodyData.reason,
+				tenantCode
 			)
 
 			if (rejectedCount == 0) {
@@ -519,7 +576,8 @@ module.exports = class requestSessionsHelper {
 				orgId.toString(),
 				rejectedData[0].dataValues.requestor_id,
 				userId,
-				bodyData.reason
+				bodyData.reason,
+				tenantCode
 			)
 
 			return responses.successResponse({
@@ -542,9 +600,9 @@ module.exports = class requestSessionsHelper {
 	 * @returns {Promise<Object>} The session information.
 	 * @throws Will throw an error if the request fails.
 	 */
-	static async getInfo(requestSessionId, userId) {
+	static async getInfo(requestSessionId, userId, tenantCode) {
 		try {
-			const requestSessions = await sessionRequestQueries.getRequestSessions(requestSessionId, userId)
+			const requestSessions = await sessionRequestQueries.getRequestSessions(requestSessionId, tenantCode)
 
 			const defaultOrgId = await getDefaultOrgId()
 			if (!defaultOrgId) {
@@ -559,21 +617,26 @@ module.exports = class requestSessionsHelper {
 				userId === requestSessions.requestee_id ? requestSessions.requestor_id : requestSessions.requestee_id
 
 			const [userExtensionsModelName, userDetails] = await Promise.all([
-				userExtensionQueries.getModelName(),
-				userExtensionQueries.getMenteeExtension(targetUserId, [
-					'name',
-					'user_id',
-					'mentee_visibility',
-					'organization_id',
-					'designation',
-					'area_of_expertise',
-					'education_qualification',
-					'custom_entity_text',
-					'meta',
-					'is_mentor',
-					'experience',
-					'image',
-				]),
+				userExtensionQueries.getModelName(tenantCode),
+				userExtensionQueries.getMenteeExtension(
+					targetUserId,
+					[
+						'name',
+						'user_id',
+						'mentee_visibility',
+						'organization_id',
+						'designation',
+						'area_of_expertise',
+						'education_qualification',
+						'custom_entity_text',
+						'meta',
+						'is_mentor',
+						'experience',
+						'image',
+					],
+					false,
+					tenantCode
+				),
 			])
 
 			if (requestSessions?.status === common.CONNECTIONS_STATUS.BLOCKED || !userDetails) {
@@ -588,13 +651,16 @@ module.exports = class requestSessionsHelper {
 			}
 
 			// Fetch entity types associated with the user
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [userDetails.organization_id, defaultOrgId],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_id: {
+						[Op.in]: [userDetails.organization_id, defaultOrgId],
+					},
+					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				model_names: { [Op.contains]: [userExtensionsModelName] },
-			})
+				tenantCode
+			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_id)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
 
@@ -620,12 +686,22 @@ module.exports = class requestSessionsHelper {
 		}
 	}
 
-	static async userAvailability(userId, page, limit, search, status, roles, startDate, endDate) {
+	static async userAvailability(userId, page, limit, search, status, roles, startDate, endDate, tenantCode) {
 		try {
 			// Fetch both mentor and mentee sessions in parallel
 			const [enrolledSessions, mentoringSessions] = await Promise.all([
-				menteeServices.getMySessions(page, limit, search, userId, startDate, endDate),
-				mentorService.createdSessions(userId, page, limit, search, status, roles, startDate, endDate),
+				menteeServices.getMySessions(page, limit, search, userId, startDate, endDate, tenantCode),
+				mentorService.createdSessions(
+					userId,
+					page,
+					limit,
+					search,
+					status,
+					roles,
+					startDate,
+					endDate,
+					tenantCode
+				),
 			])
 
 			// Merge the two session arrays into one
@@ -644,10 +720,11 @@ module.exports = class requestSessionsHelper {
 		}
 	}
 
-	static async expire(requestSessionId) {
+	static async expire(requestSessionId, tenantCode = null) {
 		try {
 			// Fetch session request details
-			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(requestSessionId)
+			// Note: tenantCode is optional for system-triggered expire operations
+			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(requestSessionId, tenantCode)
 
 			// If no session request found
 			if (!getRequestSessionDetails) {
@@ -658,7 +735,7 @@ module.exports = class requestSessionsHelper {
 				})
 			}
 
-			const [expiredCount, expiredData] = await sessionRequestQueries.expireRequest(requestSessionId)
+			const [expiredCount, expiredData] = await sessionRequestQueries.expireRequest(requestSessionId, tenantCode)
 
 			if (expiredCount == 0) {
 				return responses.failureResponse({
@@ -712,12 +789,17 @@ function createMentorAvailabilityResponse(data) {
 	}
 }
 
-async function emailForAcceptAndReject(templateCode, orgId, requestor_id, mentorUserId, rejectReason = '') {
-	const menteeDetails = await userExtensionQueries.getUsersByUserIds(requestor_id, {
-		attributes: ['name', 'email'],
-	})
+async function emailForAcceptAndReject(templateCode, orgId, requestor_id, mentorUserId, rejectReason = '', tenantCode) {
+	const menteeDetails = await userExtensionQueries.getUsersByUserIds(
+		requestor_id,
+		{
+			attributes: ['name', 'email'],
+		},
+		false,
+		tenantCode
+	)
 
-	const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorUserId, ['name'], true)
+	const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorUserId, ['name'], true, tenantCode)
 
 	let emailTemplateCode
 
@@ -725,7 +807,7 @@ async function emailForAcceptAndReject(templateCode, orgId, requestor_id, mentor
 	emailTemplateCode = templateCode
 
 	// send mail to mentors on session creation if session created by manager
-	const templateData = await notificationQueries.findOneEmailTemplate(emailTemplateCode, orgId)
+	const templateData = await notificationQueries.findOneEmailTemplate(emailTemplateCode, orgId, tenantCode)
 
 	// If template data is available. create mail data and push to kafka
 	if (templateData) {

@@ -12,12 +12,14 @@ module.exports = class requestsSessions {
 	 */
 	async create(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
 			const SkipValidation = req.query.SkipValidation ? req.query.SkipValidation : false
 			return await requestSessionsService.create(
 				req.body,
 				req.decodedToken.id,
 				req.decodedToken.organization_id,
-				SkipValidation
+				SkipValidation,
+				tenantCode
 			)
 		} catch (error) {
 			return error
@@ -33,11 +35,13 @@ module.exports = class requestsSessions {
 	 */
 	async list(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
 			const requestSessionDetails = await requestSessionsService.list(
 				req.decodedToken.id,
 				req.query.pageNo,
 				req.query.pageSize,
-				req.query.status ? req.query.status.split(',').map((s) => s.trim()) : []
+				req.query.status ? req.query.status.split(',').map((s) => s.trim()) : [],
+				tenantCode
 			)
 			return requestSessionDetails
 		} catch (error) {
@@ -55,6 +59,7 @@ module.exports = class requestsSessions {
 	 */
 	async accept(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
 			if (req.headers.timezone) {
 				req.body['time_zone'] = req.headers.timezone
 			}
@@ -62,7 +67,8 @@ module.exports = class requestsSessions {
 				req.body,
 				req.decodedToken.id,
 				req.decodedToken.organization_id,
-				isAMentor(req.decodedToken.roles)
+				isAMentor(req.decodedToken.roles),
+				tenantCode
 			)
 			return acceptRequestSession
 		} catch (error) {
@@ -80,7 +86,13 @@ module.exports = class requestsSessions {
 	 */
 	async reject(req) {
 		try {
-			return await requestSessionsService.reject(req.body, req.decodedToken.id, req.decodedToken.organization_id)
+			const tenantCode = req.decodedToken.tenant_code
+			return await requestSessionsService.reject(
+				req.body,
+				req.decodedToken.id,
+				req.decodedToken.organization_id,
+				tenantCode
+			)
 		} catch (error) {
 			throw error
 		}
@@ -95,7 +107,8 @@ module.exports = class requestsSessions {
 	 */
 	async getDetails(req) {
 		try {
-			return await requestSessionsService.getInfo(req.query.request_session_id, req.decodedToken.id)
+			const tenantCode = req.decodedToken.tenant_code
+			return await requestSessionsService.getInfo(req.query.request_session_id, req.decodedToken.id, tenantCode)
 		} catch (error) {
 			throw error
 		}
@@ -114,6 +127,7 @@ module.exports = class requestsSessions {
 	 */
 	async userAvailability(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
 			return await requestSessionsService.userAvailability(
 				req.decodedToken.id,
 				req.query.pageNo,
@@ -122,7 +136,8 @@ module.exports = class requestsSessions {
 				req.query.status,
 				req.decodedToken.roles,
 				req.query.start_date,
-				req.query.end_date
+				req.query.end_date,
+				tenantCode
 			)
 		} catch (error) {
 			throw error
@@ -139,6 +154,8 @@ module.exports = class requestsSessions {
 
 	async expire(req) {
 		try {
+			// Note: expire is called by scheduler, may not have tenant context
+			// For now, keeping without tenant context as this is system-triggered
 			const sessionsExpire = await requestSessionsService.expire(req.params.id)
 			return sessionsExpire
 		} catch (error) {
