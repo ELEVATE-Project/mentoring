@@ -7,7 +7,7 @@ const MenteeExtension = require('@database/models/index').UserExtension
 const { QueryTypes } = require('sequelize')
 const moment = require('moment')
 
-exports.getColumns = async (tenantCode) => {
+exports.getColumns = async () => {
 	try {
 		return await Object.keys(requestSession.rawAttributes)
 	} catch (error) {
@@ -15,7 +15,7 @@ exports.getColumns = async (tenantCode) => {
 	}
 }
 
-exports.getModelName = async (tenantCode) => {
+exports.getModelName = async () => {
 	try {
 		return await requestSession.name
 	} catch (error) {
@@ -23,17 +23,7 @@ exports.getModelName = async (tenantCode) => {
 	}
 }
 
-exports.addSessionRequest = async (
-	requestorId,
-	requesteeId,
-	Agenda,
-	startDate,
-	endDate,
-	Title,
-	Meta,
-	organizationId,
-	tenantCode
-) => {
+exports.addSessionRequest = async (requestorId, requesteeId, Agenda, startDate, endDate, Title, Meta) => {
 	try {
 		const SessionRequestData = [
 			{
@@ -47,8 +37,6 @@ exports.addSessionRequest = async (
 				created_by: requestorId,
 				updated_by: requestorId,
 				meta: Meta,
-				organization_code: organizationId,
-				tenant_code: tenantCode,
 			},
 		]
 
@@ -61,7 +49,7 @@ exports.addSessionRequest = async (
 	}
 }
 
-exports.getAllRequests = async (userId, status, tenantCode) => {
+exports.getAllRequests = async (userId, status) => {
 	try {
 		// Prepare status filter
 		const statusFilter =
@@ -76,14 +64,11 @@ exports.getAllRequests = async (userId, status, tenantCode) => {
 						],
 				  }
 
-		const whereClause = {
-			requestor_id: userId,
-			status: statusFilter,
-			tenant_code: tenantCode,
-		}
-
 		const sessionRequest = await requestSession.findAndCountAll({
-			where: whereClause,
+			where: {
+				requestor_id: userId,
+				status: statusFilter,
+			},
 			raw: true,
 			order: [['created_at', 'DESC']],
 		})
@@ -95,7 +80,7 @@ exports.getAllRequests = async (userId, status, tenantCode) => {
 	}
 }
 
-exports.getSessionMappingDetails = async (sessionRequestIds, status, tenantCode) => {
+exports.getSessionMappingDetails = async (sessionRequestIds, status) => {
 	try {
 		const statusFilter =
 			status != []
@@ -109,16 +94,13 @@ exports.getSessionMappingDetails = async (sessionRequestIds, status, tenantCode)
 						],
 				  }
 
-		const whereClause = {
-			id: {
-				[Op.in]: sessionRequestIds, // Using Sequelize.Op.in to filter by multiple ids
-			},
-			status: statusFilter, // Your status filter
-			tenant_code: tenantCode,
-		}
-
 		const result = await requestSession.findAll({
-			where: whereClause,
+			where: {
+				id: {
+					[Op.in]: sessionRequestIds, // Using Sequelize.Op.in to filter by multiple ids
+				},
+				status: statusFilter, // Your status filter
+			},
 			order: [['created_at', 'DESC']],
 		})
 
@@ -128,20 +110,17 @@ exports.getSessionMappingDetails = async (sessionRequestIds, status, tenantCode)
 	}
 }
 
-exports.getpendingRequests = async (userId, page, pageSize, tenantCode) => {
+exports.getpendingRequests = async (userId, page, pageSize) => {
 	try {
 		const currentPage = page ? page : 1
 		const limit = pageSize ? pageSize : 5
 		const offset = (currentPage - 1) * limit
 
-		const whereClause = {
-			user_id: userId,
-			status: common.CONNECTIONS_STATUS.REQUESTED,
-			tenant_code: tenantCode,
-		}
-
 		const result = await requestSession.findAndCountAll({
-			where: whereClause,
+			where: {
+				user_id: userId,
+				status: common.CONNECTIONS_STATUS.REQUESTED,
+			},
 			raw: true,
 			limit,
 			offset,
@@ -153,7 +132,7 @@ exports.getpendingRequests = async (userId, page, pageSize, tenantCode) => {
 	}
 }
 
-exports.approveRequest = async (userId, requestSessionId, sessionId, tenantCode) => {
+exports.approveRequest = async (userId, requestSessionId, sessionId) => {
 	try {
 		const updateData = {
 			status: common.CONNECTIONS_STATUS.ACCEPTED,
@@ -161,14 +140,11 @@ exports.approveRequest = async (userId, requestSessionId, sessionId, tenantCode)
 			updated_by: userId,
 		}
 
-		const whereClause = {
-			status: common.CONNECTIONS_STATUS.REQUESTED,
-			id: requestSessionId,
-			tenant_code: tenantCode,
-		}
-
 		const requests = await requestSession.update(updateData, {
-			where: whereClause,
+			where: {
+				status: common.CONNECTIONS_STATUS.REQUESTED,
+				id: requestSessionId,
+			},
 			individualHooks: true,
 		})
 
@@ -178,7 +154,7 @@ exports.approveRequest = async (userId, requestSessionId, sessionId, tenantCode)
 	}
 }
 
-exports.rejectRequest = async (userId, requestSessionId, rejectReason, tenantCode) => {
+exports.rejectRequest = async (userId, requestSessionId, rejectReason) => {
 	try {
 		let updateData = {
 			status: common.CONNECTIONS_STATUS.REJECTED,
@@ -186,14 +162,11 @@ exports.rejectRequest = async (userId, requestSessionId, rejectReason, tenantCod
 			reject_reason: rejectReason ? rejectReason : null,
 		}
 
-		const whereClause = {
-			status: common.CONNECTIONS_STATUS.REQUESTED,
-			id: requestSessionId,
-			tenant_code: tenantCode,
-		}
-
 		return await requestSession.update(updateData, {
-			where: whereClause,
+			where: {
+				status: common.CONNECTIONS_STATUS.REQUESTED,
+				id: requestSessionId,
+			},
 			individualHooks: true,
 		})
 	} catch (error) {
@@ -201,24 +174,17 @@ exports.rejectRequest = async (userId, requestSessionId, rejectReason, tenantCod
 	}
 }
 
-exports.expireRequest = async (requestSessionId, tenantCode = null) => {
+exports.expireRequest = async (requestSessionId) => {
 	try {
 		let updateData = {
 			status: common.CONNECTIONS_STATUS.EXPIRED,
 		}
 
-		const whereClause = {
-			status: common.CONNECTIONS_STATUS.REQUESTED,
-			id: requestSessionId,
-		}
-
-		// Add tenant filtering only if tenantCode is provided (system operations may not have tenant context)
-		if (tenantCode) {
-			whereClause.tenant_code = tenantCode
-		}
-
 		return await requestSession.update(updateData, {
-			where: whereClause,
+			where: {
+				status: common.CONNECTIONS_STATUS.REQUESTED,
+				id: requestSessionId,
+			},
 			individualHooks: true,
 		})
 	} catch (error) {
@@ -226,20 +192,13 @@ exports.expireRequest = async (requestSessionId, tenantCode = null) => {
 	}
 }
 
-exports.findOneRequest = async (requestSessionId, tenantCode = null) => {
+exports.findOneRequest = async (requestSessionId) => {
 	try {
-		const whereClause = {
-			id: requestSessionId,
-			status: common.CONNECTIONS_STATUS.REQUESTED,
-		}
-
-		// Add tenant filtering only if tenantCode is provided (system operations may not have tenant context)
-		if (tenantCode) {
-			whereClause.tenant_code = tenantCode
-		}
-
 		const sessionRequest = await requestSession.findOne({
-			where: whereClause,
+			where: {
+				id: requestSessionId,
+				status: common.CONNECTIONS_STATUS.REQUESTED,
+			},
 			raw: true,
 		})
 
@@ -249,17 +208,14 @@ exports.findOneRequest = async (requestSessionId, tenantCode = null) => {
 	}
 }
 
-exports.checkPendingRequest = async (requestorId, requesteeId, tenantCode) => {
+exports.checkPendingRequest = async (requestorId, requesteeId) => {
 	try {
-		const whereClause = {
-			requestor_id: requestorId,
-			requestee_id: requesteeId,
-			status: common.CONNECTIONS_STATUS.REQUESTED,
-			tenant_code: tenantCode,
-		}
-
 		const result = await requestSession.findAndCountAll({
-			where: whereClause,
+			where: {
+				requestor_id: requestorId,
+				requestee_id: requesteeId,
+				status: common.CONNECTIONS_STATUS.REQUESTED,
+			},
 		})
 		return result
 	} catch (error) {
@@ -267,11 +223,10 @@ exports.checkPendingRequest = async (requestorId, requesteeId, tenantCode) => {
 	}
 }
 
-exports.getRequestSessions = async (requestSessionId, tenantCode) => {
+exports.getRequestSessions = async (requestSessionId) => {
 	try {
 		const whereClause = {
 			id: requestSessionId,
-			tenant_code: tenantCode,
 		}
 		return await requestSession.findOne({
 			where: whereClause,
