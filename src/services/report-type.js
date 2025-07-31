@@ -3,10 +3,10 @@ const responses = require('@helpers/responses')
 const reportTypeQueries = require('@database/queries/reportTypes')
 
 module.exports = class ReportsHelper {
-	static async createReportType(data) {
+	static async createReportType(data, userId, organizationId, tenantCode) {
 		try {
 			// Attempt to create a new report directly
-			const reportTypeCreation = await reportTypeQueries.createReportType(data)
+			const reportTypeCreation = await reportTypeQueries.createReportType(data, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'REPORT_TYPE_CREATED_SUCCESS',
@@ -29,9 +29,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async getReportType(title) {
+	static async getReportType(title, organizationId, tenantCode) {
 		try {
-			const readReportType = await reportTypeQueries.findReportTypeByTitle(title)
+			const readReportType = await reportTypeQueries.findReportTypeByTitle(title, tenantCode)
 			if (!readReportType) {
 				return responses.failureResponse({
 					message: 'REPORT_TYPE_NOT_FOUND',
@@ -49,9 +49,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async updateReportType(filter, updateData) {
+	static async updateReportType(filter, updateData, userId, organizationId, tenantCode) {
 		try {
-			const updatedReport = await reportTypeQueries.updateReportType(filter, updateData)
+			const updatedReport = await reportTypeQueries.updateReportType(filter, updateData, tenantCode)
 			if (!updatedReport) {
 				return responses.failureResponse({
 					message: 'REPORT_TYPE_UPDATE_FAILED',
@@ -69,9 +69,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async deleteReportType(id) {
+	static async deleteReportType(id, userId, organizationId, tenantCode) {
 		try {
-			const deletedRows = await reportTypeQueries.deleteReportType(id)
+			const deletedRows = await reportTypeQueries.deleteReportType(id, tenantCode)
 			if (deletedRows === 0) {
 				return responses.failureResponse({
 					message: 'REPORT_TYPE_DELETION_FAILED',
