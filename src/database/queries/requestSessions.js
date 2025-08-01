@@ -23,7 +23,7 @@ exports.getModelName = async () => {
 	}
 }
 
-exports.addSessionRequest = async (requestorId, requesteeId, Agenda, startDate, endDate, Title, Meta) => {
+exports.addSessionRequest = async (requestorId, requesteeId, Agenda, startDate, endDate, Title, Meta, tenantCode) => {
 	try {
 		const SessionRequestData = [
 			{
@@ -37,6 +37,7 @@ exports.addSessionRequest = async (requestorId, requesteeId, Agenda, startDate, 
 				created_by: requestorId,
 				updated_by: requestorId,
 				meta: Meta,
+				tenant_code: tenantCode,
 			},
 		]
 
@@ -49,7 +50,7 @@ exports.addSessionRequest = async (requestorId, requesteeId, Agenda, startDate, 
 	}
 }
 
-exports.getAllRequests = async (userId, status) => {
+exports.getAllRequests = async (userId, status, tenantCode) => {
 	try {
 		// Prepare status filter
 		const statusFilter =
@@ -68,6 +69,7 @@ exports.getAllRequests = async (userId, status) => {
 			where: {
 				requestor_id: userId,
 				status: statusFilter,
+				tenant_code: tenantCode,
 			},
 			raw: true,
 			order: [['created_at', 'DESC']],
@@ -80,7 +82,7 @@ exports.getAllRequests = async (userId, status) => {
 	}
 }
 
-exports.getSessionMappingDetails = async (sessionRequestIds, status) => {
+exports.getSessionMappingDetails = async (sessionRequestIds, status, tenantCode) => {
 	try {
 		const statusFilter =
 			status != []
@@ -100,6 +102,7 @@ exports.getSessionMappingDetails = async (sessionRequestIds, status) => {
 					[Op.in]: sessionRequestIds, // Using Sequelize.Op.in to filter by multiple ids
 				},
 				status: statusFilter, // Your status filter
+				tenant_code: tenantCode,
 			},
 			order: [['created_at', 'DESC']],
 		})
@@ -110,7 +113,7 @@ exports.getSessionMappingDetails = async (sessionRequestIds, status) => {
 	}
 }
 
-exports.getpendingRequests = async (userId, page, pageSize) => {
+exports.getpendingRequests = async (userId, page, pageSize, tenantCode) => {
 	try {
 		const currentPage = page ? page : 1
 		const limit = pageSize ? pageSize : 5
@@ -120,6 +123,7 @@ exports.getpendingRequests = async (userId, page, pageSize) => {
 			where: {
 				user_id: userId,
 				status: common.CONNECTIONS_STATUS.REQUESTED,
+				tenant_code: tenantCode,
 			},
 			raw: true,
 			limit,
@@ -132,7 +136,7 @@ exports.getpendingRequests = async (userId, page, pageSize) => {
 	}
 }
 
-exports.approveRequest = async (userId, requestSessionId, sessionId) => {
+exports.approveRequest = async (userId, requestSessionId, sessionId, tenantCode) => {
 	try {
 		const updateData = {
 			status: common.CONNECTIONS_STATUS.ACCEPTED,
@@ -144,6 +148,7 @@ exports.approveRequest = async (userId, requestSessionId, sessionId) => {
 			where: {
 				status: common.CONNECTIONS_STATUS.REQUESTED,
 				id: requestSessionId,
+				tenant_code: tenantCode,
 			},
 			individualHooks: true,
 		})
@@ -154,7 +159,7 @@ exports.approveRequest = async (userId, requestSessionId, sessionId) => {
 	}
 }
 
-exports.rejectRequest = async (userId, requestSessionId, rejectReason) => {
+exports.rejectRequest = async (userId, requestSessionId, rejectReason, tenantCode) => {
 	try {
 		let updateData = {
 			status: common.CONNECTIONS_STATUS.REJECTED,
@@ -166,6 +171,7 @@ exports.rejectRequest = async (userId, requestSessionId, rejectReason) => {
 			where: {
 				status: common.CONNECTIONS_STATUS.REQUESTED,
 				id: requestSessionId,
+				tenant_code: tenantCode,
 			},
 			individualHooks: true,
 		})
@@ -174,7 +180,7 @@ exports.rejectRequest = async (userId, requestSessionId, rejectReason) => {
 	}
 }
 
-exports.expireRequest = async (requestSessionId) => {
+exports.expireRequest = async (requestSessionId, tenantCode) => {
 	try {
 		let updateData = {
 			status: common.CONNECTIONS_STATUS.EXPIRED,
@@ -184,6 +190,7 @@ exports.expireRequest = async (requestSessionId) => {
 			where: {
 				status: common.CONNECTIONS_STATUS.REQUESTED,
 				id: requestSessionId,
+				tenant_code: tenantCode,
 			},
 			individualHooks: true,
 		})
@@ -192,12 +199,13 @@ exports.expireRequest = async (requestSessionId) => {
 	}
 }
 
-exports.findOneRequest = async (requestSessionId) => {
+exports.findOneRequest = async (requestSessionId, tenantCode) => {
 	try {
 		const sessionRequest = await requestSession.findOne({
 			where: {
 				id: requestSessionId,
 				status: common.CONNECTIONS_STATUS.REQUESTED,
+				tenant_code: tenantCode,
 			},
 			raw: true,
 		})
@@ -208,13 +216,14 @@ exports.findOneRequest = async (requestSessionId) => {
 	}
 }
 
-exports.checkPendingRequest = async (requestorId, requesteeId) => {
+exports.checkPendingRequest = async (requestorId, requesteeId, tenantCode) => {
 	try {
 		const result = await requestSession.findAndCountAll({
 			where: {
 				requestor_id: requestorId,
 				requestee_id: requesteeId,
 				status: common.CONNECTIONS_STATUS.REQUESTED,
+				tenant_code: tenantCode,
 			},
 		})
 		return result
@@ -223,10 +232,11 @@ exports.checkPendingRequest = async (requestorId, requesteeId) => {
 	}
 }
 
-exports.getRequestSessions = async (requestSessionId) => {
+exports.getRequestSessions = async (requestSessionId, tenantCode) => {
 	try {
 		const whereClause = {
 			id: requestSessionId,
+			tenant_code: tenantCode,
 		}
 		return await requestSession.findOne({
 			where: whereClause,

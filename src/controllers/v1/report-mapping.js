@@ -4,7 +4,10 @@ const reportmappingService = require('@services/report-mapping')
 module.exports = class ReportMapping {
 	async create(req) {
 		try {
-			const createReport = await reportmappingService.createMapping(req.body)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+			const createReport = await reportmappingService.createMapping(req.body, userId, organizationId, tenantCode)
 			return createReport
 		} catch (error) {
 			return error
@@ -13,7 +16,9 @@ module.exports = class ReportMapping {
 
 	async read(req) {
 		try {
-			const getReportMapping = await reportmappingService.getMapping(req.query.code)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const getReportMapping = await reportmappingService.getMapping(req.query.code, organizationId, tenantCode)
 			return getReportMapping
 		} catch (error) {
 			return error
@@ -22,8 +27,17 @@ module.exports = class ReportMapping {
 
 	async update(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
 			const filter = { id: req.query.id }
-			const updatedReportMapping = await reportmappingService.updateMapping(filter, req.body)
+			const updatedReportMapping = await reportmappingService.updateMapping(
+				filter,
+				req.body,
+				userId,
+				organizationId,
+				tenantCode
+			)
 			return updatedReportMapping
 		} catch (error) {
 			return error
@@ -32,7 +46,15 @@ module.exports = class ReportMapping {
 
 	async delete(req) {
 		try {
-			const deleteReportMapping = await reportmappingService.deleteMapping(req.query.id)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+			const deleteReportMapping = await reportmappingService.deleteMapping(
+				req.query.id,
+				userId,
+				organizationId,
+				tenantCode
+			)
 			return deleteReportMapping
 		} catch (error) {
 			return error

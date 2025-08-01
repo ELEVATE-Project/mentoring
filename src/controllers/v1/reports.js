@@ -17,11 +17,13 @@ module.exports = class Reports {
 
 	async filterList(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
 			const reportFilterList = await reportService.getFilterList(
 				req.query.entity_types ? req.query.entity_types : '',
 				req.query.filter_type ? req.query.filter_type : '',
 				req.decodedToken,
-				req.query.report_filter ? req.query.report_filter : ''
+				req.query.report_filter ? req.query.report_filter : '',
+				tenantCode
 			)
 			return reportFilterList
 		} catch (error) {
@@ -108,6 +110,7 @@ module.exports = class Reports {
 			}
 
 			// Call the report service with the transformed data
+			const tenantCode = req.decodedToken.tenant_code
 			const reportData = await reportService.getReportData(
 				req.decodedToken.id,
 				req.decodedToken.organization_id,
@@ -127,7 +130,8 @@ module.exports = class Reports {
 				req.query.download_csv ? req.query.download_csv : 'false',
 				req.query.group_by ? req.query.group_by : 'month',
 				filter_column.length > 0 ? filter_column : undefined, // Pass filter_column only if it's not empty
-				filter_value.length > 0 ? filter_value : undefined // Pass filter_value only if it's not empty
+				filter_value.length > 0 ? filter_value : undefined, // Pass filter_value only if it's not empty
+				tenantCode
 			)
 			return reportData
 		} catch (error) {
@@ -137,7 +141,10 @@ module.exports = class Reports {
 
 	async create(req) {
 		try {
-			const createReport = await reportService.createReport(req.body)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+			const createReport = await reportService.createReport(req.body, userId, organizationId, tenantCode)
 			return createReport
 		} catch (error) {
 			return error
@@ -146,7 +153,9 @@ module.exports = class Reports {
 
 	async read(req) {
 		try {
-			const getReportById = await reportService.getReportById(req.query.id)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const getReportById = await reportService.getReportById(req.query.id, organizationId, tenantCode)
 			return getReportById
 		} catch (error) {
 			return error
@@ -155,7 +164,16 @@ module.exports = class Reports {
 
 	async update(req) {
 		try {
-			const updatedReport = await reportService.updateReport(req.query.id, req.body)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+			const updatedReport = await reportService.updateReport(
+				req.query.id,
+				req.body,
+				userId,
+				organizationId,
+				tenantCode
+			)
 			return updatedReport
 		} catch (error) {
 			return error
@@ -164,7 +182,10 @@ module.exports = class Reports {
 
 	async delete(req) {
 		try {
-			const deleteReport = await reportService.deleteReportById(req.query.id)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+			const deleteReport = await reportService.deleteReportById(req.query.id, userId, organizationId, tenantCode)
 			return deleteReport
 		} catch (error) {
 			return error

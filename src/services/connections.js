@@ -23,8 +23,8 @@ module.exports = class ConnectionHelper {
 	 * @param {string} targetUserId - The ID of the target user.
 	 * @returns {Promise<Object|undefined>} The connection request if it exists, otherwise a failure response.
 	 */
-	static async checkConnectionRequestExists(userId, targetUserId) {
-		const connectionRequest = await connectionQueries.findOneRequest(userId, targetUserId)
+	static async checkConnectionRequestExists(userId, targetUserId, tenantCode) {
+		const connectionRequest = await connectionQueries.findOneRequest(userId, targetUserId, tenantCode)
 		if (!connectionRequest) {
 			return false
 		}
@@ -38,10 +38,10 @@ module.exports = class ConnectionHelper {
 	 * @param {string} userId - The ID of the user initiating the request.
 	 * @returns {Promise<Object>} A success or failure response.
 	 */
-	static async initiate(bodyData, userId) {
+	static async initiate(bodyData, userId, tenantCode) {
 		try {
 			// Check if the target user exists
-			const userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id)
+			const userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id, [], false, tenantCode)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -50,7 +50,7 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Check if a connection already exists between the users
-			const connectionExists = await connectionQueries.getConnection(userId, bodyData.user_id)
+			const connectionExists = await connectionQueries.getConnection(userId, bodyData.user_id, tenantCode)
 			if (connectionExists?.status == common.CONNECTIONS_STATUS.BLOCKED) {
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
@@ -69,7 +69,8 @@ module.exports = class ConnectionHelper {
 			const friendRequestResult = await connectionQueries.addFriendRequest(
 				userId,
 				bodyData.user_id,
-				bodyData.message
+				bodyData.message,
+				tenantCode
 			)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -95,18 +96,18 @@ module.exports = class ConnectionHelper {
 	 * @param {string} userId - The ID of the authenticated user.
 	 * @returns {Promise<Object>} The connection details or appropriate error.
 	 */
-	static async getInfo(friendId, userId) {
+	static async getInfo(friendId, userId, tenantCode) {
 		try {
-			let connection = await connectionQueries.getConnection(userId, friendId)
+			let connection = await connectionQueries.getConnection(userId, friendId, tenantCode)
 
 			if (!connection) {
 				// If no connection is found, check for pending requests
-				connection = await connectionQueries.checkPendingRequest(userId, friendId)
+				connection = await connectionQueries.checkPendingRequest(userId, friendId, tenantCode)
 			}
 
 			if (!connection) {
 				// If still no connection, check for the deleted request
-				connection = await connectionQueries.getRejectedRequest(userId, friendId)
+				connection = await connectionQueries.getRejectedRequest(userId, friendId, tenantCode)
 			}
 
 			const defaultOrgId = await getDefaultOrgId()
@@ -188,9 +189,9 @@ module.exports = class ConnectionHelper {
 	 * @param {number} pageSize - The number of records per page.
 	 * @returns {Promise<Object>} The list of pending connection requests.
 	 */
-	static async pending(userId, pageNo, pageSize) {
+	static async pending(userId, pageNo, pageSize, tenantCode) {
 		try {
-			const connections = await connectionQueries.getPendingRequests(userId, pageNo, pageSize)
+			const connections = await connectionQueries.getPendingRequests(userId, pageNo, pageSize, tenantCode)
 
 			if (connections.count == 0 || connections.rows.length == 0) {
 				return responses.successResponse({
@@ -205,22 +206,27 @@ module.exports = class ConnectionHelper {
 
 			// Map friend details by user IDs
 			const friendIds = connections.rows.map((connection) => connection.friend_id)
-			let friendDetails = await userExtensionQueries.getUsersByUserIds(friendIds, {
-				attributes: [
-					'name',
-					'user_id',
-					'mentee_visibility',
-					'organization_id',
-					'designation',
-					'area_of_expertise',
-					'education_qualification',
-					'custom_entity_text',
-					'meta',
-					'experience',
-					'is_mentor',
-					'image',
-				],
-			})
+			let friendDetails = await userExtensionQueries.getUsersByUserIds(
+				friendIds,
+				{
+					attributes: [
+						'name',
+						'user_id',
+						'mentee_visibility',
+						'organization_id',
+						'designation',
+						'area_of_expertise',
+						'education_qualification',
+						'custom_entity_text',
+						'meta',
+						'experience',
+						'is_mentor',
+						'image',
+					],
+				},
+				false,
+				tenantCode
+			)
 
 			const userExtensionsModelName = await userExtensionQueries.getModelName()
 
@@ -484,7 +490,7 @@ module.exports = class ConnectionHelper {
 	 * @param {string} mentorId - ID of the mentor who rejected the request
 	 * @param {string} orgId - Organization ID
 	 */
-	static async sendConnectionRejectionNotification(menteeId, mentorId, orgId) {
+	static async sendConnectionRejectionNotification(menteeId, mentorId, orgId, tenantCode) {
 		try {
 			const templateCode = process.env.CONNECTION_REQUEST_REJECTION_EMAIL_TEMPLATE
 			if (!templateCode) {
@@ -493,12 +499,17 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get mentee details
-			const menteeDetails = await userExtensionQueries.getUsersByUserIds([menteeId], {
-				attributes: ['name', 'email', 'user_id'],
-			})
+			const menteeDetails = await userExtensionQueries.getUsersByUserIds(
+				[menteeId],
+				{
+					attributes: ['name', 'email', 'user_id'],
+				},
+				false,
+				tenantCode
+			)
 
 			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true)
+			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				console.log('Unable to fetch user details for connection rejection notification')
@@ -547,7 +558,7 @@ module.exports = class ConnectionHelper {
 	 * @param {string} mentorId - ID of the mentor who accepted the request
 	 * @param {string} orgId - Organization ID
 	 */
-	static async sendConnectionAcceptNotification(menteeId, mentorId, orgId) {
+	static async sendConnectionAcceptNotification(menteeId, mentorId, orgId, tenantCode) {
 		try {
 			const templateCode = process.env.CONNECTION_REQUEST_ACCEPT_EMAIL_TEMPLATE
 			if (!templateCode) {
@@ -556,12 +567,17 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get mentee details
-			const menteeDetails = await userExtensionQueries.getUsersByUserIds([menteeId], {
-				attributes: ['name', 'email', 'user_id'],
-			})
+			const menteeDetails = await userExtensionQueries.getUsersByUserIds(
+				[menteeId],
+				{
+					attributes: ['name', 'email', 'user_id'],
+				},
+				false,
+				tenantCode
+			)
 
 			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true)
+			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				console.log('Unable to fetch user details for connection rejection notification')
