@@ -24,20 +24,28 @@ module.exports = class UserHelper {
 	 * @returns {JSON} 							- User list.
 	 */
 
-	static async list(userType, pageNo, pageSize, searchText) {
+	static async list(userType, pageNo, pageSize, searchText, userId, organizationId, tenantCode) {
 		try {
 			const userDetails = await userRequests.list(userType, pageNo, pageSize, searchText)
 			const ids = userDetails.data.result.data.map((item) => item.values[0].id)
 
 			let extensionDetails
 			if (userType == common.MENTEE_ROLE) {
-				extensionDetails = await menteeQueries.getUsersByUserIds(ids, {
-					attributes: ['user_id', 'rating'],
-				})
+				extensionDetails = await menteeQueries.getUsersByUserIds(
+					ids,
+					{
+						attributes: ['user_id', 'rating'],
+					},
+					tenantCode
+				)
 			} else if (userType == common.MENTOR_ROLE) {
-				extensionDetails = await mentorQueries.getMentorsByUserIds(ids, {
-					attributes: ['user_id', 'rating', 'mentor_visibility', 'organization_id'],
-				})
+				extensionDetails = await mentorQueries.getMentorsByUserIds(
+					ids,
+					{
+						attributes: ['user_id', 'rating', 'mentor_visibility', 'organization_id'],
+					},
+					tenantCode
+				)
 				// Inside your function
 				extensionDetails = extensionDetails.filter((item) => item.mentor_visibility && item.organization_id)
 			}
@@ -68,7 +76,7 @@ module.exports = class UserHelper {
 		}
 	}
 
-	static async create(decodedToken) {
+	static async create(decodedToken, userId, organizationId, tenantCode) {
 		try {
 			const isNewUser = await this.#checkUserExistence(decodedToken.id, decodedToken.tenant_code)
 			if (isNewUser) {
@@ -101,7 +109,7 @@ module.exports = class UserHelper {
 		}
 	}
 
-	static async update(updateData, decodedToken) {
+	static async update(updateData, decodedToken, userId, organizationId, tenantCode) {
 		try {
 			const userId = updateData.userId
 			const isNewUser = await this.#checkUserExistence(userId, decodedToken.tenant_code)
@@ -113,18 +121,18 @@ module.exports = class UserHelper {
 		}
 	}
 
-	static async add(bodyData, tenantCode) {
+	static async add(bodyData, userId, organizationId, tenantCode) {
 		bodyData.id = bodyData.id.toString()
 		let result = {}
 		const isNewUser = await this.#checkUserExistence(bodyData.id, tenantCode)
 		if (isNewUser) {
-			result = await this.#createUserWithBody(bodyData)
+			result = await this.#createUserWithBody(bodyData, tenantCode)
 		}
 		return result
 	}
 
-	static async #createUserWithBody(userBody) {
-		const orgExtension = await this.#createOrUpdateOrg({ id: userBody.organization_id.toString() })
+	static async #createUserWithBody(userBody, tenantCode) {
+		const orgExtension = await this.#createOrUpdateOrg({ id: userBody.organization_id.toString() }, tenantCode)
 
 		if (!orgExtension) {
 			return responses.failureResponse({
@@ -135,7 +143,7 @@ module.exports = class UserHelper {
 		}
 		const userExtensionData = this.#getExtensionData(userBody, orgExtension)
 
-		const createResult = await this.#createUser({ ...userExtensionData, roles: userBody.roles })
+		const createResult = await this.#createUser({ ...userExtensionData, roles: userBody.roles }, tenantCode)
 
 		if (createResult.statusCode != httpStatusCode.ok) return createResult
 		else
@@ -165,7 +173,10 @@ module.exports = class UserHelper {
 			})
 		}
 
-		const orgExtension = await this.#createOrUpdateOrg({ id: userDetails.data.result.organization_id })
+		const orgExtension = await this.#createOrUpdateOrg(
+			{ id: userDetails.data.result.organization_id },
+			decodedToken.tenant_code
+		)
 
 		if (!orgExtension) {
 			return responses.failureResponse({
@@ -177,7 +188,7 @@ module.exports = class UserHelper {
 		const userExtensionData = this.#getExtensionData(userDetails.data.result, orgExtension)
 
 		const createOrUpdateResult = isNewUser
-			? await this.#createUser(userExtensionData)
+			? await this.#createUser(userExtensionData, decodedToken.tenant_code)
 			: await this.#updateUser(userExtensionData, decodedToken)
 		if (createOrUpdateResult.statusCode != httpStatusCode.ok) return createOrUpdateResult
 		else
@@ -219,8 +230,8 @@ module.exports = class UserHelper {
 		return data
 	}
 
-	static async #createOrUpdateOrg(orgData) {
-		let orgExtension = await organisationExtensionQueries.getById(orgData.id)
+	static async #createOrUpdateOrg(orgData, tenantCode) {
+		let orgExtension = await organisationExtensionQueries.getById(orgData.id, tenantCode)
 		if (orgExtension) return orgExtension
 
 		const orgExtensionData = {
@@ -228,17 +239,18 @@ module.exports = class UserHelper {
 			organization_id: orgData.id,
 			created_by: 1,
 			updated_by: 1,
+			tenant_code: tenantCode,
 		}
-		orgExtension = await organisationExtensionQueries.upsert(orgExtensionData)
+		orgExtension = await organisationExtensionQueries.upsert(orgExtensionData, tenantCode)
 		return orgExtension.toJSON()
 	}
 
-	static async #createUser(userExtensionData) {
+	static async #createUser(userExtensionData, tenantCode) {
 		const isAMentor = userExtensionData.roles.some((role) => role.title == common.MENTOR_ROLE)
 		const orgId = userExtensionData.organization.id
 		const user = isAMentor
-			? await mentorsService.createMentorExtension(userExtensionData, userExtensionData.id, orgId)
-			: await menteesService.createMenteeExtension(userExtensionData, userExtensionData.id, orgId)
+			? await mentorsService.createMentorExtension(userExtensionData, userExtensionData.id, orgId, tenantCode)
+			: await menteesService.createMenteeExtension(userExtensionData, userExtensionData.id, orgId, tenantCode)
 		return user
 	}
 
@@ -278,7 +290,8 @@ module.exports = class UserHelper {
 			const roleChangeResult = await orgAdminService.roleChange(
 				roleChangePayload,
 				userExtensionData,
-				decodedToken
+				decodedToken,
+				decodedToken.tenant_code
 			)
 			return roleChangeResult
 		} else {
@@ -289,12 +302,14 @@ module.exports = class UserHelper {
 				? await menteesService.updateMenteeExtension(
 						userExtensionData,
 						userExtensionData.id,
-						userExtensionData.organization.id
+						userExtensionData.organization.id,
+						decodedToken.tenant_code
 				  )
 				: await mentorsService.updateMentorExtension(
 						userExtensionData,
 						userExtensionData.id,
-						userExtensionData.organization.id
+						userExtensionData.organization.id,
+						decodedToken.tenant_code
 				  )
 			return user
 		}

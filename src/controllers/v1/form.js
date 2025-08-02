@@ -22,7 +22,7 @@ module.exports = class Form {
 		try {
 			const createdForm = await formsService.create(
 				params,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
 			return createdForm
@@ -45,7 +45,7 @@ module.exports = class Form {
 			const updatedForm = await formsService.update(
 				req.params.id,
 				params,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
 			return updatedForm
@@ -72,7 +72,7 @@ module.exports = class Form {
 				const form = await formsService.read(
 					req.params.id,
 					params,
-					req.decodedToken.organization_id,
+					req.decodedToken.organization_code,
 					req.decodedToken.tenant_code
 				)
 				return form

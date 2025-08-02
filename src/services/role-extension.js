@@ -3,10 +3,15 @@ const responses = require('@helpers/responses')
 const roleExtensionQueries = require('@database/queries/roleExtentions')
 
 module.exports = class ReportsHelper {
-	static async createRoleExtension(data) {
+	static async createRoleExtension(data, userId, organizationId, tenantCode) {
 		try {
 			// Attempt to create a new report directly
-			const roleCreation = await roleExtensionQueries.createRoleExtension(data)
+			const roleCreation = await roleExtensionQueries.createRoleExtension(
+				data,
+				userId,
+				organizationId,
+				tenantCode
+			)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ROLE_EXTENSION_CREATED_SUCCESS',
@@ -29,9 +34,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async roleExtensionDetails(title) {
+	static async roleExtensionDetails(title, userId, organizationId, tenantCode) {
 		try {
-			const readRoleExtension = await roleExtensionQueries.findRoleExtensionByTitle(title)
+			const readRoleExtension = await roleExtensionQueries.findRoleExtensionByTitle(title, tenantCode)
 			if (!readRoleExtension) {
 				return responses.failureResponse({
 					message: 'ROLE_EXTENSION_NOT_FOUND',
@@ -49,10 +54,16 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async updateRoleExtension(title, updateData) {
+	static async updateRoleExtension(title, updateData, userId, organizationId, tenantCode) {
 		try {
 			const filter = { title: title }
-			const updatedRole = await roleExtensionQueries.updateRoleExtension(filter, updateData)
+			const updatedRole = await roleExtensionQueries.updateRoleExtension(
+				filter,
+				updateData,
+				userId,
+				organizationId,
+				tenantCode
+			)
 			if (!updatedRole) {
 				return responses.failureResponse({
 					message: 'ROLE_EXTENSION_UPDATE_FAILED',
@@ -70,9 +81,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async deleteRoleExtension(title) {
+	static async deleteRoleExtension(title, userId, organizationId, tenantCode) {
 		try {
-			const deletedRows = await roleExtensionQueries.deleteRoleExtension(title)
+			const deletedRows = await roleExtensionQueries.deleteRoleExtension(title, tenantCode)
 			if (deletedRows === 0) {
 				return responses.failureResponse({
 					message: 'ROLE_EXTENSION_DELETION_FAILED',

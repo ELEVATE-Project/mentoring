@@ -2090,9 +2090,9 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - Recording details.
 	 */
 
-	static async getRecording(sessionId) {
+	static async getRecording(sessionId, userId, organizationId, tenantCode) {
 		try {
-			const session = await sessionQueries.findById(sessionId)
+			const session = await sessionQueries.findById(sessionId, tenantCode)
 			if (!session) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
@@ -2123,11 +2123,14 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - Recording link updated.
 	 */
 
-	static async updateRecordingUrl(internalMeetingId, recordingUrl) {
+	static async updateRecordingUrl(internalMeetingId, recordingUrl, userId, organizationId, tenantCode) {
 		try {
-			const sessionDetails = await sessionQueries.findOne({
-				'meeting_info.meta.meeting_id': internalMeetingId,
-			})
+			const sessionDetails = await sessionQueries.findOne(
+				{
+					'meeting_info.meta.meeting_id': internalMeetingId,
+				},
+				tenantCode
+			)
 
 			if (!sessionDetails) {
 				return responses.failureResponse({
@@ -2143,7 +2146,8 @@ module.exports = class SessionsHelper {
 				},
 				{
 					recording_url: recordingUrl,
-				}
+				},
+				tenantCode
 			)
 
 			if (rowsAffected === 0) {
@@ -2484,7 +2488,7 @@ module.exports = class SessionsHelper {
 	 * @returns {Object} - Success response indicating the update was performed successfully.
 	 * @throws {Error} - Throws an error if there's an issue during the bulk update.
 	 */
-	static async bulkUpdateMentorNames(mentorIds, mentorsName) {
+	static async bulkUpdateMentorNames(mentorIds, mentorsName, userId, organizationId, tenantCode) {
 		try {
 			mentorIds = mentorIds.map(String)
 			await sessionQueries.updateSession(
@@ -2493,7 +2497,8 @@ module.exports = class SessionsHelper {
 				},
 				{
 					mentor_name: mentorsName,
-				}
+				},
+				tenantCode
 			)
 
 			return responses.successResponse({
@@ -2518,12 +2523,15 @@ module.exports = class SessionsHelper {
 	 * @returns {Promise<Object>} - A promise that resolves with the success response containing details of enrolled mentees.
 	 * @throws {Error} - Throws an error if there's an issue during data retrieval.
 	 */
-	static async enrolledMentees(sessionId, queryParams, userID) {
+	static async enrolledMentees(sessionId, queryParams, userID, organizationId, tenantCode) {
 		try {
-			const session = await sessionQueries.findOne({
-				id: sessionId,
-				[Op.or]: [{ mentor_id: userID }, { created_by: userID }],
-			})
+			const session = await sessionQueries.findOne(
+				{
+					id: sessionId,
+					[Op.or]: [{ mentor_id: userID }, { created_by: userID }],
+				},
+				tenantCode
+			)
 			if (!session) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
@@ -2531,7 +2539,7 @@ module.exports = class SessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			const enrolledMentees = await getEnrolledMentees(sessionId, queryParams, userID)
+			const enrolledMentees = await getEnrolledMentees(sessionId, queryParams, userID, tenantCode)
 
 			if (queryParams?.csv === 'true') {
 				const timestamp = moment().format('YYYY-MM-DD_HH-mm-ss')
@@ -2563,10 +2571,10 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- Session details
 	 */
 
-	static async addMentees(sessionId, menteeIds, timeZone) {
+	static async addMentees(sessionId, menteeIds, timeZone, userId, organizationId, tenantCode) {
 		try {
 			// Check if session exists
-			const sessionDetails = await sessionQueries.findOne({ id: sessionId })
+			const sessionDetails = await sessionQueries.findOne({ id: sessionId }, tenantCode)
 			if (!sessionDetails || Object.keys(sessionDetails).length === 0) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
@@ -2576,9 +2584,13 @@ module.exports = class SessionsHelper {
 			}
 
 			// Fetch mentee details
-			const mentees = await menteeExtensionQueries.getUsersByUserIds(menteeIds, {
-				attributes: ['user_id', 'email', 'name', 'is_mentor'],
-			})
+			const mentees = await menteeExtensionQueries.getUsersByUserIds(
+				menteeIds,
+				{
+					attributes: ['user_id', 'email', 'name', 'is_mentor'],
+				},
+				tenantCode
+			)
 			if (!mentees) {
 				return responses.failureResponse({
 					message: 'USER_NOT_FOUND',
@@ -2734,10 +2746,10 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- unenroll status
 	 */
 
-	static async removeMentees(sessionId, menteeIds) {
+	static async removeMentees(sessionId, menteeIds, userId, organizationId, tenantCode) {
 		try {
 			// check if session exists or not
-			const sessionDetails = await sessionQueries.findOne({ id: sessionId })
+			const sessionDetails = await sessionQueries.findOne({ id: sessionId }, tenantCode)
 
 			if (!sessionDetails || Object.keys(sessionDetails).length === 0) {
 				return responses.failureResponse({
@@ -2748,7 +2760,7 @@ module.exports = class SessionsHelper {
 			}
 
 			// Get mentee name and email from user service
-			const menteeAccounts = await userRequests.getUserDetailedList(menteeIds)
+			const menteeAccounts = await userRequests.getUserDetailedList(menteeIds, tenantCode)
 
 			if (!menteeAccounts.result || !menteeAccounts.result.length > 0) {
 				return responses.failureResponse({
@@ -2839,7 +2851,7 @@ module.exports = class SessionsHelper {
 	 * @returns {CSV} - created users.
 	 */
 
-	static async bulkSessionCreate(filePath, tokenInformation) {
+	static async bulkSessionCreate(filePath, tokenInformation, userId, organizationId, tenantCode) {
 		try {
 			const { id, organization_id } = tokenInformation
 			const downloadCsv = await this.downloadCSV(filePath)
@@ -2925,7 +2937,8 @@ module.exports = class SessionsHelper {
 				organization_id,
 				created_by: id,
 			}
-			const result = await fileUploadQueries.create(creationData)
+			creationData.tenant_code = tenantCode
+			const result = await fileUploadQueries.create(creationData, tenantCode)
 			if (!result?.id) {
 				return responses.successResponse({
 					responseCode: 'CLIENT_ERROR',
@@ -2934,11 +2947,12 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const userDetail = await mentorExtensionQueries.getMentorExtension(id, ['name', 'email'], true)
+			const userDetail = await mentorExtensionQueries.getMentorExtension(id, ['name', 'email'], true, tenantCode)
 
 			const orgDetails = await organisationExtensionQueries.findOne(
 				{ organization_id: organization_id },
-				{ attributes: ['name'] }
+				{ attributes: ['name'] },
+				tenantCode
 			)
 
 			//push to queue
@@ -2976,9 +2990,9 @@ module.exports = class SessionsHelper {
 		}
 	}
 
-	static async getSampleCSV(orgId) {
+	static async getSampleCSV(orgId, userId, organizationId, tenantCode) {
 		try {
-			const defaultOrgId = await getDefaultOrgId()
+			const defaultOrgId = await getDefaultOrgId(tenantCode)
 			if (!defaultOrgId) {
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_ID_NOT_SET',
@@ -2990,7 +3004,8 @@ module.exports = class SessionsHelper {
 			if (orgId != defaultOrgId) {
 				const result = await organisationExtensionQueries.findOne(
 					{ organization_id: orgId },
-					{ attributes: ['uploads'] }
+					{ attributes: ['uploads'] },
+					tenantCode
 				)
 				if (result && result.uploads) {
 					path = result.uploads.session_csv_path
@@ -3086,11 +3101,11 @@ module.exports = class SessionsHelper {
 		}
 	}
 
-	static async removeAllSessions(criteria) {
+	static async removeAllSessions(criteria, userId, organizationId, tenantCode) {
 		try {
 			const results = criteria.mentorIds
-				? await this.#removeSessionsByMentorIds(criteria.mentorIds)
-				: await this.#removeSessionsByOrgId(criteria.orgId)
+				? await this.#removeSessionsByMentorIds(criteria.mentorIds, tenantCode)
+				: await this.#removeSessionsByOrgId(criteria.orgId, tenantCode)
 
 			const successfulMentorIds = []
 			const failedMentorIds = []
@@ -3120,28 +3135,34 @@ module.exports = class SessionsHelper {
 		}
 	}
 
-	static async #removeSessionsByMentorIds(mentorIds) {
+	static async #removeSessionsByMentorIds(mentorIds, tenantCode) {
 		return Promise.allSettled(
 			mentorIds.map(async (mentorId) => {
-				const mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_id'])
+				const mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_id'], tenantCode)
 				if (!mentor) throw new MentorError('Invalid Mentor Id', { mentorId })
 
-				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentorId)
+				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentorId, tenantCode)
 				await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail, mentor.organization_id)
 				return mentorId
 			})
 		)
 	}
 
-	static async #removeSessionsByOrgId(orgId) {
-		const mentors = await mentorQueries.getAllMentors({
-			where: { organization_id: orgId },
-			attributes: ['user_id', 'organization_id'],
-		})
+	static async #removeSessionsByOrgId(orgId, tenantCode) {
+		const mentors = await mentorQueries.getAllMentors(
+			{
+				where: { organization_id: orgId },
+				attributes: ['user_id', 'organization_id'],
+			},
+			tenantCode
+		)
 
 		return Promise.allSettled(
 			mentors.map(async (mentor) => {
-				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentor.user_id)
+				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(
+					mentor.user_id,
+					tenantCode
+				)
 				await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail, mentor.organization_id)
 				return mentor.user_id
 			})

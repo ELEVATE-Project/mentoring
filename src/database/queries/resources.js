@@ -1,9 +1,15 @@
 const Resources = require('../models/index').Resources
 
 module.exports = class ResourcessData {
-	static async bulkCreate(data) {
+	static async bulkCreate(data, tenantCode) {
 		try {
-			const resources = await Resources.bulkCreate(data, {
+			// Assign tenant_code to all data entries
+			const dataWithTenant = data.map((item) => ({
+				...item,
+				tenant_code: tenantCode,
+			}))
+
+			const resources = await Resources.bulkCreate(dataWithTenant, {
 				returning: true, // to return the inserted records
 			})
 			return resources
@@ -12,8 +18,9 @@ module.exports = class ResourcessData {
 		}
 	}
 
-	static async create(data) {
+	static async create(data, tenantCode) {
 		try {
+			data.tenant_code = tenantCode
 			const resources = await Resources.create(data, { returning: true })
 			return resources
 		} catch (error) {
@@ -21,8 +28,9 @@ module.exports = class ResourcessData {
 		}
 	}
 
-	static async findOneResources(filter, projection = {}) {
+	static async findOneResources(filter, tenantCode, projection = {}) {
 		try {
+			filter.tenant_code = tenantCode
 			const ResourcesData = await Resources.findOne({
 				where: filter,
 				attributes: projection,
@@ -34,10 +42,10 @@ module.exports = class ResourcessData {
 		}
 	}
 
-	static async deleteResource(sessionId, projection = {}) {
+	static async deleteResource(sessionId, tenantCode, projection = {}) {
 		try {
 			const ResourcesData = await Resources.destroy({
-				where: { session_id: sessionId },
+				where: { session_id: sessionId, tenant_code: tenantCode },
 				raw: true,
 			})
 			return ResourcesData
@@ -46,10 +54,10 @@ module.exports = class ResourcessData {
 		}
 	}
 
-	static async deleteResourceById(resourceId, sessionId) {
+	static async deleteResourceById(resourceId, sessionId, tenantCode) {
 		try {
 			const ResourcesData = await Resources.destroy({
-				where: { id: resourceId, session_id: sessionId },
+				where: { id: resourceId, session_id: sessionId, tenant_code: tenantCode },
 				raw: true,
 			})
 			return ResourcesData
@@ -58,10 +66,10 @@ module.exports = class ResourcessData {
 		}
 	}
 
-	static async find(filter, projection = {}) {
+	static async find(filter, tenantCode, projection = {}) {
 		try {
 			const ResourcesData = await Resources.findAll({
-				where: { ...filter, deleted_at: null },
+				where: { ...filter, deleted_at: null, tenant_code: tenantCode },
 				attributes: projection,
 				raw: true,
 			})

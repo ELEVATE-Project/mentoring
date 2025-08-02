@@ -5,9 +5,14 @@ module.exports = class ReportType {
 	async create(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const createReport = await reportTypeService.createReportType(req.body, userId, organizationId, tenantCode)
+			const createReport = await reportTypeService.createReportType(
+				req.body,
+				userId,
+				organizationCode,
+				tenantCode
+			)
 			return createReport
 		} catch (error) {
 			return error
@@ -17,8 +22,8 @@ module.exports = class ReportType {
 	async read(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
-			const getReportById = await reportTypeService.getReportType(req.query.title, organizationId, tenantCode)
+			const organizationCode = req.decodedToken.organization_code
+			const getReportById = await reportTypeService.getReportType(req.query.title, organizationCode, tenantCode)
 			return getReportById
 		} catch (error) {
 			return error
@@ -28,14 +33,14 @@ module.exports = class ReportType {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 			const filter = { id: req.query.id }
 			const updatedReport = await reportTypeService.updateReportType(
 				filter,
 				req.body,
 				userId,
-				organizationId,
+				organizationCode,
 				tenantCode
 			)
 			return updatedReport
@@ -47,12 +52,12 @@ module.exports = class ReportType {
 	async delete(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 			const deleteReport = await reportTypeService.deleteReportType(
 				req.query.id,
 				userId,
-				organizationId,
+				organizationCode,
 				tenantCode
 			)
 			return deleteReport

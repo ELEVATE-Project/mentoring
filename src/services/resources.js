@@ -16,11 +16,11 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- deleted response
 	 */
 
-	static async deleteResource(resourceId, sessionId) {
+	static async deleteResource(resourceId, sessionId, userId, organizationId, tenantCode) {
 		try {
 			// check if session exists or not
 			console.log('sessionId', sessionId)
-			const sessionDetails = await sessionQueries.findOne({ id: sessionId })
+			const sessionDetails = await sessionQueries.findOne({ id: sessionId }, tenantCode)
 
 			if (!sessionDetails || Object.keys(sessionDetails).length === 0) {
 				return responses.failureResponse({
@@ -30,7 +30,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			await resourceQueries.deleteResourceById(resourceId, sessionId)
+			await resourceQueries.deleteResourceById(resourceId, sessionId, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,

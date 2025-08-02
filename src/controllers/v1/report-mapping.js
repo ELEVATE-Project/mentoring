@@ -5,9 +5,14 @@ module.exports = class ReportMapping {
 	async create(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const createReport = await reportmappingService.createMapping(req.body, userId, organizationId, tenantCode)
+			const createReport = await reportmappingService.createMapping(
+				req.body,
+				userId,
+				organizationCode,
+				tenantCode
+			)
 			return createReport
 		} catch (error) {
 			return error
@@ -17,8 +22,8 @@ module.exports = class ReportMapping {
 	async read(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
-			const getReportMapping = await reportmappingService.getMapping(req.query.code, organizationId, tenantCode)
+			const organizationCode = req.decodedToken.organization_code
+			const getReportMapping = await reportmappingService.getMapping(req.query.code, organizationCode, tenantCode)
 			return getReportMapping
 		} catch (error) {
 			return error
@@ -28,14 +33,14 @@ module.exports = class ReportMapping {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 			const filter = { id: req.query.id }
 			const updatedReportMapping = await reportmappingService.updateMapping(
 				filter,
 				req.body,
 				userId,
-				organizationId,
+				organizationCode,
 				tenantCode
 			)
 			return updatedReportMapping
@@ -47,12 +52,12 @@ module.exports = class ReportMapping {
 	async delete(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 			const deleteReportMapping = await reportmappingService.deleteMapping(
 				req.query.id,
 				userId,
-				organizationId,
+				organizationCode,
 				tenantCode
 			)
 			return deleteReportMapping

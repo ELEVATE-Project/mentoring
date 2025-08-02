@@ -20,7 +20,7 @@ module.exports = class Notifications {
 	async emailCronJob(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			// Make a call to notification service

@@ -4,7 +4,7 @@ module.exports = class Organization {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			return await organizationService.update(req.body, req.decodedToken, tenantCode)
