@@ -1,6 +1,4 @@
-require('module-alias/register')
 require('dotenv').config()
-const db = require('@database/models/index')
 const DatabaseConnectionManager = require('./db-connection-utils')
 
 /**
@@ -13,7 +11,13 @@ const DatabaseConnectionManager = require('./db-connection-utils')
 
 class TenantMigrationFinalizer {
 	constructor() {
-		this.sequelize = db.sequelize
+		// Initialize database connection manager
+		this.dbManager = new DatabaseConnectionManager({
+			poolMax: 10,
+			poolMin: 2,
+			logging: false,
+		})
+		this.sequelize = this.dbManager.getSequelize()
 
 		// Tables configuration from helper.js
 		this.allTables = [
@@ -74,9 +78,12 @@ class TenantMigrationFinalizer {
 	 */
 	async isCitusEnabled() {
 		try {
-			const [result] = await this.sequelize.query(`
+			const result = await this.sequelize.query(
+				`
 				SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'citus') as enabled
-			`)
+			`,
+				{ type: this.sequelize.QueryTypes.SELECT }
+			)
 			return result[0].enabled
 		} catch (error) {
 			return false
@@ -88,11 +95,14 @@ class TenantMigrationFinalizer {
 	 */
 	async isTableDistributed(tableName) {
 		try {
-			const [result] = await this.sequelize.query(`
+			const result = await this.sequelize.query(
+				`
 				SELECT COUNT(*) as count 
 				FROM pg_dist_partition 
 				WHERE logicalrelid = '${tableName}'::regclass
-			`)
+			`,
+				{ type: this.sequelize.QueryTypes.SELECT }
+			)
 			return parseInt(result[0].count) > 0
 		} catch (error) {
 			return false
@@ -110,11 +120,14 @@ class TenantMigrationFinalizer {
 		for (const tableName of this.allTables) {
 			try {
 				// Check if table exists and has the column
-				const [tableInfo] = await this.sequelize.query(`
+				const tableInfo = await this.sequelize.query(
+					`
 					SELECT 
 						EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '${tableName}') as table_exists,
 						EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = '${tableName}' AND column_name = 'tenant_code') as has_tenant_code
-				`)
+				`,
+					{ type: this.sequelize.QueryTypes.SELECT }
+				)
 
 				if (!tableInfo[0].table_exists || !tableInfo[0].has_tenant_code) {
 					console.log(`⚠️  ${tableName} missing table or tenant_code column, skipping`)
@@ -135,11 +148,14 @@ class TenantMigrationFinalizer {
 		for (const tableName of this.tablesWithOrgCode) {
 			try {
 				// Check if table exists and has the column
-				const [tableInfo] = await this.sequelize.query(`
+				const tableInfo = await this.sequelize.query(
+					`
 					SELECT 
 						EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '${tableName}') as table_exists,
 						EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = '${tableName}' AND column_name = 'organization_code') as has_org_code
-				`)
+				`,
+					{ type: this.sequelize.QueryTypes.SELECT }
+				)
 
 				if (!tableInfo[0].table_exists || !tableInfo[0].has_org_code) {
 					console.log(`⚠️  ${tableName} missing table or organization_code column, skipping`)
@@ -198,9 +214,12 @@ class TenantMigrationFinalizer {
 		for (const tableName of this.allTables) {
 			try {
 				// Check if table exists
-				const [tableExists] = await this.sequelize.query(`
+				const tableExists = await this.sequelize.query(
+					`
 					SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${tableName}') as exists
-				`)
+				`,
+					{ type: this.sequelize.QueryTypes.SELECT }
+				)
 
 				if (!tableExists[0].exists) {
 					console.log(`⚠️  Table ${tableName} does not exist, skipping`)
@@ -273,11 +292,14 @@ class TenantMigrationFinalizer {
 		for (const fkConfig of foreignKeyConfigs) {
 			try {
 				// Check if both tables exist
-				const [tablesExist] = await this.sequelize.query(`
+				const tablesExist = await this.sequelize.query(
+					`
 					SELECT 
 						EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '${fkConfig.table}') as table_exists,
 						EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '${fkConfig.refTable}') as ref_table_exists
-				`)
+				`,
+					{ type: this.sequelize.QueryTypes.SELECT }
+				)
 
 				if (!tablesExist[0].table_exists || !tablesExist[0].ref_table_exists) {
 					console.log(`⚠️  Missing table for FK ${fkConfig.name}, skipping`)
@@ -285,14 +307,17 @@ class TenantMigrationFinalizer {
 				}
 
 				// Check if constraint already exists
-				const [constraintExists] = await this.sequelize.query(`
+				const constraintExists = await this.sequelize.query(
+					`
 					SELECT EXISTS (
 						SELECT 1 FROM information_schema.table_constraints 
 						WHERE table_name = '${fkConfig.table}' 
 						AND constraint_name = '${fkConfig.name}'
 						AND constraint_type = 'FOREIGN KEY'
 					) as exists
-				`)
+				`,
+					{ type: this.sequelize.QueryTypes.SELECT }
+				)
 
 				if (constraintExists[0].exists) {
 					console.log(`✅ FK ${fkConfig.name} already exists`)
@@ -336,9 +361,12 @@ class TenantMigrationFinalizer {
 		for (const tableName of this.allTables) {
 			try {
 				// Check if table exists
-				const [tableExists] = await this.sequelize.query(`
+				const tableExists = await this.sequelize.query(
+					`
 					SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${tableName}') as exists
-				`)
+				`,
+					{ type: this.sequelize.QueryTypes.SELECT }
+				)
 
 				if (!tableExists[0].exists) {
 					console.log(`⚠️  Table ${tableName} does not exist, skipping`)
@@ -467,9 +495,12 @@ class TenantMigrationFinalizer {
 		for (const indexConfig of indexConfigs) {
 			try {
 				// Check if table exists
-				const [tableExists] = await this.sequelize.query(`
+				const tableExists = await this.sequelize.query(
+					`
 					SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${indexConfig.table}') as exists
-				`)
+				`,
+					{ type: this.sequelize.QueryTypes.SELECT }
+				)
 
 				if (!tableExists[0].exists) {
 					console.log(`⚠️  Table ${indexConfig.table} does not exist, skipping index`)
@@ -477,13 +508,16 @@ class TenantMigrationFinalizer {
 				}
 
 				// Check if index already exists
-				const [indexExists] = await this.sequelize.query(`
+				const indexExists = await this.sequelize.query(
+					`
 					SELECT EXISTS (
 						SELECT 1 FROM pg_indexes 
 						WHERE tablename = '${indexConfig.table}' 
 						AND indexname = '${indexConfig.name}'
 					) as exists
-				`)
+				`,
+					{ type: this.sequelize.QueryTypes.SELECT }
+				)
 
 				if (indexExists[0].exists) {
 					console.log(`✅ Index ${indexConfig.name} already exists`)
@@ -514,11 +548,14 @@ class TenantMigrationFinalizer {
 		// Check NOT NULL constraints
 		for (const tableName of this.allTables) {
 			try {
-				const [nullCheck] = await this.sequelize.query(`
+				const nullCheck = await this.sequelize.query(
+					`
 					SELECT COUNT(*) as null_count 
 					FROM ${tableName} 
 					WHERE tenant_code IS NULL
-				`)
+				`,
+					{ type: this.sequelize.QueryTypes.SELECT }
+				)
 
 				if (nullCheck[0].null_count > 0) {
 					console.log(`❌ ${tableName} still has ${nullCheck[0].null_count} NULL tenant_code values`)
@@ -531,33 +568,42 @@ class TenantMigrationFinalizer {
 		}
 
 		// Check primary keys
-		const [primaryKeyCount] = await this.sequelize.query(`
+		const primaryKeyCount = await this.sequelize.query(
+			`
 			SELECT COUNT(*) as count 
 			FROM information_schema.table_constraints 
 			WHERE table_schema = 'public' 
 			AND constraint_type = 'PRIMARY KEY'
 			AND table_name IN ('${this.allTables.join("','")}')
-		`)
+		`,
+			{ type: this.sequelize.QueryTypes.SELECT }
+		)
 
 		console.log(`✅ Primary keys configured: ${primaryKeyCount[0].count}/${this.allTables.length}`)
 
 		// Check foreign keys
-		const [foreignKeyCount] = await this.sequelize.query(`
+		const foreignKeyCount = await this.sequelize.query(
+			`
 			SELECT COUNT(*) as count 
 			FROM information_schema.table_constraints 
 			WHERE table_schema = 'public' 
 			AND constraint_type = 'FOREIGN KEY'
 			AND constraint_name LIKE 'fk_%'
-		`)
+		`,
+			{ type: this.sequelize.QueryTypes.SELECT }
+		)
 
 		console.log(`✅ Foreign keys created: ${foreignKeyCount[0].count}`)
 
 		// Check Citus distribution (only if Citus is enabled)
 		const citusEnabled = await this.isCitusEnabled()
 		if (citusEnabled) {
-			const [distributedCount] = await this.sequelize.query(`
+			const distributedCount = await this.sequelize.query(
+				`
 				SELECT COUNT(*) as count FROM pg_dist_partition
-			`)
+			`,
+				{ type: this.sequelize.QueryTypes.SELECT }
+			)
 			console.log(`✅ Distributed tables: ${distributedCount[0].count}`)
 		} else {
 			console.log(`✅ Using regular PostgreSQL (no distribution required)`)
@@ -595,7 +641,7 @@ class TenantMigrationFinalizer {
 			console.log('🚀 Starting Tenant Migration Finalization...')
 			console.log('='.repeat(60))
 
-			await this.sequelize.authenticate()
+			await this.dbManager.checkConnection()
 			console.log('✅ Database connection established')
 
 			// Check if Citus is enabled
@@ -615,7 +661,7 @@ class TenantMigrationFinalizer {
 			console.error('❌ Finalization failed:', error)
 			process.exit(1)
 		} finally {
-			await this.sequelize.close()
+			await this.dbManager.closeConnection()
 		}
 	}
 }
