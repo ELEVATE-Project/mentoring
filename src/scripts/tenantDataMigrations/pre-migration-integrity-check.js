@@ -235,7 +235,7 @@ class DatabaseIntegrityChecker {
 
 		const logContent = {
 			checkTimestamp: new Date().toISOString(),
-			database: 'reportsMentorings',
+			database: this.dbManager.connectionInfo?.database || 'unknown',
 			summary: {
 				totalIssues: this.detailedIssues.length,
 				totalOrphanedRecords: this.detailedIssues.reduce((sum, issue) => sum + issue.totalCount, 0),

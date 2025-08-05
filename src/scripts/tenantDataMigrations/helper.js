@@ -2,7 +2,7 @@ const { Sequelize } = require('sequelize')
 const fs = require('fs')
 const path = require('path')
 const csv = require('csv-parser')
-require('dotenv').config({ path: '../../.env' })
+require('dotenv').config()
 const DatabaseConnectionManager = require('./db-connection-utils')
 
 /**
@@ -280,7 +280,7 @@ class MentoringDataMigrator {
 	}
 
 	async loadTenantAndOrgCsv() {
-		const csvPath = path.join(__dirname, '../data/data_codes.csv')
+		const csvPath = path.join(__dirname, '../../data/data_codes.csv')
 		if (!fs.existsSync(csvPath)) {
 			console.log('⚠️  data_codes.csv not found, using defaults')
 			return

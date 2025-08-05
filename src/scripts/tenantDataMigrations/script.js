@@ -5,7 +5,7 @@
  * Handles 30+ lakh records with Citus distribution
  */
 
-require('dotenv').config({ path: '../../.env' })
+require('dotenv').config()
 const MentoringDataMigrator = require('./helper')
 const readline = require('readline')
 
@@ -28,7 +28,7 @@ const csvFiles = ['data_codes.csv']
 let allFilesExist = true
 
 csvFiles.forEach((file) => {
-	const filePath = path.join(__dirname, '../data', file)
+	const filePath = path.join(__dirname, '../../data', file)
 	const exists = fs.existsSync(filePath)
 	console.log(`   ${file}: ${exists ? '✅ Found' : '❌ Missing'}`)
 	if (!exists) allFilesExist = false

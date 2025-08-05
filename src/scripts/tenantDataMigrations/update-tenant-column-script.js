@@ -1,5 +1,5 @@
 require('module-alias/register')
-require('dotenv').config({ path: '../../.env' })
+require('dotenv').config()
 const db = require('@database/models/index')
 const DatabaseConnectionManager = require('./db-connection-utils')
 
