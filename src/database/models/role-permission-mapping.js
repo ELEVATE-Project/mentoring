@@ -28,6 +28,14 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.STRING,
 				allowNull: false,
 			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: false,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: false,
+			},
 		},
 		{
 			modelName: 'RolePermission',
@@ -36,6 +44,14 @@ module.exports = (sequelize, DataTypes) => {
 			paranoid: false,
 		}
 	)
+
+	RolePermission.associate = (models) => {
+		// RolePermission belongs to Permission
+		RolePermission.belongsTo(models.Permission, {
+			foreignKey: 'permission_id',
+			as: 'permission',
+		})
+	}
 
 	return RolePermission
 }
