@@ -16,13 +16,17 @@ module.exports = class FormsHelper {
 	 * Create Form.
 	 * @method
 	 * @name create
-	 * @param {Object} bodyData
+	 * @param {Object} bodyData - Form data
+	 * @param {String} orgId - Organization ID
+	 * @param {String} orgCode - Organization code
+	 * @param {String} tenantCode - Tenant code
 	 * @returns {JSON} - Form creation data.
 	 */
 
-	static async create(bodyData, orgId, tenantCode) {
+	static async create(bodyData, orgId, orgCode, tenantCode) {
 		try {
 			bodyData['organization_id'] = orgId
+			bodyData['organization_code'] = orgCode
 			bodyData['tenant_code'] = tenantCode
 			const form = await formQueries.createForm(bodyData, tenantCode)
 

@@ -22,6 +22,7 @@ module.exports = class Form {
 		try {
 			const createdForm = await formsService.create(
 				params,
+				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
