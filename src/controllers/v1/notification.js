@@ -38,7 +38,7 @@ module.exports = class NotificationTemplate {
 			}
 
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			if (req.method === common.PATCH_METHOD) {
@@ -52,7 +52,7 @@ module.exports = class NotificationTemplate {
 			} else if (req.method === common.GET_METHOD) {
 				if (!req.params.id && !req.query.code) {
 					const templatesData = await notificationService.readAllNotificationTemplates(
-						organizationId,
+						organizationCode,
 						tenantCode
 					)
 					return templatesData
@@ -60,7 +60,7 @@ module.exports = class NotificationTemplate {
 					const templatesData = await notificationService.read(
 						req.params.id,
 						req.query.code,
-						organizationId,
+						organizationCode,
 						tenantCode
 					)
 					return templatesData

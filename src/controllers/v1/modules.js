@@ -13,10 +13,10 @@ module.exports = class modules {
 	async create(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
-			const createdModules = await modulesService.create(req.body, userId, organizationId, tenantCode)
+			const createdModules = await modulesService.create(req.body, userId, organizationCode, tenantCode)
 			return createdModules
 		} catch (error) {
 			return error
@@ -34,14 +34,14 @@ module.exports = class modules {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const updatedModules = await modulesService.update(
 				req.params.id,
 				req.body,
 				userId,
-				organizationId,
+				organizationCode,
 				tenantCode
 			)
 			return updatedModules
@@ -63,7 +63,7 @@ module.exports = class modules {
 	async list(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const modulesDetails = await modulesService.list(
@@ -71,7 +71,7 @@ module.exports = class modules {
 				req.pageSize,
 				req.searchText,
 				userId,
-				organizationId,
+				organizationCode,
 				tenantCode
 			)
 			return modulesDetails
@@ -91,10 +91,10 @@ module.exports = class modules {
 	async delete(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
-			const modulesDelete = await modulesService.delete(req.params.id, userId, organizationId, tenantCode)
+			const modulesDelete = await modulesService.delete(req.params.id, userId, organizationCode, tenantCode)
 			return modulesDelete
 		} catch (error) {
 			return error

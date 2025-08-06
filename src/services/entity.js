@@ -22,9 +22,10 @@ module.exports = class EntityHelper {
 			...bodyData,
 			created_by: id,
 			updated_by: id,
+			tenant_code: tenantCode,
 		}
 		try {
-			const entity = await entityTypeQueries.createEntity(sanitizedData)
+			const entity = await entityTypeQueries.createEntity(sanitizedData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_CREATED_SUCCESSFULLY',
@@ -72,10 +73,15 @@ module.exports = class EntityHelper {
 			tenant_code: tenantCode,
 		}
 		try {
-			const [updateCount, updatedEntity] = await entityTypeQueries.updateOneEntity(whereClause, sanitizedData, {
-				returning: true,
-				raw: true,
-			})
+			const [updateCount, updatedEntity] = await entityTypeQueries.updateOneEntity(
+				whereClause,
+				tenantCode,
+				sanitizedData,
+				{
+					returning: true,
+					raw: true,
+				}
+			)
 
 			if (updateCount === 0) {
 				return responses.failureResponse({
@@ -139,7 +145,7 @@ module.exports = class EntityHelper {
 					],
 				}
 			}
-			const entities = await entityTypeQueries.findAllEntities(filter)
+			const entities = await entityTypeQueries.findAllEntities(filter, tenantCode)
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -180,7 +186,7 @@ module.exports = class EntityHelper {
 					tenant_code: tenantCode,
 				}
 			}
-			const entities = await entityTypeQueries.findAllEntities(filter)
+			const entities = await entityTypeQueries.findAllEntities(filter, tenantCode)
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -216,7 +222,7 @@ module.exports = class EntityHelper {
 				created_by: userId,
 				tenant_code: tenantCode,
 			}
-			const deleteCount = await entityTypeQueries.deleteOneEntityType(whereClause)
+			const deleteCount = await entityTypeQueries.deleteOneEntityType(whereClause, tenantCode)
 			if (deleteCount === '0') {
 				return responses.failureResponse({
 					message: 'ENTITY_NOT_FOUND',
@@ -256,7 +262,14 @@ module.exports = class EntityHelper {
 			}
 
 			const attributes = ['id', 'entity_type_id', 'value', 'label', 'status', 'type', 'created_by', 'created_at']
-			const entities = await entityTypeQueries.getAllEntities(filter, attributes, pageNo, pageSize, searchText)
+			const entities = await entityTypeQueries.getAllEntities(
+				filter,
+				tenantCode,
+				attributes,
+				pageNo,
+				pageSize,
+				searchText
+			)
 
 			if (entities.rows == 0 || entities.count == 0) {
 				return responses.failureResponse({

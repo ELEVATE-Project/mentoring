@@ -5,9 +5,14 @@ module.exports = class ReportQuery {
 	async create(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const createReportQuery = await reportQueryService.createQuery(req.body, userId, organizationId, tenantCode)
+			const createReportQuery = await reportQueryService.createQuery(
+				req.body,
+				userId,
+				organizationCode,
+				tenantCode
+			)
 			return createReportQuery
 		} catch (error) {
 			return error
@@ -17,8 +22,8 @@ module.exports = class ReportQuery {
 	async read(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
-			const getReportQuery = await reportQueryService.getQuery(req.query.code, organizationId, tenantCode)
+			const organizationCode = req.decodedToken.organization_code
+			const getReportQuery = await reportQueryService.getQuery(req.query.code, organizationCode, tenantCode)
 			return getReportQuery
 		} catch (error) {
 			return error
@@ -28,13 +33,13 @@ module.exports = class ReportQuery {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 			const updatedReportQuery = await reportQueryService.updateQuery(
 				req.query.code,
 				req.body,
 				userId,
-				organizationId,
+				organizationCode,
 				tenantCode
 			)
 			return updatedReportQuery
@@ -46,12 +51,12 @@ module.exports = class ReportQuery {
 	async delete(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 			const deleteReportQuery = await reportQueryService.deleteQuery(
 				req.query.id,
 				userId,
-				organizationId,
+				organizationCode,
 				tenantCode
 			)
 			return deleteReportQuery

@@ -23,8 +23,9 @@ module.exports = class MenteeExtensionQueries {
 			return error
 		}
 	}
-	static async createMenteeExtension(data) {
+	static async createMenteeExtension(data, tenantCode) {
 		try {
+			data.tenant_code = tenantCode
 			return await MenteeExtension.create(data, { returning: true })
 		} catch (error) {
 			throw error
@@ -259,11 +260,12 @@ module.exports = class MenteeExtensionQueries {
 		}
 	}
 
-	static async getUsersByUserIds(ids, options = {}, unscoped = false) {
+	static async getUsersByUserIds(ids, options = {}, tenantCode, unscoped = false) {
 		try {
 			const query = {
 				where: {
 					user_id: ids,
+					tenant_code: tenantCode,
 				},
 				...options,
 				returning: true,

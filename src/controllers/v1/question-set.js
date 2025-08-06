@@ -24,7 +24,7 @@ module.exports = class QuestionsSet {
 	async create(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const createQuestionSet = await questionSetService.create(req.body, req.decodedToken, tenantCode)
@@ -47,7 +47,7 @@ module.exports = class QuestionsSet {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const updateQuestionsSet = await questionSetService.update(
@@ -74,7 +74,7 @@ module.exports = class QuestionsSet {
 	async read(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const questionsSetData = await questionSetService.read(req.params.id, req.body.code, tenantCode)

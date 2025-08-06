@@ -72,7 +72,7 @@ module.exports = class Connection {
 			return await connectionsService.accept(
 				req.body,
 				req.decodedToken.id,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				tenantCode
 			)
 		} catch (error) {
@@ -95,7 +95,7 @@ module.exports = class Connection {
 			return await connectionsService.reject(
 				req.body,
 				req.decodedToken.id,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				tenantCode
 			)
 		} catch (error) {
@@ -112,7 +112,7 @@ module.exports = class Connection {
 	 * @param {Object} req.query - Additional query parameters for filtering.
 	 * @param {Object} req.decodedToken - The decoded token containing authenticated user info.
 	 * @param {string} req.decodedToken.id - The ID of the authenticated user.
-	 * @param {string} req.decodedToken.organization_id - The organization ID of the authenticated user.
+	 * @param {string} req.decodedToken.organization_code - The organization ID of the authenticated user.
 	 * @returns {Promise<Object[]>} The list of connections.
 	 * @throws Will throw an error if the request fails.
 	 */
@@ -125,7 +125,7 @@ module.exports = class Connection {
 				req.searchText,
 				req.query,
 				req.decodedToken.id,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				tenantCode
 			)
 		} catch (error) {

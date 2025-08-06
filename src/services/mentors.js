@@ -412,7 +412,7 @@ module.exports = class MentorsHelper {
 				visible_to_organizations: userOrgDetails.data.result.related_orgs,
 			}
 
-			const response = await mentorQueries.createMentorExtension(data)
+			const response = await mentorQueries.createMentorExtension(data, tenantCode)
 
 			const processDbResponse = utils.processDbResponse(response.toJSON(), validationData)
 

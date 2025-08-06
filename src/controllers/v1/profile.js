@@ -14,21 +14,21 @@ module.exports = class Mentees {
 	async create(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			if (isAMentor(req.decodedToken.roles)) {
 				return await mentorsService.createMentorExtension(
 					req.body,
 					req.decodedToken.id,
-					req.decodedToken.organization_id,
+					req.decodedToken.organization_code,
 					tenantCode
 				)
 			}
 			return await menteesService.createMenteeExtension(
 				req.body,
 				req.decodedToken.id,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				tenantCode
 			)
 		} catch (error) {
@@ -49,21 +49,21 @@ module.exports = class Mentees {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			if (isAMentor(req.decodedToken.roles)) {
 				return await mentorsService.updateMentorExtension(
 					req.body,
 					req.decodedToken.id,
-					req.decodedToken.organization_id,
+					req.decodedToken.organization_code,
 					tenantCode
 				)
 			}
 			return await menteesService.updateMenteeExtension(
 				req.body,
 				req.decodedToken.id,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				tenantCode
 			)
 		} catch (error) {
@@ -82,7 +82,7 @@ module.exports = class Mentees {
 	async getExtension(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			if (isAMentor(req.decodedToken.roles)) {
@@ -90,7 +90,7 @@ module.exports = class Mentees {
 			}
 			return await menteesService.getMenteeExtension(
 				req.decodedToken.id,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				tenantCode
 			) // params since read will be public for mentees
 		} catch (error) {
@@ -109,13 +109,13 @@ module.exports = class Mentees {
 	async read(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			if (isAMentor(req.decodedToken.roles)) {
 				return await mentorsService.read(
 					req.decodedToken.id,
-					req.decodedToken.organization_id,
+					req.decodedToken.organization_code,
 					'',
 					'',
 					req.decodedToken.roles,
@@ -124,7 +124,7 @@ module.exports = class Mentees {
 			}
 			return await menteesService.read(
 				req.decodedToken.id,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				req.decodedToken.roles,
 				tenantCode
 			)
@@ -145,7 +145,7 @@ module.exports = class Mentees {
 	async filterList(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const filterList = await menteesService.getFilterList(
@@ -172,7 +172,7 @@ module.exports = class Mentees {
 	async getCommunicationToken(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			return await menteesService.getCommunicationToken(req.decodedToken.id, tenantCode) // params since read will be public for mentees
@@ -193,7 +193,7 @@ module.exports = class Mentees {
 	async externalIdMapping(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			return await menteesService.externalMapping(req.body, tenantCode)
@@ -220,7 +220,7 @@ module.exports = class Mentees {
 	async logout(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			return await menteesService.logout(req.decodedToken.id, tenantCode) // Params since read will be public for mentees
@@ -237,7 +237,7 @@ module.exports = class Mentees {
 	 * @param {String} req.params.id - The mentor's ID.
 	 * @param {Object} req.decodedToken - Decoded token from authentication.
 	 * @param {String} req.decodedToken.id - The user's ID.
-	 * @param {String} req.decodedToken.organization_id - The user's organization ID.
+	 * @param {String} req.decodedToken.organization_code - The user's organization ID.
 	 * @param {Array} req.decodedToken.roles - The user's roles.
 	 * @param {Boolean} isAMentor - Indicates whether the user is a mentor.
 	 * @returns {Promise<Object>} - The mentor's profile details.
@@ -245,12 +245,12 @@ module.exports = class Mentees {
 	async details(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			return await menteesService.details(
 				req.params.id,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				req.decodedToken.id,
 				isAMentor(req.decodedToken.roles),
 				req.decodedToken.roles,

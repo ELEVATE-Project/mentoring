@@ -96,12 +96,12 @@ exports.defaultRulesFilter = async function defaultRulesFilter({
 	ruleType,
 	requesterId,
 	roles,
-	requesterOrganizationId,
+	requesterOrganizationCode,
 }) {
 	try {
 		const [userDetails, defaultRules] = await Promise.all([
 			getUserDetails(requesterId, isAMentor(roles)),
-			defaultRuleQueries.findAll({ type: ruleType, organization_id: requesterOrganizationId }),
+			defaultRuleQueries.findAll({ type: ruleType, organization_id: requesterOrganizationCode }),
 		])
 
 		const validConfigs = getValidConfigs(defaultRules, roles)
@@ -193,13 +193,13 @@ exports.validateDefaultRulesFilter = async function validateDefaultRulesFilter({
 	ruleType,
 	requesterId,
 	roles,
-	requesterOrganizationId,
+	requesterOrganizationCode,
 	data,
 }) {
 	try {
 		const [userDetails, defaultRules] = await Promise.all([
 			getUserDetails(requesterId, isAMentor(roles)),
-			defaultRuleQueries.findAll({ type: ruleType, organization_id: requesterOrganizationId }),
+			defaultRuleQueries.findAll({ type: ruleType, organization_id: requesterOrganizationCode }),
 		])
 
 		const validConfigs = getValidConfigs(defaultRules, roles)

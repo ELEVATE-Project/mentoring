@@ -33,9 +33,9 @@ module.exports = class MentorExtensionQueries {
 		}
 	}
 
-	static async createMentorExtension(data) {
+	static async createMentorExtension(data, tenantCode) {
 		try {
-			data = { ...data, is_mentor: true }
+			data = { ...data, is_mentor: true, tenant_code: tenantCode }
 			return await MentorExtension.create(data, { returning: true })
 		} catch (error) {
 			console.log(error)
@@ -171,11 +171,12 @@ module.exports = class MentorExtensionQueries {
 			throw error
 		}
 	}
-	static async getMentorsByUserIds(ids, options = {}, unscoped = false) {
+	static async getMentorsByUserIds(ids, options = {}, tenantCode, unscoped = false) {
 		try {
 			const query = {
 				where: {
 					user_id: ids,
+					tenant_code: tenantCode,
 				},
 				...options,
 				returning: true,

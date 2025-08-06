@@ -23,7 +23,7 @@ module.exports = class OrgAdmin {
 	async setOrgPolicies(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			console.log(req.decodedToken)
@@ -38,10 +38,10 @@ module.exports = class OrgAdmin {
 	async getOrgPolicies(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
-			//req.decodedToken.organization_id
+			//req.decodedToken.organization_code
 			const orgPolicies = await orgAdminService.getOrgPolicies(req.decodedToken, tenantCode)
 			return orgPolicies
 		} catch (error) {
@@ -59,7 +59,7 @@ module.exports = class OrgAdmin {
 	async roleChange(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			let changedRoleDetails = await orgAdminService.roleChange(req.body, {}, req.decodedToken, tenantCode)
@@ -79,13 +79,13 @@ module.exports = class OrgAdmin {
 	async inheritEntityType(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			let entityTypeDetails = await orgAdminService.inheritEntityType(
 				req.body.entity_type_value,
 				req.body.target_entity_type_label,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				req.decodedToken,
 				tenantCode
 			)
@@ -102,7 +102,7 @@ module.exports = class OrgAdmin {
 	 * @param {Object} req - Request data.
 	 * @param {Object} req.body - Request body containing updated policies.
 	 * @param {String} req.body.user_id - User id.
-	 * @param {String} req.body.organization_id - Organization id.
+	 * @param {String} req.body.organization_code - Organization code.
 	 * @param {Array} req.body.roles - User Roles.
 	 * @returns {JSON} - Success Response.
 	 * @throws {Error} - Returns an error if the update fails.
@@ -110,7 +110,7 @@ module.exports = class OrgAdmin {
 	async updateOrganization(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const updateOrg = await orgAdminService.updateOrganization(req.body, tenantCode)
@@ -132,7 +132,7 @@ module.exports = class OrgAdmin {
 	async deactivateUpcomingSession(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const response = await orgAdminService.deactivateUpcomingSession(
@@ -150,15 +150,15 @@ module.exports = class OrgAdmin {
 	 * updateRelatedOrgs
 	 * @method
 	 * @name updateRelatedOrgs
-	 * @param {Array} req.body.related_organization_ids - Related orgs ids.
-	 * @param {Integer} req.body.organization_id - Id of the organisation .
+	 * @param {Array} req.body.related_organization_codes - Related orgs codes.
+	 * @param {String} req.body.organization_code - Code of the organisation .
 	 * @returns {JSON} - Success Response.
 	 * @throws {Error} - Error response.
 	 */
 	async updateRelatedOrgs(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			return await orgAdminService.updateRelatedOrgs(
@@ -175,7 +175,7 @@ module.exports = class OrgAdmin {
 	async setDefaultQuestionSets(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			return await orgAdminService.setDefaultQuestionSets(req.body, req.decodedToken, tenantCode)
@@ -195,12 +195,12 @@ module.exports = class OrgAdmin {
 	async uploadSampleCSV(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const updatePath = await orgAdminService.uploadSampleCSV(
 				req.body.file_path,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				tenantCode
 			)
 			return updatePath
@@ -214,18 +214,18 @@ module.exports = class OrgAdmin {
 	 * @method
 	 * @name updateTheme
 	 * @param {Object} req.body - The theme data to be updated.
-	 * @param {String} req.decodedToken.organization_id - The organization ID extracted from the decoded token.
+	 * @param {String} req.decodedToken.organization_code - The organization ID extracted from the decoded token.
 	 * @returns {Object} - The result of the theme update, either success or error details.
 	 */
 	async updateTheme(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const updateTheme = await orgAdminService.updateTheme(
 				req.body,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				tenantCode
 			)
 			return updateTheme
@@ -239,17 +239,17 @@ module.exports = class OrgAdmin {
 	 * @method
 	 * @name themeDetails
 	 * @param {Object} req.body - The theme data to be updated.
-	 * @param {String} req.decodedToken.organization_id - The organization ID extracted from the decoded token.
+	 * @param {String} req.decodedToken.organization_code - The organization ID extracted from the decoded token.
 	 * @returns {Object} - The result of the theme update, either success or error details.
 	 */
 	async themeDetails(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
 			const themeDetails = await orgAdminService.themeDetails(
-				req.query.organizationId ? req.query.organizationId : req.decodedToken.organization_id,
+				req.query.organizationCode ? req.query.organizationCode : req.decodedToken.organization_code,
 				tenantCode
 			)
 			return themeDetails

@@ -40,7 +40,7 @@ module.exports = class requestSessionsHelper {
 	 * @returns {Promise<Object>} A success or failure response.
 	 */
 
-	static async create(bodyData, userId, orgId, skipValidation) {
+	static async create(bodyData, userId, orgId, skipValidation, tenantCode) {
 		try {
 			const mentorUserExists = await mentorQueries.getMentorExtension(bodyData.requestee_id)
 			if (!mentorUserExists) {
@@ -55,7 +55,11 @@ module.exports = class requestSessionsHelper {
 
 			// If not connected, restrict mentee to a single pending request
 			if (!connectionExists) {
-				const pendingRequest = await sessionRequestQueries.checkPendingRequest(userId, bodyData.requestee_id)
+				const pendingRequest = await sessionRequestQueries.checkPendingRequest(
+					userId,
+					bodyData.requestee_id,
+					tenantCode
+				)
 				if (pendingRequest.count > 0) {
 					return responses.failureResponse({
 						statusCode: httpStatusCode.bad_request,
@@ -149,7 +153,8 @@ module.exports = class requestSessionsHelper {
 				bodyData.start_date,
 				bodyData.end_date,
 				bodyData.title,
-				bodyData.meta ? bodyData.meta : null
+				bodyData.meta ? bodyData.meta : null,
+				tenantCode
 			)
 
 			const SessionRequestMapping = await sessionRequestMappingQueries.addSessionRequest(
@@ -194,9 +199,9 @@ module.exports = class requestSessionsHelper {
 	 * @param {number} pageSize - The number of records per page.
 	 * @returns {Promise<Object>} The list of pending session requests.
 	 */
-	static async list(userId, pageNo, pageSize, status) {
+	static async list(userId, pageNo, pageSize, status, tenantCode) {
 		try {
-			const allRequestSession = await sessionRequestQueries.getAllRequests(userId, status)
+			const allRequestSession = await sessionRequestQueries.getAllRequests(userId, status, tenantCode)
 			const sessionRequestData = allRequestSession.rows
 
 			const sessionRequestMapping = await sessionRequestMappingQueries.getSessionsMapping(userId)
@@ -204,7 +209,8 @@ module.exports = class requestSessionsHelper {
 
 			const sessionMappingDetails = await sessionRequestQueries.getSessionMappingDetails(
 				sessionRequestIds,
-				status
+				status,
+				tenantCode
 			)
 			const sessionMappingDetailsData = sessionMappingDetails.map((s) => s.dataValues)
 
@@ -303,13 +309,16 @@ module.exports = class requestSessionsHelper {
 	 * @param {Object} bodyData - The body data containing the target user ID.
 	 * @param {string} bodyData.user_id - The ID of the target user.
 	 * @param {string} mentorUserId - The ID of the authenticated user.
-	 * @param {string} organization_id - the ID of the user organization.
+	 * @param {string} organization_code - the code of the user organization.
 	 * @returns {Promise<Object>} A success response indicating the request was accepted.
 	 */
-	static async accept(bodyData, mentorUserId, orgId, isMentor) {
+	static async accept(bodyData, mentorUserId, orgId, isMentor, tenantCode) {
 		try {
 			// Fetch session request details
-			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(bodyData.request_session_id)
+			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(
+				bodyData.request_session_id,
+				tenantCode
+			)
 
 			// If no session request found
 			if (!getRequestSessionDetails) {
@@ -357,7 +366,8 @@ module.exports = class requestSessionsHelper {
 			const approveSessionRequest = await sessionRequestQueries.approveRequest(
 				mentorUserId,
 				bodyData.request_session_id,
-				sessionCreation.result.id
+				sessionCreation.result.id,
+				tenantCode
 			)
 
 			// If approval failed
@@ -458,7 +468,9 @@ module.exports = class requestSessionsHelper {
 					templateCode,
 					orgId.toString(),
 					getRequestSessionDetails.requestor_id,
-					mentorUserId
+					mentorUserId,
+					'',
+					tenantCode
 				)
 			}
 
@@ -482,13 +494,16 @@ module.exports = class requestSessionsHelper {
 	 * @param {Object} bodyData - The body data containing the target user ID.
 	 * @param {string} bodyData.user_id - The ID of the target user.
 	 * @param {string} mentorUserId - The ID of the authenticated user.
-	 * @param {string} organization_id - the ID of the user organization.
+	 * @param {string} organization_code - the code of the user organization.
 	 * @returns {Promise<Object>} A success response indicating the request was rejected.
 	 */
-	static async reject(bodyData, userId, orgId) {
+	static async reject(bodyData, userId, orgId, tenantCode) {
 		try {
 			// Fetch session request details
-			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(bodyData.request_session_id)
+			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(
+				bodyData.request_session_id,
+				tenantCode
+			)
 
 			// If no session request found
 			if (!getRequestSessionDetails) {
@@ -502,7 +517,8 @@ module.exports = class requestSessionsHelper {
 			const [rejectedCount, rejectedData] = await sessionRequestQueries.rejectRequest(
 				userId,
 				bodyData.request_session_id,
-				bodyData.reason
+				bodyData.reason,
+				tenantCode
 			)
 
 			if (rejectedCount == 0) {
@@ -519,7 +535,8 @@ module.exports = class requestSessionsHelper {
 				orgId.toString(),
 				rejectedData[0].dataValues.requestor_id,
 				userId,
-				bodyData.reason
+				bodyData.reason,
+				tenantCode
 			)
 
 			return responses.successResponse({
@@ -542,9 +559,9 @@ module.exports = class requestSessionsHelper {
 	 * @returns {Promise<Object>} The session information.
 	 * @throws Will throw an error if the request fails.
 	 */
-	static async getInfo(requestSessionId, userId) {
+	static async getInfo(requestSessionId, userId, tenantCode) {
 		try {
-			const requestSessions = await sessionRequestQueries.getRequestSessions(requestSessionId, userId)
+			const requestSessions = await sessionRequestQueries.getRequestSessions(requestSessionId, tenantCode)
 
 			const defaultOrgId = await getDefaultOrgId()
 			if (!defaultOrgId) {
@@ -620,7 +637,7 @@ module.exports = class requestSessionsHelper {
 		}
 	}
 
-	static async userAvailability(userId, page, limit, search, status, roles, startDate, endDate) {
+	static async userAvailability(userId, page, limit, search, status, roles, startDate, endDate, tenantCode) {
 		try {
 			// Fetch both mentor and mentee sessions in parallel
 			const [enrolledSessions, mentoringSessions] = await Promise.all([
@@ -644,10 +661,10 @@ module.exports = class requestSessionsHelper {
 		}
 	}
 
-	static async expire(requestSessionId) {
+	static async expire(requestSessionId, tenantCode) {
 		try {
 			// Fetch session request details
-			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(requestSessionId)
+			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(requestSessionId, tenantCode)
 
 			// If no session request found
 			if (!getRequestSessionDetails) {
@@ -658,7 +675,7 @@ module.exports = class requestSessionsHelper {
 				})
 			}
 
-			const [expiredCount, expiredData] = await sessionRequestQueries.expireRequest(requestSessionId)
+			const [expiredCount, expiredData] = await sessionRequestQueries.expireRequest(requestSessionId, tenantCode)
 
 			if (expiredCount == 0) {
 				return responses.failureResponse({
@@ -712,7 +729,7 @@ function createMentorAvailabilityResponse(data) {
 	}
 }
 
-async function emailForAcceptAndReject(templateCode, orgId, requestor_id, mentorUserId, rejectReason = '') {
+async function emailForAcceptAndReject(templateCode, orgId, requestor_id, mentorUserId, rejectReason = '', tenantCode) {
 	const menteeDetails = await userExtensionQueries.getUsersByUserIds(requestor_id, {
 		attributes: ['name', 'email'],
 	})
@@ -725,7 +742,7 @@ async function emailForAcceptAndReject(templateCode, orgId, requestor_id, mentor
 	emailTemplateCode = templateCode
 
 	// send mail to mentors on session creation if session created by manager
-	const templateData = await notificationQueries.findOneEmailTemplate(emailTemplateCode, orgId)
+	const templateData = await notificationQueries.findOneEmailTemplate(emailTemplateCode, orgId, tenantCode)
 
 	// If template data is available. create mail data and push to kafka
 	if (templateData) {

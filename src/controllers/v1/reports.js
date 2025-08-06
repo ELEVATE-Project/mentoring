@@ -38,7 +38,7 @@ module.exports = class Reports {
 	 * @param {Object} req - Request data object.
 	 * @param {Object} req.query - Query parameters.
 	 * @param {String} req.query.decodedToken.id - User ID from the decoded token.
-	 * @param {String} req.query.decodedToken.organization_id - Organization ID from the decoded token.
+	 * @param {String} req.query.decodedToken.organization_code - Organization code from the decoded token.
 	 * @param {Number} [req.query.pageNo=1] - Page number for pagination (default is 1).
 	 * @param {Number} [req.query.Limit=10] - Number of items per page (default is 10).
 	 * @param {String} req.query.report_code - Code for the report type.
@@ -113,7 +113,7 @@ module.exports = class Reports {
 			const tenantCode = req.decodedToken.tenant_code
 			const reportData = await reportService.getReportData(
 				req.decodedToken.id,
-				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				req.query.pageNo ? req.query.pageNo : common.pagination.DEFAULT_PAGE_NO,
 				req.query.Limit ? req.query.Limit : common.pagination.DEFAULT_LIMIT,
 				req.query.report_code,
@@ -142,9 +142,9 @@ module.exports = class Reports {
 	async create(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const createReport = await reportService.createReport(req.body, userId, organizationId, tenantCode)
+			const createReport = await reportService.createReport(req.body, userId, organizationCode, tenantCode)
 			return createReport
 		} catch (error) {
 			return error
@@ -154,8 +154,8 @@ module.exports = class Reports {
 	async read(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
-			const getReportById = await reportService.getReportById(req.query.id, organizationId, tenantCode)
+			const organizationCode = req.decodedToken.organization_code
+			const getReportById = await reportService.getReportById(req.query.id, organizationCode, tenantCode)
 			return getReportById
 		} catch (error) {
 			return error
@@ -165,13 +165,13 @@ module.exports = class Reports {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 			const updatedReport = await reportService.updateReport(
 				req.query.id,
 				req.body,
 				userId,
-				organizationId,
+				organizationCode,
 				tenantCode
 			)
 			return updatedReport
@@ -183,9 +183,14 @@ module.exports = class Reports {
 	async delete(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
+			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const deleteReport = await reportService.deleteReportById(req.query.id, userId, organizationId, tenantCode)
+			const deleteReport = await reportService.deleteReportById(
+				req.query.id,
+				userId,
+				organizationCode,
+				tenantCode
+			)
 			return deleteReport
 		} catch (error) {
 			return error
