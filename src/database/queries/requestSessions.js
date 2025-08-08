@@ -263,6 +263,32 @@ exports.markRequestsAsDeleted = async (requestSessionIds = []) => {
 	}
 }
 
+exports.getPendingSessionRequests = async (userId) => {
+	try {
+		const query = `
+			SELECT rs.*, rm.requestee_id
+			FROM session_request rs
+			INNER JOIN request_session_mapping rm ON rs.id = rm.request_session_id
+			WHERE rm.requestee_id = :userId 
+			AND rs.status = :requestedStatus
+			AND rs.deleted_at IS NULL
+		`
+
+		const pendingRequests = await sequelize.query(query, {
+			type: QueryTypes.SELECT,
+			replacements: {
+				userId,
+				requestedStatus: common.CONNECTIONS_STATUS.REQUESTED,
+			},
+		})
+
+		return pendingRequests || []
+	} catch (error) {
+		console.error('Error getting pending session requests :', error)
+		return []
+	}
+}
+
 exports.getCount = async (userId, status) => {
 	try {
 		// Prepare filter

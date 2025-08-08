@@ -449,6 +449,30 @@ exports.getConnectionsCount = async (filter, userId, organizationIds = []) => {
 	}
 }
 
+exports.getConnectedUsers = async ({ userId, selectColumn = 'user_id', whereColumn = 'friend_id' }) => {
+	try {
+		const query = `
+			SELECT DISTINCT ${selectColumn} AS user_id
+			FROM ${Connection.tableName}
+			WHERE ${whereColumn} = :userId
+			AND status = :acceptedStatus
+		`
+
+		const connections = await sequelize.query(query, {
+			type: QueryTypes.SELECT,
+			replacements: {
+				userId,
+				acceptedStatus: common.CONNECTIONS_STATUS.ACCEPTED,
+			},
+		})
+
+		const userIds = connections.map((conn) => conn.user_id)
+		return userIds.length > 0 ? userIds : []
+	} catch (error) {
+		throw error
+	}
+}
+
 exports.getRequestsCount = async (userId) => {
 	try {
 		// This will retrieve the request count

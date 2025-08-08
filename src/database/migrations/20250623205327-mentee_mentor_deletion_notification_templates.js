@@ -53,8 +53,8 @@ module.exports = {
 				code: 'session_manager_mentor_deletion_email',
 				subject: 'Action Required - Mentor Deleted',
 				body: `
-					<p>Hi {sessionManagerName},</p>
-					<p><strong>{mentorName}</strong> is no longer a part of the organisation, and following are their upcoming sessions:</p>
+					<p>Hi,</p>
+					<p><strong>{mentorName}</strong> is no longer a part of the organisation, and following are their upcoming sessions :</p>
 					<div style="margin: 15px 0;">
 						{sessionList}
 					</div>

@@ -1150,12 +1150,7 @@ module.exports = class SessionsHelper {
 
 			// check for accessibility
 			if (userId !== '' && isAMentor !== '') {
-				let isAccessible = await this.checkIfSessionIsAccessible(
-					sessionDetails,
-					userId,
-					isAMentor,
-					mentorExtension
-				)
+				let isAccessible = await this.checkIfSessionIsAccessible(sessionDetails, userId, isAMentor)
 
 				// Throw access error
 				if (!isAccessible) {

@@ -503,7 +503,7 @@ let enviromentVariables = {
 		optional: true,
 		default: 'mentor_request_session_deletion_email',
 	},
-	SESSION_MANAGER_PRIVATE_SESSION_DELETION: {
+	SESSION_MANAGER_MENTEE_DELETION_EMAIL_TEMPLATE: {
 		message: 'Required session manager private session deletion template code',
 		optional: true,
 		default: 'session_manager_private_session_deletion_email',
