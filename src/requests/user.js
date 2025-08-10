@@ -39,7 +39,7 @@ const emailEncryption = require('@utils/emailEncryption')
  *   .catch(error => console.error(error));
  */
 
-const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
+const fetchOrgDetails = async function (organizationCode, organizationId) {
 	try {
 		let orgReadUrl
 		if (organizationId)
@@ -47,8 +47,13 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
 		else if (organizationCode)
 			orgReadUrl = `${userBaseUrl}${endpoints.ORGANIZATION_READ}?organisation_code=${organizationCode}`
 
+		console.log('Fetching org details from URL:', orgReadUrl)
+		console.log('organizationId:', organizationId, 'organizationCode:', organizationCode)
+
 		const internalToken = true
 		const orgDetails = await requests.get(orgReadUrl, '', internalToken)
+
+		console.log('Org details response:', JSON.stringify(orgDetails, null, 2))
 		return orgDetails
 	} catch (error) {
 		console.error('Error fetching organization details:', error)
@@ -73,9 +78,12 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
  *   .catch(error => console.error(error));
  */
 
-const getOrgDetails = async function ({ organizationId }) {
+const getOrgDetails = async function ({ organizationId, tenantCode }) {
 	try {
-		const organizationDetails = await organisationExtensionQueries.findOne({ organization_id: organizationId })
+		const organizationDetails = await organisationExtensionQueries.findOne(
+			{ organization_id: organizationId },
+			tenantCode
+		)
 		return {
 			success: true,
 			data: {
@@ -183,9 +191,18 @@ const fetchUserDetails = async ({ token, userId }) => {
  *   .catch(error => console.error(error));
  */
 
-const getUserDetails = async (userId) => {
+const getUserDetails = async (userId, tenantCode) => {
 	try {
-		const userDetails = await menteeQueries.getMenteeExtension(userId)
+		const userDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+
+		if (!userDetails) {
+			return {
+				data: {
+					result: null,
+				},
+			}
+		}
+
 		if (userDetails.image) {
 			const downloadImageResponse = await getDownloadableUrl(userDetails.image)
 			userDetails.image = downloadImageResponse.result
@@ -631,7 +648,7 @@ const listOrganization = function (organizationIds = []) {
  *   .catch(error => console.error(error));
  */
 
-const organizationList = function (organizationIds = []) {
+const organizationList = function (organizationIds = [], tenantCode = null) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			// Fetch organization details
@@ -641,7 +658,7 @@ const organizationList = function (organizationIds = []) {
 				},
 			}
 
-			const organizationDetails = await organisationExtensionQueries.findAll(filter, {
+			const organizationDetails = await organisationExtensionQueries.findAll(filter, tenantCode, {
 				attributes: ['name', 'organization_id'],
 			})
 
@@ -734,7 +751,7 @@ const getDownloadableUrl = function (path) {
  *   .catch(error => console.error(error));
  */
 
-const getUserDetailedList = function (userIds) {
+const getUserDetailedList = function (userIds, tenantCode) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			// Fetch user details
@@ -762,7 +779,7 @@ const getUserDetailedList = function (userIds) {
 				},
 			}
 
-			const organizationDetails = await organisationExtensionQueries.findAll(filter, {
+			const organizationDetails = await organisationExtensionQueries.findAll(filter, tenantCode, {
 				attributes: ['name', 'organization_id'],
 			})
 
@@ -775,7 +792,8 @@ const getUserDetailedList = function (userIds) {
 			await Promise.all(
 				userDetails.map(async function (user) {
 					if (user.email) {
-						user.email = await emailEncryption.decrypt(user.email)
+						const decryptedEmail = await emailEncryption.decryptAndValidate(user.email)
+						user.email = decryptedEmail || user.email // Keep original if decryption fails
 					}
 
 					if (user.image) {

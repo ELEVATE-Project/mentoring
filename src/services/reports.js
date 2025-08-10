@@ -509,8 +509,11 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async createReport(data, userId, organizationId, tenantCode) {
+	static async createReport(data, userId, organizationId, organizationCode, tenantCode) {
 		try {
+			data.organization_id = organizationId
+			data.organization_code = organizationCode
+			data.tenant_code = tenantCode
 			data.created_at = new Date().toISOString()
 			data.updated_at = new Date().toISOString()
 
@@ -538,9 +541,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async getReportById(id, organizationId, tenantCode) {
+	static async getReportById(id, organizationCode, tenantCode) {
 		try {
-			const readReport = await reportsQueries.findReportById(id, tenantCode)
+			const readReport = await reportsQueries.findReportById(id, organizationCode, tenantCode)
 			if (!readReport) {
 				return responses.failureResponse({
 					message: 'REPORT_NOT_FOUND',
@@ -558,9 +561,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async updateReport(id, updateData, userId, organizationId, tenantCode) {
+	static async updateReport(id, updateData, userId, organizationId, organizationCode, tenantCode) {
 		try {
-			const filter = { id: id }
+			const filter = { id: id, organization_code: organizationCode, tenant_code: tenantCode }
 			const updatedReport = await reportsQueries.updateReport(filter, updateData, tenantCode)
 			if (!updatedReport) {
 				return responses.failureResponse({
@@ -579,9 +582,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async deleteReportById(id, userId, organizationId, tenantCode) {
+	static async deleteReportById(id, userId, organizationCode, tenantCode) {
 		try {
-			const deletedRows = await reportsQueries.deleteReportById(id, tenantCode)
+			const deletedRows = await reportsQueries.deleteReportById(id, organizationCode, tenantCode)
 			if (deletedRows === 0) {
 				return responses.failureResponse({
 					message: 'REPORT_DELETION_FAILED',

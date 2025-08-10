@@ -31,6 +31,8 @@ module.exports = class OrganizationService {
 			}
 			const extensionData = {
 				organization_id: decodedToken.organization_id,
+				organization_code: decodedToken.organization_code,
+				tenant_code: tenantCode,
 				mentee_feedback_question_set: bodyData.mentee_feedback_question_set,
 				mentor_feedback_question_set: bodyData.mentor_feedback_question_set,
 				updated_by: decodedToken.id,
@@ -59,6 +61,7 @@ module.exports = class OrganizationService {
 			const extensionData = {
 				...common.getDefaultOrgPolicies(),
 				organization_id: eventBody.entityId,
+				organization_code: eventBody.organization_code || eventBody.entityId,
 				created_by: eventBody.created_by,
 				updated_by: eventBody.created_by,
 				name: eventBody.name,

@@ -11,11 +11,11 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findOneForm(filter, tenantCode, organizationId = null) {
+	static async findOneForm(filter, tenantCode, orgCode = null) {
 		try {
 			filter.tenant_code = tenantCode
-			if (organizationId) {
-				filter.organization_id = organizationId
+			if (orgCode) {
+				filter.organization_code = orgCode
 			}
 			const formData = await Form.findOne({
 				where: filter,
@@ -27,11 +27,11 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async updateOneForm(filter, update, tenantCode, organizationId = null, options = {}) {
+	static async updateOneForm(filter, update, tenantCode, orgCode = null, options = {}) {
 		try {
 			filter.tenant_code = tenantCode
-			if (organizationId) {
-				filter.organization_id = organizationId
+			if (orgCode) {
+				filter.organization_code = orgCode
 			}
 			const [rowsAffected] = await Form.update(update, {
 				where: filter,
@@ -49,11 +49,11 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findAllTypeFormVersion(tenantCode, organizationId = null) {
+	static async findAllTypeFormVersion(tenantCode, orgCode = null) {
 		try {
 			const whereClause = { tenant_code: tenantCode }
-			if (organizationId) {
-				whereClause.organization_id = organizationId
+			if (orgCode) {
+				whereClause.organization_code = orgCode
 			}
 			const formData = await Form.findAll({
 				where: whereClause,

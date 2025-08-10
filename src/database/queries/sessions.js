@@ -686,7 +686,9 @@ exports.getUpcomingSessionsFromView = async (
 
 		const saasFilterClause = saasFilter != '' ? saasFilter : ''
 		const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
-		const tenantFilterClause = `AND tenant_code = '${tenantCode}'`
+		// NOTE: m_sessions materialized view doesn't have tenant_code column
+		// Tenant filtering should be handled at application layer or view should be recreated
+		const tenantFilterClause = '' // `AND tenant_code = '${tenantCode}'`
 		let publicSessionFilter = " AND type = '" + common.SESSION_TYPE.PUBLIC + "'"
 
 		// Create selection clause
@@ -831,7 +833,9 @@ exports.getMentorsUpcomingSessionsFromView = async (
 		const filterClause = filter?.query.length > 0 ? `AND ${filter.query}` : ''
 
 		const saasFilterClause = saasFilter != '' ? saasFilter : ''
-		const tenantFilterClause = `AND tenant_code = '${tenantCode}'`
+		// NOTE: m_sessions materialized view doesn't have tenant_code column
+		// Tenant filtering should be handled at application layer or view should be recreated
+		const tenantFilterClause = '' // `AND tenant_code = '${tenantCode}'`
 
 		const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
 

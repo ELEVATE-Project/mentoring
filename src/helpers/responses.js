@@ -18,8 +18,9 @@ const successResponse = async ({
 	stream,
 	fileName = '',
 	interpolation = false, // Can be true or an object like { title: 'Math' }
+	tenantCode = null,
 }) => {
-	const versions = await form.getAllFormsVersion()
+	const versions = await form.getAllFormsVersion(tenantCode)
 	let response = {
 		statusCode,
 		responseCode,

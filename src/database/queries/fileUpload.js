@@ -37,7 +37,7 @@ exports.update = async (filter, update, options = {}) => {
 	}
 }
 
-exports.listUploads = async (page, limit, status, organization_id) => {
+exports.listUploads = async (page, limit, status, orgCode) => {
 	try {
 		let filterQuery = {
 			where: {},
@@ -48,8 +48,8 @@ exports.listUploads = async (page, limit, status, organization_id) => {
 			limit: parseInt(limit, 10),
 		}
 
-		if (organization_id) {
-			filterQuery.where.organization_id = organization_id
+		if (orgCode) {
+			filterQuery.where.organization_code = orgCode
 		}
 
 		if (status) {

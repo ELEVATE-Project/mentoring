@@ -59,20 +59,20 @@ module.exports = class FormsHelper {
 	 * @returns {JSON} - Update form data.
 	 */
 
-	static async update(id, bodyData, orgId, tenantCode) {
+	static async update(id, bodyData, orgCode, tenantCode) {
 		try {
 			let filter = {}
 			if (id) {
 				filter = {
 					id: id,
-					organization_id: orgId,
+					organization_code: orgCode,
 					tenant_code: tenantCode,
 				}
 			} else {
 				filter = {
 					type: bodyData.type,
 					sub_type: bodyData.sub_type,
-					organization_id: orgId,
+					organization_code: orgCode,
 					tenant_code: tenantCode,
 				}
 			}
@@ -118,13 +118,13 @@ module.exports = class FormsHelper {
 	 * @returns {JSON} - Read form data.
 	 */
 
-	static async read(id, bodyData, orgId, tenantCode) {
+	static async read(id, bodyData, orgCode, tenantCode) {
 		try {
 			let filter = {}
 			if (id) {
-				filter = { id: id, organization_id: orgId, tenant_code: tenantCode }
+				filter = { id: id, organization_code: orgCode, tenant_code: tenantCode }
 			} else {
-				filter = { ...bodyData, organization_id: orgId, tenant_code: tenantCode }
+				filter = { ...bodyData, organization_code: orgCode, tenant_code: tenantCode }
 			}
 			const form = await formQueries.findOneForm(filter, tenantCode)
 			let defaultOrgForm
@@ -137,8 +137,8 @@ module.exports = class FormsHelper {
 						responseCode: 'CLIENT_ERROR',
 					})
 				filter = id
-					? { id: id, organization_id: defaultOrgId, tenant_code: tenantCode }
-					: { ...bodyData, organization_id: defaultOrgId, tenant_code: tenantCode }
+					? { id: id, organization_code: defaultOrgId, tenant_code: tenantCode }
+					: { ...bodyData, organization_code: defaultOrgId, tenant_code: tenantCode }
 				defaultOrgForm = await formQueries.findOneForm(filter, tenantCode)
 			}
 			if (!form && !defaultOrgForm) {

@@ -143,7 +143,9 @@ const capitalize = (str) => {
 	return startCase(str)
 }
 const isAMentor = (roles) => {
-	return roles.some((role) => role.title == common.MENTOR_ROLE)
+	return roles && Array.isArray(roles)
+		? roles.some((role) => role.title == common.MENTOR_ROLE || role.title == common.ADMIN_ROLE)
+		: false
 }
 function isNumeric(value) {
 	return /^\d+$/.test(value)
@@ -477,11 +479,11 @@ const validateRoleAccess = (roles, requiredRoles) => {
 	}
 }
 
-const removeDefaultOrgEntityTypes = (entityTypes, orgId) => {
+const removeDefaultOrgEntityTypes = (entityTypes, orgCode) => {
 	const entityTypeMap = new Map()
 	entityTypes.forEach((entityType) => {
 		if (!entityTypeMap.has(entityType.value)) entityTypeMap.set(entityType.value, entityType)
-		else if (entityType.organization_id === orgId) entityTypeMap.set(entityType.value, entityType)
+		else if (entityType.organization_code === orgCode) entityTypeMap.set(entityType.value, entityType)
 	})
 	return Array.from(entityTypeMap.values())
 }

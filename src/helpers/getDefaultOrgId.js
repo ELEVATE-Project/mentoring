@@ -24,3 +24,21 @@ exports.getDefaultOrgId = async () => {
 		return null
 	}
 }
+
+/**
+ * Retrieves the default organization code.
+ * @returns {Promise<string|null>} Default organization code or null if not found.
+ */
+exports.getDefaultOrgCode = async () => {
+	try {
+		const { DEFAULT_ORGANISATION_CODE } = process.env
+		if (DEFAULT_ORGANISATION_CODE) {
+			return DEFAULT_ORGANISATION_CODE
+		}
+
+		return null
+	} catch (err) {
+		console.error('Error in getDefaultOrgCode:', err)
+		return null
+	}
+}

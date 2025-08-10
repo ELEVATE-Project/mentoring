@@ -396,16 +396,16 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
-	static async findOneFromView(userId) {
+	static async findOneFromView(userId, tenantCode) {
 		try {
 			let query = `
 				SELECT *
 				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
-				WHERE user_id = :userId
+				WHERE user_id = :userId AND tenant_code = :tenantCode
 				LIMIT 1
 			`
 			const user = await Sequelize.query(query, {
-				replacements: { userId },
+				replacements: { userId, tenantCode },
 				type: QueryTypes.SELECT,
 			})
 

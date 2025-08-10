@@ -64,7 +64,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 						- Create session data.
 	 */
 
-	static async create(bodyData, loggedInUserId, orgId, isAMentor, notifyUser) {
+	static async create(bodyData, loggedInUserId, orgId, isAMentor, notifyUser, tenantCode) {
 		try {
 			let skipValidation = bodyData.type == common.SESSION_TYPE.PRIVATE ? true : false
 			// check if session mentor is added in the mentee list
@@ -294,15 +294,18 @@ module.exports = class SessionsHelper {
 			if (bodyData?.resources) {
 				await this.addResources(bodyData.resources, loggedInUserId, data.id)
 				if (notifyUser) {
-					const sessionAttendees = await sessionAttendeesQueries.findAll({
-						session_id: data.id,
-					})
+					const sessionAttendees = await sessionAttendeesQueries.findAll(
+						{
+							session_id: data.id,
+						},
+						tenantCode
+					)
 					let sessionAttendeesIds = []
 					sessionAttendees.forEach((attendee) => {
 						sessionAttendeesIds.push(attendee.mentee_id)
 					})
 
-					const attendeesAccounts = await userRequests.getUserDetailedList(sessionAttendeesIds)
+					const attendeesAccounts = await userRequests.getUserDetailedList(sessionAttendeesIds, tenantCode)
 
 					sessionAttendees.map((attendee) => {
 						for (let index = 0; index < attendeesAccounts.result.length; index++) {
@@ -445,7 +448,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - Update session data.
 	 */
 
-	static async update(sessionId, bodyData, userId, method, orgId, notifyUser) {
+	static async update(sessionId, bodyData, userId, method, orgId, notifyUser, tenantCode) {
 		let isSessionReschedule = false
 		let isSessionCreatedByManager = false
 		let skipValidation = true
@@ -661,9 +664,12 @@ module.exports = class SessionsHelper {
 				// If request body contains mentees field enroll/unenroll mentees from the session
 				if (bodyData.mentees) {
 					// Fetch mentees currently enrolled to the session
-					const sessionAttendees = await sessionAttendeesQueries.findAll({
-						session_id: sessionId,
-					})
+					const sessionAttendees = await sessionAttendeesQueries.findAll(
+						{
+							session_id: sessionId,
+						},
+						tenantCode
+					)
 					let sessionAttendeesIds = []
 					sessionAttendees.forEach((attendee) => {
 						sessionAttendeesIds.push(attendee.mentee_id)
@@ -765,15 +771,18 @@ module.exports = class SessionsHelper {
 				preResourceSendEmail ||
 				triggerSessionMeetinkAddEmail
 			) {
-				const sessionAttendees = await sessionAttendeesQueries.findAll({
-					session_id: sessionId,
-				})
+				const sessionAttendees = await sessionAttendeesQueries.findAll(
+					{
+						session_id: sessionId,
+					},
+					tenantCode
+				)
 				let sessionAttendeesIds = []
 				sessionAttendees.forEach((attendee) => {
 					sessionAttendeesIds.push(attendee.mentee_id)
 				})
 
-				const attendeesAccounts = await userRequests.getUserDetailedList(sessionAttendeesIds)
+				const attendeesAccounts = await userRequests.getUserDetailedList(sessionAttendeesIds, tenantCode)
 
 				sessionAttendees.map((attendee) => {
 					for (let index = 0; index < attendeesAccounts.result.length; index++) {
@@ -1362,7 +1371,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - Session List.
 	 */
 
-	static async list(loggedInUserId, page, limit, search, searchOn, queryParams, isAMentor, roles, orgId) {
+	static async list(loggedInUserId, page, limit, search, searchOn, queryParams, isAMentor, roles, orgId, tenantCode) {
 		try {
 			let allSessions = await menteeService.getAllSessions(
 				page,
@@ -1373,7 +1382,8 @@ module.exports = class SessionsHelper {
 				isAMentor,
 				searchOn,
 				roles,
-				orgId
+				orgId,
+				tenantCode
 			)
 
 			if (allSessions.error && allSessions.error.missingField) {
@@ -1982,7 +1992,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - updated session data.
 	 */
 
-	static async completed(sessionId, isBBB) {
+	static async completed(sessionId, isBBB, tenantCode) {
 		try {
 			const sessionDetails = await sessionQueries.findOne({
 				id: sessionId,
@@ -2006,9 +2016,12 @@ module.exports = class SessionsHelper {
 					sessionDetails.mentor_organization_id
 				)
 
-				let sessionAttendees = await sessionAttendeesQueries.findAll({
-					session_id: sessionId,
-				})
+				let sessionAttendees = await sessionAttendeesQueries.findAll(
+					{
+						session_id: sessionId,
+					},
+					tenantCode
+				)
 
 				sessionAttendees.forEach(async (attendee) => {
 					const payload = {

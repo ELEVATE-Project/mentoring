@@ -2,16 +2,18 @@ const SessionAttendee = require('@database/models/index').SessionAttendee
 const { Op } = require('sequelize')
 const SessionEnrollment = require('@database/models/index').SessionEnrollment
 
-exports.create = async (data) => {
+exports.create = async (data, tenantCode) => {
 	try {
+		data.tenant_code = tenantCode
 		return await SessionAttendee.create(data)
 	} catch (error) {
 		return error
 	}
 }
 
-exports.findOne = async (filter, options = {}) => {
+exports.findOne = async (filter, tenantCode, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		const res = await SessionAttendee.findOne({
 			where: filter,
 			...options,
@@ -23,8 +25,9 @@ exports.findOne = async (filter, options = {}) => {
 	}
 }
 
-exports.updateOne = async (filter, update, options = {}) => {
+exports.updateOne = async (filter, update, tenantCode, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		return await SessionAttendee.update(update, {
 			where: filter,
 			...options,
@@ -53,8 +56,13 @@ exports.unEnrollFromSession = async (sessionId, userId, tenantCode) => {
 	}
 }
 
-exports.findAll = async (filter, options = {}) => {
+exports.findAll = async (filter, tenantCode, options = {}) => {
 	try {
+		if (!tenantCode) {
+			console.error('findAll: tenantCode is required but undefined')
+			throw new Error('tenantCode is required')
+		}
+		filter.tenant_code = tenantCode
 		return await SessionAttendee.findAll({
 			where: filter,
 			...options,
@@ -89,12 +97,17 @@ exports.unEnrollAllAttendeesOfSessions = async (sessionIds, tenantCode) => {
 
 exports.usersUpcomingSessions = async (userId, sessionIds, tenantCode) => {
 	try {
+		if (!tenantCode) {
+			console.error('usersUpcomingSessions: tenantCode is required but undefined')
+			throw new Error('tenantCode is required')
+		}
+		const filter = {
+			session_id: sessionIds,
+			mentee_id: userId,
+		}
+		filter.tenant_code = tenantCode
 		return await SessionAttendee.findAll({
-			where: {
-				session_id: sessionIds,
-				mentee_id: userId,
-				tenant_code: tenantCode,
-			},
+			where: filter,
 			raw: true,
 		})
 	} catch (error) {
@@ -246,6 +259,10 @@ exports.findAttendeeBySessionAndUserId = async (id, sessionId, tenantCode) => {
 }
 exports.findPendingFeedbackSessions = async (menteeId, completedSessionIds, tenantCode) => {
 	try {
+		if (!tenantCode) {
+			console.error('findPendingFeedbackSessions: tenantCode is required but undefined')
+			throw new Error('tenantCode is required')
+		}
 		let sessionEnrollments = await SessionEnrollment.findAll({
 			where: {
 				mentee_id: menteeId,
@@ -254,16 +271,19 @@ exports.findPendingFeedbackSessions = async (menteeId, completedSessionIds, tena
 		})
 		const sessionIds = sessionEnrollments.map((enrollment) => enrollment.session_id)
 		const filteredSessionIds = sessionIds.filter((sessionId) => !completedSessionIds.includes(sessionId))
-		return await SessionAttendee.findAll({
-			where: {
-				mentee_id: menteeId,
-				joined_at: {
-					[Op.not]: null,
-				},
-				is_feedback_skipped: false,
-				session_id: filteredSessionIds,
-				tenant_code: tenantCode,
+
+		const filter = {
+			mentee_id: menteeId,
+			joined_at: {
+				[Op.not]: null,
 			},
+			is_feedback_skipped: false,
+			session_id: filteredSessionIds,
+		}
+		filter.tenant_code = tenantCode
+
+		return await SessionAttendee.findAll({
+			where: filter,
 			raw: true,
 		})
 	} catch (error) {

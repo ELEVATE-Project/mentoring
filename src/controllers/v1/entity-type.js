@@ -15,6 +15,7 @@ module.exports = class Entity {
 			return await entityTypeService.create(
 				req.body,
 				req.decodedToken.id,
+				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code,
 				req.decodedToken.roles
