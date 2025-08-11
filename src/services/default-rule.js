@@ -4,7 +4,7 @@ const entityTypeQueries = require('@database/queries/entityType')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const sessionQueries = require('@database/queries/sessions')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaultOrgId, getDefaultOrgCode } = require('@helpers/getDefaultOrgId')
 const responses = require('@helpers/responses')
 const httpStatusCode = require('@generics/http-status')
 const { Op } = require('sequelize')
@@ -26,7 +26,7 @@ module.exports = class DefaultRuleHelper {
 	 * The object contains a boolean `isValid` indicating if the validation passed and an array `errors` with the validation errors if any.
 	 */
 
-	static async validateFields(defaultOrgId, bodyData) {
+	static async validateFields(defaultOrgCode, bodyData, tenantCode) {
 		const isSessionType =
 			bodyData.type === common.DEFAULT_RULES.SESSION_TYPE && !bodyData.is_target_from_sessions_mentor
 		const modelNamePromise = isSessionType ? sessionQueries.getModelName() : mentorExtensionQueries.getModelName()
@@ -36,17 +36,15 @@ module.exports = class DefaultRuleHelper {
 		const [modelName, mentorModelName] = await Promise.all([modelNamePromise, mentorModelNamePromise])
 
 		const validFieldsPromise = Promise.all([
-			entityTypeQueries.findAllEntityTypes(defaultOrgId, ['id', 'data_type'], {
+			entityTypeQueries.findAllEntityTypes([defaultOrgCode], tenantCode, ['id', 'data_type'], {
 				status: 'ACTIVE',
-				organization_id: defaultOrgId,
 				value: bodyData.target_field,
 				model_names: { [Op.contains]: [modelName] },
 				required: true,
 				allow_filtering: true,
 			}),
-			entityTypeQueries.findAllEntityTypes(defaultOrgId, ['id', 'data_type'], {
+			entityTypeQueries.findAllEntityTypes([defaultOrgCode], tenantCode, ['id', 'data_type'], {
 				status: 'ACTIVE',
-				organization_id: defaultOrgId,
 				value: bodyData.requester_field,
 				model_names: { [Op.contains]: [mentorModelName] },
 				required: true,
@@ -110,18 +108,19 @@ module.exports = class DefaultRuleHelper {
 	 * @param {String} orgId - Org Id of the user.
 	 * @returns {Promise<JSON>} - Created default rule response.
 	 */
-	static async create(bodyData, userId, orgId, tenantCode) {
+	static async create(bodyData, userId, orgId, orgCode, tenantCode) {
 		bodyData.created_by = userId
 		bodyData.updated_by = userId
 		bodyData.organization_id = orgId
+		bodyData.organization_code = orgCode
 		bodyData.tenant_code = tenantCode
 		bodyData.target_field = bodyData.target_field.toLowerCase()
 		bodyData.requester_field = bodyData.requester_field.toLowerCase()
 
 		try {
-			const defaultOrgId = await getDefaultOrgId()
+			const defaultOrgCode = await getDefaultOrgCode()
 
-			const validation = await this.validateFields(defaultOrgId, bodyData)
+			const validation = await this.validateFields(defaultOrgCode, bodyData, tenantCode)
 
 			if (!validation.isValid) {
 				return responses.failureResponse({
@@ -160,17 +159,18 @@ module.exports = class DefaultRuleHelper {
 	 * @param {String} orgId - Org Id of the user.
 	 * @returns {Promise<JSON>} - Updated default rule response.
 	 */
-	static async update(bodyData, ruleId, userId, orgId, tenantCode) {
+	static async update(bodyData, ruleId, userId, orgId, orgCode, tenantCode) {
 		bodyData.updated_by = userId
 		bodyData.organization_id = orgId
+		bodyData.organization_code = orgCode
 		bodyData.tenant_code = tenantCode
 		bodyData.target_field = bodyData.target_field.toLowerCase()
 		bodyData.requester_field = bodyData.requester_field.toLowerCase()
 
 		try {
-			const defaultOrgId = await getDefaultOrgId()
+			const defaultOrgCode = await getDefaultOrgCode()
 
-			const validation = await this.validateFields(defaultOrgId, bodyData)
+			const validation = await this.validateFields(defaultOrgCode, bodyData, tenantCode)
 
 			if (!validation.isValid) {
 				return responses.failureResponse({
@@ -223,10 +223,10 @@ module.exports = class DefaultRuleHelper {
 	 * @param {String} orgId - Org Id of the user.
 	 * @returns {Promise<JSON>} - Found default rules response.
 	 */
-	static async readAll(orgId, tenantCode) {
+	static async readAll(orgCode, tenantCode) {
 		try {
 			const defaultRules = await defaultRuleQueries.findAndCountAll(
-				{ organization_id: orgId, tenant_code: tenantCode },
+				{ organization_code: orgCode, tenant_code: tenantCode },
 				tenantCode
 			)
 
@@ -251,10 +251,10 @@ module.exports = class DefaultRuleHelper {
 	 * @param {String} orgId - Org Id of the user.
 	 * @returns {Promise<JSON>} - Found default rule response.
 	 */
-	static async readOne(ruleId, orgId, tenantCode) {
+	static async readOne(ruleId, orgCode, tenantCode) {
 		try {
 			const defaultRule = await defaultRuleQueries.findOne(
-				{ id: ruleId, organization_id: orgId, tenant_code: tenantCode },
+				{ id: ruleId, organization_code: orgCode, tenant_code: tenantCode },
 				tenantCode
 			)
 			if (!defaultRule) {
@@ -282,10 +282,10 @@ module.exports = class DefaultRuleHelper {
 	 * @param {String} orgId - Org Id of the user.
 	 * @returns {Promise<JSON>} - Default rule deleted response.
 	 */
-	static async delete(ruleId, orgId, tenantCode) {
+	static async delete(ruleId, orgCode, tenantCode) {
 		try {
 			const deleteCount = await defaultRuleQueries.deleteOne(
-				{ id: ruleId, organization_id: orgId, tenant_code: tenantCode },
+				{ id: ruleId, organization_code: orgCode, tenant_code: tenantCode },
 				tenantCode
 			)
 			if (deleteCount === 0) {

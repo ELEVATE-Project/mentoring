@@ -22,6 +22,7 @@ module.exports = class DefaultRule {
 			return await defaultRuleService.create(
 				req.body,
 				req.decodedToken.id,
+				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
 				tenantCode
 			)
@@ -52,6 +53,7 @@ module.exports = class DefaultRule {
 				req.body,
 				req.params.id,
 				req.decodedToken.id,
+				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
 				tenantCode
 			)

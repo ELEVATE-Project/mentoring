@@ -123,7 +123,7 @@ class NotificationHelper {
 
 	static async getSessionAttendeeIds(sessionId, tenantCode) {
 		try {
-			const attendees = await sessionAttendeesQueries.findAll({ session_id: sessionId, tenant_code: tenantCode })
+			const attendees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, tenantCode)
 			return attendees.map((attendee) => attendee.mentee_id)
 		} catch (error) {
 			console.error('Error getting session attendee IDs:', error)
@@ -318,7 +318,8 @@ module.exports = class AdminHelper {
 				if (privateSessions.length > 0) {
 					result.isPrivateSessionsCancelled = await this.notifyAndCancelPrivateSessions(
 						privateSessions,
-						userInfo.organization_id || ''
+						userInfo.organization_id || '',
+						tenantCode
 					)
 				} else {
 					result.isPrivateSessionsCancelled = true
@@ -881,7 +882,7 @@ module.exports = class AdminHelper {
 		}
 	}
 
-	static async notifyAndCancelPrivateSessions(privateSessions, orgId) {
+	static async notifyAndCancelPrivateSessions(privateSessions, orgId, tenantCode) {
 		try {
 			let allNotificationsSent = true
 
@@ -889,7 +890,10 @@ module.exports = class AdminHelper {
 				// Check if this is a one-on-one session (only one attendee)
 				const SessionAttendee = require('@database/models/index').SessionAttendee
 				const attendeeCount = await SessionAttendee.count({
-					where: { session_id: session.id },
+					where: {
+						session_id: session.id,
+						tenant_code: tenantCode,
+					},
 				})
 
 				if (attendeeCount === 1) {

@@ -22,14 +22,16 @@ module.exports = class Mentees {
 					req.body,
 					req.decodedToken.id,
 					req.decodedToken.organization_code,
-					tenantCode
+					tenantCode,
+					req.decodedToken.organization_id
 				)
 			}
 			return await menteesService.createMenteeExtension(
 				req.body,
 				req.decodedToken.id,
 				req.decodedToken.organization_code,
-				tenantCode
+				tenantCode,
+				req.decodedToken.organization_id
 			)
 		} catch (error) {
 			console.error(error)
@@ -109,8 +111,6 @@ module.exports = class Mentees {
 	async read(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			if (isAMentor(req.decodedToken.roles)) {
 				return await mentorsService.read(
@@ -122,10 +122,17 @@ module.exports = class Mentees {
 					tenantCode
 				)
 			}
+			// Extract roles from the organization data in JWT
+			const roles =
+				req.decodedToken.organizations && req.decodedToken.organizations[0]
+					? req.decodedToken.organizations[0].roles
+					: []
+
 			return await menteesService.read(
 				req.decodedToken.id,
+				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
-				req.decodedToken.roles,
+				roles,
 				tenantCode
 			)
 		} catch (error) {

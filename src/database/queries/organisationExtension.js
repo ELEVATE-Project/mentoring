@@ -5,12 +5,12 @@ const common = require('@constants/common')
 module.exports = class OrganizationExtensionQueries {
 	static async upsert(data, tenantCode) {
 		try {
-			if (!data.organization_id) throw new Error('organization_id Missing')
+			if (!data.organization_code) throw new Error('organization_code Missing')
 			data.tenant_code = tenantCode
 			const [orgPolicies] = await OrganizationExtension.upsert(data, {
 				returning: true,
 				where: {
-					organization_id: data.organization_id,
+					organization_code: data.organization_code,
 					tenant_code: tenantCode,
 				},
 			})
@@ -20,11 +20,11 @@ module.exports = class OrganizationExtensionQueries {
 		}
 	}
 
-	static async getById(orgId, tenantCode) {
+	static async getById(orgCode, tenantCode) {
 		try {
 			const orgPolicies = await OrganizationExtension.findOne({
 				where: {
-					organization_id: orgId,
+					organization_code: orgCode,
 					tenant_code: tenantCode,
 				},
 				raw: true,
@@ -43,21 +43,22 @@ module.exports = class OrganizationExtensionQueries {
 	 * @throws {Error} If organizationId is missing or if an error occurs during the operation.
 	 */
 
-	static async findOrInsertOrganizationExtension(organizationId, organization_name, tenantCode) {
+	static async findOrInsertOrganizationExtension(organizationId, organizationCode, organization_name, tenantCode) {
 		try {
-			if (!organizationId) {
-				throw new Error('organization Id Missing')
+			if (!organizationCode) {
+				throw new Error('organization_code Missing')
 			}
 
 			const data = common.getDefaultOrgPolicies()
 			data.organization_id = organizationId
+			data.organization_code = organizationCode
 			data.name = organization_name
 			data.tenant_code = tenantCode
 
 			// Try to find the data, and if it doesn't exist, create it
 			const [orgPolicies, created] = await OrganizationExtension.findOrCreate({
 				where: {
-					organization_id: organizationId,
+					organization_code: organizationCode,
 					tenant_code: tenantCode,
 				},
 				defaults: data,
@@ -106,14 +107,14 @@ module.exports = class OrganizationExtensionQueries {
 		}
 	}
 
-	static async update(data, organization_id, tenantCode) {
+	static async update(data, organization_code, tenantCode) {
 		try {
-			if (!organization_id) {
-				throw new Error('Missing organization_id in data')
+			if (!organization_code) {
+				throw new Error('Missing organization_code in data')
 			}
 			const [updatedRecords] = await OrganizationExtension.update(data, {
 				where: {
-					organization_id: organization_id,
+					organization_code: organization_code,
 					tenant_code: tenantCode,
 				},
 				returning: true,
@@ -124,9 +125,9 @@ module.exports = class OrganizationExtensionQueries {
 		}
 	}
 
-	static async getAllByIds(ids) {
+	static async getAllByIds(codes) {
 		try {
-			const filterClause = `organization_id IN (${ids.map((id) => `'${id}'`).join(',')})`
+			const filterClause = `organization_code IN (${codes.map((code) => `'${code}'`).join(',')})`
 
 			const query = `
 				SELECT *

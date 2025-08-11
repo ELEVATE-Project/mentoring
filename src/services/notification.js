@@ -24,7 +24,7 @@ module.exports = class NotificationTemplateHelper {
 			}
 
 			bodyData['organization_id'] = tokenInformation.organization_id
-			bodyData['organization_code'] = tokenInformation.organization_id
+			bodyData['organization_code'] = tokenInformation.organization_code
 			bodyData['tenant_code'] = tenantCode
 			bodyData['created_by'] = tokenInformation.id
 

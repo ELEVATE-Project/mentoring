@@ -98,8 +98,12 @@ exports.findAndCountAll = async (filter, options = {}) => {
  * @param {Object} [options={}] - Additional query options.
  * @returns {Promise<Array<Object>|Error>} The found DefaultRules or an error.
  */
-exports.findAll = async (filter, options = {}) => {
+exports.findAll = async (filter, tenantCode = null, options = {}) => {
 	try {
+		// Only add tenant_code if tenantCode is provided (DefaultRule may not need tenant filtering)
+		if (tenantCode) {
+			filter.tenant_code = tenantCode
+		}
 		return await DefaultRule.findAll({
 			where: filter,
 			...options,

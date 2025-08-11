@@ -4,7 +4,7 @@ const entityTypeQueries = require('../database/queries/entityType')
 const { UniqueConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaultOrgId, getDefaultOrgCode } = require('@helpers/getDefaultOrgId')
 const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
@@ -18,15 +18,17 @@ module.exports = class EntityHelper {
 	 * @returns {JSON} - Created entity type response.
 	 */
 
-	static async create(bodyData, id, orgId, tenantCode, roles) {
+	static async create(bodyData, id, orgId, orgCode, tenantCode, roles) {
 		bodyData.created_by = id
 		bodyData.updated_by = id
 		bodyData.organization_id = orgId
+		bodyData.organization_code = orgCode
 		bodyData.tenant_code = tenantCode
 		bodyData.value = bodyData.value.toLowerCase()
 		try {
 			if (bodyData.allow_filtering) {
-				const isAdmin = roles.some((role) => role.title === common.ADMIN_ROLE)
+				const isAdmin =
+					roles && Array.isArray(roles) ? roles.some((role) => role.title === common.ADMIN_ROLE) : false
 				bodyData.allow_filtering = isAdmin ? bodyData.allow_filtering : false
 			}
 
@@ -58,7 +60,7 @@ module.exports = class EntityHelper {
 	 * @returns {JSON} - Updated Entity Type.
 	 */
 
-	static async update(bodyData, id, loggedInUserId, orgId, tenantCode, roles) {
+	static async update(bodyData, id, loggedInUserId, orgCode, tenantCode, roles) {
 		bodyData.updated_by = loggedInUserId
 		if (bodyData.value) {
 			bodyData.value = bodyData.value.toLowerCase()
@@ -66,12 +68,13 @@ module.exports = class EntityHelper {
 
 		try {
 			if (bodyData.allow_filtering) {
-				const isAdmin = roles.some((role) => role.title === common.ADMIN_ROLE)
+				const isAdmin =
+					roles && Array.isArray(roles) ? roles.some((role) => role.title === common.ADMIN_ROLE) : false
 				bodyData.allow_filtering = isAdmin ? bodyData.allow_filtering : false
 			}
 			const [updateCount, updatedEntityType] = await entityTypeQueries.updateOneEntityType(
 				id,
-				orgId,
+				orgCode,
 				tenantCode,
 				bodyData,
 				{
@@ -105,19 +108,23 @@ module.exports = class EntityHelper {
 		}
 	}
 
-	static async readAllSystemEntityTypes(orgId, tenantCode) {
+	static async readAllSystemEntityTypes(orgCode, tenantCode) {
 		try {
 			const attributes = ['value', 'label', 'id']
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
+			const defaultOrgCode = await getDefaultOrgCode()
+			if (!defaultOrgCode)
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			const entities = await entityTypeQueries.findAllEntityTypes([orgId, defaultOrgId], tenantCode, attributes)
+			const entities = await entityTypeQueries.findAllEntityTypes(
+				[orgCode, defaultOrgCode],
+				tenantCode,
+				attributes
+			)
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -136,12 +143,12 @@ module.exports = class EntityHelper {
 		}
 	}
 
-	static async readUserEntityTypes(body, userId, orgId, tenantCode) {
+	static async readUserEntityTypes(body, userId, orgCode, tenantCode) {
 		try {
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
+			const defaultOrgCode = await getDefaultOrgCode()
+			if (!defaultOrgCode)
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -149,14 +156,14 @@ module.exports = class EntityHelper {
 			const filter = {
 				value: body.value,
 				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [orgId, defaultOrgId],
+				organization_code: {
+					[Op.in]: [orgCode, defaultOrgCode],
 				},
 				tenant_code: tenantCode,
 			}
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
 
-			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, orgCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
@@ -175,9 +182,9 @@ module.exports = class EntityHelper {
 	 * @returns {JSON} - Entity deleted response.
 	 */
 
-	static async delete(id, organizationId, tenantCode) {
+	static async delete(id, organizationCode, tenantCode) {
 		try {
-			const deleteCount = await entityTypeQueries.deleteOneEntityType(id, organizationId, tenantCode)
+			const deleteCount = await entityTypeQueries.deleteOneEntityType(id, organizationCode, tenantCode)
 			if (deleteCount === 0) {
 				return responses.failureResponse({
 					message: 'ENTITY_TYPE_NOT_FOUND',
@@ -229,11 +236,10 @@ module.exports = class EntityHelper {
 				model_names: {
 					[Op.contains]: Array.isArray(modelName) ? modelName : [modelName],
 				},
-				tenant_code: tenantCode,
 			}
 			if (entityType) filter.value = entityType
 			// get entityTypes with entities data
-			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
+			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
 			entityTypesWithEntities = JSON.parse(JSON.stringify(entityTypesWithEntities))
 			if (!entityTypesWithEntities.length > 0) {
 				return responseData

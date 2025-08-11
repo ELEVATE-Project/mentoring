@@ -231,12 +231,14 @@ module.exports = class UserHelper {
 	}
 
 	static async #createOrUpdateOrg(orgData, tenantCode) {
+		// Use organization_id as organization_code for lookup since they're the same in user service data
 		let orgExtension = await organisationExtensionQueries.getById(orgData.id, tenantCode)
 		if (orgExtension) return orgExtension
 
 		const orgExtensionData = {
 			...common.getDefaultOrgPolicies(),
 			organization_id: orgData.id,
+			organization_code: orgData.id,
 			created_by: 1,
 			updated_by: 1,
 			tenant_code: tenantCode,

@@ -255,7 +255,7 @@ exports.getConnection = async (userId, friendId, tenantCode) => {
 	}
 }
 
-exports.getConnectionsByUserIds = async (userId, friendIds, projection) => {
+exports.getConnectionsByUserIds = async (userId, friendIds, tenantCode, projection) => {
 	try {
 		const defaultProjection = ['user_id', 'friend_id']
 
@@ -266,6 +266,7 @@ exports.getConnectionsByUserIds = async (userId, friendIds, projection) => {
 					[Op.in]: friendIds,
 				},
 				status: common.CONNECTIONS_STATUS.ACCEPTED,
+				tenant_code: tenantCode,
 			},
 			attributes: projection || defaultProjection,
 			raw: true,
@@ -339,7 +340,6 @@ exports.getConnectionsDetails = async (
             LEFT JOIN ${Connection.tableName} c 
             ON c.friend_id = mv.user_id AND c.user_id = :userId
             WHERE ${userFilterClause}
-            AND mv.tenant_code = :tenantCode
             AND c.tenant_code = :tenantCode
             ${orgFilter}
             ${filterClause}
@@ -375,7 +375,6 @@ exports.getConnectionsDetails = async (
 		    LEFT JOIN ${Connection.tableName} c 
 		    ON c.friend_id = mv.user_id AND c.user_id = :userId
 		    WHERE ${userFilterClause}
-		    AND mv.tenant_code = :tenantCode
 		    AND c.tenant_code = :tenantCode
 		    ${filterClause}
 		    ${rolesFilter}

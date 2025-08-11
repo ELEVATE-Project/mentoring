@@ -22,10 +22,12 @@ module.exports = class MenteesHelper {
 	static async pending(userId, isAMentor, tenantCode) {
 		try {
 			const sessions = []
-			const completedSessionsFeedback = await feedbackQueries.findAll({
-				user_id: userId,
-				tenant_code: tenantCode,
-			})
+			const completedSessionsFeedback = await feedbackQueries.findAll(
+				{
+					user_id: userId,
+				},
+				tenantCode
+			)
 			const completedSessionIds = completedSessionsFeedback.map((feedback) => feedback.session_id)
 
 			if (isAMentor) {
@@ -49,27 +51,42 @@ module.exports = class MenteesHelper {
 				tenantCode
 			)
 
-			const sessionIds = menteeSessionAttendances.map(
-				(menteeSessionAttendance) => menteeSessionAttendance.session_id
-			)
+			// Add null/array checks for menteeSessionAttendances
+			if (
+				!menteeSessionAttendances ||
+				!Array.isArray(menteeSessionAttendances) ||
+				menteeSessionAttendances.length === 0
+			) {
+				return sessions // Return empty sessions array if no attendances found
+			}
+
+			const sessionIds = menteeSessionAttendances
+				.map((menteeSessionAttendance) => menteeSessionAttendance?.session_id)
+				.filter(Boolean)
 
 			const sessionOptions = {
 				attributes: ['id', 'title', 'description', 'mentee_feedback_question_set'],
 			}
 
 			const menteeSessionDetails = await sessionQueries.findAll(
-				{ id: sessionIds, status: 'COMPLETED', tenant_code: tenantCode },
+				{ id: sessionIds, status: 'COMPLETED' },
+				tenantCode,
 				sessionOptions
 			)
 
-			sessions.push(...menteeSessionDetails)
+			// Add null safety for menteeSessionDetails
+			if (menteeSessionDetails && Array.isArray(menteeSessionDetails)) {
+				sessions.push(...menteeSessionDetails)
+			}
 
-			// Getting unique form codes
+			// Getting unique form codes with null safety
 			const formCodes = [
 				...new Set(
-					sessions.map(
-						(session) => session.mentee_feedback_question_set || session.mentor_feedback_question_set
-					)
+					(sessions || [])
+						.map(
+							(session) => session?.mentee_feedback_question_set || session?.mentor_feedback_question_set
+						)
+						.filter(Boolean)
 				),
 			]
 

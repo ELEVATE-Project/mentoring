@@ -26,11 +26,11 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async findAllEntityTypes(orgIds, tenantCode, attributes, filter = {}) {
+	static async findAllEntityTypes(orgCodes, tenantCode, attributes, filter = {}) {
 		try {
 			const entityData = await EntityType.findAll({
 				where: {
-					organization_id: orgIds,
+					organization_code: orgCodes,
 					tenant_code: tenantCode,
 					...filter,
 				},
@@ -50,13 +50,16 @@ module.exports = class UserEntityData {
 				raw: true,
 			})
 
-			const entityTypeIds = entityTypes.map((entityType) => entityType.id)
+			const entityTypeIds = entityTypes.map((entityType) => entityType.id).filter((id) => id != null)
 
-			const entities = await Entity.findAll({
-				where: { entity_type_id: entityTypeIds, status: 'ACTIVE', tenant_code: tenantCode },
-				raw: true,
-				//attributes: { exclude: ['entity_type_id'] },
-			})
+			let entities = []
+			if (entityTypeIds.length > 0) {
+				entities = await Entity.findAll({
+					where: { entity_type_id: entityTypeIds, status: 'ACTIVE', tenant_code: tenantCode },
+					raw: true,
+					//attributes: { exclude: ['entity_type_id'] },
+				})
+			}
 
 			const result = entityTypes.map((entityType) => {
 				const matchingEntities = entities.filter((entity) => entity.entity_type_id === entityType.id)
@@ -99,12 +102,12 @@ module.exports = class UserEntityData {
 		}
 	} */
 
-	static async updateOneEntityType(id, orgId, tenantCode, update, options = {}) {
+	static async updateOneEntityType(id, orgCode, tenantCode, update, options = {}) {
 		try {
 			return await EntityType.update(update, {
 				where: {
 					id: id,
-					organization_id: orgId,
+					organization_code: orgCode,
 					tenant_code: tenantCode,
 				},
 				...options,
@@ -114,12 +117,12 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async deleteOneEntityType(id, organizationId, tenantCode) {
+	static async deleteOneEntityType(id, organizationCode, tenantCode) {
 		try {
 			return await EntityType.destroy({
 				where: {
 					id: id,
-					organization_id: organizationId,
+					organization_code: organizationCode,
 					tenant_code: tenantCode,
 				},
 				individualHooks: true,

@@ -478,17 +478,17 @@ module.exports = class MentorExtensionQueries {
 		}
 	}
 
-	static async findOneFromView(userId) {
+	static async findOneFromView(userId, tenantCode) {
 		try {
 			let query = `
 				SELECT *
 				FROM ${common.materializedViewsPrefix + MentorExtension.tableName}
-				WHERE user_id = :userId
+				WHERE user_id = :userId AND tenant_code = :tenantCode
 				LIMIT 1
 			`
 
 			const user = await Sequelize.query(query, {
-				replacements: { userId },
+				replacements: { userId, tenantCode },
 				type: QueryTypes.SELECT,
 			})
 

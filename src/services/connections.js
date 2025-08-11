@@ -251,7 +251,7 @@ module.exports = class ConnectionHelper {
 			})
 
 			const userIds = connectionsWithDetails.map((item) => item.friend_id)
-			const userDetails = await userRequests.getUserDetailedList(userIds)
+			const userDetails = await userRequests.getUserDetailedList(userIds, tenantCode)
 			const userDetailsMap = new Map(
 				userDetails.result.map((userDetail) => [String(userDetail.user_id), userDetail])
 			)
@@ -459,7 +459,7 @@ module.exports = class ConnectionHelper {
 				)
 			}
 			const userIds = extensionDetails.data.map((item) => item.user_id)
-			const userDetails = await userRequests.getUserDetailedList(userIds)
+			const userDetails = await userRequests.getUserDetailedList(userIds, tenantCode)
 			const userDetailsMap = new Map(
 				userDetails.result.map((userDetail) => [String(userDetail.user_id), userDetail])
 			)

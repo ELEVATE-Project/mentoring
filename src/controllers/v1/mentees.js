@@ -98,6 +98,7 @@ module.exports = class Mentees {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
+			const organizationId = req.decodedToken.organization_id
 			const userId = req.decodedToken.id
 
 			const homeFeed = await menteesService.homeFeed(

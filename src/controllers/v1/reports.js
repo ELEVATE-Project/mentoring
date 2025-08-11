@@ -142,9 +142,16 @@ module.exports = class Reports {
 	async create(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const createReport = await reportService.createReport(req.body, userId, organizationCode, tenantCode)
+			const createReport = await reportService.createReport(
+				req.body,
+				userId,
+				organizationId,
+				organizationCode,
+				tenantCode
+			)
 			return createReport
 		} catch (error) {
 			return error
@@ -165,12 +172,14 @@ module.exports = class Reports {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 			const updatedReport = await reportService.updateReport(
 				req.query.id,
 				req.body,
 				userId,
+				organizationId,
 				organizationCode,
 				tenantCode
 			)
