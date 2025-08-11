@@ -262,6 +262,7 @@ const deleteMaterializedView = async (viewName) => {
 
 const renameMaterializedView = async (temporaryMaterializedViewName, tableName) => {
 	const t = await sequelize.transaction()
+	let committed = false
 	try {
 		let randomViewName = `${common.materializedViewsPrefix}${tableName}_${generateRandomCode(8)}`
 
@@ -275,11 +276,19 @@ const renameMaterializedView = async (temporaryMaterializedViewName, tableName) 
 		else randomViewName = null
 		await sequelize.query(renameNewViewQuery, { transaction: t })
 		await t.commit()
+		committed = true
 
 		return randomViewName
 	} catch (error) {
 		await t.rollback()
 		console.error('Error executing transaction:', error)
+		throw error
+	} finally {
+		if (!committed) {
+			await t.rollback()
+			console.log('Transaction rolled back due to error.')
+		}
+		await t.cleanup()
 	}
 }
 
