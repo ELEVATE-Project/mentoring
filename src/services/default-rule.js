@@ -110,10 +110,11 @@ module.exports = class DefaultRuleHelper {
 	 * @param {String} orgId - Org Id of the user.
 	 * @returns {Promise<JSON>} - Created default rule response.
 	 */
-	static async create(bodyData, userId, orgId) {
+	static async create(bodyData, userId, orgId, tenantCode) {
 		bodyData.created_by = userId
 		bodyData.updated_by = userId
 		bodyData.organization_id = orgId
+		bodyData.tenant_code = tenantCode
 		bodyData.target_field = bodyData.target_field.toLowerCase()
 		bodyData.requester_field = bodyData.requester_field.toLowerCase()
 
@@ -131,7 +132,7 @@ module.exports = class DefaultRuleHelper {
 				})
 			}
 
-			const defaultRule = await defaultRuleQueries.create(bodyData)
+			const defaultRule = await defaultRuleQueries.create(bodyData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'DEFAULT_RULE_CREATED_SUCCESSFULLY',
@@ -159,9 +160,10 @@ module.exports = class DefaultRuleHelper {
 	 * @param {String} orgId - Org Id of the user.
 	 * @returns {Promise<JSON>} - Updated default rule response.
 	 */
-	static async update(bodyData, ruleId, userId, orgId) {
+	static async update(bodyData, ruleId, userId, orgId, tenantCode) {
 		bodyData.updated_by = userId
 		bodyData.organization_id = orgId
+		bodyData.tenant_code = tenantCode
 		bodyData.target_field = bodyData.target_field.toLowerCase()
 		bodyData.requester_field = bodyData.requester_field.toLowerCase()
 
@@ -180,8 +182,9 @@ module.exports = class DefaultRuleHelper {
 			}
 
 			const [updateCount, updatedDefaultRule] = await defaultRuleQueries.updateOne(
-				{ id: ruleId, organization_id: orgId },
+				{ id: ruleId, organization_id: orgId, tenant_code: tenantCode },
 				bodyData,
+				tenantCode,
 				{
 					returning: true,
 					raw: true,
@@ -220,9 +223,12 @@ module.exports = class DefaultRuleHelper {
 	 * @param {String} orgId - Org Id of the user.
 	 * @returns {Promise<JSON>} - Found default rules response.
 	 */
-	static async readAll(orgId) {
+	static async readAll(orgId, tenantCode) {
 		try {
-			const defaultRules = await defaultRuleQueries.findAndCountAll({ organization_id: orgId })
+			const defaultRules = await defaultRuleQueries.findAndCountAll(
+				{ organization_id: orgId, tenant_code: tenantCode },
+				tenantCode
+			)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -245,9 +251,12 @@ module.exports = class DefaultRuleHelper {
 	 * @param {String} orgId - Org Id of the user.
 	 * @returns {Promise<JSON>} - Found default rule response.
 	 */
-	static async readOne(ruleId, orgId) {
+	static async readOne(ruleId, orgId, tenantCode) {
 		try {
-			const defaultRule = await defaultRuleQueries.findOne({ id: ruleId, organization_id: orgId })
+			const defaultRule = await defaultRuleQueries.findOne(
+				{ id: ruleId, organization_id: orgId, tenant_code: tenantCode },
+				tenantCode
+			)
 			if (!defaultRule) {
 				return responses.failureResponse({
 					message: 'DEFAULT_RULE_NOT_FOUND',
@@ -273,9 +282,12 @@ module.exports = class DefaultRuleHelper {
 	 * @param {String} orgId - Org Id of the user.
 	 * @returns {Promise<JSON>} - Default rule deleted response.
 	 */
-	static async delete(ruleId, orgId) {
+	static async delete(ruleId, orgId, tenantCode) {
 		try {
-			const deleteCount = await defaultRuleQueries.deleteOne({ id: ruleId, organization_id: orgId })
+			const deleteCount = await defaultRuleQueries.deleteOne(
+				{ id: ruleId, organization_id: orgId, tenant_code: tenantCode },
+				tenantCode
+			)
 			if (deleteCount === 0) {
 				return responses.failureResponse({
 					message: 'DEFAULT_RULE_NOT_FOUND',

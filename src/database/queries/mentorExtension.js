@@ -43,7 +43,7 @@ module.exports = class MentorExtensionQueries {
 		}
 	}
 
-	static async updateMentorExtension(userId, data, options = {}, customFilter = {}, unscoped = false) {
+	static async updateMentorExtension(userId, data, options = {}, customFilter = {}, unscoped = false, tenantCode) {
 		try {
 			data = { ...data, is_mentor: true }
 
@@ -51,7 +51,12 @@ module.exports = class MentorExtensionQueries {
 				delete data['user_id']
 			}
 
-			const whereClause = _.isEmpty(customFilter) ? { user_id: userId } : customFilter
+			let whereClause
+			if (_.isEmpty(customFilter)) {
+				whereClause = { user_id: userId, tenant_code: tenantCode }
+			} else {
+				whereClause = customFilter
+			}
 			// If `meta` is included in `data`, use `jsonb_set` to merge changes safely
 			if (data.meta) {
 				for (const [key, value] of Object.entries(data.meta)) {
@@ -83,10 +88,10 @@ module.exports = class MentorExtensionQueries {
 		}
 	}
 
-	static async getMentorExtension(userId, attributes = [], unScoped = false) {
+	static async getMentorExtension(userId, attributes = [], unScoped = false, tenantCode) {
 		try {
 			const queryOptions = {
-				where: { user_id: userId },
+				where: { user_id: userId, tenant_code: tenantCode },
 				raw: true,
 			}
 
@@ -110,9 +115,9 @@ module.exports = class MentorExtensionQueries {
 		}
 	}
 
-	static async deleteMentorExtension(userId, force = false) {
+	static async deleteMentorExtension(userId, tenantCode, force = false) {
 		try {
-			const options = { where: { user_id: userId } }
+			const options = { where: { user_id: userId, tenant_code: tenantCode } }
 
 			if (force) {
 				options.force = true
@@ -411,9 +416,9 @@ module.exports = class MentorExtensionQueries {
 			type: Sequelize.QueryTypes.UPDATE,
 		})
 	}
-	static async getMentorExtensions(userIds, attributes = []) {
+	static async getMentorExtensions(userIds, attributes = [], tenantCode) {
 		try {
-			const queryOptions = { where: { user_id: { [Op.in]: userIds } }, raw: true }
+			const queryOptions = { where: { user_id: { [Op.in]: userIds }, tenant_code: tenantCode }, raw: true }
 			if (attributes.length > 0) {
 				queryOptions.attributes = attributes
 			}

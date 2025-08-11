@@ -10,11 +10,12 @@ module.exports = class questionsHelper {
 	 * @returns {JSON} - Create questions
 	 */
 
-	static async create(bodyData, decodedToken) {
+	static async create(bodyData, decodedToken, tenantCode) {
 		try {
 			bodyData['created_by'] = decodedToken.id
 			bodyData['updated_by'] = decodedToken.id
-			let question = await questionQueries.createQuestion(bodyData)
+			bodyData['tenant_code'] = tenantCode
+			let question = await questionQueries.createQuestion(bodyData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'QUESTION_CREATED_SUCCESSFULLY',
@@ -35,10 +36,10 @@ module.exports = class questionsHelper {
 	 * @returns {JSON} - Update questions.
 	 */
 
-	static async update(questionId, bodyData, decodedToken) {
+	static async update(questionId, bodyData, decodedToken, tenantCode) {
 		try {
-			const filter = { id: questionId, created_by: decodedToken.id }
-			const result = await questionQueries.updateOneQuestion(filter, bodyData)
+			const filter = { id: questionId, created_by: decodedToken.id, tenant_code: tenantCode }
+			const result = await questionQueries.updateOneQuestion(filter, bodyData, tenantCode)
 
 			if (result === 'QUESTION_NOT_FOUND') {
 				return responses.failureResponse({
@@ -65,10 +66,10 @@ module.exports = class questionsHelper {
 	 * @returns {JSON} - Read question.
 	 */
 
-	static async read(questionId) {
+	static async read(questionId, tenantCode) {
 		try {
-			const filter = { id: questionId }
-			const question = await questionQueries.findOneQuestion(filter)
+			const filter = { id: questionId, tenant_code: tenantCode }
+			const question = await questionQueries.findOneQuestion(filter, tenantCode)
 			if (!question) {
 				return responses.failureResponse({
 					message: 'QUESTION_NOT_FOUND',

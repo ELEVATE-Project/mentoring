@@ -37,12 +37,13 @@ module.exports = (sequelize, DataTypes) => {
 
 	Module.addHook('beforeDestroy', async (instance, options) => {
 		try {
-			// Soft-delete associated Permissions records with matching module
+			// Soft-delete associated Permissions records with matching module AND tenant_code
 			await sequelize.models.Permission.update(
 				{ deleted_at: new Date() }, // Set the deleted_at column to the current timestamp
 				{
 					where: {
 						module: instance.code, // instance.code contains the code of the Modules record being deleted
+						tenant_code: instance.tenant_code, // CRITICAL: Must include tenant isolation
 					},
 				}
 			)
