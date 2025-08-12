@@ -42,7 +42,12 @@ module.exports = class requestSessionsHelper {
 
 	static async create(bodyData, userId, orgId, skipValidation, tenantCode) {
 		try {
-			const mentorUserExists = await mentorQueries.getMentorExtension(bodyData.requestee_id)
+			const mentorUserExists = await mentorQueries.getMentorExtension(
+				bodyData.requestee_id,
+				[],
+				false,
+				tenantCode
+			)
 			if (!mentorUserExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -243,9 +248,13 @@ module.exports = class requestSessionsHelper {
 				s.requestor_id === userId ? s.requestee_id : s.requestor_id
 			)
 
-			let oppositeUserDetails = await userExtensionQueries.getUsersByUserIds(oppositeUserIds, {
-				attributes: ['user_id', 'image', 'name', 'experience', 'designation', 'organization_id'],
-			})
+			let oppositeUserDetails = await userExtensionQueries.getUsersByUserIds(
+				oppositeUserIds,
+				{
+					attributes: ['user_id', 'image', 'name', 'experience', 'designation', 'organization_id'],
+				},
+				tenantCode
+			)
 
 			const uniqueOrgIds = [...new Set(oppositeUserDetails.map((u) => u.organization_id))]
 			const modelName = await userExtensionQueries.getModelName()
@@ -260,7 +269,7 @@ module.exports = class requestSessionsHelper {
 			const userDetailsMap = Object.fromEntries(oppositeUserDetails.map((u) => [u.user_id, u]))
 			const userIds = oppositeUserIds.map((id) => String(id))
 
-			const userDetails = await userExtensionQueries.getUsersByUserIds(userIds, {}, true)
+			const userDetails = await userExtensionQueries.getUsersByUserIds(userIds, {}, tenantCode, true)
 
 			await Promise.all(
 				userDetails.map(async (u) => {
@@ -384,7 +393,12 @@ module.exports = class requestSessionsHelper {
 			}
 
 			// Check if mentee user exists
-			const userExists = await userExtensionQueries.getMenteeExtension(getRequestSessionDetails.requestor_id)
+			const userExists = await userExtensionQueries.getMenteeExtension(
+				getRequestSessionDetails.requestor_id,
+				[],
+				false,
+				tenantCode
+			)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -432,6 +446,7 @@ module.exports = class requestSessionsHelper {
 				const userDetails = await userExtensionQueries.getUsersByUserIds(
 					[mentorUserId, getRequestSessionDetails.requestor_id],
 					{ attributes: ['settings', 'user_id'] },
+					tenantCode,
 					true
 				)
 
@@ -447,7 +462,8 @@ module.exports = class requestSessionsHelper {
 					chatRoom = await communicationHelper.createChatRoom(
 						mentorUserId,
 						getRequestSessionDetails.requestor_id,
-						connectionRequest?.meta?.message
+						connectionRequest?.meta?.message,
+						tenantCode
 					)
 				}
 
@@ -577,20 +593,25 @@ module.exports = class requestSessionsHelper {
 
 			const [userExtensionsModelName, userDetails] = await Promise.all([
 				userExtensionQueries.getModelName(),
-				userExtensionQueries.getMenteeExtension(targetUserId, [
-					'name',
-					'user_id',
-					'mentee_visibility',
-					'organization_id',
-					'designation',
-					'area_of_expertise',
-					'education_qualification',
-					'custom_entity_text',
-					'meta',
-					'is_mentor',
-					'experience',
-					'image',
-				]),
+				userExtensionQueries.getMenteeExtension(
+					targetUserId,
+					[
+						'name',
+						'user_id',
+						'mentee_visibility',
+						'organization_id',
+						'designation',
+						'area_of_expertise',
+						'education_qualification',
+						'custom_entity_text',
+						'meta',
+						'is_mentor',
+						'experience',
+						'image',
+					],
+					false,
+					tenantCode
+				),
 			])
 
 			if (requestSessions?.status === common.CONNECTIONS_STATUS.BLOCKED || !userDetails) {
@@ -730,9 +751,13 @@ function createMentorAvailabilityResponse(data) {
 }
 
 async function emailForAcceptAndReject(templateCode, orgId, requestor_id, mentorUserId, rejectReason = '', tenantCode) {
-	const menteeDetails = await userExtensionQueries.getUsersByUserIds(requestor_id, {
-		attributes: ['name', 'email'],
-	})
+	const menteeDetails = await userExtensionQueries.getUsersByUserIds(
+		requestor_id,
+		{
+			attributes: ['name', 'email'],
+		},
+		tenantCode
+	)
 
 	const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorUserId, ['name'], true)
 

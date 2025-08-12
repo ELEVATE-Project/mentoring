@@ -10,11 +10,12 @@ module.exports = class questionsHelper {
 	 * @returns {JSON} - Create questions
 	 */
 
-	static async create(bodyData, decodedToken, tenantCode) {
+	static async create(bodyData, userId, organizationCode, tenantCode) {
 		try {
-			bodyData['created_by'] = decodedToken.id
-			bodyData['updated_by'] = decodedToken.id
+			bodyData['created_by'] = userId
+			bodyData['updated_by'] = userId
 			bodyData['tenant_code'] = tenantCode
+			bodyData['organization_code'] = organizationCode
 			let question = await questionQueries.createQuestion(bodyData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -36,9 +37,11 @@ module.exports = class questionsHelper {
 	 * @returns {JSON} - Update questions.
 	 */
 
-	static async update(questionId, bodyData, decodedToken, tenantCode) {
+	static async update(questionId, bodyData, userId, organizationCode, tenantCode) {
 		try {
-			const filter = { id: questionId, created_by: decodedToken.id, tenant_code: tenantCode }
+			bodyData['updated_by'] = userId
+			bodyData['organization_code'] = organizationCode
+			const filter = { id: questionId, created_by: userId, tenant_code: tenantCode }
 			const result = await questionQueries.updateOneQuestion(filter, bodyData, tenantCode)
 
 			if (result === 'QUESTION_NOT_FOUND') {
@@ -48,9 +51,13 @@ module.exports = class questionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+			// Fetch the updated question data
+			const updatedQuestion = await this.read(questionId, tenantCode)
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: 'QUESTION_UPDATED_SUCCESSFULLY',
+				result: updatedQuestion.result,
 			})
 		} catch (error) {
 			console.log(error)
@@ -69,7 +76,7 @@ module.exports = class questionsHelper {
 	static async read(questionId, tenantCode) {
 		try {
 			const filter = { id: questionId, tenant_code: tenantCode }
-			const question = await questionQueries.findOneQuestion(filter, tenantCode)
+			const question = await questionQueries.findOneQuestion(filter)
 			if (!question) {
 				return responses.failureResponse({
 					message: 'QUESTION_NOT_FOUND',

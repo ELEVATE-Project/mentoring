@@ -13,9 +13,9 @@ module.exports = class questionsSetHelper {
 	 * @returns {JSON} - Create question set
 	 */
 
-	static async create(bodyData, decodedToken, tenantCode) {
+	static async create(bodyData, decodedToken, tenantCode, organizationCode) {
 		try {
-			let questions = await questionQueries.find({ id: bodyData.questions, tenant_code: tenantCode }, tenantCode)
+			let questions = await questionQueries.find({ id: bodyData.questions, tenant_code: tenantCode })
 			if (questions.length != bodyData.questions.length) {
 				return responses.failureResponse({
 					message: 'QUESTION_NOT_FOUND',
@@ -25,8 +25,9 @@ module.exports = class questionsSetHelper {
 			}
 			const questionSetData = {
 				code: bodyData.code,
+				tenant_code: tenantCode,
 			}
-			let questionSet = await questionSetQueries.findOneQuestionSet(questionSetData, tenantCode)
+			let questionSet = await questionSetQueries.findOneQuestionSet(questionSetData)
 			if (questionSet) {
 				return responses.failureResponse({
 					message: 'QUESTIONS_SET_ALREADY_EXISTS',
@@ -38,7 +39,8 @@ module.exports = class questionsSetHelper {
 			questionSetData['created_by'] = decodedToken.id
 			questionSetData['updated_by'] = decodedToken.id
 			questionSetData['tenant_code'] = tenantCode
-			questionSet = await questionSetQueries.createQuestionSet(questionSetData, tenantCode)
+			questionSetData['organization_code'] = organizationCode
+			questionSet = await questionSetQueries.createQuestionSet(questionSetData)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -63,10 +65,7 @@ module.exports = class questionsSetHelper {
 	static async update(questionSetId, bodyData, decodedToken, tenantCode) {
 		try {
 			if (bodyData.questions) {
-				let questionInfo = await questionQueries.find(
-					{ id: bodyData.questions, tenant_code: tenantCode },
-					tenantCode
-				)
+				let questionInfo = await questionQueries.find({ id: bodyData.questions, tenant_code: tenantCode })
 				if (questionInfo.length != bodyData.questions.length) {
 					return responses.failureResponse({
 						message: 'QUESTION_NOT_FOUND',
@@ -121,7 +120,7 @@ module.exports = class questionsSetHelper {
 			if (questionSetCode) {
 				filter.code = questionSetCode
 			}
-			const questionSet = await questionSetQueries.findOneQuestionSet(filter, tenantCode)
+			const questionSet = await questionSetQueries.findOneQuestionSet(filter)
 			if (!questionSet) {
 				return responses.failureResponse({
 					message: 'QUESTION_NOT_FOUND',

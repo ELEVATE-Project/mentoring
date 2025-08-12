@@ -36,7 +36,14 @@ module.exports = class MentorExtensionQueries {
 	static async createMentorExtension(data, tenantCode) {
 		try {
 			data = { ...data, is_mentor: true, tenant_code: tenantCode }
-			return await MentorExtension.create(data, { returning: true })
+			const [mentorExtension, created] = await MentorExtension.findOrCreate({
+				where: {
+					user_id: data.user_id,
+					tenant_code: tenantCode,
+				},
+				defaults: data,
+			})
+			return mentorExtension
 		} catch (error) {
 			console.log(error)
 			throw error
@@ -91,15 +98,16 @@ module.exports = class MentorExtensionQueries {
 	static async getMentorExtension(userId, attributes = [], unScoped = false, tenantCode) {
 		try {
 			const queryOptions = {
-				where: { user_id: userId, tenant_code: tenantCode },
+				where: {
+					user_id: userId,
+					tenant_code: tenantCode,
+				},
 				raw: true,
 			}
-
 			// If attributes are passed update query
 			if (attributes.length > 0) {
 				queryOptions.attributes = attributes
 			}
-
 			let mentor
 			if (unScoped) {
 				mentor = await MentorExtension.unscoped().findOne(queryOptions)
@@ -238,7 +246,6 @@ module.exports = class MentorExtensionQueries {
 
 			let saasFilterClause = saasFilter !== '' ? saasFilter : ''
 			const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
-
 			if (excludeUserIds && filter.query.length === 0) {
 				saasFilterClause = saasFilterClause.replace('AND ', '') // Remove "AND" if excludeUserIds is true and filter is empty
 			}

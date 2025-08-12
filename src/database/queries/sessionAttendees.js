@@ -164,24 +164,19 @@ exports.removeUserFromAllSessions = async (userId, tenantCode) => {
 }
 exports.countEnrolledSessions = async (mentee_id, tenantCode) => {
 	try {
-		let sessionEnrollments = await SessionEnrollment.findAll({
-			where: {
-				mentee_id: mentee_id,
-				tenant_code: tenantCode,
+		const whereClause = {
+			mentee_id: mentee_id,
+			joined_at: {
+				[Op.not]: null,
 			},
-		})
-		const sessionIds = sessionEnrollments.map((enrollment) => enrollment.session_id)
-		if (sessionIds.length <= 0) {
-			return 0
 		}
+
+		if (tenantCode) {
+			whereClause.tenant_code = tenantCode
+		}
+
 		return await SessionAttendee.count({
-			where: {
-				joined_at: {
-					[Op.not]: null,
-				},
-				session_id: sessionIds,
-				tenant_code: tenantCode,
-			},
+			where: whereClause,
 		})
 	} catch (error) {
 		return error

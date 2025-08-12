@@ -29,7 +29,12 @@ module.exports = class NotificationTemplate {
 
 	async template(req) {
 		try {
-			if (!utilsHelper.validateRoleAccess(req.decodedToken.roles, [common.ADMIN_ROLE, common.ORG_ADMIN_ROLE])) {
+			if (
+				!utilsHelper.validateRoleAccess(req.decodedToken.organizations[0].roles, [
+					common.ADMIN_ROLE,
+					common.ORG_ADMIN_ROLE,
+				])
+			) {
 				throw responses.failureResponse({
 					message: 'USER_IS_NOT_A_ADMIN',
 					statusCode: httpStatusCode.bad_request,

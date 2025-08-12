@@ -130,6 +130,14 @@ module.exports = async function (req, res, next) {
 				? req.decodedToken?.organization_code?.toString()
 				: req.decodedToken?.organization_code
 
+		// Convert organization IDs in organizations array to strings
+		if (req.decodedToken?.organizations?.length > 0) {
+			req.decodedToken.organizations = req.decodedToken.organizations.map((org) => ({
+				...org,
+				id: typeof org.id === 'number' ? org.id.toString() : org.id,
+			}))
+		}
+
 		if (!req.decodedToken[organizationKey]) {
 			throw createUnauthorizedResponse()
 		}
@@ -153,7 +161,7 @@ module.exports = async function (req, res, next) {
 				})
 			}
 			req.decodedToken.organization_id = organizationId.toString()
-			req.decodedToken.roles.push({ title: common.ADMIN_ROLE })
+			req.decodedToken.organizations[0].roles.push({ title: common.ADMIN_ROLE })
 		}
 
 		if (!skipFurtherChecks) {
@@ -164,22 +172,29 @@ module.exports = async function (req, res, next) {
 			const roleValidation = common.roleValidationPaths.some((path) => req.path.includes(path))
 
 			if (roleValidation) {
-				if (process.env.AUTH_METHOD === common.AUTH_METHOD.NATIVE)
-					await nativeRoleValidation(decodedToken, authHeader)
-				else if (process.env.AUTH_METHOD === common.AUTH_METHOD.KEYCLOAK_PUBLIC_KEY)
+				if (process.env.AUTH_METHOD === common.AUTH_METHOD.NATIVE) {
+					// Extract clean token for user service call
+					let cleanToken = authHeader
+					if (process.env.IS_AUTH_TOKEN_BEARER === 'true') {
+						const [authType, extractedToken] = authHeader.split(' ')
+						if (authType.toLowerCase() === 'bearer') {
+							cleanToken = extractedToken.trim()
+						}
+					}
+					await nativeRoleValidation(decodedToken, cleanToken)
+				} else if (process.env.AUTH_METHOD === common.AUTH_METHOD.KEYCLOAK_PUBLIC_KEY)
 					await dbBasedRoleValidation(decodedToken)
 			}
 
 			// Extract roles from JWT structure - roles are nested in organizations
 			let userRoles = []
-			if (req.decodedToken.roles && Array.isArray(req.decodedToken.roles)) {
-				userRoles = req.decodedToken.roles.map((role) => role.title)
+			if (req.decodedToken.organizations[0].roles && Array.isArray(req.decodedToken.organizations[0].roles)) {
+				userRoles = req.decodedToken.organizations[0].roles.map((role) => role.title)
 			} else if (req.decodedToken.organizations && req.decodedToken.organizations[0]?.roles) {
 				userRoles = req.decodedToken.organizations[0].roles.map((role) => role.title)
 			}
 
 			const tenantCode = req.decodedToken?.tenant_code || 'default'
-			console.log('DEBUG: tenantCode being used:', tenantCode, 'from token:', req.decodedToken?.tenant_code)
 			const isPermissionValid = await checkPermissions(userRoles, req.path, req.method, tenantCode)
 
 			if (!isPermissionValid) throw createUnauthorizedResponse('PERMISSION_DENIED')

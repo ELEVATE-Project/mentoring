@@ -165,22 +165,29 @@ module.exports = class MenteeExtensionQueries {
 	static async getMenteeExtension(userId, attributes = [], unScoped = false, tenantCode) {
 		try {
 			const queryOptions = {
-				where: { user_id: userId, tenant_code: tenantCode },
+				where: {
+					user_id: userId,
+					tenant_code: tenantCode,
+				},
 				raw: true,
 			}
+
 			// If attributes are passed update query
 			if (attributes.length > 0) {
 				queryOptions.attributes = attributes
 			}
+
 			let mentee
 			if (unScoped) {
 				mentee = await MenteeExtension.unscoped().findOne(queryOptions)
 			} else {
 				mentee = await MenteeExtension.findOne(queryOptions)
 			}
+
 			if (mentee && mentee.email) {
 				mentee.email = await emailEncryption.decrypt(mentee.email.toLowerCase())
 			}
+
 			return mentee
 		} catch (error) {
 			throw error

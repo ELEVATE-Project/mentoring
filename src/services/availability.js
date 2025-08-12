@@ -469,6 +469,7 @@ module.exports = class availabilityHelper {
 				{
 					attributes: ['user_id', 'name', 'email'],
 				},
+				tenantCode,
 				true
 			)
 

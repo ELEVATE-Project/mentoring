@@ -127,12 +127,9 @@ module.exports = class MenteesHelper {
 
 	static async forms(sessionId, roles, tenantCode) {
 		try {
-			let sessioninfo = await sessionQueries.findOne(
-				{ id: sessionId, tenant_code: tenantCode },
-				{
-					attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
-				}
-			)
+			let sessioninfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+				attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
+			})
 
 			if (!sessioninfo) {
 				return responses.failureResponse({
@@ -184,12 +181,9 @@ module.exports = class MenteesHelper {
 		}
 		try {
 			//get session details
-			let sessionInfo = await sessionQueries.findOne(
-				{ id: sessionId, tenant_code: tenantCode },
-				{
-					attributes: ['is_feedback_skipped', 'mentor_id'],
-				}
-			)
+			let sessionInfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+				attributes: ['is_feedback_skipped', 'mentor_id'],
+			})
 
 			if (!sessionInfo) {
 				return responses.failureResponse({
@@ -271,8 +265,8 @@ module.exports = class MenteesHelper {
 					{
 						session_id: sessionId,
 						mentee_id: userId,
-						tenant_code: tenantCode,
 					},
+					tenantCode,
 					{
 						attributes: ['is_feedback_skipped'],
 					}

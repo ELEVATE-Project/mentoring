@@ -103,12 +103,12 @@ module.exports = class Mentees {
 
 			const homeFeed = await menteesService.homeFeed(
 				userId,
-				isAMentor(req.decodedToken.roles),
+				isAMentor(req.decodedToken.organizations[0].roles),
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
 				req.query,
-				req.decodedToken.roles,
+				req.decodedToken.organizations[0].roles,
 				organizationCode,
 				req.query.start_date,
 				req.query.end_date,
@@ -155,7 +155,7 @@ module.exports = class Mentees {
 				req.searchText,
 				req.query,
 				userId,
-				isAMentor(req.decodedToken.roles),
+				isAMentor(req.decodedToken.organizations[0].roles),
 				organizationCode,
 				tenantCode
 			)

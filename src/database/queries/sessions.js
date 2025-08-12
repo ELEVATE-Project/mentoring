@@ -28,25 +28,6 @@ exports.create = async (data, tenantCode) => {
 	try {
 		data.tenant_code = tenantCode
 		const session = await Session.create(data)
-		// create session ownership entry for the session creator
-		await sessionOwnership.create(
-			{
-				user_id: session.created_by,
-				session_id: session.id,
-				type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
-			},
-			tenantCode
-		)
-
-		// create session ownership entry for the session mentor
-		await sessionOwnership.create(
-			{
-				user_id: session.mentor_id,
-				session_id: session.id,
-				type: common.SESSION_OWNERSHIP_TYPE.MENTOR,
-			},
-			tenantCode
-		)
 		return session
 	} catch (error) {
 		return error
@@ -352,25 +333,20 @@ exports.updateEnrollmentCount = async (sessionId, increment = true, tenantCode) 
 }
 exports.countHostedSessions = async (id, tenantCode) => {
 	try {
-		const filter = {
-			user_id: id,
-			type: common.SESSION_OWNERSHIP_TYPE.MENTOR,
+		const whereClause = {
+			mentor_id: id,
+			status: 'COMPLETED',
+			started_at: {
+				[Op.not]: null,
+			},
 		}
 
-		const option = {
-			attributes: ['session_id'],
+		if (tenantCode) {
+			whereClause.tenant_code = tenantCode
 		}
-		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
 
 		const count = await Session.count({
-			where: {
-				id: { [Op.in]: sessionIds },
-				status: 'COMPLETED',
-				started_at: {
-					[Op.not]: null,
-				},
-				tenant_code: tenantCode,
-			},
+			where: whereClause,
 		})
 		return count
 	} catch (error) {

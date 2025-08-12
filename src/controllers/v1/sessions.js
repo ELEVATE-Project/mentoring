@@ -39,6 +39,7 @@ module.exports = class Sessions {
 					req.body,
 					req.decodedToken.id,
 					req.method,
+					req.decodedToken.organizations[0].id,
 					req.decodedToken.organization_code,
 					notifyUser,
 					req.decodedToken.tenant_code
@@ -52,8 +53,9 @@ module.exports = class Sessions {
 				const sessionCreated = await sessionService.create(
 					req.body,
 					req.decodedToken.id,
+					req.decodedToken.organizations[0].id,
 					req.decodedToken.organization_code,
-					isAMentor(req.decodedToken.roles),
+					isAMentor(req.decodedToken.organizations[0].roles),
 					notifyUser,
 					req.decodedToken.tenant_code
 				)
@@ -80,9 +82,9 @@ module.exports = class Sessions {
 			const sessionDetails = await sessionService.details(
 				req.params.id,
 				req.decodedToken ? req.decodedToken.id : '',
-				req.decodedToken ? isAMentor(req.decodedToken.roles) : '',
+				req.decodedToken ? isAMentor(req.decodedToken.organizations[0].roles) : '',
 				req.query,
-				req.decodedToken.roles,
+				req.decodedToken.organizations[0].roles,
 				req.decodedToken.organization_code,
 				req.decodedToken ? req.decodedToken.tenant_code : ''
 			)
@@ -117,8 +119,8 @@ module.exports = class Sessions {
 				req.searchText,
 				req.searchOn,
 				req.query,
-				isAMentor(req.decodedToken.roles),
-				req.decodedToken.roles,
+				isAMentor(req.decodedToken.organizations[0].roles),
+				req.decodedToken.organizations[0].roles,
 				organizationCode,
 				tenantCode
 			)
@@ -169,10 +171,11 @@ module.exports = class Sessions {
 				req.params.id,
 				req.decodedToken,
 				req.headers['timezone'],
-				isAMentor(req.decodedToken.roles),
+				isAMentor(req.decodedToken.organizations[0].roles),
 				isSelfEnrolled,
 				session,
-				req.decodedToken.roles,
+				req.decodedToken.organizations[0].roles,
+				req.decodedToken.organizations[0].id,
 				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
@@ -404,7 +407,8 @@ module.exports = class Sessions {
 				req.body.mentees, // Array of mentee ids
 				req.headers['timezone'],
 				userId,
-				organizationCode,
+				req.decodedToken.organizations[0].id, // organizationId
+				organizationCode, // organizationCode
 				tenantCode
 			)
 			return sessionDetails

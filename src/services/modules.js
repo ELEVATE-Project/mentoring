@@ -20,7 +20,6 @@ module.exports = class modulesHelper {
 	static async create(bodyData, userId, organizationId, tenantCode) {
 		try {
 			// Add tenant context to bodyData
-			bodyData.organization_code = organizationId
 			bodyData.tenant_code = tenantCode
 
 			const modules = await modulesQueries.createModules(bodyData, tenantCode)
@@ -59,7 +58,11 @@ module.exports = class modulesHelper {
 		try {
 			const modules = await modulesQueries.findModulesById(id, tenantCode)
 			if (!modules) {
-				throw new Error('MODULES_NOT_FOUND')
+				return responses.failureResponse({
+					message: 'MODULES_NOT_FOUND',
+					statusCode: httpStatusCode.not_found,
+					responseCode: 'CLIENT_ERROR',
+				})
 			}
 
 			const updatedModules = await modulesQueries.updateModules(

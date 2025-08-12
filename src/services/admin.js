@@ -89,7 +89,7 @@ class NotificationHelper {
 						? await this.getSessionAttendeeIds(session.id, tenantCode)
 						: [session[recipientField]]
 
-				const recipients = await menteeQueries.getUsersByUserIds(recipientIds, {}, true, tenantCode)
+				const recipients = await menteeQueries.getUsersByUserIds(recipientIds, {}, tenantCode, true)
 
 				const emailPromises = recipients.map(async (recipient) => {
 					const templateData = {
@@ -146,7 +146,7 @@ module.exports = class AdminHelper {
 			let result = {}
 
 			// Step 1: Fetch user details
-			const getUserDetails = await menteeQueries.getUsersByUserIds([userId], {}, false, tenantCode) // userId = "1"
+			const getUserDetails = await menteeQueries.getUsersByUserIds([userId], {}, tenantCode, false) // userId = "1"
 			if (!getUserDetails || getUserDetails.length === 0) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.bad_request,

@@ -1420,7 +1420,7 @@ module.exports = class MenteesHelper {
 
 			// Step 6: Handle session enrollment
 			if (queryParams.session_id) {
-				const enrolledMentees = await getEnrolledMentees(queryParams.session_id, '', userId)
+				const enrolledMentees = await getEnrolledMentees(queryParams.session_id, '', userId, tenantCode)
 				extensionDetails.data.forEach((user) => {
 					user.is_enrolled = false
 					const enrolledUser = _.find(enrolledMentees, { id: user.id })
@@ -1754,7 +1754,7 @@ module.exports = class MenteesHelper {
 
 			let mentorExtension
 			if (requestedUserExtension) mentorExtension = requestedUserExtension
-			else mentorExtension = await mentorQueries.getMentorExtension(id)
+			else mentorExtension = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
 
 			mentorExtension = utils.deleteProperties(mentorExtension, [
 				'user_id',

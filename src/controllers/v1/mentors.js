@@ -34,8 +34,8 @@ module.exports = class Mentors {
 				req.searchText,
 				req.params.menteeId ? req.params.menteeId : userId,
 				req.query,
-				isAMentor(req.decodedToken.roles),
-				req.decodedToken.roles,
+				isAMentor(req.decodedToken.organizations[0].roles),
+				req.decodedToken.organizations[0].roles,
 				organizationCode,
 				tenantCode
 			)
@@ -56,13 +56,13 @@ module.exports = class Mentors {
 	 */
 	async details(req) {
 		try {
+			const roles = req.decodedToken.organizations[0].roles
 			return await mentorsService.read(
 				req.params.id,
 				req.decodedToken.organization_code,
 				req.decodedToken.id,
-				isAMentor(req.decodedToken.roles),
-				req.decodedToken.roles,
-				req.decodedToken.tenant_code
+				isAMentor(roles),
+				roles
 			)
 		} catch (error) {
 			return error
@@ -90,7 +90,7 @@ module.exports = class Mentors {
 			const reports = await mentorsService.reports(
 				userId,
 				req.query.filterType,
-				req.decodedToken.roles,
+				req.decodedToken.organizations[0].roles,
 				organizationCode,
 				tenantCode
 			)
@@ -147,8 +147,8 @@ module.exports = class Mentors {
 				req.searchOn,
 				req.query,
 				userId,
-				isAMentor(req.decodedToken.roles),
-				req.decodedToken.roles,
+				isAMentor(req.decodedToken.organizations[0].roles),
+				req.decodedToken.organizations[0].roles,
 				organizationCode,
 				tenantCode
 			)
@@ -178,7 +178,7 @@ module.exports = class Mentors {
 				req.pageSize,
 				req.searchText,
 				req.query.status,
-				req.decodedToken.roles,
+				req.decodedToken.organizations[0].roles,
 				organizationCode,
 				tenantCode
 			)

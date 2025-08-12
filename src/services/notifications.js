@@ -93,8 +93,8 @@ module.exports = class Notifications {
 				{
 					attributes: ['user_id', 'name', 'email'],
 				},
-				true,
-				tenantCode
+				tenantCode,
+				true
 			)
 
 			// Get attendees accound details

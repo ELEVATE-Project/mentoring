@@ -25,9 +25,13 @@ module.exports = class QuestionsSet {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
-			const createQuestionSet = await questionSetService.create(req.body, req.decodedToken, tenantCode)
+			const createQuestionSet = await questionSetService.create(
+				req.body,
+				req.decodedToken,
+				tenantCode,
+				organizationCode
+			)
 
 			return createQuestionSet
 		} catch (error) {
@@ -47,8 +51,6 @@ module.exports = class QuestionsSet {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			const updateQuestionsSet = await questionSetService.update(
 				req.params.id,
