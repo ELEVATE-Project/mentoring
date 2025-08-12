@@ -160,7 +160,7 @@ exports.create = async (userId, name, email, image) => {
  * @returns {Promise<Object>} The response from the communication service upon creating the chat room.
  * @throws Will throw an error if the request to create a chat room fails.
  */
-exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage) => {
+exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage, tenantCode) => {
 	try {
 		// Retrieve user details, ensuring each has a `communications_user_id`
 		let userDetails = await userExtensionQueries.getUsersByUserIds(
@@ -168,6 +168,7 @@ exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage
 			{
 				attributes: ['name', 'user_id', 'email', 'meta', 'image'],
 			},
+			tenantCode,
 			true
 		)
 

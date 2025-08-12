@@ -34,7 +34,7 @@ module.exports = class UserInviteHelper {
 				const orgId = data.user.organization_id
 				const notifyUser = true
 
-				const mentor = await menteeExtensionQueries.getMenteeExtension(userId, ['is_mentor'])
+				const mentor = await menteeExtensionQueries.getMenteeExtension(userId, ['is_mentor'], false, tenantCode)
 				if (!mentor) throw createUnauthorizedResponse('USER_NOT_FOUND')
 
 				const isMentor = mentor.is_mentor
@@ -1028,7 +1028,12 @@ module.exports = class UserInviteHelper {
 		for (const item of sessionCreationOutput) {
 			const mentorIdPromise = item.mentor_id
 			if (!isNaN(mentorIdPromise) && mentorIdPromise) {
-				const mentorId = await menteeExtensionQueries.getMenteeExtension(mentorIdPromise, ['email'])
+				const mentorId = await menteeExtensionQueries.getMenteeExtension(
+					mentorIdPromise,
+					['email'],
+					false,
+					tenantCode
+				)
 				if (!mentorId) throw createUnauthorizedResponse('USER_NOT_FOUND')
 				item.mentor_id = mentorId.email
 			} else {
@@ -1040,7 +1045,12 @@ module.exports = class UserInviteHelper {
 				for (let i = 0; i < item.mentees.length; i++) {
 					const menteeId = item.mentees[i]
 					if (!isNaN(menteeId)) {
-						const mentee = await menteeExtensionQueries.getMenteeExtension(menteeId, ['email'])
+						const mentee = await menteeExtensionQueries.getMenteeExtension(
+							menteeId,
+							['email'],
+							false,
+							tenantCode
+						)
 						if (!mentee) throw createUnauthorizedResponse('USER_NOT_FOUND')
 						menteeEmails.push(mentee.email)
 					} else {

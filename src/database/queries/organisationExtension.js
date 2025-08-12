@@ -85,7 +85,11 @@ module.exports = class OrganizationExtensionQueries {
 	}
 	static async findOne(filter, tenantCode, options = {}) {
 		try {
-			filter.tenant_code = tenantCode
+			// Only add tenant_code to filter if tenantCode is provided
+			if (tenantCode) {
+				filter.tenant_code = tenantCode
+			}
+
 			const orgExtension = await OrganizationExtension.findOne({
 				where: filter,
 				...options,

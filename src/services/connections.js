@@ -316,7 +316,8 @@ module.exports = class ConnectionHelper {
 				chatRoom = await communicationHelper.createChatRoom(
 					userId,
 					bodyData.user_id,
-					connectionRequest.meta.message
+					connectionRequest.meta.message,
+					tenantCode
 				)
 			}
 

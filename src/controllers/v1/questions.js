@@ -27,7 +27,7 @@ module.exports = class Questions {
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
-			const createdQuestion = await questionsService.create(req.body, req.decodedToken, tenantCode)
+			const createdQuestion = await questionsService.create(req.body, userId, organizationCode, tenantCode)
 			return createdQuestion
 		} catch (error) {
 			return error
@@ -48,7 +48,13 @@ module.exports = class Questions {
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
-			const updatedQuestion = await questionsService.update(req.params.id, req.body, req.decodedToken, tenantCode)
+			const updatedQuestion = await questionsService.update(
+				req.params.id,
+				req.body,
+				userId,
+				organizationCode,
+				tenantCode
+			)
 			return updatedQuestion
 		} catch (error) {
 			return error

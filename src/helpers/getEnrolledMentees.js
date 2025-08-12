@@ -7,6 +7,26 @@ const { Parser } = require('@json2csv/plainjs')
 exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) => {
 	try {
 		const mentees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, tenantCode)
+
+		// Early return if no mentees found
+		if (!mentees || mentees.length === 0) {
+			return queryParams?.csv === 'true'
+				? new Parser({
+						fields: [
+							{ label: 'No.', value: 'index_number' },
+							{ label: 'Name', value: 'name' },
+							{ label: 'Designation', value: 'designation' },
+							{ label: 'Organization', value: 'organization' },
+							{ label: 'E-mail ID', value: 'email' },
+							{ label: 'Enrollment Type', value: 'type' },
+						],
+						header: true,
+						includeEmptyRows: true,
+						defaultValue: null,
+				  }).parse()
+				: []
+		}
+
 		const menteeIds = mentees.map((mentee) => mentee.mentee_id)
 		let menteeTypeMap = {}
 		mentees.forEach((mentee) => {
@@ -28,7 +48,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 			},
 		}
 		let [enrolledUsers, attendeesAccounts] = await Promise.all([
-			menteeExtensionQueries.getUsersByUserIds(menteeIds, options),
+			menteeExtensionQueries.getUsersByUserIds(menteeIds, options, tenantCode),
 			userRequests.getUserDetailedList(menteeIds, tenantCode).then((result) => result.result),
 		])
 

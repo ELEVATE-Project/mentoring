@@ -44,7 +44,11 @@ module.exports = class UserEntityData {
 	}
 	static async findUserEntityTypesAndEntities(filter, tenantCode) {
 		try {
-			filter.tenant_code = tenantCode
+			// Only add tenant_code to filter if tenantCode is provided
+			if (tenantCode) {
+				filter.tenant_code = tenantCode
+			}
+
 			const entityTypes = await EntityType.findAll({
 				where: filter,
 				raw: true,
@@ -54,8 +58,18 @@ module.exports = class UserEntityData {
 
 			let entities = []
 			if (entityTypeIds.length > 0) {
+				const entityFilter = {
+					entity_type_id: entityTypeIds,
+					status: 'ACTIVE',
+				}
+
+				// Only add tenant_code to entity filter if tenantCode is provided
+				if (tenantCode) {
+					entityFilter.tenant_code = tenantCode
+				}
+
 				entities = await Entity.findAll({
-					where: { entity_type_id: entityTypeIds, status: 'ACTIVE', tenant_code: tenantCode },
+					where: entityFilter,
 					raw: true,
 					//attributes: { exclude: ['entity_type_id'] },
 				})

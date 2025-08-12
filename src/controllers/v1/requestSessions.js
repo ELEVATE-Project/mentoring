@@ -69,7 +69,7 @@ module.exports = class requestsSessions {
 				req.body,
 				userId,
 				organizationCode,
-				isAMentor(req.decodedToken.roles),
+				isAMentor(req.decodedToken.organizations[0].roles),
 				tenantCode
 			)
 			return acceptRequestSession
@@ -138,7 +138,7 @@ module.exports = class requestsSessions {
 				req.query.pageSize,
 				req.query.searchText,
 				req.query.status,
-				req.decodedToken.roles,
+				req.decodedToken.organizations[0].roles,
 				req.query.start_date,
 				req.query.end_date,
 				tenantCode

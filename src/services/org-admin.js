@@ -448,7 +448,7 @@ module.exports = class OrgAdminService {
 			let failedUserIds = []
 			for (let key in userIds) {
 				const userId = userIds[key]
-				const mentorDetails = await mentorQueries.getMentorExtension(userId)
+				const mentorDetails = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
 				if (mentorDetails?.user_id) {
 					// Deactivate upcoming sessions of user as mentor
 					const removedSessionsDetail = await sessionQueries.deactivateAndReturnMentorSessions(userId)
@@ -461,7 +461,7 @@ module.exports = class OrgAdminService {
 				}
 
 				//unenroll from upcoming session
-				const menteeDetails = await menteeQueries.getMenteeExtension(userId)
+				const menteeDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
 				if (menteeDetails?.user_id) {
 					await adminService.unenrollFromUpcomingSessions(userId, decodedToken.tenant_code)
 					deactivatedIdsList.push(userId)

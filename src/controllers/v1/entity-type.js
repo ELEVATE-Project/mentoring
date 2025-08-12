@@ -18,7 +18,7 @@ module.exports = class Entity {
 				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code,
-				req.decodedToken.roles
+				req.decodedToken.organizations[0].roles
 			)
 		} catch (error) {
 			return error
@@ -41,7 +41,7 @@ module.exports = class Entity {
 				req.decodedToken.id,
 				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code,
-				req.decodedToken.roles
+				req.decodedToken.organizations[0].roles
 			)
 		} catch (error) {
 			return error

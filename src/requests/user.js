@@ -193,7 +193,13 @@ const fetchUserDetails = async ({ token, userId }) => {
 
 const getUserDetails = async (userId, tenantCode) => {
 	try {
-		const userDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+		// Only pass tenantCode if it exists
+		const userDetails = await menteeQueries.getMenteeExtension(
+			userId,
+			[],
+			false,
+			tenantCode || null // or just: tenantCode
+		)
 
 		if (!userDetails) {
 			return {
@@ -207,10 +213,12 @@ const getUserDetails = async (userId, tenantCode) => {
 			const downloadImageResponse = await getDownloadableUrl(userDetails.image)
 			userDetails.image = downloadImageResponse.result
 		}
+
 		userDetails.user_roles = [{ title: common.MENTEE_ROLE }]
 		if (userDetails.is_mentor) {
 			userDetails.user_roles.push({ title: common.MENTOR_ROLE })
 		}
+
 		if (userDetails.email) {
 			userDetails.email = await emailEncryption.decrypt(userDetails.email)
 		}

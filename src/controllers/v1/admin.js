@@ -33,7 +33,7 @@ module.exports = class admin {
 
 	async triggerViewRebuild(req) {
 		try {
-			if (!req.decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)) {
+			if (!req.decodedToken.organizations[0].roles.some((role) => role.title === common.ADMIN_ROLE)) {
 				return responses.failureResponse({
 					message: 'UNAUTHORIZED_REQUEST',
 					statusCode: httpStatusCode.unauthorized,
@@ -49,7 +49,7 @@ module.exports = class admin {
 	}
 	async triggerPeriodicViewRefresh(req) {
 		try {
-			if (!req.decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)) {
+			if (!req.decodedToken.organizations[0].roles.some((role) => role.title === common.ADMIN_ROLE)) {
 				return responses.failureResponse({
 					message: 'UNAUTHORIZED_REQUEST',
 					statusCode: httpStatusCode.unauthorized,
