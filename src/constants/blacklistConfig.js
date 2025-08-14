@@ -94,6 +94,10 @@ const queryForbiddenPatterns = [
 	'\\',
 	"'",
 	'"',
+	'char(',
+	'chr(',
+	'concat(',
+	'||',
 
 	// DML/DDL Commands
 	'insert',
@@ -105,6 +109,7 @@ const queryForbiddenPatterns = [
 	'create',
 	'replace',
 	'rename',
+	'merge',
 
 	// Joins & Advanced Access Paths
 	'cross join',
@@ -145,6 +150,11 @@ const queryForbiddenPatterns = [
 	'pg_execute_server_program',
 	'current_setting',
 	'set_config',
+	'dblink',
+	'xml',
+	'json_agg',
+	'array_agg',
+	'string_agg',
 
 	// Privilege Escalation
 	'set role',
@@ -185,7 +195,6 @@ const queryForbiddenPatterns = [
 	'admins',
 	'passwords',
 	'audit_logs',
-	'sessions',
 ]
 
 module.exports = {

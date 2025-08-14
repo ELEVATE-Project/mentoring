@@ -1,5 +1,7 @@
 const common = require('@constants/common')
 const reportService = require('@services/reports')
+const responses = require('@helpers/responses')
+const httpStatusCode = require('@generics/http-status')
 
 module.exports = class Reports {
 	/**
@@ -187,6 +189,14 @@ module.exports = class Reports {
 	 */
 	async fetchData(req) {
 		try {
+			// Early validation of query presence/type (service still enforces SELECT + blacklist)
+			if (!req.body || !req.body.query || typeof req.body.query !== 'string' || !req.body.query.trim()) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.bad_request,
+					message: 'Query is required',
+				})
+			}
+
 			const data = await reportService.fetchData(req.body, req.pageNo, req.pageSize)
 			return data
 		} catch (error) {

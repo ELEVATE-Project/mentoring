@@ -626,16 +626,26 @@ module.exports = class ReportsHelper {
 				throw new Error('Query is not allowed or references restricted operations/tables')
 			}
 
-			const offset = common.getPaginationOffset(pageNo, pageSize)
+			// Validate pagination parameters
+			const validPageNo = Math.max(1, parseInt(pageNo) || 1)
+			const validPageSize = Math.min(Math.max(1, parseInt(pageSize) || 100), 1000)
+			const offset = common.getPaginationOffset(validPageNo, validPageSize)
 
-			let paginatedQuery = rawQuery
-			paginatedQuery += ` LIMIT ${pageSize}`
-			paginatedQuery += ` OFFSET ${offset}`
+			// Use parameterized query with replacements
+			const paginatedQuery = `${rawQuery} LIMIT :limit OFFSET :offset`
 
-			// 1. Fetch paginated data
 			const queryData = await sequelize.query(paginatedQuery, {
+				replacements: {
+					limit: validPageSize,
+					offset: offset,
+				},
 				type: sequelize.QueryTypes.SELECT,
 			})
+
+			// 1. Fetch paginated data
+			// const queryData = await sequelize.query(paginatedQuery, {
+			// 	type: sequelize.QueryTypes.SELECT,
+			// })
 
 			// 2. Return with metadata
 			return responses.successResponse({
@@ -654,10 +664,42 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async isQuerySafe(query) {
-		const lowerQuery = query.toLowerCase()
-		if (!lowerQuery.startsWith('select')) return false
+	static isQuerySafe(query) {
+		if (typeof query !== 'string') return false
 
-		return !queryForbiddenPatterns.some((pattern) => lowerQuery.includes(pattern))
+		const lowerQuery = query.toLowerCase()
+
+		// Quick reject for tokens that must not appear (preserve current blacklist semantics)
+		const immediateForbidden = ['--', ';', '/*', '*/', '#', '\\', "'", '"']
+		if (immediateForbidden.some((tok) => lowerQuery.includes(tok))) return false
+
+		// Normalize: strip comments and literals, collapse whitespace
+		let normalizedQuery = lowerQuery
+			.replace(/\/\*[\s\S]*?\*\//g, ' ')
+			.replace(/--.*$/gm, ' ')
+			.replace(/#[^\n]*/g, ' ')
+			// remove dollar-quoted and quoted string literals to avoid false positives inside strings
+			.replace(/\$[A-Za-z0-9_]*\$[\s\S]*?\$[A-Za-z0-9_]*\$/g, ' ')
+			.replace(/'(?:''|[^'])*'/g, ' ')
+			.replace(/"(?:\\"|[^"])*"/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim()
+
+		// Match forbidden patterns robustly:
+		// - letter-only words/phrases use word boundaries and flexible spacing
+		// - other patterns (punctuation, underscores, mixed chars) are tested literally
+		return !queryForbiddenPatterns.some((pattern) => {
+			const pat = String(pattern).toLowerCase().trim()
+			if (/^[a-z\s]+$/.test(pat)) {
+				const escaped = pat
+					.split(/\s+/)
+					.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+					.join('\\s+')
+				const regex = new RegExp(`\\b${escaped}\\b`, 'i')
+				return regex.test(normalizedQuery)
+			}
+			const escapedLiteral = pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+			return new RegExp(escapedLiteral, 'i').test(lowerQuery)
+		})
 	}
 }
