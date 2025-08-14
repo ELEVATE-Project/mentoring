@@ -82,6 +82,24 @@ exports.updateOne = async (filter, update, options = {}) => {
 	}
 }
 
+/**
+ * Update Session table rows with provided data and conditions
+ * @param {Object} data - Fields to update (e.g., { deleted_at: new Date() })
+ * @param {Object} where - WHERE condition (e.g., { id: sessionIds })
+ * @returns {Promise<number>} Number of affected rows
+ */
+exports.updateRecords = async (data, options = {}) => {
+	try {
+		if (!options.where || Object.keys(options.where).length === 0) {
+			throw new Error('updateRecords: "where" condition is required')
+		}
+		const result = await Session.update(data, options)
+		return Array.isArray(result) ? result[0] : result // Sequelize returns [number of affected rows]
+	} catch (error) {
+		throw error
+	}
+}
+
 exports.findAll = async (filter, options = {}) => {
 	try {
 		return await Session.findAll({
@@ -917,6 +935,82 @@ exports.deactivateAndReturnMentorSessions = async (userId) => {
 		return removedSessions
 	} catch (error) {
 		return error
+	}
+}
+
+exports.getUpcomingSessionsOfMentee = async (menteeUserId, sessionType) => {
+	try {
+		// Get private sessions where the deleted mentee was enrolled and session is in future
+		const query = `
+			SELECT s.id, s.title, s.mentor_id, s.start_date, s.end_date, s.type, s.created_by
+			FROM sessions s
+			INNER JOIN  session_attendees sa ON s.id = sa.session_id
+			WHERE sa.mentee_id = :menteeUserId
+			AND s.type = :sessionType
+			AND s.start_date > :currentTime
+			AND s.deleted_at IS NULL
+		`
+
+		const privateSessions = await Sequelize.query(query, {
+			type: QueryTypes.SELECT,
+			replacements: {
+				menteeUserId,
+				sessionType,
+				currentTime: Math.floor(Date.now() / 1000),
+			},
+		})
+
+		return privateSessions || []
+	} catch (error) {
+		throw error
+	}
+}
+
+exports.getUpcomingSessionsForMentor = async (mentorUserId) => {
+	try {
+		const currentTime = Math.floor(Date.now() / 1000)
+
+		const upcomingSessions = await Session.findAll({
+			where: {
+				mentor_id: mentorUserId,
+				start_date: { [Op.gt]: currentTime },
+				deleted_at: null,
+				created_by: {
+					[Op.and]: [{ [Op.ne]: null }, { [Op.ne]: mentorUserId }],
+				},
+			},
+			raw: true,
+		})
+
+		return upcomingSessions || []
+	} catch (error) {
+		throw error
+	}
+}
+
+exports.getSessionsAssignedToMentor = async (mentorUserId) => {
+	try {
+		const query = `
+				SELECT s.*, sa.mentee_id
+				FROM ${Session.tableName} s
+				INNER JOIN session_attendees sa ON s.id = sa.session_id
+				WHERE s.mentor_id = :mentorUserId 
+				AND s.start_date > :currentTime
+				AND s.deleted_at IS NULL
+				AND s.created_by != :mentorUserId
+			`
+
+		const sessionsToDelete = await Sequelize.query(query, {
+			type: QueryTypes.SELECT,
+			replacements: {
+				mentorUserId,
+				currentTime: Math.floor(Date.now() / 1000),
+			},
+		})
+
+		return sessionsToDelete
+	} catch (error) {
+		throw error
 	}
 }
 

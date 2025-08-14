@@ -734,7 +734,7 @@ const getDownloadableUrl = function (path) {
  *   .catch(error => console.error(error));
  */
 
-const getUserDetailedList = function (userIds) {
+const getUserDetailedList = function (userIds, deletedUsers = false, unscopped = false) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			// Fetch user details
@@ -743,7 +743,12 @@ const getUserDetailedList = function (userIds) {
 					result: [],
 				})
 			}
-			const userDetails = await menteeQueries.getAllUsersByIds(userIds)
+
+			let options = {}
+			if (deletedUsers) {
+				options = { paranoid: false }
+			}
+			const userDetails = await menteeQueries.getUsersByUserIds(userIds, options, unscopped)
 
 			// Extract unique organization IDs and create a mapping for organization details
 			const organizationIds = new Set()
@@ -754,7 +759,6 @@ const getUserDetailedList = function (userIds) {
 					organizationIds.add(user.organization_id)
 				})
 			}
-
 			// Fetch organization details
 			const filter = {
 				organization_id: {

@@ -11,20 +11,12 @@ module.exports = {
 			{
 				code: 'connection_request_accept',
 				subject: 'Message Request Accepted',
-				body: `
-					<p>Dear {menteeName},</p>
-					<p>Congratulations! Your message request to <strong>{mentorName}</strong> has been accepted.</p>
-					<p>You can now continue your conversation and seek guidance on your queries.</p>
-				`,
+				body: `<p>Dear {menteeName},</p><p>Congratulations! Your message request to <strong>{mentorName}</strong> has been accepted.</p><p>You can now continue your conversation and seek guidance on your queries.</p>`,
 			},
 			{
 				code: 'session_meeting_link_added',
 				subject: 'Meeting link added for {sessionTitle}',
-				body: `
-					<p>Hi,</p>
-					<p>The meeting link for your upcoming session, <strong>{sessionTitle}</strong> scheduled on {Date}, {Time} has been added by <strong>{mentorName}</strong>.</p>
-					<p>You can access it from the <strong>'Enrolled Sessions'</string> tab and click on the <strong> <a href="{sessionLink}">Join</a></strong> button at the scheduled time to attend the session. Thank you!</p>
-				`,
+				body: `<p>Hi,</p><p>The meeting link for your upcoming session, <strong>{sessionTitle}</strong> scheduled on {Date}, {Time} has been added by <strong>{mentorName}</strong>.</p><p>You can access it from the <strong>'Enrolled Sessions'</string> tab and click on the <strong> <a href="{sessionLink}">Join</a></strong> button at the scheduled time to attend the session. Thank you!</p>`,
 			},
 		]
 

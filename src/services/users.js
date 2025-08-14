@@ -11,6 +11,8 @@ const mentorsService = require('@services/mentors')
 const menteesService = require('@services/mentees')
 const orgAdminService = require('@services/org-admin')
 
+const userServiceHelper = require('@helpers/users')
+
 module.exports = class UserHelper {
 	/**
 	 * Get user list.
@@ -340,5 +342,28 @@ module.exports = class UserHelper {
 			}
 		}
 		return null
+	}
+
+	/**
+	 * Get user requestCount.
+	 * @method
+	 * @name requestCount
+	 * @param {String} userId 					- userId	.
+	 * @returns {JSON} 							- request count.
+	 */
+
+	static async requestCount(userId) {
+		try {
+			const response = await userServiceHelper.findRequestCounts(userId)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'REQUESTS_COUNT_FETCHED',
+				result: response,
+			})
+		} catch (error) {
+			console.log(error)
+			throw error
+		}
 	}
 }

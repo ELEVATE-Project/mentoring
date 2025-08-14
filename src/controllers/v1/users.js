@@ -125,4 +125,20 @@ module.exports = class Users {
 			return error
 		}
 	}
+
+	/**
+	 * Get user's connection and session request counts
+	 * @method
+	 * @name requestCount
+	 * @param {Object} req - Request object.
+	 * @returns {JSON} - Request counts with success/failure response.
+	 */
+	async requestCount(req) {
+		try {
+			return await userService.requestCount(req.decodedToken.id)
+		} catch (error) {
+			console.log(error)
+			return error
+		}
+	}
 }

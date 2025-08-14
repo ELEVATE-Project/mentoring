@@ -174,8 +174,6 @@ exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage
 		// Loop through users to ensure they have a `communications_user_id`
 		for (const user of userDetails) {
 			if (!user.meta || !user.meta.communications_user_id) {
-				// Decrypt email and create user in communication service if `communications_user_id` is missing
-				user.email = await emailEncryption.decrypt(user.email)
 				let userImage
 				if (user?.image) {
 					userImage = (await userRequests.getDownloadableUrl(user.image))?.result
@@ -249,6 +247,32 @@ exports.setActiveStatus = async (userId, activeStatus, confirmRelinquish) => {
 		return setUserActiveStatus
 	} catch (error) {
 		console.error(`Error updating user ${userId}:`, error.message)
+		throw error
+	}
+}
+
+/**
+ * Removes the avatar (profile image) of a Rocket.Chat user.
+ *
+ * Sends a request to the Rocket.Chat API to delete the user's profile image.
+ * If the operation is successful, the response will include `{ result: { success: true } }`.
+ *
+ * @async
+ * @function removeAvatar
+ * @param {string} userId - The Rocket.Chat user ID whose avatar should be removed.
+ * @returns {Promise<Object>} The full response from the API.
+ * @throws {Error} If the API call fails or the request encounters an error.
+ *
+ * @example
+ * const result = await removeAvatar('abc123');
+ * // result => { result: { success: true }, statusCode: 200, message: 'AVATAR_REMOVED' }
+ */
+exports.removeAvatar = async (userId) => {
+	try {
+		const removeAvatarStatus = await communicationRequests.removeAvatar(userId)
+		return removeAvatarStatus
+	} catch (error) {
+		console.error(`Error remove avatar of the user ${userId}:`, error.message)
 		throw error
 	}
 }

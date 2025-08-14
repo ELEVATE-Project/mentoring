@@ -26,6 +26,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID) => {
 					'mentee_visibility',
 				],
 			},
+			paranoid: false,
 		}
 		let [enrolledUsers, attendeesAccounts] = await Promise.all([
 			menteeExtensionQueries.getUsersByUserIds(menteeIds, options),

@@ -462,14 +462,14 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			let triggerSessionMeetinkAddEmail = false
-			if (
-				sessionDetail.meeting_info.platform == 'OFF' &&
-				bodyData.meeting_info &&
-				bodyData.meeting_info.platform
-			) {
-				triggerSessionMeetinkAddEmail = true
-			}
+			// let triggerSessionMeetinkAddEmail = false
+			// if (
+			// 	sessionDetail.meeting_info.platform == 'OFF' &&
+			// 	bodyData.meeting_info &&
+			// 	bodyData.meeting_info.platform
+			// ) {
+			// 	triggerSessionMeetinkAddEmail = true
+			// }
 
 			if (sessionDetail.status == common.COMPLETED_STATUS && bodyData?.resources) {
 				const completedDate = moment(sessionDetail.completed_at)
@@ -533,6 +533,9 @@ module.exports = class SessionsHelper {
 				isSessionCreatedByManager = true
 				// If session is created by manager update userId with mentor_id
 				userId = sessionDetail.mentor_id
+			}
+			if (bodyData.mentor_id) {
+				userId = bodyData.mentor_id
 			}
 
 			let mentorExtension = await mentorExtensionQueries.getMentorExtension(userId)
@@ -634,6 +637,8 @@ module.exports = class SessionsHelper {
 			}
 
 			let preResourceSendEmail = false
+			let postResourceSendEmail = false
+			let mentorUpdated = false
 
 			let message
 			const sessionRelatedJobIds = common.notificationJobIdPrefixes.map((element) => element + sessionDetail.id)
@@ -689,10 +694,21 @@ module.exports = class SessionsHelper {
 					await this.addResources(bodyData.resources, userId, sessionId)
 
 					bodyData.resources.forEach((element) => {
-						if ((element.type = common.SESSION_PRE_RESOURCE_TYPE)) {
-							preResourceSendEmail = true
+						if (element.type === common.SESSION_PRE_RESOURCE_TYPE) {
+							if (sessionDetail.status != common.COMPLETED_STATUS) {
+								preResourceSendEmail = true
+							}
+						}
+						if (element.type === common.SESSION_POST_RESOURCE_TYPE) {
+							if (sessionDetail.status == common.COMPLETED_STATUS) {
+								postResourceSendEmail = true
+							}
 						}
 					})
+				}
+
+				if (bodyData.mentor_id != sessionDetail.mentor_id) {
+					mentorUpdated = true
 				}
 
 				const { rowsAffected, updatedRows } = await sessionQueries.updateOne({ id: sessionId }, bodyData, {
@@ -713,6 +729,7 @@ module.exports = class SessionsHelper {
 					// Confirm if session is edited or not.
 					const updatedSessionDetails = updatedDiff(sessionDetail, updatedSessionData)
 					delete updatedSessionDetails.updated_at
+					delete updatedSessionDetails.mentor_id
 					const keys = Object.keys(updatedSessionDetails)
 					if (keys.length > 0) {
 						isSessionDataChanged = true
@@ -763,7 +780,8 @@ module.exports = class SessionsHelper {
 				isSessionReschedule ||
 				isSessionDataChanged ||
 				preResourceSendEmail ||
-				triggerSessionMeetinkAddEmail
+				postResourceSendEmail ||
+				mentorUpdated
 			) {
 				const sessionAttendees = await sessionAttendeesQueries.findAll({
 					session_id: sessionId,
@@ -773,7 +791,7 @@ module.exports = class SessionsHelper {
 					sessionAttendeesIds.push(attendee.mentee_id)
 				})
 
-				const attendeesAccounts = await userRequests.getUserDetailedList(sessionAttendeesIds)
+				const attendeesAccounts = await userRequests.getUserDetailedList(sessionAttendeesIds, false, true)
 
 				sessionAttendees.map((attendee) => {
 					for (let index = 0; index < attendeesAccounts.result.length; index++) {
@@ -789,6 +807,8 @@ module.exports = class SessionsHelper {
 				/* Find email template according to request type */
 				let templateData
 				let mentorEmailTemplate
+				let preOrPostEmailTemplate
+				let mentorChangedTemplate
 				if (method == common.DELETE_METHOD) {
 					let sessionDeleteEmailTemplate = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE
 					// commenting this part for 2.6 release products confirmed to use the new delete email template for all.
@@ -815,15 +835,27 @@ module.exports = class SessionsHelper {
 
 				if (preResourceSendEmail) {
 					let preResourceTemplate = process.env.PRE_RESOURCE_EMAIL_TEMPLATE_CODE
-					templateData = await notificationQueries.findOneEmailTemplate(preResourceTemplate, orgId)
+					preOrPostEmailTemplate = await notificationQueries.findOneEmailTemplate(preResourceTemplate, orgId)
+				}
+				if (postResourceSendEmail) {
+					let postResourceTemplate = process.env.POST_RESOURCE_EMAIL_TEMPLATE_CODE
+					preOrPostEmailTemplate = await notificationQueries.findOneEmailTemplate(postResourceTemplate, orgId)
 				}
 
-				if (triggerSessionMeetinkAddEmail) {
-					templateData = await notificationQueries.findOneEmailTemplate(
-						process.env.SESSION_MEETLINK_ADDED_EMAIL_TEMPLATE,
+				if (mentorUpdated) {
+					let mentorChangedTemplateName = process.env.SESSION_MENTOR_CHANGED_EMAIL_TEMPLATE
+					mentorChangedTemplate = await notificationQueries.findOneEmailTemplate(
+						mentorChangedTemplateName,
 						orgId
 					)
 				}
+
+				// if (triggerSessionMeetinkAddEmail) {
+				// 	templateData = await notificationQueries.findOneEmailTemplate(
+				// 		process.env.SESSION_MEETLINK_ADDED_EMAIL_TEMPLATE,
+				// 		orgId
+				// 	)
+				// }
 
 				// send mail associated with action to session mentees
 				sessionAttendees.forEach(async (attendee) => {
@@ -962,13 +994,13 @@ module.exports = class SessionsHelper {
 							console.log('Session attendee mapped, isSessionReschedule true and kafka res: ', kafkaRes)
 						}
 					}
-					if (preResourceSendEmail) {
+					if (preResourceSendEmail || postResourceSendEmail) {
 						const payload = {
 							type: 'email',
 							email: {
 								to: attendee.attendeeEmail,
-								subject: templateData.subject,
-								body: utils.composeEmailBody(templateData.body, {
+								subject: preOrPostEmailTemplate.subject,
+								body: utils.composeEmailBody(preOrPostEmailTemplate.body, {
 									mentorName: sessionDetail.mentor_name,
 									sessionTitle: sessionDetail.title,
 									sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetail.id,
@@ -990,36 +1022,64 @@ module.exports = class SessionsHelper {
 						console.log('Kafka payload:', payload)
 						console.log('Session attendee mapped, preResourceSendEmail true and kafka res: ', kafkaRes)
 					}
-					if (triggerSessionMeetinkAddEmail) {
+					if (mentorUpdated) {
 						const payload = {
 							type: 'email',
 							email: {
 								to: attendee.attendeeEmail,
-								subject: utils.composeEmailBody(templateData.subject, {
+								subject: mentorChangedTemplate.subject,
+								body: utils.composeEmailBody(mentorChangedTemplate.body, {
+									newMentorName: sessionDetail.mentor_name,
 									sessionTitle: sessionDetail.title,
-								}),
-								body: utils.composeEmailBody(templateData.body, {
-									mentorName: sessionDetail.mentor_name,
-									sessionTitle: sessionDetail.title,
-									sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetail.id,
-									Date: utils.getTimeZone(
+									startDate: utils.getTimeZone(
 										sessionDetail.start_date,
 										common.dateFormat,
 										sessionDetail.time_zone
 									),
-									Time: utils.getTimeZone(
+									startTime: utils.getTimeZone(
 										sessionDetail.start_date,
 										common.timeFormat,
 										sessionDetail.time_zone
 									),
+									menteeName: attendee.attendeeName,
 								}),
 							},
 						}
 
 						let kafkaRes = await kafkaCommunication.pushEmailToKafka(payload)
 						console.log('Kafka payload:', payload)
-						console.log('Session attendee mapped, preResourceSendEmail true and kafka res: ', kafkaRes)
+						console.log('Session attendee emails, mentorUpdated true and kafka res: ', kafkaRes)
 					}
+					// if (triggerSessionMeetinkAddEmail) {
+					// 	const payload = {
+					// 		type: 'email',
+					// 		email: {
+					// 			to: attendee.attendeeEmail,
+					// 			subject: utils.composeEmailBody(templateData.subject, {
+					// 				sessionTitle: sessionDetail.title,
+					// 			}),
+					// 			body: utils.composeEmailBody(templateData.body, {
+					// 				mentorName: sessionDetail.mentor_name,
+					// 				sessionTitle: sessionDetail.title,
+					// 				sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetail.id,
+					// 				Date: utils.getTimeZone(
+					// 					sessionDetail.start_date,
+					// 					common.dateFormat,
+					// 					sessionDetail.time_zone
+					// 				),
+					// 				Time: utils.getTimeZone(
+					// 					sessionDetail.start_date,
+					// 					common.timeFormat,
+					// 					sessionDetail.time_zone
+					// 				),
+					// 			}),
+					// 		},
+					// 	}
+
+					// 	let kafkaRes = await kafkaCommunication.pushEmailToKafka(payload)
+					// 	console.log('Kafka payload:', payload)
+					// 	console.log('Session attendee mapped, preResourceSendEmail true and kafka res: ', kafkaRes)
+					// }
 				})
 				// send mail to mentor if session is created and handled by a manager and if there is any data change
 				// send notification only if front end request for user notification
@@ -1066,7 +1126,6 @@ module.exports = class SessionsHelper {
 			} else {
 				filter.share_link = id
 			}
-
 			const sessionDetails = await sessionQueries.findOne(filter, {
 				attributes: {
 					exclude: ['share_link', 'mentee_password', 'mentor_password'],
@@ -1137,12 +1196,7 @@ module.exports = class SessionsHelper {
 
 			// check for accessibility
 			if (userId !== '' && isAMentor !== '') {
-				let isAccessible = await this.checkIfSessionIsAccessible(
-					sessionDetails,
-					userId,
-					isAMentor,
-					mentorExtension
-				)
+				let isAccessible = await this.checkIfSessionIsAccessible(sessionDetails, userId, isAMentor)
 
 				// Throw access error
 				if (!isAccessible) {
@@ -1176,15 +1230,27 @@ module.exports = class SessionsHelper {
 				sessionDetails.image = await Promise.all(sessionDetails.image)
 			}
 
-			if (isInvited || sessionDetails.is_assigned) {
+			let sessionAccessorDetails
+			if (isInvited || sessionDetails.is_assigned || !mentorExtension) {
 				const managerDetails = await menteeExtensionQueries.getMenteeExtension(sessionDetails.created_by, [
+					'user_id',
 					'name',
+					'designation',
+					'organization_id',
+					'custom_entity_text',
+					'external_session_visibility',
+					'organization_id',
 				])
 				sessionDetails.manager_name = managerDetails.name
+				sessionAccessorDetails = managerDetails
 			}
 
+			if (mentorExtension) {
+				sessionAccessorDetails = mentorExtension
+			}
+			// sessionAccessorDetails
 			const orgDetails = await organisationExtensionQueries.findOne(
-				{ organization_id: mentorExtension.organization_id },
+				{ organization_id: sessionAccessorDetails.organization_id },
 				{ attributes: ['name'] }
 			)
 
@@ -1192,7 +1258,7 @@ module.exports = class SessionsHelper {
 				sessionDetails.organization = orgDetails.name
 			}
 
-			sessionDetails.mentor_name = mentorExtension.name
+			sessionDetails.mentor_name = mentorExtension ? mentorExtension.name : common.USER_NOT_FOUND
 			sessionDetails.mentor_designation = []
 
 			const defaultOrgId = await getDefaultOrgId()
@@ -1206,9 +1272,11 @@ module.exports = class SessionsHelper {
 			// Prepare unique orgIds
 			const orgIds = [
 				...new Set(
-					[mentorExtension?.organization_id, sessionDetails.mentor_organization_id, defaultOrgId].filter(
-						Boolean
-					)
+					[
+						sessionAccessorDetails.organization_id,
+						sessionDetails.mentor_organization_id,
+						defaultOrgId,
+					].filter(Boolean)
 				),
 			]
 

@@ -236,5 +236,6 @@
 	"SESSION_MANAGER_MENTOR_DELETION_NOTIFICATION": "Action Required - Mentor Deleted.",
 	"SELECT_AT_LEAST_ONE_MENTEE": "Select at least one mentee.",
 	"MINIMUM_SESSION_DURATION": "Minimum session time is 30 minutes",
-	"DATA_FETCHED": "Data fetched successfully"
+	"DATA_FETCHED": "Data fetched successfully",
+	"REQUESTS_COUNT_FETCHED": "Successfully retrieved requests count"
 }

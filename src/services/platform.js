@@ -19,6 +19,7 @@ module.exports = class platformHelper {
 				meeting_platform: process.env.DEFAULT_MEETING_SERVICE,
 				session_mentee_limit: process.env.SESSION_MENTEE_LIMIT,
 				search_config: convertKeysToSnakeCase(searchConfig),
+				chat_config: process.env.ENABLE_CHAT,
 			}
 
 			return responses.successResponse({

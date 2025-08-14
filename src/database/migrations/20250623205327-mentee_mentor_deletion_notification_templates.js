@@ -21,55 +21,29 @@ module.exports = {
 			{
 				code: 'private_session_cancelled_email',
 				subject: '{sessionName} Cancelled',
-				body: `
-					<p>Hi,</p>
-					<p>The session <strong>{sessionName}</strong>, scheduled for {sessionDate} at {sessionTime}, has been cancelled and deleted as the mentee is no longer part of the organisation.</p>
-					<p>For more details, please visit MentorED.</p>
-				`,
+				body: `<p>Hi,</p><p>The session <strong>{sessionName}</strong>, scheduled for {sessionDate} at {sessionTime}, has been cancelled and deleted as the mentee is no longer part of the organisation.</p><p>For more details, please visit MentorED.</p>`,
 			},
 
 			// Templates for Mentor Deletion (notifying mentees)
 			{
 				code: 'mentor_deletion_notification_email',
 				subject: 'Connection Removed',
-				body: `
-					<p>Hi {menteeName},</p>
-					<p>Your connected mentor <strong>{mentorName}</strong> has been removed from the platform.</p>
-					<p>The connection history will remain available in your chat, but the mentor will no longer be accessible for new conversations or sessions.</p>
-					<p>You can continue to search for other mentors on the platform.</p>
-				`,
+				body: `<p>Hi {menteeName},</p><p>Your connected mentor <strong>{mentorName}</strong> has been removed from the platform.</p><p>The connection history will remain available in your chat, but the mentor will no longer be accessible for new conversations or sessions.</p><p>You can continue to search for other mentors on the platform.</p>`,
 			},
 			{
 				code: 'session_request_rejected_mentor_deletion_email',
 				subject: 'Session Request Rejected',
-				body: `
-					<p>Hi {menteeName},</p>
-					<p><strong>{sessionName}</strong></p>
-					<p>This session request has been rejected and deleted. Requested Mentor for this session is no longer available.</p>
-					<p>You can search for other mentors and send new session requests.</p>
-				`,
+				body: `<p>Hi {menteeName},</p><p><strong>{sessionName}</strong></p><p>This session request has been rejected and deleted. Requested Mentor for this session is no longer available.</p><p>You can search for other mentors and send new session requests.</p>`,
 			},
 			{
 				code: 'session_manager_mentor_deletion_email',
 				subject: 'Action Required - Mentor Deleted',
-				body: `
-					<p>Hi {sessionManagerName},</p>
-					<p><strong>{mentorName}</strong> is no longer a part of the organisation, and following are their upcoming sessions:</p>
-					<div style="margin: 15px 0;">
-						{sessionList}
-					</div>
-					<p>Please reassign a mentor to continue the sessions or cancel the session to notify attendees.</p>
-				`,
+				body: `<p>Hi,</p><p><strong>{mentorName}</strong> is no longer a part of the organisation, and following are their upcoming sessions :</p><div style="margin: 15px 0;">{sessionList}</div><p>Please reassign a mentor to continue the sessions or cancel the session to notify attendees.</p>`,
 			},
 			{
 				code: 'session_deleted_mentor_deletion_email',
 				subject: '{sessionName} Deleted',
-				body: `
-					<p>Hi {attendeeName},</p>
-					<p><strong>{sessionName}</strong></p>
-					<p>This session has been deleted. Mentor for this session is no longer available.</p>
-					<p>You can search for other sessions or mentors on the platform.</p>
-				`,
+				body: `<p>Hi {attendeeName},</p><p><strong>{sessionName}</strong></p><p>This session has been deleted. Mentor for this session is no longer available.</p><p>You can search for other sessions or mentors on the platform.</p>`,
 			},
 		]
 

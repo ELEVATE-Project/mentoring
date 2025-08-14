@@ -9,10 +9,9 @@ module.exports = {
 
 		const emailTemplates = [
 			{
-				code: 'connection_request_rejected',
-				subject: 'Message Request Rejected',
-				body: `<p>Dear {menteeName},</p><p>We regret to inform you that your message request to <strong>{mentorName}</strong> has been rejected. Thanks!</p>
-				`,
+				code: 'mentor_has_changed',
+				subject: 'Your Mentor Has Been Changed',
+				body: `<p>Dear {menteeName},</p><p>Your previous mentor for the upcoming session has been changed.</p><p>Name of Session: {sessionTitle} </p><p>New Mentor:{newMentorName} </p><p> Date and Time of Session: {startDate} at {startTime} </p>`,
 			},
 		]
 
@@ -48,12 +47,12 @@ module.exports = {
 			await queryInterface.bulkInsert('notification_templates', notificationTemplateData, {})
 			console.log(`Inserted ${notificationTemplateData.length} new notification template(s)`)
 		} else {
-			console.log('Connection request rejection notification template already exists, no insertion needed')
+			console.log('Notification template already exists, no insertion needed')
 		}
 	},
 
 	down: async (queryInterface, Sequelize) => {
-		const templateCodes = ['connection_request_rejected']
+		const templateCodes = ['mentor_has_changed']
 
 		await queryInterface.bulkDelete(
 			'notification_templates',
@@ -64,6 +63,6 @@ module.exports = {
 			},
 			{}
 		)
-		console.log('Removed connection request rejection notification template')
+		console.log('Notification templates are removed')
 	},
 }
