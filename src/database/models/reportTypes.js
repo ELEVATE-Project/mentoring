@@ -1,5 +1,4 @@
 'use strict'
-
 module.exports = (sequelize, DataTypes) => {
 	const ReportType = sequelize.define(
 		'ReportType',
@@ -8,11 +7,20 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.INTEGER,
 				allowNull: false,
 				autoIncrement: true,
-				primaryKey: true,
 			},
 			title: {
 				type: DataTypes.STRING,
 				allowNull: false,
+				primaryKey: true,
+			},
+			organization_code: {
+				type: DataTypes.STRING,
+				allowNull: false,
+			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: false,
+				primaryKey: true,
 			},
 			created_at: {
 				type: DataTypes.DATE,
