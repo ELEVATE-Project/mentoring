@@ -10,10 +10,12 @@ module.exports = class ReportTypeQueries {
 		}
 	}
 
-	static async findReportTypeByTitle(title, tenantCode) {
+	static async findReportTypeByTitle(Title, tenantCode, options = {}) {
 		try {
-			const reportType = await ReportType.findOne({
-				where: { title, tenant_code: tenantCode },
+			const reportType = await ReportType.findAll({
+				where: { title: Title, tenant_code: tenantCode },
+				...options,
+				raw: true,
 			})
 			return reportType
 		} catch (error) {

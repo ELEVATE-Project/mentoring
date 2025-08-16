@@ -26,8 +26,8 @@ module.exports = class UserHelper {
 
 	static async list(userType, pageNo, pageSize, searchText, userId, organizationId, tenantCode) {
 		try {
-			const userDetails = await userRequests.list(userType, pageNo, pageSize, searchText)
-			const ids = userDetails.data.result.data.map((item) => item.values[0].id)
+			const userDetails = await userRequests.list(userType, pageNo, pageSize, searchText, tenantCode)
+			const ids = userDetails.result.data.map((item) => item.values[0].id)
 
 			let extensionDetails
 			if (userType == common.MENTEE_ROLE) {
@@ -51,7 +51,7 @@ module.exports = class UserHelper {
 			}
 			const extensionDataMap = new Map(extensionDetails.map((newItem) => [newItem.user_id, newItem]))
 
-			userDetails.data.result.data = userDetails.data.result.data.filter((existingItem) => {
+			userDetails.result.data = userDetails.result.data.filter((existingItem) => {
 				const user_id = existingItem.values[0].id
 				if (extensionDataMap.has(user_id)) {
 					const newItem = extensionDataMap.get(user_id)
@@ -67,8 +67,8 @@ module.exports = class UserHelper {
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
-				message: userDetails.data.message,
-				result: userDetails.data.result,
+				message: 'USERS_FETCHED_SUCCESSFULLY',
+				result: userDetails.result,
 			})
 		} catch (error) {
 			console.log(error)

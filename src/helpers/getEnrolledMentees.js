@@ -2,7 +2,9 @@ const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const userRequests = require('@requests/user')
 const entityTypeService = require('@services/entity-type')
+const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const { Parser } = require('@json2csv/plainjs')
+const { Op } = require('sequelize')
 
 exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) => {
 	try {
@@ -87,6 +89,33 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 			[await menteeExtensionQueries.getModelName()],
 			'organization_id'
 		)
+
+		// Fetch organization details for each unique organization ID
+		const validOrgIds = uniqueOrgIds.filter((id) => id != null)
+		let organizationDetails = []
+		if (validOrgIds.length > 0) {
+			organizationDetails = await organisationExtensionQueries.findAll(
+				{
+					organization_id: {
+						[Op.in]: validOrgIds,
+					},
+				},
+				tenantCode,
+				{
+					attributes: ['name', 'organization_id'],
+					raw: true,
+				}
+			)
+		}
+
+		// Map organization details to users
+		enrolledUsers = enrolledUsers.map((user) => {
+			const org = organizationDetails.find((org) => org.organization_id == user.organization_id)
+			return {
+				...user,
+				organization: org ? { name: org.name } : { name: 'Unknown Organization' },
+			}
+		})
 
 		// Merge arrays based on user_id and id
 		const mergedUserArray = enrolledUsers.map((user) => {

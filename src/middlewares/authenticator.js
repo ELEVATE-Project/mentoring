@@ -27,7 +27,7 @@ module.exports = async function (req, res, next) {
 
 		if (isInternalAccess && !authHeader) return next()
 		if (!authHeader) {
-			const isPermissionValid = await checkPermissions(common.PUBLIC_ROLE, req.path, req.method, 'default')
+			const isPermissionValid = await checkPermissions(common.PUBLIC_ROLE, req.path, req.method)
 			if (isPermissionValid) return next()
 			else throw createUnauthorizedResponse('PERMISSION_DENIED')
 		}
@@ -195,7 +195,7 @@ module.exports = async function (req, res, next) {
 			}
 
 			const tenantCode = req.decodedToken?.tenant_code || 'default'
-			const isPermissionValid = await checkPermissions(userRoles, req.path, req.method, tenantCode)
+			const isPermissionValid = await checkPermissions(userRoles, req.path, req.method)
 
 			if (!isPermissionValid) throw createUnauthorizedResponse('PERMISSION_DENIED')
 		}
@@ -271,10 +271,10 @@ function createUnauthorizedResponse(message = 'UNAUTHORIZED_REQUEST') {
 	})
 }
 
-async function checkPermissions(roleTitle, requestPath, requestMethod, tenantCode = 'default') {
+async function checkPermissions(roleTitle, requestPath, requestMethod) {
 	const parts = requestPath.match(/[^/]+/g)
 	const apiPath = getApiPaths(parts)
-	const allowedPermissions = await fetchPermissions(roleTitle, apiPath, parts[2], tenantCode)
+	const allowedPermissions = await fetchPermissions(roleTitle, apiPath, parts[2])
 	return allowedPermissions.some((permission) => permission.request_type.includes(requestMethod))
 }
 
@@ -289,7 +289,7 @@ function getApiPaths(parts) {
 	return apiPath
 }
 
-async function fetchPermissions(roleTitle, apiPath, module, tenantCode = 'default') {
+async function fetchPermissions(roleTitle, apiPath, module) {
 	if (Array.isArray(roleTitle) && !roleTitle.includes(common.PUBLIC_ROLE)) roleTitle.push(common.PUBLIC_ROLE)
 	const filter = { role_title: roleTitle, module, api_path: { [Op.in]: apiPath } }
 	const attributes = ['request_type', 'api_path', 'module']

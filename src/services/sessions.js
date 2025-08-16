@@ -49,6 +49,7 @@ const adminService = require('@services/admin')
 const mentorQueries = require('@database/queries/mentorExtension')
 const emailEncryption = require('@utils/emailEncryption')
 const resourceQueries = require('@database/queries/resources')
+const feedbackService = require('@services/feedback')
 
 module.exports = class SessionsHelper {
 	/**
@@ -630,7 +631,20 @@ module.exports = class SessionsHelper {
 				}
 			}
 			let sessionModel = await sessionQueries.getColumns()
+
+			// Preserve original meeting_info before restructureBody potentially filters it out
+			const originalMeetingInfo = bodyData.meeting_info
+
 			bodyData = utils.restructureBody(bodyData, validationData, sessionModel)
+
+			// Remove mentees field as it's not part of the Session model - it's handled separately
+			// Restore meeting_info if it was filtered out by restructureBody - same logic as create method
+			if (originalMeetingInfo && !bodyData.meeting_info) {
+				bodyData.meeting_info = originalMeetingInfo
+			}
+
+			// Set updated_by field for audit trail
+			bodyData.updated_by = userId
 
 			let isSessionDataChanged = false
 			let updatedSessionData = {}
@@ -1139,6 +1153,7 @@ module.exports = class SessionsHelper {
 						roles: roles,
 						requesterOrganizationId: orgId,
 						data: sessionDetails,
+						tenantCode: tenantCode,
 					})
 				}
 				if (validateDefaultRules?.error && validateDefaultRules?.error?.missingField) {
@@ -1417,7 +1432,18 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - Session List.
 	 */
 
-	static async list(loggedInUserId, page, limit, search, searchOn, queryParams, isAMentor, roles, orgId, tenantCode) {
+	static async list(
+		loggedInUserId,
+		page,
+		limit,
+		search,
+		searchOn,
+		queryParams,
+		isAMentor,
+		roles,
+		orgCode,
+		tenantCode
+	) {
 		try {
 			let allSessions = await menteeService.getAllSessions(
 				page,
@@ -1428,7 +1454,7 @@ module.exports = class SessionsHelper {
 				isAMentor,
 				searchOn,
 				roles,
-				orgId,
+				orgCode,
 				tenantCode
 			)
 
@@ -1515,7 +1541,7 @@ module.exports = class SessionsHelper {
 			}
 			// search for session only if session data not passed
 			if (!session || Object.keys(session).length === 0) {
-				session = await sessionQueries.findById(sessionId)
+				session = await sessionQueries.findById(sessionId, tenantCode)
 			}
 			if (!session) {
 				return responses.failureResponse({
@@ -1531,8 +1557,9 @@ module.exports = class SessionsHelper {
 					ruleType: common.DEFAULT_RULES.SESSION_TYPE,
 					requesterId: userId,
 					roles: roles,
-					requesterOrganizationId: orgId,
+					requesterOrganizationCode: orgCode,
 					data: session,
+					tenantCode: tenantCode,
 				})
 			}
 			if (validateDefaultRules?.error && validateDefaultRules?.error?.missingField) {
@@ -1546,6 +1573,14 @@ module.exports = class SessionsHelper {
 			if (!validateDefaultRules && isSelfEnrolled) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			if (isSelfEnrolled && session.type == common.SESSION_TYPE.PRIVATE && userId == session.mentor_id) {
+				return responses.failureResponse({
+					message: 'INVALID_PERMISSION',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -1604,12 +1639,13 @@ module.exports = class SessionsHelper {
 			//	await sessionEnrollmentQueries.create(_.omit(attendee, 'time_zone'))
 
 			if (session.created_by !== userId) {
-				await sessionQueries.updateEnrollmentCount(sessionId, false)
+				await sessionQueries.updateEnrollmentCount(sessionId, false, tenantCode)
 			}
 
 			const templateData = await notificationQueries.findOneEmailTemplate(
 				emailTemplateCode,
-				session.mentor_organization_id
+				session.mentor_organization_id,
+				tenantCode
 			)
 			let duration = moment.duration(moment.unix(session.end_date).diff(moment.unix(session.start_date)))
 			let elapsedMinutes = duration.asMinutes()
@@ -1683,7 +1719,7 @@ module.exports = class SessionsHelper {
 				emailTemplateCode = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE // update with new template
 			}
 			if (!session || Object.keys(session).length === 0) {
-				session = await sessionQueries.findById(sessionId)
+				session = await sessionQueries.findById(sessionId, tenantCode)
 			}
 
 			if (!session) {
@@ -1703,7 +1739,7 @@ module.exports = class SessionsHelper {
 
 			session.mentor_name = mentorDetails.name
 
-			const deletedRows = await sessionAttendeesQueries.unEnrollFromSession(sessionId, userId)
+			const deletedRows = await sessionAttendeesQueries.unEnrollFromSession(sessionId, userId, tenantCode)
 			if (deletedRows === 0) {
 				return responses.failureResponse({
 					message: 'USER_NOT_ENROLLED',
@@ -1712,15 +1748,16 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			await sessionEnrollmentQueries.unEnrollFromSession(sessionId, userId)
+			//	await sessionEnrollmentQueries.unEnrollFromSession(sessionId, userId)
 
 			if (session.created_by !== userId) {
-				await sessionQueries.updateEnrollmentCount(sessionId)
+				await sessionQueries.updateEnrollmentCount(sessionId, false, tenantCode)
 			}
 
 			const templateData = await notificationQueries.findOneEmailTemplate(
 				emailTemplateCode,
-				session.mentor_organization_id
+				session.mentor_organization_id,
+				tenantCode
 			)
 
 			if (templateData) {
@@ -1806,9 +1843,9 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - Session share link.
 	 */
 
-	static async share(sessionId) {
+	static async share(sessionId, tenantCode) {
 		try {
-			const session = await sessionQueries.findById(sessionId)
+			const session = await sessionQueries.findById(sessionId, tenantCode)
 			if (!session) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
@@ -1823,7 +1860,8 @@ module.exports = class SessionsHelper {
 					{
 						id: sessionId,
 					},
-					{ share_link: shareLink }
+					{ share_link: shareLink },
+					tenantCode
 				)
 			}
 			return responses.successResponse({
@@ -1866,7 +1904,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - start session link
 	 */
 
-	static async start(sessionId, userTokenData) {
+	static async start(sessionId, userTokenData, tenantCode) {
 		const loggedInUserId = userTokenData.id
 		const mentorName = userTokenData.name
 		try {
@@ -1879,7 +1917,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const session = await sessionQueries.findById(sessionId)
+			const session = await sessionQueries.findById(sessionId, tenantCode)
 			if (!session) {
 				return resolve(
 					responses.failureResponse({
@@ -1914,7 +1952,8 @@ module.exports = class SessionsHelper {
 					{
 						status: common.LIVE_STATUS,
 						started_at: utils.utcFormat(),
-					}
+					},
+					tenantCode
 				)
 			}
 			if (session?.meeting_info?.link) {
@@ -1974,7 +2013,8 @@ module.exports = class SessionsHelper {
 						status: common.LIVE_STATUS,
 						started_at: utils.utcFormat(),
 						meeting_info: meetingInfo,
-					}
+					},
+					tenantCode
 				)
 			}
 
@@ -2066,15 +2106,19 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			let resourceInfo = await resourceQueries.find({
-				session_id: sessionId,
-				type: common.SESSION_POST_RESOURCE_TYPE,
-			})
+			let resourceInfo = await resourceQueries.find(
+				{
+					session_id: sessionId,
+					type: common.SESSION_POST_RESOURCE_TYPE,
+				},
+				tenantCode
+			)
 			if (resourceInfo && resourceInfo.length > 0) {
 				let postResourceTemplate = process.env.POST_RESOURCE_EMAIL_TEMPLATE_CODE
 				let templateData = await notificationQueries.findOneEmailTemplate(
 					postResourceTemplate,
-					sessionDetails.mentor_organization_id
+					sessionDetails.mentor_organization_id,
+					tenantCode
 				)
 
 				let sessionAttendees = await sessionAttendeesQueries.findAll(
@@ -2129,6 +2173,7 @@ module.exports = class SessionsHelper {
 					status: common.COMPLETED_STATUS,
 					completed_at: utils.utcFormat(),
 				},
+				tenantCode,
 				{ returning: false, raw: true }
 			)
 
@@ -2164,7 +2209,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - Recording details.
 	 */
 
-	static async getRecording(sessionId, userId, organizationId, tenantCode) {
+	static async getRecording(sessionId, tenantCode) {
 		try {
 			const session = await sessionQueries.findById(sessionId, tenantCode)
 			if (!session) {
@@ -2175,6 +2220,13 @@ module.exports = class SessionsHelper {
 				})
 			}
 
+			if (session.meeting_info.platform !== common.BBB_PLATFORM) {
+				return responses.failureResponse({
+					message: 'SESSION_MEETING_FLATFORM_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			const recordingInfo = await bigBlueButtonRequests.getRecordings(sessionId)
 
 			// let response = await requestUtil.get("https://dev.mentoring.shikshalokam.org/playback/presentation/2.3/6af6737c986d83e8d5ce2ff77af1171e397c739e-1638254682349");
@@ -2314,9 +2366,17 @@ module.exports = class SessionsHelper {
 			const sortBy = queryParams.sort_by || 'created_at'
 			const order = queryParams.order || 'DESC'
 
-			let sessions = await sessionQueries.findAll(filter, {
+			let sessions = await sessionQueries.findAll(filter, tenantCode, {
 				order: [[sortBy, order]],
 			})
+
+			// Ensure sessions is an array (handle potential error objects)
+			if (!Array.isArray(sessions)) {
+				if (sessions instanceof Error) {
+					throw sessions
+				}
+				sessions = []
+			}
 
 			const CSVFields = [
 				{ label: 'No.', value: 'index_number' },
@@ -2344,6 +2404,7 @@ module.exports = class SessionsHelper {
 					isResponseAStream: true,
 					stream: csv,
 					fileName: 'session_list' + moment() + '.csv',
+					tenantCode: tenantCode,
 				})
 			}
 
@@ -2361,6 +2422,7 @@ module.exports = class SessionsHelper {
 				isResponseAStream: true,
 				stream: csv,
 				fileName: 'session_list' + moment() + '.csv',
+				tenantCode: tenantCode,
 			})
 		} catch (error) {
 			console.log(error)
@@ -2504,6 +2566,7 @@ module.exports = class SessionsHelper {
 			const attributes = { exclude: ['mentee_password', 'mentor_password'] }
 			let sessions = await sessionQueries.findAndCountAll(
 				filter,
+				tenantCode,
 				{
 					order: [[sortBy, order]],
 					offset: limit * (page - 1),
@@ -2697,10 +2760,8 @@ module.exports = class SessionsHelper {
 
 			// Wait for all enrollments to settle
 			const results = await Promise.allSettled(enrollPromises)
-			console.log(results)
 			results.forEach((result, index) => {
 				if (result.status === 'fulfilled' && result.value.status === 'fulfilled') {
-					console.log(result)
 					successIds.push(mentees[index].id)
 				} else {
 					failedIds.push(mentees[index].id)
@@ -2943,9 +3004,8 @@ module.exports = class SessionsHelper {
 	 * @returns {CSV} - created users.
 	 */
 
-	static async bulkSessionCreate(filePath, tokenInformation, userId, organizationId, tenantCode) {
+	static async bulkSessionCreate(filePath, userId, organizationCode, tenantCode, organizationId) {
 		try {
-			const { id, organization_id } = tokenInformation
 			const downloadCsv = await this.downloadCSV(filePath)
 			const csvData = await csv().fromFile(downloadCsv.result.downloadPath)
 
@@ -3026,10 +3086,12 @@ module.exports = class SessionsHelper {
 				name: utils.extractFilename(filePath),
 				input_path: filePath,
 				type: common.FILE_TYPE_CSV,
-				organization_id,
-				created_by: id,
+				organization_id: organizationId,
+				organization_code: organizationCode,
+				created_by: userId,
+				tenant_code: tenantCode,
 			}
-			creationData.tenant_code = tenantCode
+
 			const result = await fileUploadQueries.create(creationData, tenantCode)
 			if (!result?.id) {
 				return responses.successResponse({
@@ -3039,10 +3101,15 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const userDetail = await mentorExtensionQueries.getMentorExtension(id, ['name', 'email'], true, tenantCode)
+			const userDetail = await mentorExtensionQueries.getMentorExtension(
+				userId,
+				['name', 'email'],
+				true,
+				tenantCode
+			)
 
 			const orgDetails = await organisationExtensionQueries.findOne(
-				{ organization_id: organization_id },
+				{ organization_code: organizationCode },
 				tenantCode,
 				{ attributes: ['name'] }
 			)
@@ -3055,10 +3122,11 @@ module.exports = class SessionsHelper {
 				{
 					fileDetails: result,
 					user: {
-						id,
+						userId,
 						name: userDetail.name,
 						email: userDetail.email,
-						organization_id,
+						organization_id: organizationId,
+						organization_code: organizationCode,
 						org_name: orgDetails.name,
 					},
 				},
@@ -3082,10 +3150,10 @@ module.exports = class SessionsHelper {
 		}
 	}
 
-	static async getSampleCSV(orgId, userId, organizationId, tenantCode) {
+	static async getSampleCSV(orgCode, tenantCode) {
 		try {
-			const defaultOrgId = await getDefaultOrgId(tenantCode)
-			if (!defaultOrgId) {
+			const defaultOrgCode = await getDefaultOrgCode()
+			if (!defaultOrgCode) {
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_ID_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
@@ -3093,8 +3161,8 @@ module.exports = class SessionsHelper {
 				})
 			}
 			let path = process.env.SAMPLE_CSV_FILE_PATH
-			if (orgId != defaultOrgId) {
-				const result = await organisationExtensionQueries.findOne({ organization_id: orgId }, tenantCode, {
+			if (orgCode != defaultOrgCode) {
+				const result = await organisationExtensionQueries.findOne({ organization_code: orgCode }, tenantCode, {
 					attributes: ['uploads'],
 				})
 				if (result && result.uploads) {
@@ -3288,6 +3356,59 @@ module.exports = class SessionsHelper {
 			return resourceInfo
 		} else {
 			return []
+		}
+	}
+
+	/**
+	 * Submit session feedback.
+	 *
+	 * @static
+	 * @async
+	 * @method
+	 * @name feedback
+	 * @param {String} sessionId - Session ID
+	 * @param {Object} bodyData - Feedback data containing ratings
+	 * @param {String} userId - User ID of feedback submitter
+	 * @param {String} organizationCode - Organization code
+	 * @param {String} tenantCode - Tenant code
+	 * @returns {JSON} - Feedback submission response
+	 */
+	static async feedback(sessionId, bodyData, userId, organizationCode, tenantCode) {
+		try {
+			// Check if user is a mentor by querying mentor extension
+			const mentorDetails = await mentorExtensionQueries.getMentorExtension(userId, [], false, tenantCode)
+			const isAMentor = !!mentorDetails
+
+			// Transform ratings data to feedback format expected by feedbackService
+			const feedbackData = {
+				feedbacks:
+					bodyData.ratings?.map((rating) => {
+						// Convert question_id to integer if it's a valid number string
+						let questionId = rating.qid
+						if (typeof questionId === 'string' && /^\d+$/.test(questionId)) {
+							questionId = parseInt(questionId, 10)
+						} else if (typeof questionId === 'string' && !/^\d+$/.test(questionId)) {
+							// Handle MongoDB ObjectId-style strings or other non-numeric strings
+							// For now, we'll return an error since the database expects integer IDs
+							throw new Error(`Invalid question_id format: ${questionId}. Expected numeric value.`)
+						}
+
+						return {
+							question_id: questionId,
+							value: rating.rating,
+						}
+					}) || [],
+			}
+
+			// If user is a mentor, determine feedback role
+			if (isAMentor) {
+				feedbackData.feedback_as = 'mentor'
+			}
+
+			// Delegate to feedback service
+			return await feedbackService.submit(sessionId, feedbackData, userId, isAMentor, tenantCode)
+		} catch (error) {
+			throw error
 		}
 	}
 }

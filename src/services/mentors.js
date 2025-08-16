@@ -66,11 +66,14 @@ module.exports = class MentorsHelper {
 			const query = utils.processQueryParametersWithExclusions(queryParams)
 			const sessionModelName = await sessionQueries.getModelName()
 
-			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities({
-				status: 'ACTIVE',
-				allow_filtering: true,
-				model_names: { [Op.contains]: [sessionModelName] },
-			})
+			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					allow_filtering: true,
+					model_names: { [Op.contains]: [sessionModelName] },
+				},
+				tenantCode
+			)
 
 			const defaultRuleFilter = await defaultRulesFilter({
 				ruleType: common.DEFAULT_RULES.SESSION_TYPE,
@@ -1364,9 +1367,14 @@ module.exports = class MentorsHelper {
 				filters['start_date'] = { [Op.gte]: startDate }
 				filters['end_date'] = { ...(filters['end_date'] || {}), [Op.lte]: endDate }
 			}
-			const sessionDetails = await sessionQueries.findAllSessions(page, limit, search, filters)
+			const sessionDetails = await sessionQueries.findAllSessions(page, limit, search, filters, tenantCode)
 
-			if (sessionDetails.count == 0 || sessionDetails.rows.length == 0) {
+			if (
+				!sessionDetails ||
+				sessionDetails.count == 0 ||
+				!sessionDetails.rows ||
+				sessionDetails.rows.length == 0
+			) {
 				return responses.successResponse({
 					message: 'SESSION_FETCHED_SUCCESSFULLY',
 					statusCode: httpStatusCode.ok,

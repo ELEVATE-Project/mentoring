@@ -6,11 +6,12 @@ module.exports = class ReportMapping {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
+			const organizationId = req.decodedToken.organization_id
 			const userId = req.decodedToken.id
 			const createReport = await reportmappingService.createMapping(
 				req.body,
-				userId,
 				organizationCode,
+				organizationId,
 				tenantCode
 			)
 			return createReport
@@ -33,16 +34,8 @@ module.exports = class ReportMapping {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 			const filter = { id: req.query.id }
-			const updatedReportMapping = await reportmappingService.updateMapping(
-				filter,
-				req.body,
-				userId,
-				organizationCode,
-				tenantCode
-			)
+			const updatedReportMapping = await reportmappingService.updateMapping(filter, req.body, tenantCode)
 			return updatedReportMapping
 		} catch (error) {
 			return error

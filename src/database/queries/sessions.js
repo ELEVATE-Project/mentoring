@@ -619,7 +619,7 @@ exports.findAndCountAll = async (filter, tenantCode, options = {}, attributes = 
 		})
 		return { rows, count }
 	} catch (error) {
-		return error
+		throw error
 	}
 }
 exports.mentorsSessionWithPendingFeedback = async (mentorId, tenantCode, options = {}, completedSessionIds) => {
@@ -639,7 +639,7 @@ exports.mentorsSessionWithPendingFeedback = async (mentorId, tenantCode, options
 			raw: true,
 		})
 	} catch (error) {
-		return error
+		throw error
 	}
 }
 

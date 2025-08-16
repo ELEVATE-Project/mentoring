@@ -142,10 +142,8 @@ module.exports = class Sessions {
 	async share(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
-			const shareSessionDetails = await sessionService.share(req.params.id, userId, organizationCode, tenantCode)
+			const shareSessionDetails = await sessionService.share(req.params.id, tenantCode)
 			return shareSessionDetails
 		} catch (error) {
 			return error
@@ -223,8 +221,6 @@ module.exports = class Sessions {
 	async start(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			const sessionsStarted = await sessionService.start(req.params.id, req.decodedToken, tenantCode)
 			return sessionsStarted
@@ -264,10 +260,8 @@ module.exports = class Sessions {
 	async getRecording(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
-			const recording = await sessionService.getRecording(req.params.id, userId, organizationCode, tenantCode)
+			const recording = await sessionService.getRecording(req.params.id, tenantCode)
 			return recording
 		} catch (error) {
 			return error
@@ -460,10 +454,10 @@ module.exports = class Sessions {
 
 			const sessionUploadRes = await sessionService.bulkSessionCreate(
 				req.body.file_path,
-				req.decodedToken,
 				userId,
 				organizationCode,
-				tenantCode
+				tenantCode,
+				req.decodedToken.organizations[0].id
 			)
 			return sessionUploadRes
 		} catch (error) {
@@ -482,9 +476,8 @@ module.exports = class Sessions {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
-			const downloadUrlResponse = await sessionService.getSampleCSV(organizationCode, userId, tenantCode)
+			const downloadUrlResponse = await sessionService.getSampleCSV(organizationCode, tenantCode)
 			return downloadUrlResponse
 		} catch (error) {
 			return error

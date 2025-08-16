@@ -509,11 +509,10 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async createReport(data, userId, organizationId, organizationCode, tenantCode) {
+	static async createReport(data, organizationId, organizationCode, tenantCode) {
 		try {
 			data.organization_id = organizationId
 			data.organization_code = organizationCode
-			data.tenant_code = tenantCode
 			data.created_at = new Date().toISOString()
 			data.updated_at = new Date().toISOString()
 
@@ -541,9 +540,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async getReportById(id, organizationCode, tenantCode) {
+	static async getReportById(id, tenantCode) {
 		try {
-			const readReport = await reportsQueries.findReportById(id, organizationCode, tenantCode)
+			const readReport = await reportsQueries.findReportById(id, tenantCode)
 			if (!readReport) {
 				return responses.failureResponse({
 					message: 'REPORT_NOT_FOUND',
@@ -561,9 +560,14 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async updateReport(id, updateData, userId, organizationId, organizationCode, tenantCode) {
+	static async updateReport(id, updateData, organizationId, organizationCode, tenantCode) {
 		try {
-			const filter = { id: id, organization_code: organizationCode, tenant_code: tenantCode }
+			const filter = {
+				id: id,
+				organization_code: organizationCode,
+				organization_id: organizationId,
+				tenant_code: tenantCode,
+			}
 			const updatedReport = await reportsQueries.updateReport(filter, updateData, tenantCode)
 			if (!updatedReport) {
 				return responses.failureResponse({
@@ -582,9 +586,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async deleteReportById(id, userId, organizationCode, tenantCode) {
+	static async deleteReportById(id, tenantCode) {
 		try {
-			const deletedRows = await reportsQueries.deleteReportById(id, organizationCode, tenantCode)
+			const deletedRows = await reportsQueries.deleteReportById(id, tenantCode)
 			if (deletedRows === 0) {
 				return responses.failureResponse({
 					message: 'REPORT_DELETION_FAILED',

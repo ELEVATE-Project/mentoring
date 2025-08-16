@@ -594,7 +594,7 @@ module.exports = class AdminHelper {
 
 	static async triggerViewRebuild(decodedToken, tenantCode) {
 		try {
-			const result = await adminService.triggerViewBuild()
+			const result = await adminService.triggerViewBuild(tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MATERIALIZED_VIEW_GENERATED_SUCCESSFULLY',
@@ -606,7 +606,7 @@ module.exports = class AdminHelper {
 	}
 	static async triggerPeriodicViewRefresh(decodedToken, tenantCode) {
 		try {
-			const result = await adminService.triggerPeriodicViewRefresh()
+			const result = await adminService.triggerPeriodicViewRefresh(tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY',

@@ -719,8 +719,8 @@ module.exports = class MenteesHelper {
 				{
 					attributes: ['user_id', 'organization_id'],
 				},
-				true,
-				tenantCode
+				tenantCode,
+				true
 			)
 
 			// ✅ FIX 1: Add null check and filter out null organization_ids
@@ -1724,6 +1724,7 @@ module.exports = class MenteesHelper {
 					roles: roles,
 					requesterOrganizationId: organizationId,
 					data: requestedUserExtension,
+					tenantCode: tenantCode,
 				})
 				if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
 					return responses.failureResponse({

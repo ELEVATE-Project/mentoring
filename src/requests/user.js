@@ -394,7 +394,7 @@ const share = function (profileId) {
  *   .catch(error => console.error(error));
  */
 
-const list = function (userType, pageNo, pageSize, searchText) {
+const list = function (userType, pageNo, pageSize, searchText, tenantCode) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			const filter = {
@@ -417,7 +417,8 @@ const list = function (userType, pageNo, pageSize, searchText) {
 				(additionalProjectionClause = `name,email,organization_id`),
 				(returnOnlyUserId = false),
 				searchText ? searchText : '',
-				(defaultFilter = '')
+				(defaultFilter = ''),
+				tenantCode
 			)
 
 			let foundKeys = {}

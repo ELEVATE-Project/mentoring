@@ -6,11 +6,11 @@ module.exports = class ReportQuery {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
+			const organizationId = req.decodedToken.organization_id
 			const createReportQuery = await reportQueryService.createQuery(
 				req.body,
-				userId,
 				organizationCode,
+				organizationId,
 				tenantCode
 			)
 			return createReportQuery
@@ -33,15 +33,7 @@ module.exports = class ReportQuery {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-			const updatedReportQuery = await reportQueryService.updateQuery(
-				req.query.code,
-				req.body,
-				userId,
-				organizationCode,
-				tenantCode
-			)
+			const updatedReportQuery = await reportQueryService.updateQuery(req.query.code, req.body, tenantCode)
 			return updatedReportQuery
 		} catch (error) {
 			return error
@@ -51,14 +43,7 @@ module.exports = class ReportQuery {
 	async delete(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-			const deleteReportQuery = await reportQueryService.deleteQuery(
-				req.query.id,
-				userId,
-				organizationCode,
-				tenantCode
-			)
+			const deleteReportQuery = await reportQueryService.deleteQuery(req.query.id, tenantCode)
 			return deleteReportQuery
 		} catch (error) {
 			return error

@@ -3,13 +3,13 @@ const responses = require('@helpers/responses')
 const roleExtensionQueries = require('@database/queries/roleExtentions')
 
 module.exports = class ReportsHelper {
-	static async createRoleExtension(data, userId, organizationId, tenantCode) {
+	static async createRoleExtension(data, organizationId, organizationCode, tenantCode) {
 		try {
 			// Attempt to create a new report directly
 			const roleCreation = await roleExtensionQueries.createRoleExtension(
 				data,
-				userId,
 				organizationId,
+				organizationCode,
 				tenantCode
 			)
 			return responses.successResponse({
@@ -34,7 +34,7 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async roleExtensionDetails(title, userId, organizationId, tenantCode) {
+	static async roleExtensionDetails(title, tenantCode) {
 		try {
 			const readRoleExtension = await roleExtensionQueries.findRoleExtensionByTitle(title, tenantCode)
 			if (!readRoleExtension) {
@@ -54,26 +54,19 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async updateRoleExtension(title, updateData, userId, organizationId, tenantCode) {
+	static async updateRoleExtension(title, updateData, tenantCode) {
 		try {
-			const filter = { title: title }
-			const updatedRole = await roleExtensionQueries.updateRoleExtension(
-				filter,
-				updateData,
-				userId,
-				organizationId,
-				tenantCode
-			)
+			const updatedRole = await roleExtensionQueries.updateRoleExtension(title, updateData, tenantCode)
 			if (!updatedRole) {
 				return responses.failureResponse({
-					message: 'ROLE_EXTENSION_UPDATE_FAILED',
+					message: 'ROLE_EXTENSION_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
 			return responses.successResponse({
-				statusCode: httpStatusCode.created,
-				message: 'ROLE_EXTENSION_UPATED_SUCCESSFULLY',
+				statusCode: httpStatusCode.ok,
+				message: 'ROLE_EXTENSION_UPDATED_SUCCESSFULLY',
 				result: updatedRole.dataValues,
 			})
 		} catch (error) {

@@ -3,8 +3,9 @@ const responses = require('@helpers/responses')
 const reportTypeQueries = require('@database/queries/reportTypes')
 
 module.exports = class ReportsHelper {
-	static async createReportType(data, userId, organizationId, tenantCode) {
+	static async createReportType(data, organizationCode, tenantCode) {
 		try {
+			data.organization_code = organizationCode
 			// Attempt to create a new report directly
 			const reportTypeCreation = await reportTypeQueries.createReportType(data, tenantCode)
 			return responses.successResponse({
@@ -29,10 +30,10 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async getReportType(title, organizationId, tenantCode) {
+	static async getReportType(title, tenantCode) {
 		try {
 			const readReportType = await reportTypeQueries.findReportTypeByTitle(title, tenantCode)
-			if (!readReportType) {
+			if (readReportType.length == 0) {
 				return responses.failureResponse({
 					message: 'REPORT_TYPE_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
@@ -42,14 +43,14 @@ module.exports = class ReportsHelper {
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'REPORT_TYPE_FETCHED_SUCCESSFULLY',
-				result: readReportType.dataValues,
+				result: readReportType,
 			})
 		} catch (error) {
 			throw error
 		}
 	}
 
-	static async updateReportType(filter, updateData, userId, organizationId, tenantCode) {
+	static async updateReportType(filter, updateData, tenantCode) {
 		try {
 			const updatedReport = await reportTypeQueries.updateReportType(filter, updateData, tenantCode)
 			if (!updatedReport) {
@@ -69,7 +70,7 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async deleteReportType(id, userId, organizationId, tenantCode) {
+	static async deleteReportType(id, tenantCode) {
 		try {
 			const deletedRows = await reportTypeQueries.deleteReportType(id, tenantCode)
 			if (deletedRows === 0) {

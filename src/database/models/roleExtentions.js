@@ -49,9 +49,11 @@ module.exports = (sequelize, DataTypes) => {
 			tenant_code: {
 				type: DataTypes.STRING,
 				allowNull: false,
+				primaryKey: true,
 			},
 		},
 		{
+			sequelize,
 			modelName: 'RoleExtension',
 			tableName: 'role_extensions',
 			freezeTableName: true,

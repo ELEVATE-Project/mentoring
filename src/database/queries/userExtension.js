@@ -431,7 +431,8 @@ module.exports = class MenteeExtensionQueries {
 		additionalProjectionClause = '',
 		returnOnlyUserId,
 		searchText = '',
-		defaultFilter = ''
+		defaultFilter = '',
+		tenantCode
 	) {
 		try {
 			const excludeUserIds = ids.length === 0
@@ -451,6 +452,9 @@ module.exports = class MenteeExtensionQueries {
 			if (excludeUserIds && filter.query.length === 0) {
 				saasFilterClause = saasFilterClause.replace('AND ', '') // Remove "AND" if excludeUserIds is true and filter is empty
 			}
+
+			// Tenant filtering enabled - materialized view now includes tenant_code column
+			const tenantFilterClause = tenantCode ? `AND tenant_code = '${tenantCode}'` : ''
 
 			let projectionClause = `
 				user_id,
@@ -474,15 +478,34 @@ module.exports = class MenteeExtensionQueries {
 				filterClause = filterClause.startsWith('AND') ? filterClause : 'AND ' + filterClause
 			}
 
+			// Build WHERE clause dynamically to avoid empty conditions
+			const whereConditions = [
+				userFilterClause,
+				filterClause,
+				saasFilterClause,
+				additionalFilter,
+				defaultFilter,
+				tenantFilterClause,
+			].filter((condition) => condition && condition.trim() !== '')
+
+			let whereClause = ''
+			if (whereConditions.length > 0) {
+				// Clean up AND prefixes and join conditions
+				const cleanedConditions = whereConditions.map((condition, index) => {
+					if (index === 0) {
+						// First condition shouldn't have AND prefix
+						return condition.replace(/^AND\s+/, '')
+					}
+					// Subsequent conditions should have AND prefix
+					return condition.startsWith('AND ') ? condition : `AND ${condition}`
+				})
+				whereClause = `WHERE ${cleanedConditions.join(' ')}`
+			}
+
 			const query = `
 				SELECT ${projectionClause}
 				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
-				WHERE
-					${userFilterClause}
-					${filterClause}
-					${saasFilterClause}
-					${additionalFilter}
-					${defaultFilter}
+				${whereClause}
 				OFFSET :offset
 				LIMIT :limit
 			`
@@ -497,7 +520,7 @@ module.exports = class MenteeExtensionQueries {
 				replacements.limit = limit
 			}
 
-			const results = await Sequelize.query(query, {
+			let results = await Sequelize.query(query, {
 				type: QueryTypes.SELECT,
 				replacements: replacements,
 			})

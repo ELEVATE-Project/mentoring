@@ -1,10 +1,40 @@
 const RoleExtension = require('@database/models/index').RoleExtension
 
 module.exports = class RoleExtensionService {
-	static async createRoleExtension(data, userId, organizationId, tenantCode) {
+	static async createRoleExtension(data, organizationId, organizationCode, tenantCode) {
 		try {
+			// Check if a soft-deleted record exists
+			const existingRecord = await RoleExtension.findOne({
+				where: {
+					title: data.title,
+					tenant_code: tenantCode,
+				},
+				paranoid: false, // Include soft-deleted records
+			})
+
+			if (existingRecord && existingRecord.deleted_at) {
+				// Restore the soft-deleted record with new data
+				const updateData = {
+					...data,
+					tenant_code: tenantCode,
+					organization_code: organizationCode,
+					organization_id: organizationId,
+					deleted_at: null,
+					updated_at: new Date(),
+				}
+
+				const [rowsUpdated, updatedRecords] = await RoleExtension.update(updateData, {
+					where: { title: data.title, tenant_code: tenantCode },
+					returning: true,
+					paranoid: false, // Update even soft-deleted records
+				})
+				return updatedRecords[0]
+			}
+
+			// Create new record if no existing one found
 			data.tenant_code = tenantCode
-			data.organization_code = organizationId
+			data.organization_code = organizationCode
+			data.organization_id = organizationId
 			return await RoleExtension.create(data, { returning: true })
 		} catch (error) {
 			throw error
@@ -16,8 +46,9 @@ module.exports = class RoleExtensionService {
 			return await RoleExtension.findOne({
 				where: { title, tenant_code: tenantCode },
 			})
-		} catch (error) {
-			throw error
+		} catch (err) {
+			console.error('Error finding RoleExtension by title:', err)
+			throw err
 		}
 	}
 
@@ -34,14 +65,22 @@ module.exports = class RoleExtensionService {
 		}
 	}
 
-	static async updateRoleExtension(filter, updateData, userId, organizationId, tenantCode) {
+	static async updateRoleExtension(title, updateData, tenantCode) {
 		try {
-			filter.tenant_code = tenantCode
-			const [rowsUpdated, [updatedRoleExtension]] = await RoleExtension.update(updateData, {
+			const filter = { title: title, tenant_code: tenantCode }
+
+			const [rowsUpdated, updatedExtension] = await RoleExtension.update(updateData, {
 				where: filter,
 				returning: true,
 			})
-			return updatedRoleExtension
+
+			// Return null if no rows were updated (record not found)
+			if (rowsUpdated === 0) {
+				return null
+			}
+
+			// Return the first updated record
+			return updatedExtension[0]
 		} catch (error) {
 			throw error
 		}

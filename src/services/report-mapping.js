@@ -3,8 +3,10 @@ const responses = require('@helpers/responses')
 const mappingQueries = require('@database/queries/reportRoleMapping')
 
 module.exports = class ReportsHelper {
-	static async createMapping(data, userId, organizationId, tenantCode) {
+	static async createMapping(data, organizationCode, organizationId, tenantCode) {
 		try {
+			data.organization_code = organizationCode
+			data.organization_id = organizationId
 			// Attempt to create a new report directly
 			const mappingCreation = await mappingQueries.createReportRoleMapping(data, tenantCode)
 			return responses.successResponse({
@@ -29,9 +31,13 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async getMapping(code, organizationId, tenantCode) {
+	static async getMapping(code, organizationCode, tenantCode) {
 		try {
-			const readMapping = await mappingQueries.findReportRoleMappingByReportCode(code, tenantCode)
+			const readMapping = await mappingQueries.findReportRoleMappingByReportCode(
+				code,
+				tenantCode,
+				organizationCode
+			)
 			if (!readMapping) {
 				return responses.failureResponse({
 					message: 'REPORT_MAPPING_NOT_FOUND',
@@ -49,7 +55,7 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async updateMapping(filter, updateData, userId, organizationId, tenantCode) {
+	static async updateMapping(filter, updateData, tenantCode) {
 		try {
 			const updateMapping = await mappingQueries.updateReportRoleMappings(filter, updateData, tenantCode)
 			if (!updateMapping) {

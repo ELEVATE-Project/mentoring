@@ -6,11 +6,11 @@ module.exports = class Reports {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
+			const organizationId = req.decodedToken.organization_id
 
 			const createReport = await roleExtensionService.createRoleExtension(
 				req.body,
-				userId,
+				organizationId,
 				organizationCode,
 				tenantCode
 			)
@@ -23,15 +23,7 @@ module.exports = class Reports {
 	async read(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
-			const getReportById = await roleExtensionService.roleExtensionDetails(
-				req.query.title,
-				userId,
-				organizationCode,
-				tenantCode
-			)
+			const getReportById = await roleExtensionService.roleExtensionDetails(req.query.title, tenantCode)
 			return getReportById
 		} catch (error) {
 			return error
@@ -41,16 +33,7 @@ module.exports = class Reports {
 	async update(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
-			const updatedReport = await roleExtensionService.updateRoleExtension(
-				req.query.title,
-				req.body,
-				userId,
-				organizationCode,
-				tenantCode
-			)
+			const updatedReport = await roleExtensionService.updateRoleExtension(req.query.title, req.body, tenantCode)
 			return updatedReport
 		} catch (error) {
 			return error

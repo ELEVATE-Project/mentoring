@@ -58,10 +58,10 @@ module.exports = class ReportQueryServiceQueries {
 		}
 	}
 
-	static async findReportQueryByCode(code, tenantCode) {
+	static async findReportQueryByCode(code, tenantCode, organizationCode) {
 		try {
 			return await ReportQuery.findOne({
-				where: { report_code: code, tenant_code: tenantCode },
+				where: { report_code: code, tenant_code: tenantCode, organization_code: organizationCode },
 				raw: true,
 			})
 		} catch (error) {

@@ -14,10 +14,18 @@ module.exports = class requestsSessions {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
+			const organizationId = req.decodedToken.organization_id
 			const userId = req.decodedToken.id
 			const SkipValidation = req.query.SkipValidation ? req.query.SkipValidation : false
 
-			return await requestSessionsService.create(req.body, userId, organizationCode, SkipValidation, tenantCode)
+			return await requestSessionsService.create(
+				req.body,
+				userId,
+				organizationCode,
+				organizationId,
+				SkipValidation,
+				tenantCode
+			)
 		} catch (error) {
 			return error
 		}
@@ -60,6 +68,7 @@ module.exports = class requestsSessions {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
+			const organizationId = req.decodedToken.organization_id
 			const userId = req.decodedToken.id
 
 			if (req.headers.timezone) {
@@ -68,6 +77,7 @@ module.exports = class requestsSessions {
 			const acceptRequestSession = await requestSessionsService.accept(
 				req.body,
 				userId,
+				organizationId,
 				organizationCode,
 				isAMentor(req.decodedToken.organizations[0].roles),
 				tenantCode
@@ -130,6 +140,7 @@ module.exports = class requestsSessions {
 	async userAvailability(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
 			const userId = req.decodedToken.id
 
 			return await requestSessionsService.userAvailability(
@@ -141,6 +152,7 @@ module.exports = class requestsSessions {
 				req.decodedToken.organizations[0].roles,
 				req.query.start_date,
 				req.query.end_date,
+				organizationId,
 				tenantCode
 			)
 		} catch (error) {

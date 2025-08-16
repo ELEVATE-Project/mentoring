@@ -16,10 +16,12 @@ module.exports = class MenteesHelper {
 	 * @name pending
 	 * @param {String} userId - user id.
 	 * @param {Boolean} isAMentor
+	 * @param {String} organizationCode - organization code.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - pending feedback.
 	 */
 
-	static async pending(userId, isAMentor, tenantCode) {
+	static async pending(userId, isAMentor, organizationCode, tenantCode) {
 		try {
 			const sessions = []
 			const completedSessionsFeedback = await feedbackQueries.findAll(
@@ -37,12 +39,15 @@ module.exports = class MenteesHelper {
 
 				const sessionDetails = await sessionQueries.mentorsSessionWithPendingFeedback(
 					userId,
+					tenantCode,
 					options,
-					completedSessionIds,
-					tenantCode
+					completedSessionIds
 				)
 
-				sessions.push(...sessionDetails)
+				// Add null safety check for sessionDetails
+				if (sessionDetails && Array.isArray(sessionDetails)) {
+					sessions.push(...sessionDetails)
+				}
 			}
 
 			const menteeSessionAttendances = await sessionAttendeesQueries.findPendingFeedbackSessions(
@@ -57,26 +62,26 @@ module.exports = class MenteesHelper {
 				!Array.isArray(menteeSessionAttendances) ||
 				menteeSessionAttendances.length === 0
 			) {
-				return sessions // Return empty sessions array if no attendances found
-			}
+				// Don't return here - continue to proper response formatting
+			} else {
+				const sessionIds = menteeSessionAttendances
+					.map((menteeSessionAttendance) => menteeSessionAttendance?.session_id)
+					.filter(Boolean)
 
-			const sessionIds = menteeSessionAttendances
-				.map((menteeSessionAttendance) => menteeSessionAttendance?.session_id)
-				.filter(Boolean)
+				const sessionOptions = {
+					attributes: ['id', 'title', 'description', 'mentee_feedback_question_set'],
+				}
 
-			const sessionOptions = {
-				attributes: ['id', 'title', 'description', 'mentee_feedback_question_set'],
-			}
+				const menteeSessionDetails = await sessionQueries.findAll(
+					{ id: sessionIds, status: 'COMPLETED' },
+					tenantCode,
+					sessionOptions
+				)
 
-			const menteeSessionDetails = await sessionQueries.findAll(
-				{ id: sessionIds, status: 'COMPLETED' },
-				tenantCode,
-				sessionOptions
-			)
-
-			// Add null safety for menteeSessionDetails
-			if (menteeSessionDetails && Array.isArray(menteeSessionDetails)) {
-				sessions.push(...menteeSessionDetails)
+				// Add null safety for menteeSessionDetails
+				if (menteeSessionDetails && Array.isArray(menteeSessionDetails)) {
+					sessions.push(...menteeSessionDetails)
+				}
 			}
 
 			// Getting unique form codes with null safety

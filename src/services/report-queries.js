@@ -3,9 +3,11 @@ const responses = require('@helpers/responses')
 const ReportQueries = require('@database/queries/reportQueries')
 
 module.exports = class ReportsHelper {
-	static async createQuery(data, userId, organizationId, tenantCode) {
+	static async createQuery(data, organizationCode, organizationId, tenantCode) {
 		try {
 			// Attempt to create a new report directly
+			data.organization_id = organizationId
+			data.organization_code = organizationCode
 			const mappingCreation = await ReportQueries.createReportQuery(data, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -29,9 +31,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async getQuery(code, organizationId, tenantCode) {
+	static async getQuery(code, organizationCode, tenantCode) {
 		try {
-			const readQuery = await ReportQueries.findReportQueryByCode(code, tenantCode)
+			const readQuery = await ReportQueries.findReportQueryByCode(code, tenantCode, organizationCode)
 			if (!readQuery) {
 				return responses.failureResponse({
 					message: 'REPORT_QUERY_NOT_FOUND',
@@ -49,7 +51,7 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async updateQuery(code, updateData, userId, organizationId, tenantCode) {
+	static async updateQuery(code, updateData, tenantCode) {
 		try {
 			const filter = { report_code: code }
 			const updateMapping = await ReportQueries.updateReportQueries(filter, updateData, tenantCode)
@@ -70,7 +72,7 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async deleteQuery(id, userId, organizationId, tenantCode) {
+	static async deleteQuery(id, tenantCode) {
 		try {
 			const deletedRows = await ReportQueries.deleteReportQueryById(id, tenantCode)
 			if (deletedRows === 0) {

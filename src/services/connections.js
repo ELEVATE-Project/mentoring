@@ -224,8 +224,8 @@ module.exports = class ConnectionHelper {
 						'image',
 					],
 				},
-				false,
-				tenantCode
+				tenantCode,
+				false
 			)
 
 			const userExtensionsModelName = await userExtensionQueries.getModelName()
@@ -303,8 +303,8 @@ module.exports = class ConnectionHelper {
 				{
 					attributes: ['settings', 'user_id'],
 				},
-				true,
-				tenantCode
+				tenantCode,
+				true
 			)
 			let chatRoom
 			// Create room only if both users have enable chat option
@@ -414,11 +414,14 @@ module.exports = class ConnectionHelper {
 			const userExtensionsModelName = await userExtensionQueries.getModelName()
 
 			// Fetch validation data for filtering connections (excluding roles)
-			const validationData = await entityTypeQueries.findAllEntityTypesAndEntities({
-				status: 'ACTIVE',
-				allow_filtering: true,
-				model_names: { [Op.contains]: [userExtensionsModelName] },
-			})
+			const validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					allow_filtering: true,
+					model_names: { [Op.contains]: [userExtensionsModelName] },
+				},
+				tenantCode
+			)
 
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData, userExtensionsModelName)
 
