@@ -275,3 +275,61 @@ exports.markRequestsAsDeleted = async (requestSessionIds = [], tenantCode) => {
 		throw error
 	}
 }
+
+exports.getPendingSessionRequests = async (userId, tenant_code) => {
+	try {
+		const query = `
+			SELECT rs.*, rm.requestee_id
+			FROM session_request rs
+			INNER JOIN session_request_mapping rm ON rs.id = rm.request_session_id
+			WHERE rm.requestee_id = :userId 
+			AND rm.tenant_code = :tenantCode
+			AND rs.status = :requestedStatus
+			AND rs.deleted_at IS NULL
+		`
+
+		const pendingRequests = await sequelize.query(query, {
+			type: QueryTypes.SELECT,
+			replacements: {
+				userId,
+				requestedStatus: common.CONNECTIONS_STATUS.REQUESTED,
+				tenant_code: tenant_code,
+			},
+		})
+
+		return pendingRequests || []
+	} catch (error) {
+		console.error('Error getting pending session requests :', error)
+		throw error
+	}
+}
+
+exports.getCount = async (userId, status, tenantCode) => {
+	try {
+		// Prepare filter
+		const filter =
+			status.length != 0
+				? status
+				: {
+						[Op.in]: [
+							common.CONNECTIONS_STATUS.ACCEPTED,
+							common.CONNECTIONS_STATUS.REQUESTED,
+							common.CONNECTIONS_STATUS.REJECTED,
+							common.CONNECTIONS_STATUS.EXPIRED,
+						],
+				  }
+
+		const sessionRequest = await requestSession.count({
+			where: {
+				requestor_id: userId,
+				status: filter,
+				tenant_code: tenantCode,
+			},
+		})
+
+		return sessionRequest
+	} catch (error) {
+		console.error('Error in getCount:', error)
+		throw error
+	}
+}

@@ -8,6 +8,7 @@ const sequelize = require('@database/models/index').sequelize
 const common = require('@constants/common')
 const MenteeExtension = require('@database/models/index').UserExtension
 const { QueryTypes } = require('sequelize')
+const { fn, col } = require('sequelize')
 
 exports.addFriendRequest = async (userId, friendId, message, tenantCode) => {
 	try {
@@ -61,6 +62,7 @@ exports.getPendingRequests = async (userId, page, pageSize, tenantCode) => {
 			raw: true,
 			limit: pageSize,
 			offset: (page - 1) * pageSize,
+			order: [['created_at', 'DESC']],
 		})
 		return result
 	} catch (error) {
@@ -463,6 +465,47 @@ exports.getConnectionsCount = async (filter, userId, organizationIds = [], tenan
 		})
 
 		return Number(result[0].count)
+	} catch (error) {
+		throw error
+	}
+}
+
+exports.getConnectedUsers = async (userId, selectColumn = 'user_id', whereColumn = 'friend_id', tenantCode) => {
+	try {
+		const allowed = new Set(['user_id', 'friend_id'])
+		if (!allowed.has(selectColumn) || !allowed.has(whereColumn)) {
+			throw new Error('Invalid column name')
+		}
+
+		const connections = await Connection.findAll({
+			attributes: [[fn('DISTINCT', col(selectColumn)), 'user_id']],
+			where: {
+				[whereColumn]: userId,
+				status: common.CONNECTIONS_STATUS.ACCEPTED,
+				tenant_code: tenantCode,
+			},
+			raw: true,
+		})
+
+		const userIds = connections.map((conn) => conn.user_id)
+
+		return userIds.length > 0 ? userIds : []
+	} catch (error) {
+		throw error
+	}
+}
+
+exports.getRequestsCount = async (userId, tenantCode) => {
+	try {
+		// This will retrieve the request count
+		const result = await ConnectionRequest.count({
+			where: {
+				friend_id: userId,
+				tenant_code: tenantCode,
+				status: common.CONNECTIONS_STATUS.REQUESTED,
+			},
+		})
+		return result
 	} catch (error) {
 		throw error
 	}

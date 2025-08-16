@@ -30,4 +30,5 @@ module.exports = {
 	COMMUNICATION_GET_USER_ID: 'v1/communication/userMapping',
 	DOWNLOAD_IMAGE_URL: 'v1/cloud-services/file/getDownloadableUrl',
 	COMMUNICATION_USERS_SET_ACTIVE_STATUS: 'v1/communication/setActiveStatus',
+	COMMUNICATION_USERS_REMOVE_AVATAR: 'v1/communication/removeAvatar',
 }

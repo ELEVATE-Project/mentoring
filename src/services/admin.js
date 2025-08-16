@@ -19,6 +19,8 @@ const moment = require('moment')
 const connectionQueries = require('@database/queries/connection')
 const userExtensionQueries = require('@database/queries/userExtension')
 const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { sequelize } = require('@database/models/index')
+const { literal } = require('sequelize')
 
 // Generic notification helper class
 class NotificationHelper {
@@ -97,6 +99,7 @@ class NotificationHelper {
 						sessionDate: session.start_date ? moment.unix(session.start_date).format('DD-MM-YYYY') : '',
 						sessionTime: session.start_date ? moment.unix(session.start_date).format('hh:mm A') : '',
 						recipientName: recipient.name,
+						attendeeName: recipient.name,
 						...addionalData,
 					}
 
@@ -132,7 +135,7 @@ class NotificationHelper {
 	}
 }
 
-module.exports = class AdminHelper {
+module.exports = class AdminService {
 	/**
 	 * userDelete
 	 * @method
@@ -156,7 +159,7 @@ module.exports = class AdminHelper {
 			}
 
 			const userInfo = getUserDetails[0]
-			const isMentor = userInfo.isMentor === true
+			const isMentor = userInfo.is_mentor === true
 
 			// Step 2: Check if user is a session manager
 			const getUserDetailById = await userRequests.fetchUserDetails({ userId }) // userId = "1"
@@ -202,16 +205,25 @@ module.exports = class AdminHelper {
 			const connectionCount = await connectionQueries.getConnectionsCount('', userId, [], tenantCode) // filter, userId = "1", organizationIds = ["1", "2"]
 
 			if (connectionCount > 0) {
-				// Get connected mentors before deleting connections (for notifications)
-				const connectedMentors = await this.getConnectedMentors(userId, tenantCode)
+				let mentorIds = await connectionQueries.getConnectedUsers(userId, 'user_id', 'friend_id', tenantCode)
+				if (mentorIds.length === 0) {
+					return []
+				}
+				// Get mentor details for notification
+				const connectedMentors = await userExtensionQueries.getUsersByUserIds(mentorIds, {
+					attributes: ['user_id', 'name', 'email'],
+					tenantCode,
+				})
 
 				// Soft delete in communication service
 				const removeChatUser = await communicationHelper.setActiveStatus(userId, false) // ( userId = "1", activeStatus = "true" or "false")
+				const removeChatAvatar = await communicationHelper.removeAvatar(userId)
 
 				// Update user name to 'User Not Found'
 				const updateChatUserName = await communicationHelper.updateUser(userId, common.USER_NOT_FOUND) // userId: "1", name: "User Name"
 
 				result.isChatUserRemoved = removeChatUser?.result?.success === true
+				result.isRemoveChatAvatar = removeChatAvatar?.result?.success === true
 				result.isChatNameUpdated = updateChatUserName?.result?.success === true
 
 				// Delete user connections and requests from DB
@@ -235,6 +247,7 @@ module.exports = class AdminHelper {
 				// No connections exist, set chat flags to true since no action needed
 				result.isChatUserRemoved = true
 				result.isChatNameUpdated = true
+				result.isRemoveChatAvatar = true
 				result.isConnectionsAndRequestsRemoved = true
 				result.isMentorNotifiedAboutMenteeDeletion = true
 			}
@@ -299,6 +312,9 @@ module.exports = class AdminHelper {
 				) //removedSessionsDetail , orgId : "1")
 			}
 
+			// send email to SM when mentee is deleted from the private sessions if it is upcoming
+			await this.notifySessionManagerIfMenteeDeleted(userId, userInfo, result)
+
 			// Always check and remove mentee extension (user can be both mentor and mentee)
 			try {
 				menteeDetailsRemoved = await menteeQueries.deleteMenteeExtension(userId, tenantCode) // userId = "1"
@@ -310,11 +326,33 @@ module.exports = class AdminHelper {
 			removedUserDetails = mentorDetailsRemoved + menteeDetailsRemoved
 			result.areUserDetailsCleared = removedUserDetails > 0
 
+			// Get private sessions where deleted mentee was the only attendee
+			const privateSessions = await sessionQueries.getUpcomingSessionsOfMentee(
+				userId,
+				common.SESSION_TYPE.PRIVATE
+			)
+
+			// increment seats_remaining
+			try {
+				const upcomingPublicSessions = await sessionQueries.getUpcomingSessionsOfMentee(
+					userId,
+					common.SESSION_TYPE.PUBLIC
+				)
+				const allUpcomingSessions = [...privateSessions, ...upcomingPublicSessions]
+				for (const session of allUpcomingSessions) {
+					await sessionQueries.updateRecords(
+						{ seats_remaining: literal('seats_remaining + 1') },
+						{ where: { id: session.id } }
+					)
+				}
+				result.isSeatsUpdate = true
+			} catch (error) {
+				console.error('Error handling while session seats_remaining updating:', error)
+				result.isSeatsUpdate = false
+			}
+
 			// Step 7: Handle private session cancellations and notifications
 			try {
-				// Get private sessions where deleted mentee was the only attendee
-				const privateSessions = await this.getPrivateSessionsWithDeletedMentee(userId, tenantCode)
-
 				if (privateSessions.length > 0) {
 					result.isPrivateSessionsCancelled = await this.notifyAndCancelPrivateSessions(
 						privateSessions,
@@ -348,7 +386,7 @@ module.exports = class AdminHelper {
 				result.isMenteeNotifiedAboutMentorDeletion !== false &&
 				result.isSessionRequestsRejected !== false &&
 				result.isSessionManagerNotified !== false &&
-				result.isAssignedSessionsDeleted !== false
+				result.isAssignedSessionsUpdated !== false
 
 			if (allOperationsSuccessful) {
 				return responses.successResponse({
@@ -630,6 +668,50 @@ module.exports = class AdminHelper {
 		}
 	}
 
+	static async notifyAndCancelPrivateSessions(privateSessions, orgId, tenantCode) {
+		const transaction = await sequelize.transaction()
+		try {
+			let allNotificationsSent = true
+
+			for (const session of privateSessions) {
+				// Check if this is a one-on-one session (only one attendee)
+				const attendeeCount = await sessionAttendeesQueries.getCount({
+					session_id: session.id,
+					tenant_code: tenantCode,
+				})
+
+				if (attendeeCount === 1) {
+					// This is a one-on-one private session, cancel it and notify mentor
+					const notificationSent = await this.notifyMentorAboutPrivateSessionCancellation(
+						session.mentor_id,
+						session,
+						orgId,
+						tenantCode
+					)
+
+					if (!notificationSent) {
+						allNotificationsSent = false
+					}
+
+					// Mark session as cancelled/deleted
+					await sessionQueries.updateRecords(
+						{ deleted_at: new Date() },
+						{ where: { id: session.id, tenant_code: tenantCode } },
+						transaction
+					)
+
+					console.log(`Cancelled private session ${session.id} due to mentee deletion`)
+				}
+			}
+			await transaction.commit()
+			return allNotificationsSent
+		} catch (error) {
+			await transaction.rollback()
+			console.error('Error notifying and cancelling private sessions:', error)
+			return false
+		}
+	}
+
 	// Session Manager Deletion Flow Codes
 
 	// static async validateSessionReassignmentPolicies(oldSessionManagerId, newSessionManagerId, orgAdminUserId) {
@@ -882,48 +964,6 @@ module.exports = class AdminHelper {
 		}
 	}
 
-	static async notifyAndCancelPrivateSessions(privateSessions, orgId, tenantCode) {
-		try {
-			let allNotificationsSent = true
-
-			for (const session of privateSessions) {
-				// Check if this is a one-on-one session (only one attendee)
-				const SessionAttendee = require('@database/models/index').SessionAttendee
-				const attendeeCount = await SessionAttendee.count({
-					where: {
-						session_id: session.id,
-						tenant_code: tenantCode,
-					},
-				})
-
-				if (attendeeCount === 1) {
-					// This is a one-on-one private session, cancel it and notify mentor
-					const notificationSent = await this.notifyMentorAboutPrivateSessionCancellation(
-						session.mentor_id,
-						session,
-						orgId,
-						tenantCode
-					)
-
-					if (!notificationSent) {
-						allNotificationsSent = false
-					}
-
-					// Mark session as cancelled/deleted
-					const Session = require('@database/models/index').Session
-					await Session.update({ deleted_at: new Date() }, { where: { id: session.id } })
-
-					console.log(`Cancelled private session ${session.id} due to mentee deletion`)
-				}
-			}
-
-			return allNotificationsSent
-		} catch (error) {
-			console.error('Error notifying and cancelling private sessions:', error)
-			return false
-		}
-	}
-
 	static async notifyMentorAboutPrivateSessionCancellation(mentorId, sessionDetails, orgId, tenantCode) {
 		try {
 			// Get mentor details
@@ -960,10 +1000,46 @@ module.exports = class AdminHelper {
 
 	static async handleMentorDeletion(mentorUserId, mentorInfo, result, tenantCode) {
 		try {
+			const orgId = userInfo.organization_id || ''
+
+			// 1. Notify session managers about sessions with deleted mentor
+			const upcomingSessions = await sessionQueries.getUpcomingSessionsOfMentee(
+				userId,
+				common.SESSION_TYPE.PRIVATE
+			)
+
+			if (upcomingSessions.length > 0) {
+				result.isSessionManagerNotified = await this.notifySessionManagersAboutMenteeDeletion(
+					upcomingSessions,
+					userInfo.name,
+					orgId,
+					tenantCode
+				)
+			} else {
+				result.isSessionManagerNotified = true
+			}
+			return result
+		} catch (error) {
+			console.error('Error in notifySessionManagerIfMenteeDeleted:', error)
+			result.isSessionManagerNotified = false
+		}
+	}
+
+	static async handleMentorDeletion(mentorUserId, mentorInfo, result, tenantCode) {
+		try {
 			const orgId = mentorInfo.organization_id || ''
 
 			// 1. Notify connected mentees about mentor deletion
-			const connectedMentees = await this.getConnectedMentees(mentorUserId, tenantCode)
+			const menteeIds = await connectionQueries.getConnectedUsers(
+				mentorUserId,
+				'friend_id',
+				'user_id',
+				tenantCode
+			)
+			const connectedMentees = await userExtensionQueries.getUsersByUserIds(menteeIds, {
+				attributes: ['user_id', 'name', 'email'],
+			})
+
 			if (connectedMentees.length > 0) {
 				result.isMenteeNotifiedAboutMentorDeletion = await this.notifyMenteesAboutMentorDeletion(
 					connectedMentees,
@@ -976,7 +1052,12 @@ module.exports = class AdminHelper {
 			}
 
 			// 2. Handle session requests - auto-reject pending requests
-			const pendingSessionRequests = await this.getPendingSessionRequestsForMentor(mentorUserId, tenantCode)
+
+			const pendingSessionRequests = await requestSessionQueries.getPendingSessionRequests(
+				mentorUserId,
+				tenantCode
+			)
+
 			if (pendingSessionRequests.length > 0) {
 				result.isSessionRequestsRejected = await this.rejectSessionRequestsDueToMentorDeletion(
 					pendingSessionRequests,
@@ -988,30 +1069,33 @@ module.exports = class AdminHelper {
 			}
 
 			// 3. Notify session managers about sessions with deleted mentor
-			const upcomingSessions = await this.getUpcomingSessionsForMentor(mentorUserId, tenantCode)
+
+			const upcomingSessions = await sessionQueries.getUpcomingSessionsForMentor(mentorUserId, tenantCode)
+
 			if (upcomingSessions.length > 0) {
-				result.isSessionManagerNotified = await this.notifySessionManagersAboutMentorDeletion(
+				result.isSessionManagerNotifiedForMentorDelete = await this.notifySessionManagersAboutMentorDeletion(
 					upcomingSessions,
 					mentorInfo.name || 'Mentor',
 					orgId,
 					tenantCode
 				)
+
+				// update upcoming sessions of mentor to set as deleted if he created only
+				const sessionIds = [...new Set(upcomingSessions.map((s) => s.id))]
+				await sessionQueries.updateRecords({ deleted_at: new Date() }, { where: { id: sessionIds } })
 			} else {
-				result.isSessionManagerNotified = true
+				result.isSessionManagerNotifiedForMentorDelete = true
 			}
 
 			// 4. Delete sessions where mentor was assigned (not created by mentor)
-			result.isAssignedSessionsDeleted = await this.deleteSessionsWithAssignedMentor(
-				mentorUserId,
-				orgId,
-				tenantCode
-			)
+
+			result.isAssignedSessionsUpdated = await this.updateSessionsWithAssignedMentor(mentorUserId, orgId)
 		} catch (error) {
 			console.error('Error in handleMentorDeletion:', error)
 			result.isMenteeNotifiedAboutMentorDeletion = false
 			result.isSessionRequestsRejected = false
-			result.isSessionManagerNotified = false
-			result.isAssignedSessionsDeleted = false
+			result.isSessionManagerNotifiedForMentorDelete = false
+			result.isAssignedSessionsUpdated = false
 		}
 	}
 
@@ -1058,6 +1142,24 @@ module.exports = class AdminHelper {
 			console.error('Error getting connected mentees:', error)
 			return []
 		}
+	}
+	static async updateSessionsWithAssignedMentor(mentorUserId, orgId, tenantCode) {
+		// Notify attendees about session deletion
+
+		const sessionsToUpdate = await sessionQueries.getSessionsAssignedToMentor(mentorUserId, tenantCode)
+
+		if (sessionsToUpdate.length == 0) {
+			return true
+		}
+
+		await this.notifyAttendeesAboutMentorDeletion(sessionsToUpdate, orgId)
+
+		// Delete the sessions
+		const sessionIds = [...new Set(sessionsToUpdate.map((s) => s.id))]
+		await sessionQueries.updateRecords({ mentor_name: common.USER_NOT_FOUND }, { where: { id: sessionIds } })
+
+		console.log(`Update ${sessionIds.length} sessions with assigned mentor`)
+		return true
 	}
 
 	static async notifyMenteesAboutMentorDeletion(mentees, mentorName, orgId, tenantCode) {
@@ -1146,39 +1248,6 @@ module.exports = class AdminHelper {
 		}
 	}
 
-	static async getUpcomingSessionsForMentor(mentorUserId, tenantCode) {
-		try {
-			const Session = require('@database/models/index').Session
-			const { QueryTypes } = require('sequelize')
-			const sequelize = require('@database/models/index').sequelize
-
-			const query = `
-				SELECT s.*, s.session_manager_id
-				FROM ${Session.tableName} s
-				WHERE s.mentor_id = :mentorUserId 
-				AND s.start_date > :currentTime
-				AND s.deleted_at IS NULL
-				AND s.session_manager_id IS NOT NULL
-				AND s.session_manager_id != :mentorUserId
-				AND s.tenant_code = :tenantCode
-			`
-
-			const upcomingSessions = await sequelize.query(query, {
-				type: QueryTypes.SELECT,
-				replacements: {
-					mentorUserId,
-					currentTime: Math.floor(Date.now() / 1000),
-					tenantCode,
-				},
-			})
-
-			return upcomingSessions || []
-		} catch (error) {
-			console.error('Error getting upcoming sessions for mentor:', error)
-			return []
-		}
-	}
-
 	static async notifySessionManagersAboutMentorDeletion(sessions, mentorName, orgId, tenantCode) {
 		try {
 			const templateCode = process.env.SESSION_MANAGER_MENTOR_DELETION_EMAIL_TEMPLATE
@@ -1190,10 +1259,10 @@ module.exports = class AdminHelper {
 			// Group sessions by session manager
 			const sessionsByManager = {}
 			sessions.forEach((session) => {
-				if (!sessionsByManager[session.session_manager_id]) {
-					sessionsByManager[session.session_manager_id] = []
+				if (!sessionsByManager[session.created_by]) {
+					sessionsByManager[session.created_by] = []
 				}
-				sessionsByManager[session.session_manager_id].push(session)
+				sessionsByManager[session.created_by].push(session)
 			})
 
 			const notificationPromises = Object.keys(sessionsByManager).map(async (managerId) => {
@@ -1237,50 +1306,56 @@ module.exports = class AdminHelper {
 		}
 	}
 
-	static async deleteSessionsWithAssignedMentor(mentorUserId, orgId, tenantCode) {
+	static async notifySessionManagersAboutMenteeDeletion(sessions, menteeName, orgId, tenantCode) {
 		try {
-			const Session = require('@database/models/index').Session
-			const SessionAttendee = require('@database/models/index').SessionAttendee
-			const { QueryTypes } = require('sequelize')
-			const sequelize = require('@database/models/index').sequelize
-
-			// Get sessions where this mentor was assigned (not created by mentor, but assigned as mentor)
-			const query = `
-				SELECT s.*, sa.mentee_id
-				FROM ${Session.tableName} s
-				INNER JOIN ${SessionAttendee.tableName} sa ON s.id = sa.session_id
-				WHERE s.mentor_id = :mentorUserId 
-				AND s.start_date > :currentTime
-				AND s.deleted_at IS NULL
-				AND s.created_by != :mentorUserId
-				AND s.tenant_code = :tenantCode
-				AND sa.tenant_code = :tenantCode
-			`
-
-			const sessionsToDelete = await sequelize.query(query, {
-				type: QueryTypes.SELECT,
-				replacements: {
-					mentorUserId,
-					currentTime: Math.floor(Date.now() / 1000),
-					tenantCode,
-				},
-			})
-
-			if (sessionsToDelete.length === 0) {
+			const templateCode = process.env.SESSION_MANAGER_MENTEE_DELETION_EMAIL_TEMPLATE
+			if (!templateCode) {
+				console.log('No email template configured for session manager mentee deletion notification')
 				return true
 			}
 
-			// Notify attendees about session deletion
-			await this.notifyAttendeesAboutSessionDeletion(sessionsToDelete, orgId, tenantCode)
+			// Group sessions by session manager
+			const sessionsByManager = {}
+			sessions.forEach((session) => {
+				if (!sessionsByManager[session.created_by]) {
+					sessionsByManager[session.created_by] = []
+				}
+				sessionsByManager[session.created_by].push(session)
+			})
 
-			// Delete the sessions
-			const sessionIds = [...new Set(sessionsToDelete.map((s) => s.id))]
-			await Session.update({ deleted_at: new Date() }, { where: { id: sessionIds } })
+			const notificationPromises = Object.keys(sessionsByManager).map(async (managerId) => {
+				const managerSessions = sessionsByManager[managerId]
 
-			console.log(`Deleted ${sessionIds.length} sessions with assigned mentor`)
+				// Get session manager details
+				const managerDetails = await userExtensionQueries.getUsersByUserIds([managerId], {
+					attributes: ['name', 'email'],
+					tenantCode,
+				})
+
+				if (managerDetails.length > 0) {
+					const sessionList = managerSessions
+						.map((session) => {
+							const sessionDateTime = moment.unix(session.start_date)
+							return `${session.title} – ${sessionDateTime.format('DD-MM-YYYY, hh:mm A')}`
+						})
+						.join('\n')
+
+					await NotificationHelper.sendGenericNotification({
+						recipients: managerDetails,
+						templateCode,
+						orgId,
+						templateData: { menteeName: menteeName, sessionList: sessionList },
+						subjectData: { menteeName: menteeName },
+						tenantCode,
+					})
+				}
+			})
+
+			await Promise.all(notificationPromises)
+			console.log(`Notified session managers about mentor deletion for ${sessions.length} sessions`)
 			return true
 		} catch (error) {
-			console.error('Error deleting sessions with assigned mentor:', error)
+			console.error('Error notifying session managers about mentee deletion:', error)
 			return false
 		}
 	}
@@ -1330,8 +1405,10 @@ module.exports = class AdminHelper {
 
 			await Promise.all(notificationPromises)
 			console.log(`Notified attendees about session deletions due to mentor deletion`)
+			return true
 		} catch (error) {
 			console.error('Error notifying attendees about session deletion:', error)
+			return false
 		}
 	}
 }

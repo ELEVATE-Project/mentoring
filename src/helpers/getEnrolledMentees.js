@@ -48,6 +48,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 					'mentee_visibility',
 				],
 			},
+			paranoid: false,
 		}
 		let [enrolledUsers, attendeesAccounts] = await Promise.all([
 			menteeExtensionQueries.getUsersByUserIds(menteeIds, options, tenantCode),

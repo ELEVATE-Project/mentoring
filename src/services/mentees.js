@@ -717,7 +717,7 @@ module.exports = class MenteesHelper {
 			const mentorDetails = await menteeQueries.getUsersByUserIds(
 				mentorIds,
 				{
-					attributes: ['user_id', 'organization_id'],
+					attributes: ['name', 'user_id', 'organization_id'],
 				},
 				tenantCode,
 				true
@@ -1271,9 +1271,9 @@ module.exports = class MenteesHelper {
 
 				if (connectionDetails?.data?.length > 0) {
 					connectedMenteeIds = connectionDetails.data.map((item) => item.user_id)
-					if (!connectedMenteeIds.includes(userId)) {
-						connectedMenteeIds.push(userId)
-					}
+					// if (!connectedMenteeIds.includes(userId)) {
+					// 	connectedMenteeIds.push(userId)
+					// }
 				}
 
 				// If there are no connected mentees, short-circuit and return empty
@@ -1736,7 +1736,7 @@ module.exports = class MenteesHelper {
 				if (!validateDefaultRules) {
 					return responses.failureResponse({
 						message: 'USER_NOT_FOUND',
-						statusCode: httpStatusCode.bad_request,
+						statusCode: httpStatusCode.not_found,
 						responseCode: 'CLIENT_ERROR',
 					})
 				}

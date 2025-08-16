@@ -213,3 +213,30 @@ exports.setActiveStatus = async (userId, active_status, confirm_relinquish = fal
 		throw err
 	}
 }
+
+/**
+ * Sends a POST request to the communication service to remove the profile avatar
+ * of a specified user in Rocket.Chat.
+ *
+ * @async
+ * @function removeAvatar
+ * @param {string} userId - The internal Rocket.Chat user ID whose avatar should be removed.
+ * @returns {Promise<Object>} The full response data from the API (e.g., { result: { success: true }, ... }).
+ * @throws {Error} If the API request fails or returns an error.
+ *
+ * @example
+ * const result = await removeAvatar('5HmCfpoB7jp2uibTC');
+ * // result => { result: { success: true }, statusCode: 200, message: 'AVATAR_REMOVED' }
+ */
+exports.removeAvatar = async (userId) => {
+	try {
+		const url = apiEndpoints.COMMUNICATION_USERS_REMOVE_AVATAR
+		const body = { user_id: userId }
+
+		const response = await apiClient.post(url, body)
+		return response.data
+	} catch (err) {
+		console.error('Remove Avatar User error:', err.message)
+		throw err
+	}
+}
