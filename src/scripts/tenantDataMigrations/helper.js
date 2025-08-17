@@ -49,6 +49,15 @@ class MentoringDataMigrator {
 		this.defaultTenantCode = process.env.DEFAULT_TENANT_CODE || 'default'
 		this.defaultOrgCode = process.env.DEFAULT_ORG_CODE || 'default'
 
+		// Table-specific default values configuration
+		this.tableSpecificDefaults = {
+			report_types: { tenant_code: this.defaultTenantCode, organization_code: this.defaultOrgCode },
+			report_role_mapping: { tenant_code: this.defaultTenantCode, organization_code: this.defaultOrgCode },
+			modules: { tenant_code: this.defaultTenantCode, organization_code: this.defaultOrgCode },
+			// Example: 'notification_templates': { tenant_code: 'system', organization_code: 'global' },
+			// Example: 'entity_types': { tenant_code: 'shared', organization_code: 'common' }
+		}
+
 		// Tables with organization_id - process using CSV lookup
 		this.tablesWithOrgId = [
 			{
@@ -98,6 +107,21 @@ class MentoringDataMigrator {
 			},
 			{
 				name: 'role_extensions',
+				updateColumns: ['tenant_code', 'organization_code'],
+				hasPartitionKey: true,
+			},
+			{
+				name: 'report_types',
+				updateColumns: ['tenant_code', 'organization_code'],
+				hasPartitionKey: true,
+			},
+			{
+				name: 'report_role_mapping',
+				updateColumns: ['tenant_code', 'organization_code'],
+				hasPartitionKey: true,
+			},
+			{
+				name: 'modules',
 				updateColumns: ['tenant_code', 'organization_code'],
 				hasPartitionKey: true,
 			},
@@ -185,6 +209,19 @@ class MentoringDataMigrator {
 				useSessionLookup: true,
 			},
 		]
+	}
+
+	/**
+	 * Get default values for a specific table
+	 * @param {string} tableName - Name of the table
+	 * @returns {object} Object with tenant_code and organization_code defaults
+	 */
+	getTableDefaults(tableName) {
+		const tableSpecific = this.tableSpecificDefaults[tableName]
+		return {
+			tenant_code: tableSpecific?.tenant_code || this.defaultTenantCode,
+			organization_code: tableSpecific?.organization_code || this.defaultOrgCode,
+		}
 	}
 
 	/**
@@ -617,12 +654,13 @@ class MentoringDataMigrator {
 				}
 			}
 
-			// Handle records with NULL organization_id using defaults
+			// Handle records with NULL organization_id using table-specific defaults
 			if (availableUpdateColumns.includes('tenant_code')) {
+				const tableDefaults = this.getTableDefaults(tableName)
 				const setClauses = []
-				setClauses.push(`tenant_code = '${this.defaultTenantCode}'`)
+				setClauses.push(`tenant_code = '${tableDefaults.tenant_code}'`)
 				if (availableUpdateColumns.includes('organization_code')) {
-					setClauses.push(`organization_code = '${this.defaultOrgCode}'`)
+					setClauses.push(`organization_code = '${tableDefaults.organization_code}'`)
 				}
 				setClauses.push('updated_at = NOW()')
 
@@ -637,7 +675,10 @@ class MentoringDataMigrator {
 
 				if (nullOrgMetadata.rowCount > 0) {
 					console.log(
-						`✅ Applied defaults to ${nullOrgMetadata.rowCount} records with NULL organization_id in ${tableName}`
+						`✅ Applied table-specific defaults to ${nullOrgMetadata.rowCount} records with NULL organization_id in ${tableName}`
+					)
+					console.log(
+						`   Defaults used: tenant_code='${tableDefaults.tenant_code}', organization_code='${tableDefaults.organization_code}'`
 					)
 					totalUpdated += nullOrgMetadata.rowCount
 				}
@@ -996,10 +1037,11 @@ class MentoringDataMigrator {
 				)
 
 				if (parseInt(systemRecordsCount[0].count) > 0) {
+					const tableDefaults = this.getTableDefaults(tableName)
 					const setClauses = []
-					setClauses.push(`tenant_code = '${this.defaultTenantCode}'`)
+					setClauses.push(`tenant_code = '${tableDefaults.tenant_code}'`)
 					if (tableConfig.updateColumns.includes('organization_code')) {
-						setClauses.push(`organization_code = '${this.defaultOrgCode}'`)
+						setClauses.push(`organization_code = '${tableDefaults.organization_code}'`)
 					}
 					setClauses.push('updated_at = NOW()')
 
@@ -1014,7 +1056,10 @@ class MentoringDataMigrator {
 
 					if (systemMetadata.rowCount > 0) {
 						console.log(
-							`✅ Applied defaults to ${systemMetadata.rowCount} system records (${userIdColumn} = '0') in ${tableName}`
+							`✅ Applied table-specific defaults to ${systemMetadata.rowCount} system records (${userIdColumn} = '0') in ${tableName}`
+						)
+						console.log(
+							`   Defaults used: tenant_code='${tableDefaults.tenant_code}', organization_code='${tableDefaults.organization_code}'`
 						)
 						totalUpdated += systemMetadata.rowCount
 
@@ -1061,10 +1106,11 @@ class MentoringDataMigrator {
 				)
 
 				if (parseInt(orphanedUserRecords[0].count) > 0) {
+					const tableDefaults = this.getTableDefaults(tableName)
 					const setClauses = []
-					setClauses.push(`tenant_code = '${this.defaultTenantCode}'`)
+					setClauses.push(`tenant_code = '${tableDefaults.tenant_code}'`)
 					if (tableConfig.updateColumns.includes('organization_code')) {
-						setClauses.push(`organization_code = '${this.defaultOrgCode}'`)
+						setClauses.push(`organization_code = '${tableDefaults.organization_code}'`)
 					}
 					setClauses.push('updated_at = NOW()')
 
@@ -1088,7 +1134,10 @@ class MentoringDataMigrator {
 
 					if (orphanedUserMetadata.rowCount > 0) {
 						console.log(
-							`✅ Applied defaults to ${orphanedUserMetadata.rowCount} records with orphaned ${userIdColumn} in ${tableName}`
+							`✅ Applied table-specific defaults to ${orphanedUserMetadata.rowCount} records with orphaned ${userIdColumn} in ${tableName}`
+						)
+						console.log(
+							`   Defaults used: tenant_code='${tableDefaults.tenant_code}', organization_code='${tableDefaults.organization_code}'`
 						)
 						totalUpdated += orphanedUserMetadata.rowCount
 
@@ -1406,7 +1455,21 @@ class MentoringDataMigrator {
 		try {
 			console.log('🚀 Starting Enhanced Data Migration with Rollback Support...')
 			console.log('='.repeat(70))
-			console.log(`🔧 Using defaults: tenant_code="${this.defaultTenantCode}", org_code="${this.defaultOrgCode}"`)
+			console.log(
+				`🔧 Using global defaults: tenant_code="${this.defaultTenantCode}", org_code="${this.defaultOrgCode}"`
+			)
+
+			const tableSpecificCount = Object.keys(this.tableSpecificDefaults).length
+			if (tableSpecificCount > 0) {
+				console.log(`🔧 Table-specific defaults configured for ${tableSpecificCount} tables:`)
+				Object.entries(this.tableSpecificDefaults).forEach(([table, defaults]) => {
+					console.log(
+						`   - ${table}: tenant_code="${defaults.tenant_code}", org_code="${defaults.organization_code}"`
+					)
+				})
+			} else {
+				console.log('🔧 No table-specific defaults configured (using global defaults for all tables)')
+			}
 
 			await this.sequelize.authenticate()
 			console.log('✅ Database connection established')
