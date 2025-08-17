@@ -16,13 +16,20 @@ module.exports = class MenteesHelper {
 	 * @name pending
 	 * @param {String} userId - user id.
 	 * @param {Boolean} isAMentor
+	 * @param {String} organizationCode - organization code.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - pending feedback.
 	 */
 
-	static async pending(userId, isAMentor) {
+	static async pending(userId, isAMentor, organizationCode, tenantCode) {
 		try {
 			const sessions = []
-			const completedSessionsFeedback = await feedbackQueries.findAll({ user_id: userId })
+			const completedSessionsFeedback = await feedbackQueries.findAll(
+				{
+					user_id: userId,
+				},
+				tenantCode
+			)
 			const completedSessionIds = completedSessionsFeedback.map((feedback) => feedback.session_id)
 
 			if (isAMentor) {
@@ -32,39 +39,59 @@ module.exports = class MenteesHelper {
 
 				const sessionDetails = await sessionQueries.mentorsSessionWithPendingFeedback(
 					userId,
+					tenantCode,
 					options,
 					completedSessionIds
 				)
 
-				sessions.push(...sessionDetails)
+				// Add null safety check for sessionDetails
+				if (sessionDetails && Array.isArray(sessionDetails)) {
+					sessions.push(...sessionDetails)
+				}
 			}
 
 			const menteeSessionAttendances = await sessionAttendeesQueries.findPendingFeedbackSessions(
 				userId,
-				completedSessionIds
+				completedSessionIds,
+				tenantCode
 			)
 
-			const sessionIds = menteeSessionAttendances.map(
-				(menteeSessionAttendance) => menteeSessionAttendance.session_id
-			)
+			// Add null/array checks for menteeSessionAttendances
+			if (
+				!menteeSessionAttendances ||
+				!Array.isArray(menteeSessionAttendances) ||
+				menteeSessionAttendances.length === 0
+			) {
+				// Don't return here - continue to proper response formatting
+			} else {
+				const sessionIds = menteeSessionAttendances
+					.map((menteeSessionAttendance) => menteeSessionAttendance?.session_id)
+					.filter(Boolean)
 
-			const sessionOptions = {
-				attributes: ['id', 'title', 'description', 'mentee_feedback_question_set'],
+				const sessionOptions = {
+					attributes: ['id', 'title', 'description', 'mentee_feedback_question_set'],
+				}
+
+				const menteeSessionDetails = await sessionQueries.findAll(
+					{ id: sessionIds, status: 'COMPLETED' },
+					tenantCode,
+					sessionOptions
+				)
+
+				// Add null safety for menteeSessionDetails
+				if (menteeSessionDetails && Array.isArray(menteeSessionDetails)) {
+					sessions.push(...menteeSessionDetails)
+				}
 			}
 
-			const menteeSessionDetails = await sessionQueries.findAll(
-				{ id: sessionIds, status: 'COMPLETED' },
-				sessionOptions
-			)
-
-			sessions.push(...menteeSessionDetails)
-
-			// Getting unique form codes
+			// Getting unique form codes with null safety
 			const formCodes = [
 				...new Set(
-					sessions.map(
-						(session) => session.mentee_feedback_question_set || session.mentor_feedback_question_set
-					)
+					(sessions || [])
+						.map(
+							(session) => session?.mentee_feedback_question_set || session?.mentor_feedback_question_set
+						)
+						.filter(Boolean)
 				),
 			]
 
@@ -72,7 +99,7 @@ module.exports = class MenteesHelper {
 			const feedbackForm = {}
 
 			for (const formCode of formCodes) {
-				const formData = await getFeedbackQuestions(formCode)
+				const formData = await getFeedbackQuestions(formCode, tenantCode)
 				if (formData) {
 					feedbackForm[formCode] = formData
 				}
@@ -103,14 +130,11 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Feedback forms.
 	 */
 
-	static async forms(sessionId, roles) {
+	static async forms(sessionId, roles, tenantCode) {
 		try {
-			let sessioninfo = await sessionQueries.findOne(
-				{ id: sessionId },
-				{
-					attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
-				}
-			)
+			let sessioninfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+				attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
+			})
 
 			if (!sessioninfo) {
 				return responses.failureResponse({
@@ -128,7 +152,7 @@ module.exports = class MenteesHelper {
 				formCode = sessioninfo.mentee_feedback_question_set
 			}
 
-			let formData = await getFeedbackQuestions(formCode)
+			let formData = await getFeedbackQuestions(formCode, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -154,7 +178,7 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Feedback submission.
 	 */
 
-	static async submit(sessionId, updateData, userId, isAMentor) {
+	static async submit(sessionId, updateData, userId, isAMentor, tenantCode) {
 		let feedback_as
 		if (isAMentor) {
 			feedback_as = updateData.feedback_as
@@ -162,12 +186,9 @@ module.exports = class MenteesHelper {
 		}
 		try {
 			//get session details
-			let sessionInfo = await sessionQueries.findOne(
-				{ id: sessionId },
-				{
-					attributes: ['is_feedback_skipped', 'mentor_id'],
-				}
-			)
+			let sessionInfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+				attributes: ['is_feedback_skipped', 'mentor_id'],
+			})
 
 			if (!sessionInfo) {
 				return responses.failureResponse({
@@ -181,6 +202,7 @@ module.exports = class MenteesHelper {
 			const feedbacks = await feedbackQueries.findAll({
 				session_id: sessionId,
 				user_id: userId,
+				tenant_code: tenantCode,
 			})
 
 			//check the feedback is exist
@@ -200,6 +222,7 @@ module.exports = class MenteesHelper {
 					feedback.session_id = sessionId
 					feedback.user_id = userId
 					feedback.response = feedback.value
+					feedback.tenant_code = tenantCode
 				})
 			}
 
@@ -219,7 +242,10 @@ module.exports = class MenteesHelper {
 
 				//update session
 				if (updateData.is_feedback_skipped) {
-					const rowsAffected = await sessionQueries.updateOne({ id: sessionId }, updateData)
+					const rowsAffected = await sessionQueries.updateOne(
+						{ id: sessionId, tenant_code: tenantCode },
+						updateData
+					)
 					if (rowsAffected == 0) {
 						return responses.failureResponse({
 							message: 'SESSION_NOT_FOUND',
@@ -245,6 +271,7 @@ module.exports = class MenteesHelper {
 						session_id: sessionId,
 						mentee_id: userId,
 					},
+					tenantCode,
 					{
 						attributes: ['is_feedback_skipped'],
 					}
@@ -266,6 +293,7 @@ module.exports = class MenteesHelper {
 						{
 							session_id: sessionId,
 							mentee_id: userId,
+							tenant_code: tenantCode,
 						},
 						updateData
 					)
@@ -282,13 +310,14 @@ module.exports = class MenteesHelper {
 						for (const feedbackInfo of feedbackNotExists) {
 							let questionData = await questionsQueries.findOneQuestion({
 								id: feedbackInfo.question_id,
+								tenant_code: tenantCode,
 							})
 							if (
 								questionData &&
 								questionData.category &&
 								questionData.category.evaluating == common.MENTOR_EVALUATING
 							) {
-								await ratingCalculation(feedbackInfo, sessionInfo.mentor_id)
+								await ratingCalculation(feedbackInfo, sessionInfo.mentor_id, tenantCode)
 							}
 						}
 					}
@@ -314,16 +343,18 @@ module.exports = class MenteesHelper {
  * @returns {JSON} - Feedback forms.
  */
 
-const getFeedbackQuestions = async function (formCode) {
+const getFeedbackQuestions = async function (formCode, tenantCode) {
 	try {
 		let questionSet = await questionSetQueries.findOneQuestionSet({
 			code: formCode,
+			tenant_code: tenantCode,
 		})
 
 		let result = {}
 		if (questionSet && questionSet.questions) {
 			let questions = await questionsQueries.find({
 				id: questionSet.questions,
+				tenant_code: tenantCode,
 			})
 			const questionIndexMap = new Map()
 			questionSet.questions.forEach((id, index) => {
@@ -361,9 +392,9 @@ const getFeedbackQuestions = async function (formCode) {
  * @returns {JSON} - mentor data.
  */
 
-const ratingCalculation = async function (ratingData, mentor_id) {
+const ratingCalculation = async function (ratingData, mentor_id, tenantCode) {
 	try {
-		let mentorDetails = await mentorExtensionQueries.getMentorExtension(mentor_id)
+		let mentorDetails = await mentorExtensionQueries.getMentorExtension(mentor_id, tenantCode)
 		let mentorRating = mentorDetails.rating
 		let updateData
 
@@ -419,7 +450,7 @@ const ratingCalculation = async function (ratingData, mentor_id) {
 				},
 			}
 		}
-		await mentorExtensionQueries.updateMentorExtension(mentor_id, updateData)
+		await mentorExtensionQueries.updateMentorExtension(mentor_id, updateData, tenantCode)
 		return
 	} catch (error) {
 		return error

@@ -10,7 +10,7 @@ const MenteeExtension = require('@database/models/index').UserExtension
 const { QueryTypes } = require('sequelize')
 const { fn, col } = require('sequelize')
 
-exports.addFriendRequest = async (userId, friendId, message) => {
+exports.addFriendRequest = async (userId, friendId, message, tenantCode) => {
 	try {
 		const result = await sequelize.transaction(async (t) => {
 			const friendRequestData = [
@@ -20,6 +20,7 @@ exports.addFriendRequest = async (userId, friendId, message) => {
 					status: common.CONNECTIONS_STATUS.REQUESTED,
 					created_by: userId,
 					updated_by: userId,
+					tenant_code: tenantCode,
 					meta: {
 						message,
 					},
@@ -30,6 +31,7 @@ exports.addFriendRequest = async (userId, friendId, message) => {
 					status: common.CONNECTIONS_STATUS.REQUESTED,
 					created_by: userId,
 					updated_by: userId,
+					tenant_code: tenantCode,
 					meta: {
 						message,
 					},
@@ -47,7 +49,7 @@ exports.addFriendRequest = async (userId, friendId, message) => {
 	}
 }
 
-exports.getPendingRequests = async (userId, page, pageSize) => {
+exports.getPendingRequests = async (userId, page, pageSize, tenantCode) => {
 	try {
 		// This will retrieve send and received request
 
@@ -55,6 +57,7 @@ exports.getPendingRequests = async (userId, page, pageSize) => {
 			where: {
 				user_id: userId,
 				status: common.CONNECTIONS_STATUS.REQUESTED,
+				tenant_code: tenantCode,
 			},
 			raw: true,
 			limit: pageSize,
@@ -67,7 +70,7 @@ exports.getPendingRequests = async (userId, page, pageSize) => {
 	}
 }
 
-exports.getRejectedRequest = async (userId, friendId) => {
+exports.getRejectedRequest = async (userId, friendId, tenantCode) => {
 	try {
 		const result = await ConnectionRequest.findOne({
 			where: {
@@ -75,6 +78,7 @@ exports.getRejectedRequest = async (userId, friendId) => {
 				friend_id: friendId,
 				status: common.CONNECTIONS_STATUS.REJECTED,
 				created_by: friendId,
+				tenant_code: tenantCode,
 			},
 			paranoid: false,
 			order: [['deleted_at', 'DESC']], // Order by the deleted_at field in descending order to get the latest
@@ -87,7 +91,7 @@ exports.getRejectedRequest = async (userId, friendId) => {
 	}
 }
 
-exports.approveRequest = async (userId, friendId, meta) => {
+exports.approveRequest = async (userId, friendId, meta, tenantCode) => {
 	try {
 		const requests = await sequelize.transaction(async (t) => {
 			const deletedCount = await ConnectionRequest.destroy({
@@ -98,6 +102,7 @@ exports.approveRequest = async (userId, friendId, meta) => {
 					],
 					status: common.CONNECTIONS_STATUS.REQUESTED,
 					created_by: friendId,
+					tenant_code: tenantCode,
 				},
 				individualHooks: true,
 				transaction: t,
@@ -113,6 +118,7 @@ exports.approveRequest = async (userId, friendId, meta) => {
 					status: common.CONNECTIONS_STATUS.ACCEPTED,
 					created_by: friendId,
 					updated_by: userId,
+					tenant_code: tenantCode,
 					meta,
 				},
 				{
@@ -121,6 +127,7 @@ exports.approveRequest = async (userId, friendId, meta) => {
 					status: common.CONNECTIONS_STATUS.ACCEPTED,
 					created_by: friendId,
 					updated_by: userId,
+					tenant_code: tenantCode,
 					meta,
 				},
 			]
@@ -138,7 +145,7 @@ exports.approveRequest = async (userId, friendId, meta) => {
 	}
 }
 
-exports.rejectRequest = async (userId, friendId) => {
+exports.rejectRequest = async (userId, friendId, tenantCode) => {
 	try {
 		const updateData = {
 			status: common.CONNECTIONS_STATUS.REJECTED,
@@ -154,6 +161,7 @@ exports.rejectRequest = async (userId, friendId) => {
 					{ user_id: friendId, friend_id: userId },
 				],
 				created_by: friendId,
+				tenant_code: tenantCode,
 			},
 			individualHooks: true,
 		})
@@ -161,7 +169,7 @@ exports.rejectRequest = async (userId, friendId) => {
 		throw error
 	}
 }
-exports.findOneRequest = async (userId, friendId) => {
+exports.findOneRequest = async (userId, friendId, tenantCode) => {
 	try {
 		const connectionRequest = await ConnectionRequest.findOne({
 			where: {
@@ -171,6 +179,7 @@ exports.findOneRequest = async (userId, friendId) => {
 				],
 				status: common.CONNECTIONS_STATUS.REQUESTED,
 				created_by: friendId,
+				tenant_code: tenantCode,
 			},
 			raw: true,
 		})
@@ -181,13 +190,14 @@ exports.findOneRequest = async (userId, friendId) => {
 	}
 }
 
-exports.checkPendingRequest = async (userId, friendId) => {
+exports.checkPendingRequest = async (userId, friendId, tenantCode) => {
 	try {
 		const result = await ConnectionRequest.findOne({
 			where: {
 				user_id: userId,
 				friend_id: friendId,
 				status: common.CONNECTIONS_STATUS.REQUESTED,
+				tenant_code: tenantCode,
 			},
 			raw: true,
 		})
@@ -197,7 +207,7 @@ exports.checkPendingRequest = async (userId, friendId) => {
 	}
 }
 
-exports.deleteUserConnectionsAndRequests = async (userId) => {
+exports.deleteUserConnectionsAndRequests = async (userId, tenantCode) => {
 	try {
 		const now = new Date()
 
@@ -209,15 +219,13 @@ exports.deleteUserConnectionsAndRequests = async (userId) => {
 		let deleted = false
 
 		for (const { model, status } of modelsToUpdate) {
-			const [affectedRows] = await model.update(
-				{ deleted_at: now },
-				{
-					where: {
-						[Op.or]: [{ user_id: userId }, { friend_id: userId }],
-						status,
-					},
-				}
-			)
+			const whereClause = {
+				[Op.or]: [{ user_id: userId }, { friend_id: userId }],
+				status,
+				tenant_code: tenantCode,
+			}
+
+			const [affectedRows] = await model.update({ deleted_at: now }, { where: whereClause })
 
 			if (affectedRows > 0) {
 				deleted = true
@@ -230,15 +238,16 @@ exports.deleteUserConnectionsAndRequests = async (userId) => {
 	}
 }
 
-exports.getConnection = async (userId, friendId) => {
+exports.getConnection = async (userId, friendId, tenantCode) => {
 	try {
 		const result = await Connection.findOne({
 			where: {
 				user_id: userId,
 				friend_id: friendId,
 				status: {
-					[Op.or]: [common.CONNECTIONS_STATUS.ACCEPTED, common.CONNECTIONS_STATUS.BLOCKED],
+					[Op.in]: [common.CONNECTIONS_STATUS.ACCEPTED, common.CONNECTIONS_STATUS.BLOCKED],
 				},
+				tenant_code: tenantCode,
 			},
 			raw: true,
 		})
@@ -248,7 +257,7 @@ exports.getConnection = async (userId, friendId) => {
 	}
 }
 
-exports.getConnectionsByUserIds = async (userId, friendIds, projection) => {
+exports.getConnectionsByUserIds = async (userId, friendIds, tenantCode, projection) => {
 	try {
 		const defaultProjection = ['user_id', 'friend_id']
 
@@ -259,6 +268,7 @@ exports.getConnectionsByUserIds = async (userId, friendIds, projection) => {
 					[Op.in]: friendIds,
 				},
 				status: common.CONNECTIONS_STATUS.ACCEPTED,
+				tenant_code: tenantCode,
 			},
 			attributes: projection || defaultProjection,
 			raw: true,
@@ -276,7 +286,8 @@ exports.getConnectionsDetails = async (
 	searchText = '',
 	userId,
 	organizationIds = [],
-	roles = []
+	roles = [],
+	tenantCode
 ) => {
 	try {
 		let additionalFilter = ''
@@ -331,6 +342,7 @@ exports.getConnectionsDetails = async (
             LEFT JOIN ${Connection.tableName} c 
             ON c.friend_id = mv.user_id AND c.user_id = :userId
             WHERE ${userFilterClause}
+            AND c.tenant_code = :tenantCode
             ${orgFilter}
             ${filterClause}
             ${rolesFilter}
@@ -342,6 +354,7 @@ exports.getConnectionsDetails = async (
 			search: `%${searchText}%`,
 			userId,
 			organizationIds,
+			tenantCode,
 		}
 
 		if (page !== null && limit !== null) {
@@ -364,6 +377,7 @@ exports.getConnectionsDetails = async (
 		    LEFT JOIN ${Connection.tableName} c 
 		    ON c.friend_id = mv.user_id AND c.user_id = :userId
 		    WHERE ${userFilterClause}
+		    AND c.tenant_code = :tenantCode
 		    ${filterClause}
 		    ${rolesFilter}
 		    ${orgFilter}
@@ -383,7 +397,7 @@ exports.getConnectionsDetails = async (
 	}
 }
 
-exports.updateConnection = async (userId, friendId, updateBody) => {
+exports.updateConnection = async (userId, friendId, updateBody, tenantCode) => {
 	try {
 		const [rowsUpdated, updatedConnections] = await Connection.update(updateBody, {
 			where: {
@@ -392,6 +406,7 @@ exports.updateConnection = async (userId, friendId, updateBody) => {
 					{ user_id: friendId, friend_id: userId },
 				],
 				status: common.CONNECTIONS_STATUS.ACCEPTED,
+				tenant_code: tenantCode,
 			},
 			returning: true,
 			raw: true,
@@ -408,14 +423,17 @@ exports.updateConnection = async (userId, friendId, updateBody) => {
 	}
 }
 
-exports.getConnectionsCount = async (filter, userId, organizationIds = []) => {
+exports.getConnectionsCount = async (filter, userId, organizationIds = [], tenantCode) => {
 	try {
 		let orgFilter = ''
 		let filterClause = ''
+		let tenantFilter = ''
 
 		if (organizationIds.length > 0) {
 			orgFilter = `AND ue.organization_id IN (:organizationIds)`
 		}
+
+		tenantFilter = `AND ue.tenant_code = :tenantCode AND c.tenant_code = :tenantCode`
 
 		if (filter?.query?.length > 0) {
 			filterClause = filter.query.startsWith('AND') ? filter.query : 'AND ' + filter.query
@@ -430,13 +448,15 @@ exports.getConnectionsCount = async (filter, userId, organizationIds = []) => {
 			ON c.friend_id = ue.user_id AND c.user_id = :userId
 			WHERE ${userFilterClause}
 			${orgFilter}
-			${filterClause};
+			${filterClause}
+			${tenantFilter};
 		`
 
 		const replacements = {
 			...filter?.replacements,
 			userId,
 			organizationIds,
+			tenantCode,
 		}
 
 		const result = await sequelize.query(countQuery, {
@@ -450,7 +470,7 @@ exports.getConnectionsCount = async (filter, userId, organizationIds = []) => {
 	}
 }
 
-exports.getConnectedUsers = async (userId, selectColumn = 'user_id', whereColumn = 'friend_id') => {
+exports.getConnectedUsers = async (userId, selectColumn = 'user_id', whereColumn = 'friend_id', tenantCode) => {
 	try {
 		const allowed = new Set(['user_id', 'friend_id'])
 		if (!allowed.has(selectColumn) || !allowed.has(whereColumn)) {
@@ -462,6 +482,7 @@ exports.getConnectedUsers = async (userId, selectColumn = 'user_id', whereColumn
 			where: {
 				[whereColumn]: userId,
 				status: common.CONNECTIONS_STATUS.ACCEPTED,
+				tenant_code: tenantCode,
 			},
 			raw: true,
 		})
@@ -474,12 +495,13 @@ exports.getConnectedUsers = async (userId, selectColumn = 'user_id', whereColumn
 	}
 }
 
-exports.getRequestsCount = async (userId) => {
+exports.getRequestsCount = async (userId, tenantCode) => {
 	try {
 		// This will retrieve the request count
 		const result = await ConnectionRequest.count({
 			where: {
 				friend_id: userId,
+				tenant_code: tenantCode,
 				status: common.CONNECTIONS_STATUS.REQUESTED,
 			},
 		})

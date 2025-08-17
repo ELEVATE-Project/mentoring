@@ -20,13 +20,13 @@ module.exports = class issuesHelper {
 	 * @returns {JSON} - Success response.
 	 */
 
-	static async create(bodyData, decodedToken) {
+	static async create(bodyData, decodedToken, tenantCode) {
 		try {
-			const userDetails = await menteeExtensionQueries.getMenteeExtension(decodedToken.id, [
-				'name',
-				'user_id',
-				'email',
-			])
+			const userDetails = await menteeExtensionQueries.getMenteeExtension(
+				decodedToken.id,
+				['name', 'user_id', 'email'],
+				tenantCode
+			)
 			if (!userDetails) throw createUnauthorizedResponse('USER_NOT_FOUND')
 
 			const name = userDetails.name
@@ -34,11 +34,14 @@ module.exports = class issuesHelper {
 			const userEmailId = userDetails.email
 			const email = process.env.SUPPORT_EMAIL_ID
 			bodyData.user_id = decodedToken.id
+			bodyData.tenant_code = tenantCode
+			bodyData.organization_code = decodedToken.organization_code
 
 			if (process.env.ENABLE_EMAIL_FOR_REPORT_ISSUE === 'true') {
 				const templateData = await notificationTemplateQueries.findOneEmailTemplate(
 					process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE,
-					decodedToken.organization_id
+					decodedToken.organization_id,
+					tenantCode
 				)
 
 				let metaItems = ''
@@ -70,7 +73,7 @@ module.exports = class issuesHelper {
 					bodyData.isEmailTriggered = true
 				}
 			}
-			await issueQueries.create(bodyData)
+			await issueQueries.create(bodyData, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,

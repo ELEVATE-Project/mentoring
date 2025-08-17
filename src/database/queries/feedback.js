@@ -23,8 +23,14 @@ module.exports = class QuestionsData {
 		}
 	}
 
-	static async findAll(filter, attributes = {}) {
+	static async findAll(filter, tenantCode = null, attributes = {}) {
 		try {
+			// Ensure tenant isolation without mutating caller-provided filter
+			if (tenantCode) {
+				filter = { ...filter, tenant_code: tenantCode }
+			} else {
+				filter = { ...filter }
+			}
 			const feedbackData = await Feedback.findAll({
 				where: filter,
 				...attributes,

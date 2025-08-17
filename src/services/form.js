@@ -16,14 +16,19 @@ module.exports = class FormsHelper {
 	 * Create Form.
 	 * @method
 	 * @name create
-	 * @param {Object} bodyData
+	 * @param {Object} bodyData - Form data
+	 * @param {String} orgId - Organization ID
+	 * @param {String} orgCode - Organization code
+	 * @param {String} tenantCode - Tenant code
 	 * @returns {JSON} - Form creation data.
 	 */
 
-	static async create(bodyData, orgId) {
+	static async create(bodyData, orgId, orgCode, tenantCode) {
 		try {
 			bodyData['organization_id'] = orgId
-			const form = await formQueries.createForm(bodyData)
+			bodyData['organization_code'] = orgCode
+			bodyData['tenant_code'] = tenantCode
+			const form = await formQueries.createForm(bodyData, tenantCode)
 
 			await utils.internalDel('formVersion')
 
@@ -54,23 +59,25 @@ module.exports = class FormsHelper {
 	 * @returns {JSON} - Update form data.
 	 */
 
-	static async update(id, bodyData, orgId) {
+	static async update(id, bodyData, orgCode, tenantCode) {
 		try {
 			let filter = {}
 			if (id) {
 				filter = {
 					id: id,
-					organization_id: orgId,
+					organization_code: orgCode,
+					tenant_code: tenantCode,
 				}
 			} else {
 				filter = {
 					type: bodyData.type,
 					sub_type: bodyData.sub_type,
-					organization_id: orgId,
+					organization_code: orgCode,
+					tenant_code: tenantCode,
 				}
 			}
 
-			const result = await formQueries.updateOneForm(filter, bodyData)
+			const result = await formQueries.updateOneForm(filter, bodyData, tenantCode)
 
 			if (result === 'ENTITY_ALREADY_EXISTS') {
 				return responses.failureResponse({
@@ -111,15 +118,15 @@ module.exports = class FormsHelper {
 	 * @returns {JSON} - Read form data.
 	 */
 
-	static async read(id, bodyData, orgId) {
+	static async read(id, bodyData, orgCode, tenantCode) {
 		try {
 			let filter = {}
 			if (id) {
-				filter = { id: id, organization_id: orgId }
+				filter = { id: id, organization_code: orgCode, tenant_code: tenantCode }
 			} else {
-				filter = { ...bodyData, organization_id: orgId }
+				filter = { ...bodyData, organization_code: orgCode, tenant_code: tenantCode }
 			}
-			const form = await formQueries.findOneForm(filter)
+			const form = await formQueries.findOneForm(filter, tenantCode)
 			let defaultOrgForm
 			if (!form) {
 				const defaultOrgId = await getDefaultOrgId()
@@ -129,8 +136,10 @@ module.exports = class FormsHelper {
 						statusCode: httpStatusCode.bad_request,
 						responseCode: 'CLIENT_ERROR',
 					})
-				filter = id ? { id: id, organization_id: defaultOrgId } : { ...bodyData, organization_id: defaultOrgId }
-				defaultOrgForm = await formQueries.findOneForm(filter)
+				filter = id
+					? { id: id, organization_code: defaultOrgId, tenant_code: tenantCode }
+					: { ...bodyData, organization_code: defaultOrgId, tenant_code: tenantCode }
+				defaultOrgForm = await formQueries.findOneForm(filter, tenantCode)
 			}
 			if (!form && !defaultOrgForm) {
 				return responses.failureResponse({
@@ -150,12 +159,12 @@ module.exports = class FormsHelper {
 			throw error
 		}
 	}
-	static async readAllFormsVersion() {
+	static async readAllFormsVersion(tenantCode) {
 		try {
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'FORM_VERSION_FETCHED_SUCCESSFULLY',
-				result: (await form.getAllFormsVersion()) || {},
+				result: (await form.getAllFormsVersion(tenantCode)) || {},
 			})
 		} catch (error) {
 			return error

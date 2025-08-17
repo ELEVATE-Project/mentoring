@@ -19,11 +19,16 @@ module.exports = class Notifications {
 
 	async emailCronJob(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const userId = req.decodedToken.id
+
 			// Make a call to notification service
 			notificationsService.sendNotification(
 				req.body.job_id,
 				req.body.email_template_code,
-				req.body.job_creator_org_id ? req.body.job_creator_org_id : ''
+				req.body.job_creator_org_id ? req.body.job_creator_org_id : '',
+				tenantCode
 			)
 			return {
 				statusCode: httpStatusCode.ok,

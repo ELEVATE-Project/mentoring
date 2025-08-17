@@ -23,7 +23,8 @@ module.exports = class admin {
 
 	async userDelete(req) {
 		try {
-			const userDelete = await adminService.userDelete(req.query.userId)
+			const tenantCode = req.decodedToken.tenant_code
+			const userDelete = await adminService.userDelete(req.query.userId, tenantCode)
 			return userDelete
 		} catch (error) {
 			return error
@@ -32,14 +33,15 @@ module.exports = class admin {
 
 	async triggerViewRebuild(req) {
 		try {
-			if (!req.decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)) {
+			if (!req.decodedToken.organizations[0].roles.some((role) => role.title === common.ADMIN_ROLE)) {
 				return responses.failureResponse({
 					message: 'UNAUTHORIZED_REQUEST',
 					statusCode: httpStatusCode.unauthorized,
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
-			const userDelete = await adminService.triggerViewRebuild(req.decodedToken)
+			const tenantCode = req.decodedToken.tenant_code
+			const userDelete = await adminService.triggerViewRebuild(req.decodedToken, tenantCode)
 			return userDelete
 		} catch (error) {
 			return error
@@ -47,28 +49,33 @@ module.exports = class admin {
 	}
 	async triggerPeriodicViewRefresh(req) {
 		try {
-			if (!req.decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)) {
+			if (!req.decodedToken.organizations[0].roles.some((role) => role.title === common.ADMIN_ROLE)) {
 				return responses.failureResponse({
 					message: 'UNAUTHORIZED_REQUEST',
 					statusCode: httpStatusCode.unauthorized,
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
-			return await adminService.triggerPeriodicViewRefresh(req.decodedToken)
+			const tenantCode = req.decodedToken.tenant_code
+			return await adminService.triggerPeriodicViewRefresh(req.decodedToken, tenantCode)
 		} catch (err) {
 			console.log(err)
 		}
 	}
 	async triggerViewRebuildInternal(req) {
 		try {
-			return await adminService.triggerViewRebuild()
+			// Internal method - use default tenant or extract from query if needed
+			const tenantCode = req.query.tenant_code || null
+			return await adminService.triggerViewRebuild(null, tenantCode)
 		} catch (error) {
 			return error
 		}
 	}
 	async triggerPeriodicViewRefreshInternal(req) {
 		try {
-			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name)
+			// Internal method - use default tenant or extract from query if needed
+			const tenantCode = req.query.tenant_code || null
+			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name, tenantCode)
 		} catch (err) {
 			console.log(err)
 		}

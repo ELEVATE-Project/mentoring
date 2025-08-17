@@ -49,6 +49,7 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
 
 		const internalToken = true
 		const orgDetails = await requests.get(orgReadUrl, '', internalToken)
+
 		return orgDetails
 	} catch (error) {
 		console.error('Error fetching organization details:', error)
@@ -73,9 +74,12 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
  *   .catch(error => console.error(error));
  */
 
-const getOrgDetails = async function ({ organizationId }) {
+const getOrgDetails = async function ({ organizationId, tenantCode }) {
 	try {
-		const organizationDetails = await organisationExtensionQueries.findOne({ organization_id: organizationId })
+		const organizationDetails = await organisationExtensionQueries.findOne(
+			{ organization_id: organizationId },
+			tenantCode
+		)
 		return {
 			success: true,
 			data: {
@@ -183,17 +187,34 @@ const fetchUserDetails = async ({ token, userId }) => {
  *   .catch(error => console.error(error));
  */
 
-const getUserDetails = async (userId) => {
+const getUserDetails = async (userId, tenantCode) => {
 	try {
-		const userDetails = await menteeQueries.getMenteeExtension(userId)
+		// Only pass tenantCode if it exists
+		const userDetails = await menteeQueries.getMenteeExtension(
+			userId,
+			[],
+			false,
+			tenantCode || null // or just: tenantCode
+		)
+
+		if (!userDetails) {
+			return {
+				data: {
+					result: null,
+				},
+			}
+		}
+
 		if (userDetails.image) {
 			const downloadImageResponse = await getDownloadableUrl(userDetails.image)
 			userDetails.image = downloadImageResponse.result
 		}
+
 		userDetails.user_roles = [{ title: common.MENTEE_ROLE }]
 		if (userDetails.is_mentor) {
 			userDetails.user_roles.push({ title: common.MENTOR_ROLE })
 		}
+
 		if (userDetails.email) {
 			userDetails.email = await emailEncryption.decrypt(userDetails.email)
 		}
@@ -369,7 +390,7 @@ const share = function (profileId) {
  *   .catch(error => console.error(error));
  */
 
-const list = function (userType, pageNo, pageSize, searchText) {
+const list = function (userType, pageNo, pageSize, searchText, tenantCode) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			const filter = {
@@ -392,7 +413,8 @@ const list = function (userType, pageNo, pageSize, searchText) {
 				(additionalProjectionClause = `name,email,organization_id`),
 				(returnOnlyUserId = false),
 				searchText ? searchText : '',
-				(defaultFilter = '')
+				(defaultFilter = ''),
+				tenantCode
 			)
 
 			let foundKeys = {}
@@ -631,7 +653,7 @@ const listOrganization = function (organizationIds = []) {
  *   .catch(error => console.error(error));
  */
 
-const organizationList = function (organizationIds = []) {
+const organizationList = function (organizationIds = [], tenantCode = null) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			// Fetch organization details
@@ -641,7 +663,7 @@ const organizationList = function (organizationIds = []) {
 				},
 			}
 
-			const organizationDetails = await organisationExtensionQueries.findAll(filter, {
+			const organizationDetails = await organisationExtensionQueries.findAll(filter, tenantCode, {
 				attributes: ['name', 'organization_id'],
 			})
 
@@ -734,7 +756,7 @@ const getDownloadableUrl = function (path) {
  *   .catch(error => console.error(error));
  */
 
-const getUserDetailedList = function (userIds, deletedUsers = false, unscopped = false) {
+const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false, unscopped = false) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			// Fetch user details
@@ -748,7 +770,7 @@ const getUserDetailedList = function (userIds, deletedUsers = false, unscopped =
 			if (deletedUsers) {
 				options = { paranoid: false }
 			}
-			const userDetails = await menteeQueries.getUsersByUserIds(userIds, options, unscopped)
+			const userDetails = await menteeQueries.getUsersByUserIds(userIds, options, tenantCode, unscopped)
 
 			// Extract unique organization IDs and create a mapping for organization details
 			const organizationIds = new Set()
@@ -766,7 +788,7 @@ const getUserDetailedList = function (userIds, deletedUsers = false, unscopped =
 				},
 			}
 
-			const organizationDetails = await organisationExtensionQueries.findAll(filter, {
+			const organizationDetails = await organisationExtensionQueries.findAll(filter, tenantCode, {
 				attributes: ['name', 'organization_id'],
 			})
 
@@ -779,7 +801,8 @@ const getUserDetailedList = function (userIds, deletedUsers = false, unscopped =
 			await Promise.all(
 				userDetails.map(async function (user) {
 					if (user.email) {
-						user.email = await emailEncryption.decrypt(user.email)
+						const decryptedEmail = await emailEncryption.decryptAndValidate(user.email)
+						user.email = decryptedEmail || user.email // Keep original if decryption fails
 					}
 
 					if (user.image) {

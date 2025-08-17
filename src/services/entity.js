@@ -12,14 +12,20 @@ module.exports = class EntityHelper {
 	 * @name create
 	 * @param {Object} bodyData - entity body data.
 	 * @param {String} id -  id.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - Entity created response.
 	 */
 
-	static async create(bodyData, id) {
-		bodyData.created_by = id
-		bodyData.updated_by = id
+	static async create(bodyData, id, tenantCode) {
+		// Create sanitized data object to avoid parameter mutation
+		const sanitizedData = {
+			...bodyData,
+			created_by: id,
+			updated_by: id,
+			tenant_code: tenantCode,
+		}
 		try {
-			const entity = await entityTypeQueries.createEntity(bodyData)
+			const entity = await entityTypeQueries.createEntity(sanitizedData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_CREATED_SUCCESSFULLY',
@@ -51,16 +57,31 @@ module.exports = class EntityHelper {
 	 * @param {Object} bodyData - entity body data.
 	 * @param {String} _id - entity id.
 	 * @param {String} loggedInUserId - logged in user id.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - Entity updated response.
 	 */
 
-	static async update(bodyData, id, loggedInUserId) {
-		bodyData.updated_by = loggedInUserId
+	static async update(bodyData, id, loggedInUserId, tenantCode) {
+		// Create sanitized data object to avoid parameter mutation
+		const sanitizedData = {
+			...bodyData,
+			updated_by: loggedInUserId,
+		}
+		const whereClause = {
+			id: id,
+			created_by: loggedInUserId,
+			tenant_code: tenantCode,
+		}
 		try {
-			const [updateCount, updatedEntity] = await entityTypeQueries.updateOneEntity(id, bodyData, loggedInUserId, {
-				returning: true,
-				raw: true,
-			})
+			const [updateCount, updatedEntity] = await entityTypeQueries.updateOneEntity(
+				whereClause,
+				tenantCode,
+				sanitizedData,
+				{
+					returning: true,
+					raw: true,
+				}
+			)
 
 			if (updateCount === 0) {
 				return responses.failureResponse({
@@ -91,10 +112,12 @@ module.exports = class EntityHelper {
 	 * @method
 	 * @name read
 	 * @param {Object} bodyData - entity body data.
+	 * @param {String} userId - user id.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - Entity read response.
 	 */
 
-	static async read(query, userId) {
+	static async read(query, userId, tenantCode) {
 		try {
 			let filter
 			if (query.id) {
@@ -104,8 +127,9 @@ module.exports = class EntityHelper {
 							id: query.id,
 							created_by: '0',
 							status: 'ACTIVE',
+							tenant_code: tenantCode,
 						},
-						{ id: query.id, created_by: userId, status: 'ACTIVE' },
+						{ id: query.id, created_by: userId, status: 'ACTIVE', tenant_code: tenantCode },
 					],
 				}
 			} else {
@@ -115,12 +139,13 @@ module.exports = class EntityHelper {
 							value: query.value,
 							created_by: '0',
 							status: 'ACTIVE',
+							tenant_code: tenantCode,
 						},
-						{ value: query.value, created_by: userId, status: 'ACTIVE' },
+						{ value: query.value, created_by: userId, status: 'ACTIVE', tenant_code: tenantCode },
 					],
 				}
 			}
-			const entities = await entityTypeQueries.findAllEntities(filter)
+			const entities = await entityTypeQueries.findAllEntities(filter, tenantCode)
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -139,7 +164,7 @@ module.exports = class EntityHelper {
 		}
 	}
 
-	static async readAll(query, userId) {
+	static async readAll(query, userId, tenantCode) {
 		try {
 			let filter
 			if (query.read_user_entity == true) {
@@ -147,18 +172,21 @@ module.exports = class EntityHelper {
 					[Op.or]: [
 						{
 							created_by: '0',
+							tenant_code: tenantCode,
 						},
 						{
 							created_by: userId,
+							tenant_code: tenantCode,
 						},
 					],
 				}
 			} else {
 				filter = {
 					created_by: '0',
+					tenant_code: tenantCode,
 				}
 			}
-			const entities = await entityTypeQueries.findAllEntities(filter)
+			const entities = await entityTypeQueries.findAllEntities(filter, tenantCode)
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -182,12 +210,19 @@ module.exports = class EntityHelper {
 	 * @method
 	 * @name delete
 	 * @param {String} _id - Delete entity.
+	 * @param {String} userId - user id.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - Entity deleted response.
 	 */
 
-	static async delete(id, userId) {
+	static async delete(id, userId, tenantCode) {
 		try {
-			const deleteCount = await entityTypeQueries.deleteOneEntityType(id, userId)
+			const whereClause = {
+				id: id,
+				created_by: userId,
+				tenant_code: tenantCode,
+			}
+			const deleteCount = await entityTypeQueries.deleteOneEntityType(whereClause, tenantCode)
 			if (deleteCount === '0') {
 				return responses.failureResponse({
 					message: 'ENTITY_NOT_FOUND',
@@ -210,22 +245,31 @@ module.exports = class EntityHelper {
 	 * @method
 	 * @name list
 	 * @param {Object} query - query params
-	 * @param {String} userId - logged in user id.
 	 * @param {String} searchText - search label in entity.
-	 * @param {Integer} page -  page no.
+	 * @param {Integer} pageNo -  page no.
 	 * @param {Integer} pageSize -  page limit per api.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - Entity search matched response.
 	 */
-	static async list(query, searchText, pageNo, pageSize) {
+	static async list(query, searchText, pageNo, pageSize, tenantCode) {
 		try {
 			let entityType = query.entity_type_id ? query.entity_type_id : ''
-			let filter = {}
+			let filter = {
+				tenant_code: tenantCode,
+			}
 			if (entityType) {
 				filter['entity_type_id'] = entityType
 			}
 
 			const attributes = ['id', 'entity_type_id', 'value', 'label', 'status', 'type', 'created_by', 'created_at']
-			const entities = await entityTypeQueries.getAllEntities(filter, attributes, pageNo, pageSize, searchText)
+			const entities = await entityTypeQueries.getAllEntities(
+				filter,
+				tenantCode,
+				attributes,
+				pageNo,
+				pageSize,
+				searchText
+			)
 
 			if (entities.rows == 0 || entities.count == 0) {
 				return responses.failureResponse({

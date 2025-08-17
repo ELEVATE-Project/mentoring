@@ -23,7 +23,11 @@ module.exports = class Questions {
 
 	async create(req) {
 		try {
-			const createdQuestion = await questionsService.create(req.body, req.decodedToken)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const userId = req.decodedToken.id
+
+			const createdQuestion = await questionsService.create(req.body, userId, organizationCode, tenantCode)
 			return createdQuestion
 		} catch (error) {
 			return error
@@ -40,7 +44,17 @@ module.exports = class Questions {
 
 	async update(req) {
 		try {
-			const updatedQuestion = await questionsService.update(req.params.id, req.body, req.decodedToken)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const userId = req.decodedToken.id
+
+			const updatedQuestion = await questionsService.update(
+				req.params.id,
+				req.body,
+				userId,
+				organizationCode,
+				tenantCode
+			)
 			return updatedQuestion
 		} catch (error) {
 			return error
@@ -57,7 +71,11 @@ module.exports = class Questions {
 
 	async read(req) {
 		try {
-			const questionData = await questionsService.read(req.params.id)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const userId = req.decodedToken.id
+
+			const questionData = await questionsService.read(req.params.id, tenantCode)
 			return questionData
 		} catch (error) {
 			return error

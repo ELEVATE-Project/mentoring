@@ -9,18 +9,32 @@ const userRequests = require('@requests/user')
  */
 exports.getDefaultOrgId = async () => {
 	try {
-		const { DEFAULT_ORG_ID, DEFAULT_ORGANISATION_CODE } = process.env
+		const { DEFAULT_ORG_ID, DEFAULT_ORG_CODE, DEFAULT_ORGANISATION_CODE } = process.env
 		if (DEFAULT_ORG_ID) {
 			return DEFAULT_ORG_ID
 		}
 
 		const { success, data } = await userRequests.fetchOrgDetails({
-			organizationCode: DEFAULT_ORGANISATION_CODE,
+			organizationCode: DEFAULT_ORG_CODE || DEFAULT_ORGANISATION_CODE,
 		})
 
 		return success && data?.result?.id ? data.result.id.toString() : null
 	} catch (err) {
 		console.error('Error in getDefaultOrgId:', err)
+		return null
+	}
+}
+
+/**
+ * Retrieves the default organization code.
+ * @returns {Promise<string|null>} Default organization code or null if not found.
+ */
+exports.getDefaultOrgCode = async () => {
+	try {
+		const { DEFAULT_ORG_CODE, DEFAULT_ORGANISATION_CODE } = process.env
+		return DEFAULT_ORG_CODE || DEFAULT_ORGANISATION_CODE || null
+	} catch (err) {
+		console.error('Error in getDefaultOrgCode:', err)
 		return null
 	}
 }

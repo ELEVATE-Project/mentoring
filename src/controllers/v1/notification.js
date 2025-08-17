@@ -29,7 +29,12 @@ module.exports = class NotificationTemplate {
 
 	async template(req) {
 		try {
-			if (!utilsHelper.validateRoleAccess(req.decodedToken.roles, [common.ADMIN_ROLE, common.ORG_ADMIN_ROLE])) {
+			if (
+				!utilsHelper.validateRoleAccess(req.decodedToken.organizations[0].roles, [
+					common.ADMIN_ROLE,
+					common.ORG_ADMIN_ROLE,
+				])
+			) {
 				throw responses.failureResponse({
 					message: 'USER_IS_NOT_A_ADMIN',
 					statusCode: httpStatusCode.bad_request,
@@ -37,25 +42,36 @@ module.exports = class NotificationTemplate {
 				})
 			}
 
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const userId = req.decodedToken.id
+
 			if (req.method === common.PATCH_METHOD) {
-				const updatedTemplate = await notificationService.update(req.params.id, req.body, req.decodedToken)
+				const updatedTemplate = await notificationService.update(
+					req.params.id,
+					req.body,
+					req.decodedToken,
+					tenantCode
+				)
 				return updatedTemplate
 			} else if (req.method === common.GET_METHOD) {
 				if (!req.params.id && !req.query.code) {
 					const templatesData = await notificationService.readAllNotificationTemplates(
-						req.decodedToken.organization_id
+						organizationCode,
+						tenantCode
 					)
 					return templatesData
 				} else {
 					const templatesData = await notificationService.read(
 						req.params.id,
 						req.query.code,
-						req.decodedToken.organization_id
+						organizationCode,
+						tenantCode
 					)
 					return templatesData
 				}
 			} else {
-				const createdTemplate = await notificationService.create(req.body, req.decodedToken)
+				const createdTemplate = await notificationService.create(req.body, req.decodedToken, tenantCode)
 				return createdTemplate
 			}
 		} catch (error) {

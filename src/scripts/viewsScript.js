@@ -7,7 +7,8 @@ const entityTypeQueries = require('../database/queries/entityType')
 const schedulerServiceUrl = process.env.SCHEDULER_SERVICE_HOST // Port address on which the scheduler service is running
 const mentoringBaseurl = `http://${process.env.APPLICATION_HOST}:${process.env.APPLICATION_PORT}`
 const apiEndpoints = require('../constants/endpoints')
-const defaultOrgId = process.env.DEFAULT_ORG_ID
+const defaultOrgCode = process.env.DEFAULT_ORG_CODE
+const defaultTenantCode = process.env.DEFAULT_TENANT_CODE
 
 /**
  * Create a scheduler job.
@@ -66,7 +67,8 @@ const createSchedulerJob = function (jobId, interval, jobName, repeat, url, offs
 const getAllowFilteringEntityTypes = async () => {
 	try {
 		return await entityTypeQueries.findAllEntityTypes(
-			defaultOrgId,
+			defaultOrgCode,
+			defaultTenantCode,
 			['id', 'value', 'label', 'data_type', 'organization_id', 'has_entities', 'model_names'],
 			{
 				allow_filtering: true,

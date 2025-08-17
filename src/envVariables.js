@@ -190,6 +190,11 @@ let enviromentVariables = {
 		optional: true,
 		default: 'default_code',
 	},
+	DEFAULT_ORG_CODE: {
+		message: 'Required default organization code for migration',
+		optional: true,
+		default: 'DEFAULT_ORG',
+	},
 	REFRESH_VIEW_INTERVAL: {
 		message: 'Interval to refresh views in milliseconds',
 		optional: true,
@@ -198,6 +203,11 @@ let enviromentVariables = {
 	DEFAULT_ORG_ID: {
 		message: 'Default organization ID',
 		optional: false,
+	},
+	DEFAULT_TENANT_CODE: {
+		message: 'Required default tenant code for migration',
+		optional: true,
+		default: 'DEFAULT_TENANT',
 	},
 	MENTEE_SESSION_CANCELLATION_EMAIL_TEMPLATE: {
 		message: 'Required email template name for mentee session cancellation',

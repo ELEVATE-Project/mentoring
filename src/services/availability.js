@@ -19,11 +19,12 @@ module.exports = class availabilityHelper {
 	 * @param {Object} decodedToken - The decoded token object.
 	 * @returns {Promise<Object>} - The response object.
 	 */
-	static async create(bodyData, decodedToken) {
+	static async create(bodyData, decodedToken, tenantCode) {
 		try {
 			bodyData['created_by'] = decodedToken.id
 			bodyData['updated_by'] = decodedToken.id
 			bodyData['user_id'] = decodedToken.id
+			bodyData['tenant_code'] = tenantCode
 
 			const minimumDurationForAvailability = parseInt(process.env.MINIMUM_DURATION_FOR_AVAILABILITY, 10)
 			if (minimumDurationForAvailability !== 0) {
@@ -38,7 +39,7 @@ module.exports = class availabilityHelper {
 				}
 			}
 
-			let availability = await availabilityQueries.createAvailability(bodyData)
+			let availability = await availabilityQueries.createAvailability(bodyData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'AVAILABILITY_CREATED_SUCCESSFULLY',
@@ -58,10 +59,10 @@ module.exports = class availabilityHelper {
 	 * @param {Object} decodedToken - The decoded token object.
 	 * @returns {Promise<Object>} - The response object.
 	 */
-	static async update(id, bodyData, decodedToken) {
+	static async update(id, bodyData, decodedToken, tenantCode) {
 		try {
-			const filter = { id, created_by: decodedToken.id }
-			const [rowsAffected] = await availabilityQueries.updateAvailability(filter, bodyData)
+			const filter = { id, created_by: decodedToken.id, tenant_code: tenantCode }
+			const [rowsAffected] = await availabilityQueries.updateAvailability(filter, bodyData, tenantCode)
 
 			if (rowsAffected === 0) {
 				return responses.failureResponse({
@@ -87,10 +88,10 @@ module.exports = class availabilityHelper {
 	 * @param {Object} decodedToken - The decoded token object.
 	 * @returns {Promise<Object>} - The response object.
 	 */
-	static async delete(id, decodedToken) {
+	static async delete(id, decodedToken, tenantCode) {
 		try {
-			const filter = { id, created_by: decodedToken.id }
-			const rowsAffected = await availabilityQueries.deleteAvailability(filter)
+			const filter = { id, created_by: decodedToken.id, tenant_code: tenantCode }
+			const rowsAffected = await availabilityQueries.deleteAvailability(filter, tenantCode)
 			console.log(rowsAffected)
 			if (rowsAffected === 0) {
 				return responses.failureResponse({
@@ -236,7 +237,7 @@ module.exports = class availabilityHelper {
 	 * @param {number} userId - The user ID.
 	 * @returns {Promise<Object>} - The response object.
 	 */
-	static async read(query, userId) {
+	static async read(query, userId, tenantCode) {
 		try {
 			const filter = {
 				[Op.or]: [
@@ -253,6 +254,7 @@ module.exports = class availabilityHelper {
 					},
 				],
 				user_id: userId,
+				tenant_code: tenantCode,
 			}
 			let userAvailabilities = await availabilityQueries.findAvailability(filter)
 
@@ -330,7 +332,7 @@ module.exports = class availabilityHelper {
 	 * @param {number} userId - The user ID.
 	 * @returns {Promise<Object>} - The response object.
 	 */
-	static async isAvailable(query, userId) {
+	static async isAvailable(query, userId, tenantCode) {
 		try {
 			const filter = {
 				[Op.or]: [
@@ -347,6 +349,7 @@ module.exports = class availabilityHelper {
 					},
 				],
 				user_id: userId,
+				tenant_code: tenantCode,
 			}
 			let userAvailabilities = await availabilityQueries.findAvailability(filter)
 			const sessions = await sessionQueries.findAll(
@@ -405,7 +408,7 @@ module.exports = class availabilityHelper {
 	 * @param {Object} query - The query parameters.
 	 * @returns {Promise<Object>} - The response object.
 	 */
-	static async users(query) {
+	static async users(query, userId, tenantCode) {
 		try {
 			const filter = {
 				[Op.or]: [
@@ -421,6 +424,7 @@ module.exports = class availabilityHelper {
 						},
 					},
 				],
+				tenant_code: tenantCode,
 			}
 			let userAvailabilities = await availabilityQueries.findAvailability(filter)
 			const sessions = await sessionQueries.findAll(
@@ -465,6 +469,7 @@ module.exports = class availabilityHelper {
 				{
 					attributes: ['user_id', 'name', 'email'],
 				},
+				tenantCode,
 				true
 			)
 

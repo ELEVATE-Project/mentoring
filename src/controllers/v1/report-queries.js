@@ -4,7 +4,15 @@ const reportQueryService = require('@services/report-queries')
 module.exports = class ReportQuery {
 	async create(req) {
 		try {
-			const createReportQuery = await reportQueryService.createQuery(req.body)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const organizationId = req.decodedToken.organization_id
+			const createReportQuery = await reportQueryService.createQuery(
+				req.body,
+				organizationCode,
+				organizationId,
+				tenantCode
+			)
 			return createReportQuery
 		} catch (error) {
 			return error
@@ -13,7 +21,9 @@ module.exports = class ReportQuery {
 
 	async read(req) {
 		try {
-			const getReportQuery = await reportQueryService.getQuery(req.query.code)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const getReportQuery = await reportQueryService.getQuery(req.query.code, organizationCode, tenantCode)
 			return getReportQuery
 		} catch (error) {
 			return error
@@ -22,7 +32,8 @@ module.exports = class ReportQuery {
 
 	async update(req) {
 		try {
-			const updatedReportQuery = await reportQueryService.updateQuery(req.query.code, req.body)
+			const tenantCode = req.decodedToken.tenant_code
+			const updatedReportQuery = await reportQueryService.updateQuery(req.query.code, req.body, tenantCode)
 			return updatedReportQuery
 		} catch (error) {
 			return error
@@ -31,7 +42,8 @@ module.exports = class ReportQuery {
 
 	async delete(req) {
 		try {
-			const deleteReportQuery = await reportQueryService.deleteQuery(req.query.id)
+			const tenantCode = req.decodedToken.tenant_code
+			const deleteReportQuery = await reportQueryService.deleteQuery(req.query.id, tenantCode)
 			return deleteReportQuery
 		} catch (error) {
 			return error

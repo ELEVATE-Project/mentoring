@@ -24,7 +24,11 @@ module.exports = class Feedback {
 
 	async forms(req) {
 		try {
-			const feedbackFormData = await feedbackService.forms(req.params.id, req.decodedToken.roles)
+			const feedbackFormData = await feedbackService.forms(
+				req.params.id,
+				req.decodedToken.organizations[0].roles,
+				req.decodedToken.tenant_code
+			)
 			return feedbackFormData
 		} catch (error) {
 			return error
@@ -39,13 +43,13 @@ module.exports = class Feedback {
 	 * @param {String} req.params.id - form id.
 	 * @param {Object} req.body - Form submission data.
 	 * @param {String} req.decodedToken.id - User Id.
-	 * @param {String} req.decodedToken.roles - User role.
+	 * @param {String} req.decodedToken.organizations[0].roles - User role.
 	 * @returns {JSON} - returns feedback submission data.
 	 */
 
 	async submit(req) {
 		try {
-			const isAMentor = req.decodedToken.roles.some((role) => role.title == common.MENTOR_ROLE)
+			const isAMentor = req.decodedToken.organizations[0].roles.some((role) => role.title == common.MENTOR_ROLE)
 			if (isAMentor && !req.body.feedback_as) {
 				return responses.failureResponse({
 					message: 'FEEDBACK_AS_NOT_PASSED',
@@ -57,7 +61,8 @@ module.exports = class Feedback {
 				req.params.id,
 				req.body,
 				req.decodedToken.id,
-				isAMentor
+				isAMentor,
+				req.decodedToken.tenant_code
 			)
 			return feedbackSubmitData
 		} catch (error) {

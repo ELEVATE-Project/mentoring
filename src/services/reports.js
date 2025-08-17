@@ -29,7 +29,7 @@ module.exports = class ReportsHelper {
 	 * @param {String} reportFilter - Specific report filter criteria.
 	 * @returns {Object} - JSON object containing the report filter list.
 	 */
-	static async getFilterList(entity_type, filterType, tokenInformation, reportFilter) {
+	static async getFilterList(entity_type, filterType, tokenInformation, reportFilter, tenantCode) {
 		try {
 			let result = {
 				entity_types: {},
@@ -155,11 +155,15 @@ module.exports = class ReportsHelper {
 		downloadCsv,
 		groupBy,
 		filterColumns,
-		filterValues
+		filterValues,
+		tenantCode
 	) {
 		try {
 			// Validate report permissions
-			const reportPermission = await reportMappingQueries.findReportRoleMappingByReportCode(reportCode)
+			const reportPermission = await reportMappingQueries.findReportRoleMappingByReportCode(
+				reportCode,
+				tenantCode
+			)
 			if (!reportPermission || reportPermission.dataValues.role_title !== reportRole) {
 				return responses.failureResponse({
 					message: 'REPORT_CODE_NOT_FOUND',
@@ -179,35 +183,47 @@ module.exports = class ReportsHelper {
 			let reportConfig
 
 			// Fetch report configuration for the given organization ID
-			const reportConfigWithOrgId = await reportsQueries.findReport({
-				code: reportCode,
-				organization_id: orgId,
-			})
+			const reportConfigWithOrgId = await reportsQueries.findReport(
+				{
+					code: reportCode,
+					organization_id: orgId,
+				},
+				tenantCode
+			)
 			if (reportConfigWithOrgId.length > 0) {
 				reportConfig = reportConfigWithOrgId
 			} else {
 				// Fetch report configuration for the default organization ID
-				const reportConfigWithDefaultOrgId = await reportsQueries.findReport({
-					code: reportCode,
-					organization_id: defaultOrgId,
-				})
+				const reportConfigWithDefaultOrgId = await reportsQueries.findReport(
+					{
+						code: reportCode,
+						organization_id: defaultOrgId,
+					},
+					tenantCode
+				)
 				reportConfig = reportConfigWithDefaultOrgId
 			}
 
 			let reportQuery
 
-			const reportQueryWithOrgId = await reportQueryQueries.findReportQueries({
-				report_code: reportCode,
-				organization_id: orgId,
-			})
+			const reportQueryWithOrgId = await reportQueryQueries.findReportQueries(
+				{
+					report_code: reportCode,
+					organization_id: orgId,
+				},
+				tenantCode
+			)
 
 			if (reportQueryWithOrgId.length > 0) {
 				reportQuery = reportQueryWithOrgId
 			} else {
-				const reportQueryWithDefaultOrgId = await reportQueryQueries.findReportQueries({
-					report_code: reportCode,
-					organization_id: defaultOrgId,
-				})
+				const reportQueryWithDefaultOrgId = await reportQueryQueries.findReportQueries(
+					{
+						report_code: reportCode,
+						organization_id: defaultOrgId,
+					},
+					tenantCode
+				)
 				reportQuery = reportQueryWithDefaultOrgId
 			}
 			if (!reportConfig || !reportQuery) {
@@ -493,13 +509,15 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async createReport(data) {
+	static async createReport(data, organizationId, organizationCode, tenantCode) {
 		try {
+			data.organization_id = organizationId
+			data.organization_code = organizationCode
 			data.created_at = new Date().toISOString()
 			data.updated_at = new Date().toISOString()
 
 			// Attempt to create a new report directly
-			const reportCreation = await reportsQueries.createReport(data)
+			const reportCreation = await reportsQueries.createReport(data, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'REPORT_CREATED_SUCCESS',
@@ -522,9 +540,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async getReportById(id) {
+	static async getReportById(id, tenantCode) {
 		try {
-			const readReport = await reportsQueries.findReportById(id)
+			const readReport = await reportsQueries.findReportById(id, tenantCode)
 			if (!readReport) {
 				return responses.failureResponse({
 					message: 'REPORT_NOT_FOUND',
@@ -542,10 +560,15 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async updateReport(id, updateData) {
+	static async updateReport(id, updateData, organizationId, organizationCode, tenantCode) {
 		try {
-			const filter = { id: id }
-			const updatedReport = await reportsQueries.updateReport(filter, updateData)
+			const filter = {
+				id: id,
+				organization_code: organizationCode,
+				organization_id: organizationId,
+				tenant_code: tenantCode,
+			}
+			const updatedReport = await reportsQueries.updateReport(filter, updateData, tenantCode)
 			if (!updatedReport) {
 				return responses.failureResponse({
 					message: 'REPORT_UPDATE_FAILED',
@@ -563,9 +586,9 @@ module.exports = class ReportsHelper {
 		}
 	}
 
-	static async deleteReportById(id) {
+	static async deleteReportById(id, tenantCode) {
 		try {
-			const deletedRows = await reportsQueries.deleteReportById(id)
+			const deletedRows = await reportsQueries.deleteReportById(id, tenantCode)
 			if (deletedRows === 0) {
 				return responses.failureResponse({
 					message: 'REPORT_DELETION_FAILED',

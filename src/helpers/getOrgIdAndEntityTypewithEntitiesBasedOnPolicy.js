@@ -5,9 +5,9 @@ const organisationExtensionQueries = require('@database/queries/organisationExte
 const { Op } = require('sequelize')
 
 module.exports = class OrganizationAndEntityTypePolicyHelper {
-	static async getOrganizationIdBasedOnPolicy(userId, organization_id, filterType) {
+	static async getOrganizationIdBasedOnPolicy(userId, organization_code, filterType, tenantCode) {
 		try {
-			let organizationIds = []
+			let organizationCodes = []
 			filterType = filterType.toLowerCase()
 
 			let visibilityPolicies = []
@@ -22,28 +22,28 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 			const attributes = visibilityPolicies
 
 			const orgExtension = await organisationExtensionQueries.findOne(
-				{ organization_id },
+				{ organization_code: organization_code },
+				tenantCode,
 				{
 					attributes: attributes,
 				}
 			)
 
-			const orgPolicyMap = {
-				[common.MENTEE_ROLE]: orgExtension.external_mentee_visibility_policy,
-				[common.SESSION]: orgExtension.external_session_visibility_policy,
-				[common.MENTOR_ROLE]: orgExtension.external_mentor_visibility_policy,
-			}
-			orgVisibilityPolicies = orgPolicyMap[filterType] || []
-			const visibilityPolicy = orgVisibilityPolicies
-
 			if (orgExtension?.organization_id) {
+				const orgPolicyMap = {
+					[common.MENTEE_ROLE]: orgExtension.external_mentee_visibility_policy,
+					[common.SESSION]: orgExtension.external_session_visibility_policy,
+					[common.MENTOR_ROLE]: orgExtension.external_mentor_visibility_policy,
+				}
+				orgVisibilityPolicies = orgPolicyMap[filterType] || []
+				const visibilityPolicy = orgVisibilityPolicies
 				if (visibilityPolicy === common.CURRENT) {
-					organizationIds.push(orgExtension.organization_id)
+					organizationCodes.push(orgExtension.organization_id)
 				} else if (visibilityPolicy === common.ASSOCIATED || visibilityPolicy === common.ALL) {
-					organizationIds.push(orgExtension.organization_id)
+					organizationCodes.push(orgExtension.organization_id)
 					let relatedOrgs = []
 					let userOrgDetails = await userRequests.fetchOrgDetails({
-						organizationId: orgExtension.organization_id,
+						organizationCode: orgExtension.organization_id,
 					})
 					if (userOrgDetails.success && userOrgDetails.data?.result?.related_orgs?.length > 0) {
 						relatedOrgs = userOrgDetails.data.result.related_orgs
@@ -79,16 +79,16 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 									associatedAdditionalFilter,
 								],
 							},
+							tenantCode,
 							{
 								attributes: ['organization_id'],
 							}
 						)
-						organizationIds.push(orgExtension.organization_id)
 						if (organizationExtension) {
-							const organizationIdsFromOrgExtension = organizationExtension.map(
+							const organizationCodesFromOrgExtension = organizationExtension.map(
 								(orgExt) => orgExt.organization_id
 							)
-							organizationIds.push(...organizationIdsFromOrgExtension)
+							organizationCodes.push(...organizationCodesFromOrgExtension)
 						}
 					} else {
 						// filter out the organizations
@@ -150,16 +150,16 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 									},
 								],
 							},
+							tenantCode,
 							{
 								attributes: ['organization_id'],
 							}
 						)
-						organizationIds.push(orgExtension.organization_id)
 						if (organizationExtension) {
-							const organizationIdsFromOrgExtension = organizationExtension.map(
+							const organizationCodesFromOrgExtension = organizationExtension.map(
 								(orgExt) => orgExt.organization_id
 							)
-							organizationIds.push(...organizationIdsFromOrgExtension)
+							organizationCodes.push(...organizationCodesFromOrgExtension)
 						}
 					}
 				}
@@ -167,7 +167,7 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 
 			return {
 				success: true,
-				result: organizationIds,
+				result: organizationCodes,
 			}
 		} catch (error) {
 			return {
@@ -178,18 +178,19 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 	}
 
 	static async getEntityTypeWithEntitiesBasedOnOrg(
-		organization_ids,
+		organization_codes,
 		entity_types,
-		defaultOrgId = '',
+		defaultOrgCode = '',
 		modelName,
-		filter = {}
+		filter = {},
+		tenantCode
 	) {
 		try {
 			filter.status = common.ACTIVE_STATUS
 			filter.allow_filtering = true
 			filter.has_entities = true
-			filter.organization_id = {
-				[Op.in]: defaultOrgId ? [...organization_ids, defaultOrgId] : organization_ids,
+			filter.organization_code = {
+				[Op.in]: defaultOrgCode ? [...organization_codes, defaultOrgCode] : organization_codes,
 			}
 			let entityTypes = []
 			if (entity_types) {
@@ -202,7 +203,7 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 				filter.model_names = { [Op.contains]: [modelName] }
 			}
 			//fetch entity types and entities
-			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
+			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
 
 			return {
 				success: true,

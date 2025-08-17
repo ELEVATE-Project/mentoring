@@ -24,30 +24,19 @@ exports.getModelName = async () => {
 	}
 }
 
-exports.create = async (data) => {
+exports.create = async (data, tenantCode) => {
 	try {
+		data.tenant_code = tenantCode
 		const session = await Session.create(data)
-		// create session ownership entry for the session creator
-		await sessionOwnership.create({
-			user_id: session.created_by,
-			session_id: session.id,
-			type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
-		})
-
-		// create session ownership entry for the session mentor
-		await sessionOwnership.create({
-			user_id: session.mentor_id,
-			session_id: session.id,
-			type: common.SESSION_OWNERSHIP_TYPE.MENTOR,
-		})
 		return session
 	} catch (error) {
 		return error
 	}
 }
 
-exports.findOne = async (filter, options = {}) => {
+exports.findOne = async (filter, tenantCode, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		const res = await Session.findOne({
 			where: filter,
 			...options,
@@ -59,16 +48,17 @@ exports.findOne = async (filter, options = {}) => {
 	}
 }
 
-exports.findById = async (id) => {
+exports.findById = async (id, tenantCode) => {
 	try {
-		return await Session.findByPk(id)
+		return await Session.findOne({ where: { id, tenant_code: tenantCode } })
 	} catch (error) {
 		return error
 	}
 }
 
-exports.updateOne = async (filter, update, options = {}) => {
+exports.updateOne = async (filter, update, tenantCode, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		const result = await Session.update(update, {
 			where: filter,
 			...options,
@@ -100,8 +90,9 @@ exports.updateRecords = async (data, options = {}) => {
 	}
 }
 
-exports.findAll = async (filter, options = {}) => {
+exports.findAll = async (filter, tenantCode, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		return await Session.findAll({
 			where: filter,
 			...options,
@@ -112,12 +103,12 @@ exports.findAll = async (filter, options = {}) => {
 	}
 }
 
-exports.updateEnrollmentCount = async (sessionId, increment = true) => {
+exports.updateEnrollmentCount = async (sessionId, increment = true, tenantCode) => {
 	try {
 		const options = increment ? { by: 1 } : { by: -1 }
 		const result = this.incrementOrDecrement(
 			{
-				where: { id: sessionId },
+				where: { id: sessionId, tenant_code: tenantCode },
 				...options,
 			},
 			'seats_remaining'
@@ -130,13 +121,14 @@ exports.updateEnrollmentCount = async (sessionId, increment = true) => {
 
 exports.incrementOrDecrement = async (filterWithOptions, incrementFields = []) => {
 	try {
+		// Note: tenant_code filtering should already be included in filterWithOptions.where
 		return await Session.increment(incrementFields, filterWithOptions)
 	} catch (error) {
 		return error
 	}
 }
 
-exports.getSessionByUserIdAndTime = async (userId, startDate, endDate, sessionId) => {
+exports.getSessionByUserIdAndTime = async (userId, startDate, endDate, sessionId, tenantCode) => {
 	try {
 		let startDateResponse, endDateResponse
 		const query = {
@@ -157,7 +149,7 @@ exports.getSessionByUserIdAndTime = async (userId, startDate, endDate, sessionId
 				query.id = { [Op.ne]: sessionId }
 			}
 
-			startDateResponse = await this.findAll(query)
+			startDateResponse = await this.findAll(query, tenantCode)
 		}
 		if (endDate) {
 			query.start_date = {
@@ -172,7 +164,7 @@ exports.getSessionByUserIdAndTime = async (userId, startDate, endDate, sessionId
 				query.id = { [Op.ne]: sessionId }
 			}
 
-			endDateResponse = await this.findAll(query)
+			endDateResponse = await this.findAll(query, tenantCode)
 		}
 
 		return {
@@ -184,8 +176,9 @@ exports.getSessionByUserIdAndTime = async (userId, startDate, endDate, sessionId
 	}
 }
 
-exports.deleteSession = async (filter) => {
+exports.deleteSession = async (filter, tenantCode) => {
 	try {
+		filter.tenant_code = tenantCode
 		return await Session.destroy({
 			where: filter,
 		})
@@ -194,9 +187,10 @@ exports.deleteSession = async (filter) => {
 	}
 }
 
-exports.updateSession = async (filter, update, options = {}) => {
+exports.updateSession = async (filter, update, tenantCode, options = {}) => {
 	try {
-		return await await Session.update(update, {
+		filter.tenant_code = tenantCode
+		return await Session.update(update, {
 			where: filter,
 			...options,
 		})
@@ -204,7 +198,7 @@ exports.updateSession = async (filter, update, options = {}) => {
 		return error
 	}
 }
-exports.removeAndReturnMentorSessions = async (userId) => {
+exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 	try {
 		const currentEpochTime = moment().unix()
 		const currentDate = moment()
@@ -234,12 +228,13 @@ exports.removeAndReturnMentorSessions = async (userId) => {
 		const option = {
 			attributes: ['session_id'],
 		}
-		const sessionIds = await sessionOwnership.findAll(filter, option, true)
+		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
 
 		const foundSessions = await Session.findAll({
 			where: {
 				id: { [Op.in]: sessionIds },
 				[Op.or]: [{ start_date: { [Op.gt]: currentEpochTime } }, { status: common.PUBLISHED_STATUS }],
+				tenant_code: tenantCode,
 			},
 			raw: true,
 		})
@@ -256,6 +251,7 @@ exports.removeAndReturnMentorSessions = async (userId) => {
 			{
 				where: {
 					id: { [Op.in]: upcomingSessionIds },
+					tenant_code: tenantCode,
 				},
 			}
 		)
@@ -266,6 +262,7 @@ exports.removeAndReturnMentorSessions = async (userId) => {
 			{
 				where: {
 					session_id: { [Op.in]: upcomingSessionIds },
+					tenant_code: tenantCode,
 				},
 			}
 		)
@@ -276,8 +273,9 @@ exports.removeAndReturnMentorSessions = async (userId) => {
 	}
 }
 
-exports.findAllSessions = async (page, limit, search, filters) => {
+exports.findAllSessions = async (page, limit, search, filters, tenantCode) => {
 	try {
+		filters.tenant_code = tenantCode
 		let filterQuery = {
 			where: filters,
 			raw: true,
@@ -310,7 +308,7 @@ exports.findAllSessions = async (page, limit, search, filters) => {
 		return error
 	}
 }
-exports.getAllUpcomingSessions = async (paranoid) => {
+exports.getAllUpcomingSessions = async (paranoid, tenantCode) => {
 	const currentEpochTime = moment().unix()
 	//const currentEpochTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
 
@@ -324,6 +322,7 @@ exports.getAllUpcomingSessions = async (paranoid) => {
 				status: {
 					[Op.not]: common.INACTIVE_STATUS,
 				},
+				tenant_code: tenantCode,
 			},
 			raw: true,
 		})
@@ -333,7 +332,7 @@ exports.getAllUpcomingSessions = async (paranoid) => {
 	}
 }
 
-exports.updateEnrollmentCount = async (sessionId, increment = true) => {
+exports.updateEnrollmentCount = async (sessionId, increment = true, tenantCode) => {
 	try {
 		const updateFields = increment
 			? { seats_remaining: literal('"seats_remaining" + 1') }
@@ -342,6 +341,7 @@ exports.updateEnrollmentCount = async (sessionId, increment = true) => {
 		return await Session.update(updateFields, {
 			where: {
 				id: sessionId,
+				tenant_code: tenantCode,
 			},
 		})
 	} catch (error) {
@@ -349,26 +349,22 @@ exports.updateEnrollmentCount = async (sessionId, increment = true) => {
 		throw error
 	}
 }
-exports.countHostedSessions = async (id) => {
+exports.countHostedSessions = async (id, tenantCode) => {
 	try {
-		const filter = {
-			user_id: id,
-			type: common.SESSION_OWNERSHIP_TYPE.MENTOR,
+		const whereClause = {
+			mentor_id: id,
+			status: 'COMPLETED',
+			started_at: {
+				[Op.not]: null,
+			},
 		}
 
-		const option = {
-			attributes: ['session_id'],
+		if (tenantCode) {
+			whereClause.tenant_code = tenantCode
 		}
-		const sessionIds = await sessionOwnership.findAll(filter, option, true)
 
 		const count = await Session.count({
-			where: {
-				id: { [Op.in]: sessionIds },
-				status: 'COMPLETED',
-				started_at: {
-					[Op.not]: null,
-				},
-			},
+			where: whereClause,
 		})
 		return count
 	} catch (error) {
@@ -376,7 +372,7 @@ exports.countHostedSessions = async (id) => {
 	}
 }
 
-exports.getCreatedSessionsCountInDateRange = async (mentorId, startDate, endDate) => {
+exports.getCreatedSessionsCountInDateRange = async (mentorId, startDate, endDate, tenantCode) => {
 	try {
 		const filter = {
 			user_id: mentorId,
@@ -386,7 +382,7 @@ exports.getCreatedSessionsCountInDateRange = async (mentorId, startDate, endDate
 		const option = {
 			attributes: ['session_id'],
 		}
-		const sessionIds = await sessionOwnership.findAll(filter, option, true)
+		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
 
 		const count = await Session.count({
 			where: {
@@ -396,6 +392,7 @@ exports.getCreatedSessionsCountInDateRange = async (mentorId, startDate, endDate
 				},
 				mentor_id: mentorId, // Check mentor_id
 				created_by: mentorId, // Check created_by
+				tenant_code: tenantCode,
 			},
 		})
 		return count
@@ -413,7 +410,7 @@ exports.getCreatedSessionsCountInDateRange = async (mentorId, startDate, endDate
  * @throws {Error} 				- If an error occurs during the process.
  */
 
-exports.getAssignedSessionsCountInDateRange = async (mentorId, startDate, endDate) => {
+exports.getAssignedSessionsCountInDateRange = async (mentorId, startDate, endDate, tenantCode) => {
 	try {
 		const filter = {
 			user_id: mentorId,
@@ -423,7 +420,7 @@ exports.getAssignedSessionsCountInDateRange = async (mentorId, startDate, endDat
 		const option = {
 			attributes: ['session_id'],
 		}
-		const sessionIds = await sessionOwnership.findAll(filter, option, true)
+		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
 
 		const count = await Session.count({
 			where: {
@@ -433,6 +430,7 @@ exports.getAssignedSessionsCountInDateRange = async (mentorId, startDate, endDat
 				},
 				mentor_id: mentorId,
 				created_by: { [Op.ne]: mentorId },
+				tenant_code: tenantCode,
 			},
 		})
 		return count
@@ -441,7 +439,7 @@ exports.getAssignedSessionsCountInDateRange = async (mentorId, startDate, endDat
 	}
 }
 
-exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate) => {
+exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate, tenantCode) => {
 	try {
 		const filter = {
 			user_id: mentorId,
@@ -451,7 +449,7 @@ exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate)
 		const option = {
 			attributes: ['session_id'],
 		}
-		const sessionIds = await sessionOwnership.findAll(filter, option, true)
+		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
 
 		const count = await Session.count({
 			where: {
@@ -463,6 +461,7 @@ exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate)
 				started_at: {
 					[Op.not]: null,
 				},
+				tenant_code: tenantCode,
 			},
 		})
 		return count
@@ -503,7 +502,7 @@ exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate)
 	}
 } */
 
-exports.getMentorsUpcomingSessions = async (page, limit, search, mentorId) => {
+exports.getMentorsUpcomingSessions = async (page, limit, search = '', mentorId, tenantCode) => {
 	try {
 		const filter = {
 			user_id: mentorId,
@@ -512,7 +511,7 @@ exports.getMentorsUpcomingSessions = async (page, limit, search, mentorId) => {
 		const option = {
 			attributes: ['session_id'],
 		}
-		const sessionIds = await sessionOwnership.findAll(filter, option, true)
+		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
 
 		const currentEpochTime = moment().unix()
 
@@ -528,6 +527,7 @@ exports.getMentorsUpcomingSessions = async (page, limit, search, mentorId) => {
 						started_at: {
 							[Op.eq]: null,
 						},
+						tenant_code: tenantCode,
 					},
 					{
 						[Op.or]: [
@@ -568,7 +568,7 @@ exports.getMentorsUpcomingSessions = async (page, limit, search, mentorId) => {
 	}
 }
 
-exports.getUpcomingSessions = async (page, limit, search, userId, startDate, endDate) => {
+exports.getUpcomingSessions = async (page, limit, search, userId, startDate, endDate, tenantCode) => {
 	try {
 		const currentEpochTime = moment().unix()
 		let whereCondition = {
@@ -580,6 +580,7 @@ exports.getUpcomingSessions = async (page, limit, search, userId, startDate, end
 			status: {
 				[Op.in]: [common.PUBLISHED_STATUS, common.LIVE_STATUS],
 			},
+			tenant_code: tenantCode,
 		}
 
 		if (startDate && endDate) {
@@ -625,8 +626,9 @@ exports.getUpcomingSessions = async (page, limit, search, userId, startDate, end
 	}
 }
 
-exports.findAndCountAll = async (filter, options = {}, attributes = {}) => {
+exports.findAndCountAll = async (filter, tenantCode, options = {}, attributes = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		const { rows, count } = await Session.findAndCountAll({
 			where: filter,
 			...options,
@@ -635,10 +637,10 @@ exports.findAndCountAll = async (filter, options = {}, attributes = {}) => {
 		})
 		return { rows, count }
 	} catch (error) {
-		return error
+		throw error
 	}
 }
-exports.mentorsSessionWithPendingFeedback = async (mentorId, options = {}, completedSessionIds) => {
+exports.mentorsSessionWithPendingFeedback = async (mentorId, tenantCode, options = {}, completedSessionIds) => {
 	try {
 		return await Session.findAll({
 			where: {
@@ -649,12 +651,13 @@ exports.mentorsSessionWithPendingFeedback = async (mentorId, options = {}, compl
 				},
 				is_feedback_skipped: false,
 				mentor_id: mentorId,
+				tenant_code: tenantCode,
 			},
 			...options,
 			raw: true,
 		})
 	} catch (error) {
-		return error
+		throw error
 	}
 }
 
@@ -664,6 +667,7 @@ exports.getUpcomingSessionsFromView = async (
 	searchFilter,
 	userId,
 	filter,
+	tenantCode,
 	saasFilter = '',
 	additionalProjectionclause = '',
 	searchText,
@@ -676,6 +680,7 @@ exports.getUpcomingSessionsFromView = async (
 
 		const saasFilterClause = saasFilter != '' ? saasFilter : ''
 		const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
+		const tenantFilterClause = 'AND tenant_code = :tenantCode'
 		let publicSessionFilter = " AND type = '" + common.SESSION_TYPE.PUBLIC + "'"
 
 		// Create selection clause
@@ -723,6 +728,7 @@ exports.getUpcomingSessionsFromView = async (
 			${common.materializedViewsPrefix + Session.tableName}
 		WHERE
 			mentor_id != :userId
+			${tenantFilterClause}
 			${saasFilterClause}
 			${filterClause}
 			AND status IN ('${common.PUBLISHED_STATUS}', '${common.LIVE_STATUS}')
@@ -743,6 +749,7 @@ exports.getUpcomingSessionsFromView = async (
 			currentEpochTime: currentEpochTime,
 			offset: limit * (page - 1),
 			limit: limit,
+			tenantCode: tenantCode,
 			...filter.replacements,
 		}
 
@@ -764,6 +771,7 @@ exports.getUpcomingSessionsFromView = async (
 			${common.materializedViewsPrefix + Session.tableName}
 		WHERE
 			mentor_id != :userId
+			${tenantFilterClause}
 			${saasFilterClause}
 			${filterClause}
 			AND status IN ('${common.PUBLISHED_STATUS}', '${common.LIVE_STATUS}')
@@ -787,11 +795,12 @@ exports.getUpcomingSessionsFromView = async (
 	}
 }
 
-exports.findAllByIds = async (ids) => {
+exports.findAllByIds = async (ids, tenantCode) => {
 	try {
 		return await Session.findAll({
 			where: {
 				id: ids,
+				tenant_code: tenantCode,
 			},
 			raw: true,
 			order: [['created_at', 'DESC']],
@@ -804,9 +813,10 @@ exports.findAllByIds = async (ids) => {
 exports.getMentorsUpcomingSessionsFromView = async (
 	page,
 	limit,
-	search,
+	search = '',
 	mentorId,
 	filter,
+	tenantCode,
 	saasFilter = '',
 	defaultFilter = ''
 ) => {
@@ -816,6 +826,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 		const filterClause = filter?.query.length > 0 ? `AND ${filter.query}` : ''
 
 		const saasFilterClause = saasFilter != '' ? saasFilter : ''
+		const tenantFilterClause = 'AND tenant_code = :tenantCode'
 
 		const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
 
@@ -836,6 +847,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 				${common.materializedViewsPrefix + Session.tableName}
 		WHERE
 			mentor_id = :mentorId
+			${tenantFilterClause}
 			AND status = 'PUBLISHED'
 			AND start_date > :currentEpochTime
 			AND started_at IS NULL
@@ -859,6 +871,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			search: `%${search.toLowerCase()}%`,
 			offset: limit * (page - 1),
 			limit: limit,
+			tenantCode: tenantCode,
 			...filter.replacements, // Add filter parameters to replacements
 		}
 
@@ -872,6 +885,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 		${common.materializedViewsPrefix + Session.tableName}
 		WHERE
 			mentor_id = :mentorId
+			${tenantFilterClause}
 			AND status = 'PUBLISHED'
 			AND start_date > :currentEpochTime
 			AND started_at IS NULL
@@ -895,7 +909,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 	}
 }
 
-exports.deactivateAndReturnMentorSessions = async (userId) => {
+exports.deactivateAndReturnMentorSessions = async (userId, tenantCode) => {
 	try {
 		const currentEpochTime = moment().unix()
 		const currentDateTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
@@ -907,11 +921,12 @@ exports.deactivateAndReturnMentorSessions = async (userId) => {
 		const option = {
 			attributes: ['session_id'],
 		}
-		const sessionIds = await sessionOwnership.findAll(filter, option, true)
+		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
 		const foundSessions = await Session.findAll({
 			where: {
 				id: { [Op.in]: sessionIds },
 				[Op.or]: [{ start_date: { [Op.gt]: currentEpochTime } }, { status: common.PUBLISHED_STATUS }],
+				tenant_code: tenantCode,
 			},
 			raw: true,
 		})
@@ -928,6 +943,7 @@ exports.deactivateAndReturnMentorSessions = async (userId) => {
 			{
 				where: {
 					id: { [Op.in]: upcomingSessionIds },
+					tenant_code: tenantCode,
 				},
 			}
 		)
@@ -966,13 +982,14 @@ exports.getUpcomingSessionsOfMentee = async (menteeUserId, sessionType) => {
 	}
 }
 
-exports.getUpcomingSessionsForMentor = async (mentorUserId) => {
+exports.getUpcomingSessionsForMentor = async (mentorUserId, tenantCode) => {
 	try {
 		const currentTime = Math.floor(Date.now() / 1000)
 
 		const upcomingSessions = await Session.findAll({
 			where: {
 				mentor_id: mentorUserId,
+				tenant_code: tenantCode,
 				start_date: { [Op.gt]: currentTime },
 				deleted_at: null,
 				created_by: {
@@ -988,13 +1005,14 @@ exports.getUpcomingSessionsForMentor = async (mentorUserId) => {
 	}
 }
 
-exports.getSessionsAssignedToMentor = async (mentorUserId) => {
+exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 	try {
 		const query = `
 				SELECT s.*, sa.mentee_id
 				FROM ${Session.tableName} s
 				INNER JOIN session_attendees sa ON s.id = sa.session_id
 				WHERE s.mentor_id = :mentorUserId 
+				AND s.tenant_code = :tenantCode
 				AND s.start_date > :currentTime
 				AND s.deleted_at IS NULL
 				AND s.created_by != :mentorUserId
@@ -1005,6 +1023,7 @@ exports.getSessionsAssignedToMentor = async (mentorUserId) => {
 			replacements: {
 				mentorUserId,
 				currentTime: Math.floor(Date.now() / 1000),
+				tenantCode: tenantCode,
 			},
 		})
 

@@ -33,17 +33,24 @@ module.exports = class MentorExtensionQueries {
 		}
 	}
 
-	static async createMentorExtension(data) {
+	static async createMentorExtension(data, tenantCode) {
 		try {
-			data = { ...data, is_mentor: true }
-			return await MentorExtension.create(data, { returning: true })
+			data = { ...data, is_mentor: true, tenant_code: tenantCode }
+			const [mentorExtension, created] = await MentorExtension.findOrCreate({
+				where: {
+					user_id: data.user_id,
+					tenant_code: tenantCode,
+				},
+				defaults: data,
+			})
+			return mentorExtension
 		} catch (error) {
 			console.log(error)
 			throw error
 		}
 	}
 
-	static async updateMentorExtension(userId, data, options = {}, customFilter = {}, unscoped = false) {
+	static async updateMentorExtension(userId, data, options = {}, customFilter = {}, unscoped = false, tenantCode) {
 		try {
 			data = { ...data, is_mentor: true }
 
@@ -51,7 +58,12 @@ module.exports = class MentorExtensionQueries {
 				delete data['user_id']
 			}
 
-			const whereClause = _.isEmpty(customFilter) ? { user_id: userId } : customFilter
+			let whereClause
+			if (_.isEmpty(customFilter)) {
+				whereClause = { user_id: userId, tenant_code: tenantCode }
+			} else {
+				whereClause = customFilter
+			}
 			// If `meta` is included in `data`, use `jsonb_set` to merge changes safely
 			if (data.meta) {
 				for (const [key, value] of Object.entries(data.meta)) {
@@ -83,18 +95,19 @@ module.exports = class MentorExtensionQueries {
 		}
 	}
 
-	static async getMentorExtension(userId, attributes = [], unScoped = false) {
+	static async getMentorExtension(userId, attributes = [], unScoped = false, tenantCode) {
 		try {
 			const queryOptions = {
-				where: { user_id: userId },
+				where: {
+					user_id: userId,
+					tenant_code: tenantCode,
+				},
 				raw: true,
 			}
-
 			// If attributes are passed update query
 			if (attributes.length > 0) {
 				queryOptions.attributes = attributes
 			}
-
 			let mentor
 			if (unScoped) {
 				mentor = await MentorExtension.unscoped().findOne(queryOptions)
@@ -110,9 +123,9 @@ module.exports = class MentorExtensionQueries {
 		}
 	}
 
-	static async deleteMentorExtension(userId, force = false) {
+	static async deleteMentorExtension(userId, tenantCode, force = false) {
 		try {
-			const options = { where: { user_id: userId } }
+			const options = { where: { user_id: userId, tenant_code: tenantCode } }
 
 			if (force) {
 				options.force = true
@@ -166,11 +179,12 @@ module.exports = class MentorExtensionQueries {
 			throw error
 		}
 	}
-	static async getMentorsByUserIds(ids, options = {}, unscoped = false) {
+	static async getMentorsByUserIds(ids, options = {}, tenantCode, unscoped = false) {
 		try {
 			const query = {
 				where: {
 					user_id: ids,
+					tenant_code: tenantCode,
 				},
 				...options,
 				returning: true,
@@ -232,7 +246,6 @@ module.exports = class MentorExtensionQueries {
 
 			let saasFilterClause = saasFilter !== '' ? saasFilter : ''
 			const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
-
 			if (excludeUserIds && filter.query.length === 0) {
 				saasFilterClause = saasFilterClause.replace('AND ', '') // Remove "AND" if excludeUserIds is true and filter is empty
 			}
@@ -411,9 +424,9 @@ module.exports = class MentorExtensionQueries {
 			type: Sequelize.QueryTypes.UPDATE,
 		})
 	}
-	static async getMentorExtensions(userIds, attributes = []) {
+	static async getMentorExtensions(userIds, attributes = [], tenantCode) {
 		try {
-			const queryOptions = { where: { user_id: { [Op.in]: userIds } }, raw: true }
+			const queryOptions = { where: { user_id: { [Op.in]: userIds }, tenant_code: tenantCode }, raw: true }
 			if (attributes.length > 0) {
 				queryOptions.attributes = attributes
 			}
@@ -472,17 +485,17 @@ module.exports = class MentorExtensionQueries {
 		}
 	}
 
-	static async findOneFromView(userId) {
+	static async findOneFromView(userId, tenantCode) {
 		try {
 			let query = `
 				SELECT *
 				FROM ${common.materializedViewsPrefix + MentorExtension.tableName}
-				WHERE user_id = :userId
+				WHERE user_id = :userId AND tenant_code = :tenantCode
 				LIMIT 1
 			`
 
 			const user = await Sequelize.query(query, {
-				replacements: { userId },
+				replacements: { userId, tenantCode },
 				type: QueryTypes.SELECT,
 			})
 

@@ -12,12 +12,19 @@ module.exports = class requestsSessions {
 	 */
 	async create(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
 			const SkipValidation = req.query.SkipValidation ? req.query.SkipValidation : false
+
 			return await requestSessionsService.create(
 				req.body,
-				req.decodedToken.id,
-				req.decodedToken.organization_id,
-				SkipValidation
+				userId,
+				organizationCode,
+				organizationId,
+				SkipValidation,
+				tenantCode
 			)
 		} catch (error) {
 			return error
@@ -33,11 +40,15 @@ module.exports = class requestsSessions {
 	 */
 	async list(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const userId = req.decodedToken.id
+
 			const requestSessionDetails = await requestSessionsService.list(
-				req.decodedToken.id,
+				userId,
 				req.query.pageNo,
 				req.query.pageSize,
-				req.query.status ? req.query.status.split(',').map((s) => s.trim()) : []
+				req.query.status ? req.query.status.split(',').map((s) => s.trim()) : [],
+				tenantCode
 			)
 			return requestSessionDetails
 		} catch (error) {
@@ -50,19 +61,26 @@ module.exports = class requestsSessions {
 	 * @param {Object} bodyData - The body data containing the target user ID.
 	 * @param {string} bodyData.user_id - The ID of the target user.
 	 * @param {string} mentorUserId - The ID of the authenticated user.
-	 * @param {string} organization_id - the ID of the user organization.
+	 * @param {string} organization_code - the code of the user organization.
 	 * @returns {Promise<Object>} A success response indicating the request was accepted.
 	 */
 	async accept(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+
 			if (req.headers.timezone) {
 				req.body['time_zone'] = req.headers.timezone
 			}
 			const acceptRequestSession = await requestSessionsService.accept(
 				req.body,
-				req.decodedToken.id,
-				req.decodedToken.organization_id,
-				isAMentor(req.decodedToken.roles)
+				userId,
+				organizationId,
+				organizationCode,
+				isAMentor(req.decodedToken.organizations[0].roles),
+				tenantCode
 			)
 			return acceptRequestSession
 		} catch (error) {
@@ -75,12 +93,16 @@ module.exports = class requestsSessions {
 	 * @param {Object} bodyData - The body data containing the target user ID.
 	 * @param {string} bodyData.user_id - The ID of the target user.
 	 * @param {string} mentorUserId - The ID of the authenticated user.
-	 * @param {string} organization_id - the ID of the user organization.
+	 * @param {string} organization_code - the code of the user organization.
 	 * @returns {Promise<Object>} A success response indicating the request was rejected.
 	 */
 	async reject(req) {
 		try {
-			return await requestSessionsService.reject(req.body, req.decodedToken.id, req.decodedToken.organization_id)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const userId = req.decodedToken.id
+
+			return await requestSessionsService.reject(req.body, userId, organizationCode, tenantCode)
 		} catch (error) {
 			throw error
 		}
@@ -95,7 +117,10 @@ module.exports = class requestsSessions {
 	 */
 	async getDetails(req) {
 		try {
-			return await requestSessionsService.getInfo(req.query.request_session_id, req.decodedToken.id)
+			const tenantCode = req.decodedToken.tenant_code
+			const userId = req.decodedToken.id
+
+			return await requestSessionsService.getInfo(req.query.request_session_id, userId, tenantCode)
 		} catch (error) {
 			throw error
 		}
@@ -114,15 +139,21 @@ module.exports = class requestsSessions {
 	 */
 	async userAvailability(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+
 			return await requestSessionsService.userAvailability(
-				req.decodedToken.id,
+				userId,
 				req.query.pageNo,
 				req.query.pageSize,
 				req.query.searchText,
 				req.query.status,
-				req.decodedToken.roles,
+				req.decodedToken.organizations[0].roles,
 				req.query.start_date,
-				req.query.end_date
+				req.query.end_date,
+				organizationId,
+				tenantCode
 			)
 		} catch (error) {
 			throw error
@@ -139,7 +170,9 @@ module.exports = class requestsSessions {
 
 	async expire(req) {
 		try {
-			const sessionsExpire = await requestSessionsService.expire(req.params.id)
+			const tenantCode = req.decodedToken.tenant_code
+
+			const sessionsExpire = await requestSessionsService.expire(req.params.id, tenantCode)
 			return sessionsExpire
 		} catch (error) {
 			return error
