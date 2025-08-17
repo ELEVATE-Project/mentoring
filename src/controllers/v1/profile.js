@@ -233,8 +233,8 @@ module.exports = class Mentees {
 
 			return await menteesService.details(
 				req.params.id,
-				req.decodedToken.organization_code,
-				req.decodedToken.id,
+				organizationCode,
+				userId,
 				isAMentor(req.decodedToken.organizations[0].roles),
 				req.decodedToken.organizations[0].roles,
 				tenantCode
