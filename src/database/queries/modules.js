@@ -19,16 +19,16 @@ module.exports = class UserRoleModulesData {
 		}
 	}
 
-	static async findAllModules(filter, attributes, options, tenantCode) {
+	static async findAllModules(filter = {}, attributes, options, tenantCode) {
 		try {
-			// Ensure tenant_code is always included in the filter
-			filter.tenant_code = tenantCode
-			const permissions = await Modules.findAndCountAll({
-				where: filter,
+			const { where: optionsWhere = {}, ...rest } = options || {}
+			const where = { ...optionsWhere, ...(filter || {}), tenant_code: tenantCode }
+			const modules = await Modules.findAndCountAll({
+				where,
 				attributes,
-				...options,
+				...rest,
 			})
-			return permissions
+			return modules
 		} catch (error) {
 			throw error
 		}

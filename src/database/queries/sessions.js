@@ -1021,7 +1021,7 @@ exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 			replacements: {
 				mentorUserId,
 				currentTime: Math.floor(Date.now() / 1000),
-				tenant_code: tenantCode,
+				tenantCode: tenantCode,
 			},
 		})
 

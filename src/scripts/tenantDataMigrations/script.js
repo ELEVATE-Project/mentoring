@@ -69,7 +69,7 @@ if (!allFilesExist) {
 	console.log('\n❌ MISSING CSV FILES:')
 	console.log('   Please export data_codes.csv from user service first:')
 	console.log('   1. Create data_codes.csv with columns: organization_id, organization_code, tenant_code')
-	console.log('   2. Save file in ../data/ directory')
+	console.log('   2. Save file in ../../data/ directory')
 	console.log('   3. Re-run this script')
 	process.exit(1)
 }

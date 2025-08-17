@@ -22,7 +22,7 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 			const attributes = visibilityPolicies
 
 			const orgExtension = await organisationExtensionQueries.findOne(
-				{ organization_id: organization_code },
+				{ organization_code: organization_code },
 				tenantCode,
 				{
 					attributes: attributes,

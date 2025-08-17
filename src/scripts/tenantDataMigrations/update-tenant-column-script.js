@@ -463,7 +463,7 @@ class TenantMigrationFinalizer {
 			{
 				table: 'organization_extension',
 				name: 'unique_organization_extension_org_tenant',
-				columns: 'organization_code, tenant_code, organization_code',
+				columns: 'organization_code, tenant_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
