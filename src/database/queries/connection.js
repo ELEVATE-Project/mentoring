@@ -245,7 +245,7 @@ exports.getConnection = async (userId, friendId, tenantCode) => {
 				user_id: userId,
 				friend_id: friendId,
 				status: {
-					[Op.or]: [common.CONNECTIONS_STATUS.ACCEPTED, common.CONNECTIONS_STATUS.BLOCKED],
+					[Op.in]: [common.CONNECTIONS_STATUS.ACCEPTED, common.CONNECTIONS_STATUS.BLOCKED],
 				},
 				tenant_code: tenantCode,
 			},

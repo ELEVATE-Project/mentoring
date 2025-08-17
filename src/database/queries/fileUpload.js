@@ -3,7 +3,7 @@ const FileUpload = require('../models/index').FileUpload
 
 exports.create = async (data, tenantCode) => {
 	try {
-		data.tenantCode = tenantCode
+		data.tenant_code = tenantCode
 		const createFileUpload = await FileUpload.create(data)
 		const result = createFileUpload.get({ plain: true })
 		return result

@@ -39,7 +39,7 @@ const emailEncryption = require('@utils/emailEncryption')
  *   .catch(error => console.error(error));
  */
 
-const fetchOrgDetails = async function (organizationCode, organizationId) {
+const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
 	try {
 		let orgReadUrl
 		if (organizationId)
@@ -47,13 +47,9 @@ const fetchOrgDetails = async function (organizationCode, organizationId) {
 		else if (organizationCode)
 			orgReadUrl = `${userBaseUrl}${endpoints.ORGANIZATION_READ}?organisation_code=${organizationCode}`
 
-		console.log('Fetching org details from URL:', orgReadUrl)
-		console.log('organizationId:', organizationId, 'organizationCode:', organizationCode)
-
 		const internalToken = true
 		const orgDetails = await requests.get(orgReadUrl, '', internalToken)
 
-		console.log('Org details response:', JSON.stringify(orgDetails, null, 2))
 		return orgDetails
 	} catch (error) {
 		console.error('Error fetching organization details:', error)

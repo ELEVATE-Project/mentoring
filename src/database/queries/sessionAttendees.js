@@ -69,7 +69,7 @@ exports.findAll = async (filter, tenantCode, options = {}) => {
 			raw: true,
 		})
 	} catch (error) {
-		return error
+		throw error
 	}
 }
 

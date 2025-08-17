@@ -29,9 +29,11 @@ module.exports = class UserEntityData {
 	static async updateOneEntity(whereClause, tenantCode, update, options = {}) {
 		try {
 			// MANDATORY: Include tenant_code in whereClause
-			whereClause.tenant_code = tenantCode
-			return await Entity.update(update, {
-				where: whereClause,
+			const where = { ...(whereClause || {}), tenant_code: tenantCode }
+			const sanitized = { ...update }
+			delete sanitized.tenant_code
+			return await Entity.update(sanitized, {
+				where,
 				...options,
 			})
 		} catch (error) {

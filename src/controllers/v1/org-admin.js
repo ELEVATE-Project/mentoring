@@ -26,8 +26,6 @@ module.exports = class OrgAdmin {
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
-			console.log(req.decodedToken)
-			console.log(req.body)
 			const orgPolicies = await orgAdminService.setOrgPolicies(req.decodedToken, req.body, tenantCode)
 			return orgPolicies
 		} catch (error) {

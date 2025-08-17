@@ -44,7 +44,7 @@ module.exports = (sequelize, DataTypes) => {
 			indexes: [
 				{
 					unique: true,
-					fields: ['title'],
+					fields: ['tenant_code', 'title'],
 					where: {
 						deleted_at: null, // Unique only when deleted_at is NULL
 					},

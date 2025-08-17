@@ -799,7 +799,7 @@ module.exports = class MenteesHelper {
 				data.email = emailEncryption.encrypt(data.email.toLowerCase())
 			}
 			// Call user service to fetch organisation details --SAAS related changes
-			let userOrgDetails = await userRequests.fetchOrgDetails(organizationCode)
+			let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode })
 
 			// Return error if user org does not exists
 			if (!userOrgDetails.success || !userOrgDetails.data || !userOrgDetails.data.result) {

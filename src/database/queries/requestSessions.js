@@ -270,7 +270,7 @@ exports.markRequestsAsDeleted = async (requestSessionIds = [], tenantCode) => {
 
 		const deletedIds = updatedRows.map((row) => row.id)
 
-		return deletedIds.length == 0 || deletedIds.length > 0 ? true : false
+		return deletedIds.length > 0
 	} catch (error) {
 		throw error
 	}

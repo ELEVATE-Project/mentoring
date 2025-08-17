@@ -17,7 +17,6 @@ module.exports = class Mentees {
 			const organizationId = req.decodedToken.organization_id
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			console.log('req.decodedToken.organizations[0].roles', isAMentor(req.decodedToken.organizations[0].roles))
 
 			if (isAMentor(req.decodedToken.organizations[0].roles)) {
 				return await mentorsService.createMentorExtension(

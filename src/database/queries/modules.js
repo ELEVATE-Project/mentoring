@@ -4,7 +4,8 @@ const { Op } = require('sequelize')
 module.exports = class UserRoleModulesData {
 	static async createModules(data, tenantCode) {
 		try {
-			return await Modules.create(data, { returning: true })
+			const payload = { ...data, tenant_code: tenantCode }
+			return await Modules.create(payload, { returning: true })
 		} catch (error) {
 			throw error
 		}

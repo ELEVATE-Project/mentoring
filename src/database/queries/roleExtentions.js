@@ -29,6 +29,9 @@ module.exports = class RoleExtensionService {
 					paranoid: false, // Update even soft-deleted records
 				})
 				return updatedRecords[0]
+			} else if (existingRecord) {
+				// Already exists and is active — return existing record
+				return existingRecord
 			}
 
 			// Create new record if no existing one found

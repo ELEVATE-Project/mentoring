@@ -161,7 +161,14 @@ module.exports = async function (req, res, next) {
 				})
 			}
 			req.decodedToken.organization_id = organizationId.toString()
-			req.decodedToken.organizations[0].roles.push({ title: common.ADMIN_ROLE })
+			if (!Array.isArray(req.decodedToken.organizations) || !req.decodedToken.organizations[0]) {
+				req.decodedToken.organizations = [{ id: req.decodedToken.organization_id, roles: [] }]
+			}
+			const rolesArr = Array.isArray(req.decodedToken.organizations[0].roles)
+				? req.decodedToken.organizations[0].roles
+				: []
+			rolesArr.push({ title: common.ADMIN_ROLE })
+			req.decodedToken.organizations[0].roles = rolesArr
 		}
 
 		if (!skipFurtherChecks) {
@@ -188,10 +195,12 @@ module.exports = async function (req, res, next) {
 
 			// Extract roles from JWT structure - roles are nested in organizations
 			let userRoles = []
-			if (req.decodedToken.organizations[0].roles && Array.isArray(req.decodedToken.organizations[0].roles)) {
-				userRoles = req.decodedToken.organizations[0].roles.map((role) => role.title)
-			} else if (req.decodedToken.organizations && req.decodedToken.organizations[0]?.roles) {
-				userRoles = req.decodedToken.organizations[0].roles.map((role) => role.title)
+			const orgRoles = req.decodedToken.organizations?.[0]?.roles
+			if (Array.isArray(orgRoles)) {
+				userRoles = orgRoles.map((role) => role.title)
+			} else if (Array.isArray(req.decodedToken.roles)) {
+				// Fallback in case roles are at top-level
+				userRoles = req.decodedToken.roles.map((role) => role.title ?? role)
 			}
 
 			const tenantCode = req.decodedToken?.tenant_code || 'default'
@@ -298,14 +307,11 @@ async function fetchPermissions(roleTitle, apiPath, module) {
 
 async function verifyToken(token) {
 	try {
-		// Decode without verification to see payload structure
-		const decoded = jwt.decode(token, { complete: true })
-
-		// TEMPORARY: For testing purposes, return decoded payload without verification
-		return decoded.payload
-
-		// Original verification (commented for testing):
-		// return jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
+		if (process.env.JWT_DISABLE_VERIFICATION === 'true') {
+			const decoded = jwt.decode(token, { complete: true })
+			return decoded?.payload
+		}
+		return jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
 	} catch (err) {
 		if (err.name === 'TokenExpiredError') throw createUnauthorizedResponse('ACCESS_TOKEN_EXPIRED')
 		console.log(err)

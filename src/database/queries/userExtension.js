@@ -41,7 +41,7 @@ module.exports = class MenteeExtensionQueries {
 			if (_.isEmpty(customFilter)) {
 				whereClause = { user_id: userId, tenant_code: tenantCode }
 			} else {
-				whereClause = customFilter
+				whereClause = { ...customFilter, tenant_code: tenantCode }
 			}
 
 			// If `meta` is included in `data`, use `jsonb_set` to merge changes safely

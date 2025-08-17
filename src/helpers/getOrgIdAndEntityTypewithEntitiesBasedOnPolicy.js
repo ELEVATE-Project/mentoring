@@ -84,7 +84,6 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 								attributes: ['organization_id'],
 							}
 						)
-						organizationCodes.push(orgExtension.organization_id)
 						if (organizationExtension) {
 							const organizationCodesFromOrgExtension = organizationExtension.map(
 								(orgExt) => orgExt.organization_id
@@ -156,7 +155,6 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 								attributes: ['organization_id'],
 							}
 						)
-						organizationCodes.push(orgExtension.organization_id)
 						if (organizationExtension) {
 							const organizationCodesFromOrgExtension = organizationExtension.map(
 								(orgExt) => orgExt.organization_id
@@ -191,7 +189,7 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 			filter.status = common.ACTIVE_STATUS
 			filter.allow_filtering = true
 			filter.has_entities = true
-			filter.organization_id = {
+			filter.organization_code = {
 				[Op.in]: defaultOrgCode ? [...organization_codes, defaultOrgCode] : organization_codes,
 			}
 			let entityTypes = []
@@ -210,7 +208,6 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 			return {
 				success: true,
 				result: entityTypesWithEntities,
-				debug: { filter, count: entityTypesWithEntities ? entityTypesWithEntities.length : 0 },
 			}
 		} catch (error) {
 			return {

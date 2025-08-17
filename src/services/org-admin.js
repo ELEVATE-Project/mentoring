@@ -313,7 +313,7 @@ module.exports = class OrgAdminService {
 		try {
 			// Get default organisation details
 			let defaultOrgDetails = await userRequests.fetchOrgDetails({
-				organizationCode: process.env.DEFAULT_ORGANISATION_CODE,
+				organizationCode: process.env.DEFAULT_ORG_CODE || process.env.DEFAULT_ORGANISATION_CODE,
 			})
 
 			let defaultOrgId

@@ -40,7 +40,7 @@ module.exports = class requestSessionsHelper {
 	 * @returns {Promise<Object>} A success or failure response.
 	 */
 
-	static async create(bodyData, userId, orgCode, organizationId, skipValidation, tenantCode) {
+	static async create(bodyData, userId, organizationCode, organizationId, SkipValidation, tenantCode) {
 		try {
 			const mentorUserExists = await mentorQueries.getMentorExtension(
 				bodyData.requestee_id,
@@ -140,7 +140,7 @@ module.exports = class requestSessionsHelper {
 				{
 					status: 'ACTIVE',
 					organization_code: {
-						[Op.in]: [orgCode, defaultOrgCode],
+						[Op.in]: [organizationCode, defaultOrgCode],
 					},
 					organization_id: {
 						[Op.in]: [organizationId, defaultOrgId],
@@ -150,8 +150,8 @@ module.exports = class requestSessionsHelper {
 				tenantCode
 			)
 
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgCode)
-			let res = utils.validateInput(bodyData, validationData, requestSessionModelName, skipValidation)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
+			let res = utils.validateInput(bodyData, validationData, requestSessionModelName, SkipValidation)
 			if (!res.success) {
 				return responses.failureResponse({
 					message: 'REQUEST_SESSION_CREATION_FAILED',
