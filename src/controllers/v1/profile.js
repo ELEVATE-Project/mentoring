@@ -17,8 +17,12 @@ module.exports = class Mentees {
 			const organizationId = req.decodedToken.organization_id
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
+			const roles =
+				req.decodedToken.organizations && req.decodedToken.organizations[0]
+					? req.decodedToken.organizations[0].roles
+					: []
 
-			if (isAMentor(req.decodedToken.organizations[0].roles)) {
+			if (isAMentor(roles)) {
 				return await mentorsService.createMentorExtension(
 					req.body,
 					userId,
@@ -54,8 +58,12 @@ module.exports = class Mentees {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
+			const roles =
+				req.decodedToken.organizations && req.decodedToken.organizations[0]
+					? req.decodedToken.organizations[0].roles
+					: []
 
-			if (isAMentor(req.decodedToken.organizations[0].roles)) {
+			if (isAMentor(roles)) {
 				return await mentorsService.updateMentorExtension(req.body, userId, organizationCode, tenantCode)
 			}
 			return await menteesService.updateMenteeExtension(req.body, userId, organizationCode, tenantCode)
@@ -77,8 +85,12 @@ module.exports = class Mentees {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
+			const roles =
+				req.decodedToken.organizations && req.decodedToken.organizations[0]
+					? req.decodedToken.organizations[0].roles
+					: []
 
-			if (isAMentor(req.decodedToken.organizations[0].roles)) {
+			if (isAMentor(roles)) {
 				return await mentorsService.getMentorExtension(req.query.id || userId, tenantCode)
 			}
 			return await menteesService.getMenteeExtension(userId, organizationCode, tenantCode)
@@ -230,13 +242,17 @@ module.exports = class Mentees {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
+			const roles =
+				req.decodedToken.organizations && req.decodedToken.organizations[0]
+					? req.decodedToken.organizations[0].roles
+					: []
 
 			return await menteesService.details(
 				req.params.id,
 				organizationCode,
 				userId,
-				isAMentor(req.decodedToken.organizations[0].roles),
-				req.decodedToken.organizations[0].roles,
+				isAMentor(roles),
+				roles,
 				tenantCode
 			)
 		} catch (error) {

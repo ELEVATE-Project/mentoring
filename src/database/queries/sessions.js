@@ -680,7 +680,7 @@ exports.getUpcomingSessionsFromView = async (
 
 		const saasFilterClause = saasFilter != '' ? saasFilter : ''
 		const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
-		const tenantFilterClause = `AND tenant_code = '${tenantCode}'`
+		const tenantFilterClause = 'AND tenant_code = :tenantCode'
 		let publicSessionFilter = " AND type = '" + common.SESSION_TYPE.PUBLIC + "'"
 
 		// Create selection clause
@@ -749,6 +749,7 @@ exports.getUpcomingSessionsFromView = async (
 			currentEpochTime: currentEpochTime,
 			offset: limit * (page - 1),
 			limit: limit,
+			tenantCode: tenantCode,
 			...filter.replacements,
 		}
 
@@ -825,7 +826,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 		const filterClause = filter?.query.length > 0 ? `AND ${filter.query}` : ''
 
 		const saasFilterClause = saasFilter != '' ? saasFilter : ''
-		const tenantFilterClause = `AND tenant_code = '${tenantCode}'`
+		const tenantFilterClause = 'AND tenant_code = :tenantCode'
 
 		const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
 
@@ -870,6 +871,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			search: `%${search.toLowerCase()}%`,
 			offset: limit * (page - 1),
 			limit: limit,
+			tenantCode: tenantCode,
 			...filter.replacements, // Add filter parameters to replacements
 		}
 

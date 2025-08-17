@@ -114,7 +114,7 @@ rl.question('\n🤔 Proceed with migration? (y/N): ', async (answer) => {
 		}
 	} else {
 		console.log('\n❌ Migration cancelled by user')
-		console.log('   Use test-citus-migration.js for testing')
+		console.log('   Use update-tenant-column-script.js for testing')
 		rl.close()
 		process.exit(0)
 	}
