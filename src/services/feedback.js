@@ -199,11 +199,13 @@ module.exports = class MenteesHelper {
 			}
 
 			//get the feedbacks of that particular user for that session
-			const feedbacks = await feedbackQueries.findAll({
-				session_id: sessionId,
-				user_id: userId,
-				tenant_code: tenantCode,
-			})
+			const feedbacks = await feedbackQueries.findAll(
+				{
+					session_id: sessionId,
+					user_id: userId,
+				},
+				tenantCode
+			)
 
 			//check the feedback is exist
 			let feedbackNotExists = []
