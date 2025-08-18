@@ -10,7 +10,7 @@ const { Sequelize, QueryTypes } = require('sequelize')
 class DatabaseConnectionManager {
 	constructor(options = {}) {
 		// Environment-based configuration with fallbacks
-		const databaseUrl = options.databaseUrl || process.env.DATABASE_URL || process.env.DEV_DATABASE_URL
+		const databaseUrl = process.env.DEV_DATABASE_URL
 
 		if (!databaseUrl) {
 			throw new Error('Database URL not configured. Set DATABASE_URL or DEV_DATABASE_URL environment variable.')
