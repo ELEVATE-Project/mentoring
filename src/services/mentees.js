@@ -479,6 +479,14 @@ module.exports = class MenteesHelper {
 			}
 		}
 
+		if (!organizationCode) {
+			return responses.failureResponse({
+				message: 'ORGANIZATION_CODE_REQUIRED',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		}
+
 		const defaultRuleFilter = await defaultRulesFilter({
 			ruleType: 'session',
 			requesterId: userId,
