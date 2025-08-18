@@ -33,7 +33,6 @@ class TenantMigrationFinalizer {
 			'issues',
 			'notification_templates',
 			'organization_extension',
-			'post_session_details',
 			'question_sets',
 			'questions',
 			'report_queries',
@@ -280,13 +279,6 @@ class TenantMigrationFinalizer {
 				refColumns: 'id, tenant_code',
 				name: 'fk_resources_session_id',
 			},
-			{
-				table: 'post_session_details',
-				columns: 'session_id, tenant_code',
-				refTable: 'sessions',
-				refColumns: 'id, tenant_code',
-				name: 'fk_post_session_details_session_id',
-			},
 		]
 
 		for (const fkConfig of foreignKeyConfigs) {
@@ -428,12 +420,6 @@ class TenantMigrationFinalizer {
 				table: 'default_rules',
 				name: 'unique_default_rules_type_org_tenant',
 				columns: 'type, organization_id, tenant_code',
-				condition: 'WHERE deleted_at IS NULL',
-			},
-			{
-				table: 'entities',
-				name: 'unique_entities_entity_type_tenant',
-				columns: 'entity_type_id, tenant_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
@@ -661,7 +647,7 @@ class TenantMigrationFinalizer {
 			console.error('❌ Finalization failed:', error)
 			process.exit(1)
 		} finally {
-			await this.dbManager.closeConnection()
+			await this.dbManager.close()
 		}
 	}
 }

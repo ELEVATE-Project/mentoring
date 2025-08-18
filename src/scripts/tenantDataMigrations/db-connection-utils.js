@@ -1,5 +1,5 @@
 'use strict'
-require('dotenv').config({ path: '../.env' })
+require('dotenv').config({ path: '../../.env' })
 const { Sequelize, QueryTypes } = require('sequelize')
 const nodeEnv = process.env.NODE_ENV || 'development'
 

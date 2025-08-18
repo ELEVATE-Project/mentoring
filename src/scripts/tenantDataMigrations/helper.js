@@ -54,8 +54,6 @@ class MentoringDataMigrator {
 			report_types: { tenant_code: this.defaultTenantCode, organization_code: this.defaultOrgCode },
 			report_role_mapping: { tenant_code: this.defaultTenantCode, organization_code: this.defaultOrgCode },
 			modules: { tenant_code: this.defaultTenantCode, organization_code: this.defaultOrgCode },
-			// Example: 'notification_templates': { tenant_code: 'system', organization_code: 'global' },
-			// Example: 'entity_types': { tenant_code: 'shared', organization_code: 'common' }
 		}
 
 		// Tables with organization_id - process using CSV lookup
@@ -110,6 +108,15 @@ class MentoringDataMigrator {
 				updateColumns: ['tenant_code', 'organization_code'],
 				hasPartitionKey: true,
 			},
+		]
+
+		// Tables without organization_id or user_id - process using table-specific defaults only
+		this.tablesWithDefaults = [
+			{
+				name: 'modules',
+				updateColumns: ['tenant_code'],
+				hasPartitionKey: true,
+			},
 			{
 				name: 'report_types',
 				updateColumns: ['tenant_code', 'organization_code'],
@@ -117,11 +124,6 @@ class MentoringDataMigrator {
 			},
 			{
 				name: 'report_role_mapping',
-				updateColumns: ['tenant_code', 'organization_code'],
-				hasPartitionKey: true,
-			},
-			{
-				name: 'modules',
 				updateColumns: ['tenant_code', 'organization_code'],
 				hasPartitionKey: true,
 			},
@@ -200,13 +202,6 @@ class MentoringDataMigrator {
 				userIdColumn: 'created_by',
 				updateColumns: ['tenant_code', 'organization_code'],
 				hasPartitionKey: true,
-			},
-			{
-				name: 'post_session_details',
-				sessionIdColumn: 'session_id',
-				updateColumns: ['tenant_code'],
-				hasPartitionKey: true,
-				useSessionLookup: true,
 			},
 		]
 	}
@@ -693,10 +688,123 @@ class MentoringDataMigrator {
 	}
 
 	/**
+	 * Process tables that only need default values (no organization_id or user_id relationships)
+	 */
+	async processTablesWithDefaults() {
+		console.log('\n🔄 PHASE 2: Processing tables using table-specific defaults...')
+		console.log('='.repeat(70))
+
+		for (const tableConfig of this.tablesWithDefaults) {
+			await this.processTableWithDefaults(tableConfig)
+		}
+	}
+
+	/**
+	 * Process a single table using only default values
+	 */
+	async processTableWithDefaults(tableConfig) {
+		const { name, updateColumns, hasPartitionKey } = tableConfig
+		console.log(`\n🔄 Processing table with defaults: ${name}`)
+
+		try {
+			// Check if table exists and has target columns
+			const existingColumns = await this.checkTableColumns(name)
+			const availableUpdateColumns = updateColumns.filter((col) => existingColumns.includes(col))
+
+			if (availableUpdateColumns.length === 0) {
+				console.log(`⚠️  Table ${name} has no target columns, skipping`)
+				return
+			}
+
+			console.log(`📋 Available columns for update: ${availableUpdateColumns.join(', ')}`)
+
+			// Check if we need to update tenant_code (partition key)
+			const needsTenantCodeUpdate = availableUpdateColumns.includes('tenant_code')
+			const citusEnabled = await this.isCitusEnabled()
+
+			// Undistribute table if needed
+			let wasDistributed = false
+			if (citusEnabled && hasPartitionKey && needsTenantCodeUpdate) {
+				wasDistributed = await this.undistributeTable(name)
+			}
+
+			try {
+				// Process using table-specific defaults
+				await this.processTableWithDefaultValues(name, availableUpdateColumns)
+
+				// Redistribute if needed
+				if (citusEnabled && wasDistributed && needsTenantCodeUpdate) {
+					await this.redistributeTable(name)
+				}
+			} catch (error) {
+				console.error(`❌ Error updating table ${name}:`, error)
+				if (citusEnabled && wasDistributed && needsTenantCodeUpdate) {
+					await this.redistributeTable(name)
+				}
+				throw error
+			}
+
+			console.log(`✅ Completed ${name}`)
+		} catch (error) {
+			console.error(`❌ Error processing table ${name}:`, error)
+			throw error
+		}
+	}
+
+	/**
+	 * Process table using only default values
+	 */
+	async processTableWithDefaultValues(tableName, availableUpdateColumns) {
+		console.log(`📊 Processing ${tableName} using table-specific defaults...`)
+
+		const tableDefaults = this.getTableDefaults(tableName)
+		console.log(
+			`🔧 Using defaults: tenant_code='${tableDefaults.tenant_code}', organization_code='${tableDefaults.organization_code}'`
+		)
+
+		let totalUpdated = 0
+		const transaction = await this.sequelize.transaction()
+
+		try {
+			// Build SET clause with defaults
+			const setClauses = []
+			if (availableUpdateColumns.includes('tenant_code')) {
+				setClauses.push(`tenant_code = '${tableDefaults.tenant_code}'`)
+			}
+			if (availableUpdateColumns.includes('organization_code')) {
+				setClauses.push(`organization_code = '${tableDefaults.organization_code}'`)
+			}
+			setClauses.push('updated_at = NOW()')
+
+			// Update all NULL records with defaults
+			const [, metadata] = await this.sequelize.query(
+				`
+				UPDATE ${tableName} 
+				SET ${setClauses.join(', ')}
+				WHERE tenant_code IS NULL
+			`,
+				{ transaction }
+			)
+
+			totalUpdated = metadata.rowCount || 0
+			console.log(`✅ Updated ${totalUpdated} rows in ${tableName} with default values`)
+
+			await transaction.commit()
+			this.stats.successfulUpdates += totalUpdated
+			return totalUpdated
+		} catch (error) {
+			await transaction.rollback()
+			console.error(`❌ Failed to process ${tableName}:`, error.message)
+			this.stats.failedUpdates++
+			throw error
+		}
+	}
+
+	/**
 	 * Process tables with user_id using inner joins
 	 */
 	async processTablesWithUserId() {
-		console.log('\n🔄 PHASE 2: Processing tables with user_id using inner joins...')
+		console.log('\n🔄 PHASE 3: Processing tables with user_id using inner joins...')
 		console.log('='.repeat(70))
 
 		// First process user_extensions
@@ -1179,10 +1287,10 @@ class MentoringDataMigrator {
 	 * Handle Citus distribution
 	 */
 	async handleCitusDistribution() {
-		console.log('\n🔄 PHASE 3: Handling Citus distribution...')
+		console.log('\n🔄 PHASE 4: Handling Citus distribution...')
 		console.log('='.repeat(70))
 
-		const allTables = [...this.tablesWithOrgId, ...this.tablesWithUserId]
+		const allTables = [...this.tablesWithOrgId, ...this.tablesWithDefaults, ...this.tablesWithUserId]
 		let distributedCount = 0
 
 		for (const tableConfig of allTables) {
@@ -1208,70 +1316,166 @@ class MentoringDataMigrator {
 	}
 
 	/**
-	 * Comprehensive validation to ensure no NULL tenant_code values remain
+	 * Comprehensive validation to ensure no NULL values remain in ALL critical columns
+	 * Checks both tenant_code AND organization_code where applicable
 	 */
-	async validateNoNullTenantCodes() {
-		console.log('\n🔍 COMPREHENSIVE VALIDATION: Checking for NULL tenant_code values...')
-		console.log('='.repeat(70))
+	async validateNoNullCriticalColumns() {
+		console.log('\n🔍 COMPREHENSIVE VALIDATION: Checking for NULL values in ALL critical columns...')
+		console.log('='.repeat(80))
 
-		const allTables = [...this.tablesWithOrgId, ...this.tablesWithUserId]
+		const allTables = [...this.tablesWithOrgId, ...this.tablesWithDefaults, ...this.tablesWithUserId]
 		let totalNullFound = 0
 		const failedTables = []
+		const detailedErrors = []
 
 		for (const tableConfig of allTables) {
 			const tableName = tableConfig.name
+			console.log(`\n🔍 Validating table: ${tableName}`)
+
 			try {
-				const nullCount = await this.sequelize.query(
-					`SELECT COUNT(*) as count FROM ${tableName} WHERE tenant_code IS NULL`,
+				// Check if table exists first
+				const tableExists = await this.sequelize.query(
+					`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${tableName}')`,
 					{ type: Sequelize.QueryTypes.SELECT }
 				)
 
-				const nullTenantCodes = parseInt(nullCount[0].count)
-				totalNullFound += nullTenantCodes
+				if (!tableExists[0].exists) {
+					console.log(`⚠️  Table ${tableName} does not exist, skipping`)
+					continue
+				}
 
-				const status = nullTenantCodes === 0 ? '✅' : '❌'
-				console.log(`${status} ${tableName}: ${nullTenantCodes} NULL tenant_code values`)
+				// Get available columns for this table
+				const existingColumns = await this.checkTableColumns(tableName)
+				const criticalColumns = []
 
-				if (nullTenantCodes > 0) {
-					failedTables.push(tableName)
+				// Determine which columns should be validated based on table configuration
+				if (tableConfig.updateColumns.includes('tenant_code') && existingColumns.includes('tenant_code')) {
+					criticalColumns.push('tenant_code')
+				}
+				if (
+					tableConfig.updateColumns.includes('organization_code') &&
+					existingColumns.includes('organization_code')
+				) {
+					criticalColumns.push('organization_code')
+				}
 
-					// Get sample records for debugging
-					const sampleRecords = await this.sequelize.query(
-						`SELECT id, ${tableConfig.userIdColumn || 'organization_id'} as ref_id 
-						 FROM ${tableName} 
-						 WHERE tenant_code IS NULL 
-						 LIMIT 3`,
+				if (criticalColumns.length === 0) {
+					console.log(`⚠️  No critical columns to validate for ${tableName}`)
+					continue
+				}
+
+				console.log(`📋 Validating columns: ${criticalColumns.join(', ')}`)
+
+				// Check each critical column for NULL values
+				for (const columnName of criticalColumns) {
+					const nullCount = await this.sequelize.query(
+						`SELECT COUNT(*) as count FROM ${tableName} WHERE ${columnName} IS NULL`,
 						{ type: Sequelize.QueryTypes.SELECT }
 					)
-					console.log(
-						`    Sample NULL records:`,
-						sampleRecords.map((r) => `id:${r.id}(ref:${r.ref_id})`).join(', ')
+
+					const nullValues = parseInt(nullCount[0].count)
+					totalNullFound += nullValues
+
+					const status = nullValues === 0 ? '✅' : '❌'
+					console.log(`  ${status} ${columnName}: ${nullValues} NULL values`)
+
+					if (nullValues > 0) {
+						if (!failedTables.includes(tableName)) {
+							failedTables.push(tableName)
+						}
+
+						// Get sample records for debugging
+						const sampleRecords = await this.sequelize.query(
+							`SELECT id, ${tableConfig.userIdColumn || 'organization_id'} as ref_id 
+							 FROM ${tableName} 
+							 WHERE ${columnName} IS NULL 
+							 LIMIT 3`,
+							{ type: Sequelize.QueryTypes.SELECT }
+						)
+
+						detailedErrors.push({
+							table: tableName,
+							column: columnName,
+							nullCount: nullValues,
+							sampleRecords,
+						})
+
+						console.log(
+							`    Sample NULL records:`,
+							sampleRecords.map((r) => `id:${r.id}(ref:${r.ref_id})`).join(', ')
+						)
+					}
+				}
+
+				// Additional validation: Check for records that have tenant_code but missing organization_code
+				// (for tables that should have both columns)
+				if (criticalColumns.includes('tenant_code') && criticalColumns.includes('organization_code')) {
+					const inconsistentCount = await this.sequelize.query(
+						`SELECT COUNT(*) as count FROM ${tableName} 
+						 WHERE tenant_code IS NOT NULL AND organization_code IS NULL`,
+						{ type: Sequelize.QueryTypes.SELECT }
 					)
 
-					this.stats.validationErrors.push({
-						table: tableName,
-						nullCount: nullTenantCodes,
-						sampleRecords,
-					})
+					const inconsistentValues = parseInt(inconsistentCount[0].count)
+					if (inconsistentValues > 0) {
+						totalNullFound += inconsistentValues
+						if (!failedTables.includes(tableName)) {
+							failedTables.push(tableName)
+						}
+
+						console.log(
+							`  ❌ INCONSISTENT DATA: ${inconsistentValues} records with tenant_code but NULL organization_code`
+						)
+
+						detailedErrors.push({
+							table: tableName,
+							column: 'organization_code',
+							nullCount: inconsistentValues,
+							issue: 'Has tenant_code but missing organization_code',
+						})
+					}
 				}
 			} catch (error) {
 				console.error(`❌ Error validating ${tableName}: ${error.message}`)
-				this.stats.validationErrors.push({
+				detailedErrors.push({
 					table: tableName,
 					error: error.message,
 				})
 			}
 		}
 
-		console.log('='.repeat(70))
+		console.log('\n' + '='.repeat(80))
 		if (totalNullFound === 0) {
-			console.log('🎉 VALIDATION PASSED: No NULL tenant_code values found!')
+			console.log('🎉 COMPREHENSIVE VALIDATION PASSED: No NULL values found in critical columns!')
 			return true
 		} else {
 			console.log(
-				`❌ VALIDATION FAILED: ${totalNullFound} NULL tenant_code values in ${failedTables.length} tables`
+				`❌ COMPREHENSIVE VALIDATION FAILED: ${totalNullFound} NULL values found in ${failedTables.length} tables`
 			)
 			console.log(`Failed tables: ${failedTables.join(', ')}`)
+
+			// Detailed error report
+			console.log('\n📋 DETAILED ERROR REPORT:')
+			console.log('-'.repeat(60))
+			detailedErrors.forEach((error) => {
+				if (error.nullCount) {
+					console.log(`❌ Table: ${error.table}`)
+					console.log(`   Column: ${error.column}`)
+					console.log(`   NULL count: ${error.nullCount}`)
+					if (error.issue) {
+						console.log(`   Issue: ${error.issue}`)
+					}
+					if (error.sampleRecords) {
+						console.log(`   Sample records: ${error.sampleRecords.map((r) => `id:${r.id}`).join(', ')}`)
+					}
+				} else {
+					console.log(`❌ Table: ${error.table}, Error: ${error.error}`)
+				}
+			})
+
+			// Store detailed errors in stats for later reporting
+			this.stats.validationErrors = detailedErrors
+
 			return false
 		}
 	}
@@ -1339,7 +1543,7 @@ class MentoringDataMigrator {
 	async createSnapshot() {
 		console.log('\n📸 Creating database snapshot for rollback capability...')
 
-		const allTables = [...this.tablesWithOrgId, ...this.tablesWithUserId]
+		const allTables = [...this.tablesWithOrgId, ...this.tablesWithDefaults, ...this.tablesWithUserId]
 		const snapshotData = {}
 
 		try {
@@ -1492,18 +1696,21 @@ class MentoringDataMigrator {
 			// PHASE 1: Process tables with organization_id using CSV lookup
 			await this.processTablesWithOrgId()
 
-			// PHASE 2: Process tables with user_id using inner joins and CSV lookup
+			// PHASE 2: Process tables using table-specific defaults
+			await this.processTablesWithDefaults()
+
+			// PHASE 3: Process tables with user_id using inner joins and CSV lookup
 			await this.processTablesWithUserId()
 
-			// PHASE 3: Handle Citus distribution if enabled
+			// PHASE 4: Handle Citus distribution if enabled
 			if (citusEnabled) {
 				await this.handleCitusDistribution()
 			} else {
 				console.log('\n⚠️  Citus not enabled, skipping distribution logic')
 			}
 
-			// PHASE 4: Comprehensive validation
-			const validationPassed = await this.validateNoNullTenantCodes()
+			// PHASE 5: Comprehensive validation
+			const validationPassed = await this.validateNoNullCriticalColumns()
 
 			this.printStats()
 

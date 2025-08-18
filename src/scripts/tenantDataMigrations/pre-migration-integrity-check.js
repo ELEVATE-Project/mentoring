@@ -23,6 +23,36 @@ class DatabaseIntegrityChecker {
 		this.tableInfo = {}
 		this.detailedIssues = []
 		this.logFilePath = path.join(__dirname, 'data-integrity-issues.log')
+
+		// Reference column configurations from helper.js - these are the reference columns that MUST NOT be NULL
+		this.tablesWithOrgId = [
+			{ name: 'availabilities', referenceColumn: 'organization_id' },
+			{ name: 'default_rules', referenceColumn: 'organization_id' },
+			{ name: 'entity_types', referenceColumn: 'organization_id' },
+			{ name: 'file_uploads', referenceColumn: 'organization_id' },
+			{ name: 'forms', referenceColumn: 'organization_id' },
+			{ name: 'notification_templates', referenceColumn: 'organization_id' },
+			{ name: 'organization_extension', referenceColumn: 'organization_id' },
+			{ name: 'report_queries', referenceColumn: 'organization_id' },
+			{ name: 'reports', referenceColumn: 'organization_id' },
+			{ name: 'role_extensions', referenceColumn: 'organization_id' },
+		]
+
+		this.tablesWithUserId = [
+			{ name: 'user_extensions', referenceColumn: 'user_id' },
+			{ name: 'sessions', referenceColumn: 'created_by' },
+			{ name: 'session_attendees', referenceColumn: 'mentee_id' },
+			{ name: 'feedbacks', referenceColumn: 'user_id' },
+			{ name: 'connection_requests', referenceColumn: 'created_by' },
+			{ name: 'connections', referenceColumn: 'created_by' },
+			{ name: 'entities', referenceColumn: 'created_by' },
+			{ name: 'issues', referenceColumn: 'user_id' },
+			{ name: 'resources', referenceColumn: 'created_by' },
+			{ name: 'session_request', referenceColumn: 'created_by' },
+			{ name: 'question_sets', referenceColumn: 'created_by' },
+			{ name: 'questions', referenceColumn: 'created_by' },
+			{ name: 'post_session_details', referenceColumn: 'session_id', specialCase: 'session_lookup' },
+		]
 	}
 
 	async checkConnection() {
@@ -40,6 +70,381 @@ class DatabaseIntegrityChecker {
 		} catch (error) {
 			this.issues.push(`Connection error: ${error.message}`)
 			return false
+		}
+	}
+
+	/**
+	 * Check if table exists
+	 */
+	async tableExists(tableName) {
+		try {
+			const result = await this.sequelize.query(
+				`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${tableName}')`,
+				{ type: QueryTypes.SELECT }
+			)
+			return result[0].exists
+		} catch (error) {
+			return false
+		}
+	}
+
+	/**
+	 * Check if column exists in table
+	 */
+	async columnExists(tableName, columnName) {
+		try {
+			const result = await this.sequelize.query(
+				`SELECT EXISTS (
+					SELECT FROM information_schema.columns 
+					WHERE table_name = '${tableName}' 
+					AND column_name = '${columnName}'
+					AND table_schema = 'public'
+				)`,
+				{ type: QueryTypes.SELECT }
+			)
+			return result[0].exists
+		} catch (error) {
+			return false
+		}
+	}
+
+	/**
+	 * Check organization_id reference columns (used for CSV lookup by helper.js)
+	 */
+	async checkOrganizationIdReferences() {
+		console.log('\n🔍 Checking organization_id reference columns for tenant migration...')
+		console.log('These tables use organization_id to lookup tenant_code/organization_code from CSV data')
+
+		for (const tableConfig of this.tablesWithOrgId) {
+			const { name: tableName, referenceColumn } = tableConfig
+			console.log(`\n📋 Checking ${tableName}.${referenceColumn}:`)
+
+			try {
+				// Check if table exists
+				if (!(await this.tableExists(tableName))) {
+					this.warnings.push(`Table ${tableName} does not exist`)
+					console.log(`⚠️  Table ${tableName} does not exist - skipping`)
+					continue
+				}
+
+				// Check if reference column exists
+				if (!(await this.columnExists(tableName, referenceColumn))) {
+					this.issues.push(`Table ${tableName} missing reference column ${referenceColumn}`)
+					console.log(`❌ Column ${referenceColumn} does not exist in ${tableName}`)
+					continue
+				}
+
+				// Count total records
+				const totalCount = await this.sequelize.query(`SELECT COUNT(*) as count FROM ${tableName}`, {
+					type: QueryTypes.SELECT,
+				})
+
+				// Count NULL reference column records
+				const nullCount = await this.sequelize.query(
+					`SELECT COUNT(*) as count FROM ${tableName} WHERE ${referenceColumn} IS NULL`,
+					{ type: QueryTypes.SELECT }
+				)
+
+				// Safely parse results with error handling
+				const totalRecords = parseInt((totalCount && totalCount[0] && totalCount[0].count) || 0)
+				const nullRecords = parseInt((nullCount && nullCount[0] && nullCount[0].count) || 0)
+
+				if (nullRecords > 0) {
+					this.issues.push(
+						`${tableName}.${referenceColumn}: ${nullRecords} NULL values out of ${totalRecords} total records`
+					)
+					console.log(
+						`❌ Found ${nullRecords} NULL ${referenceColumn} values out of ${totalRecords} total records`
+					)
+
+					// Get sample NULL records for debugging
+					const sampleNulls = await this.sequelize.query(
+						`SELECT id FROM ${tableName} WHERE ${referenceColumn} IS NULL LIMIT 5`,
+						{ type: QueryTypes.SELECT }
+					)
+					console.log(`   Sample NULL record IDs: ${sampleNulls.map((r) => r.id).join(', ')}`)
+				} else {
+					this.passed.push(
+						`${tableName}.${referenceColumn}: All ${totalRecords} records have valid references`
+					)
+					console.log(`✅ All ${totalRecords} records have valid ${referenceColumn} values`)
+				}
+			} catch (error) {
+				this.issues.push(`${tableName}.${referenceColumn}: Error - ${error.message}`)
+				console.log(`❌ Error checking ${tableName}.${referenceColumn}: ${error.message}`)
+			}
+		}
+	}
+
+	/**
+	 * Check user_id/created_by reference columns (used for user_extensions lookup by helper.js)
+	 */
+	async checkUserIdReferences() {
+		console.log('\n🔍 Checking user_id/created_by reference columns for tenant migration...')
+		console.log('These tables use user_id/created_by to lookup via user_extensions -> organization_id')
+
+		for (const tableConfig of this.tablesWithUserId) {
+			const { name: tableName, referenceColumn, specialCase } = tableConfig
+			console.log(`\n📋 Checking ${tableName}.${referenceColumn}:`)
+
+			try {
+				// Check if table exists
+				if (!(await this.tableExists(tableName))) {
+					this.warnings.push(`Table ${tableName} does not exist`)
+					console.log(`⚠️  Table ${tableName} does not exist - skipping`)
+					continue
+				}
+
+				// Special case for post_session_details (uses session_id -> sessions.created_by)
+				if (specialCase === 'session_lookup') {
+					await this.checkSessionLookupReference(tableName, referenceColumn)
+					continue
+				}
+
+				// Check if reference column exists
+				if (!(await this.columnExists(tableName, referenceColumn))) {
+					this.issues.push(`Table ${tableName} missing reference column ${referenceColumn}`)
+					console.log(`❌ Column ${referenceColumn} does not exist in ${tableName}`)
+					continue
+				}
+
+				// Count total records
+				const totalCount = await this.sequelize.query(`SELECT COUNT(*) as count FROM ${tableName}`, {
+					type: QueryTypes.SELECT,
+				})
+
+				// Count NULL reference column records
+				const nullCount = await this.sequelize.query(
+					`SELECT COUNT(*) as count FROM ${tableName} WHERE ${referenceColumn} IS NULL`,
+					{ type: QueryTypes.SELECT }
+				)
+
+				// Count records where reference doesn't exist in user_extensions (orphaned references)
+				// Exclude '0' values as these are system records and are valid
+				let orphanedCount = [{ count: 0 }]
+				if (tableName !== 'user_extensions') {
+					orphanedCount = await this.sequelize.query(
+						`SELECT COUNT(*) as count 
+						 FROM ${tableName} t 
+						 LEFT JOIN user_extensions ue ON t.${referenceColumn} = ue.user_id 
+						 WHERE t.${referenceColumn} IS NOT NULL 
+						 AND t.${referenceColumn}::text != '0'
+						 AND ue.user_id IS NULL`,
+						{ type: QueryTypes.SELECT }
+					)
+				}
+
+				// Safely parse results with error handling
+				const totalRecords = parseInt((totalCount && totalCount[0] && totalCount[0].count) || 0)
+				const nullRecords = parseInt((nullCount && nullCount[0] && nullCount[0].count) || 0)
+				const orphanedRecords = parseInt((orphanedCount && orphanedCount[0] && orphanedCount[0].count) || 0)
+
+				// Report NULL values
+				if (nullRecords > 0) {
+					this.issues.push(
+						`${tableName}.${referenceColumn}: ${nullRecords} NULL values out of ${totalRecords} total records`
+					)
+					console.log(
+						`❌ Found ${nullRecords} NULL ${referenceColumn} values out of ${totalRecords} total records`
+					)
+
+					// Get sample NULL records
+					const sampleNulls = await this.sequelize.query(
+						`SELECT id FROM ${tableName} WHERE ${referenceColumn} IS NULL LIMIT 5`,
+						{ type: QueryTypes.SELECT }
+					)
+					console.log(`   Sample NULL record IDs: ${sampleNulls.map((r) => r.id).join(', ')}`)
+				} else {
+					console.log(`✅ No NULL ${referenceColumn} values found`)
+				}
+
+				// Report orphaned references (user_id not in user_extensions, excluding system records '0')
+				if (orphanedRecords > 0) {
+					this.issues.push(
+						`${tableName}.${referenceColumn}: ${orphanedRecords} orphaned references (user not in user_extensions, excluding system records)`
+					)
+					console.log(
+						`❌ Found ${orphanedRecords} orphaned ${referenceColumn} references (user not in user_extensions, excluding system records '0')`
+					)
+
+					// Get sample orphaned records (exclude '0' system records)
+					const sampleOrphans = await this.sequelize.query(
+						`SELECT t.id, t.${referenceColumn}
+						 FROM ${tableName} t 
+						 LEFT JOIN user_extensions ue ON t.${referenceColumn} = ue.user_id 
+						 WHERE t.${referenceColumn} IS NOT NULL 
+						 AND t.${referenceColumn}::text != '0'
+						 AND ue.user_id IS NULL 
+						 LIMIT 5`,
+						{ type: QueryTypes.SELECT }
+					)
+					console.log(
+						`   Sample orphaned records: ${sampleOrphans
+							.map((r) => `id:${r.id}(user:${r[referenceColumn]})`)
+							.join(', ')}`
+					)
+				} else if (tableName !== 'user_extensions') {
+					console.log(`✅ No orphaned ${referenceColumn} references found (system records '0' are valid)`)
+				}
+
+				// Overall assessment
+				if (nullRecords === 0 && orphanedRecords === 0) {
+					this.passed.push(
+						`${tableName}.${referenceColumn}: All ${totalRecords} records have valid references`
+					)
+					console.log(`✅ All ${totalRecords} records have valid ${referenceColumn} values`)
+				}
+			} catch (error) {
+				this.issues.push(`${tableName}.${referenceColumn}: Error - ${error.message}`)
+				console.log(`❌ Error checking ${tableName}.${referenceColumn}: ${error.message}`)
+			}
+		}
+	}
+
+	/**
+	 * Special check for post_session_details (session_id -> sessions.created_by)
+	 */
+	async checkSessionLookupReference(tableName, referenceColumn) {
+		try {
+			// Check if reference column exists
+			if (!(await this.columnExists(tableName, referenceColumn))) {
+				this.issues.push(`Table ${tableName} missing reference column ${referenceColumn}`)
+				console.log(`❌ Column ${referenceColumn} does not exist in ${tableName}`)
+				return
+			}
+
+			// Count total records
+			const totalCount = await this.sequelize.query(`SELECT COUNT(*) as count FROM ${tableName}`, {
+				type: QueryTypes.SELECT,
+			})
+
+			// Count NULL session_id records
+			const nullSessionCount = await this.sequelize.query(
+				`SELECT COUNT(*) as count FROM ${tableName} WHERE ${referenceColumn} IS NULL`,
+				{ type: QueryTypes.SELECT }
+			)
+
+			// Count records where session_id doesn't exist in sessions table
+			const orphanedSessionCount = await this.sequelize.query(
+				`SELECT COUNT(*) as count 
+				 FROM ${tableName} psd 
+				 LEFT JOIN sessions s ON psd.${referenceColumn} = s.id 
+				 WHERE psd.${referenceColumn} IS NOT NULL 
+				 AND s.id IS NULL`,
+				{ type: QueryTypes.SELECT }
+			)
+
+			// Count records where session exists but session.created_by is NULL
+			const sessionWithNullCreatedByCount = await this.sequelize.query(
+				`SELECT COUNT(*) as count 
+				 FROM ${tableName} psd 
+				 INNER JOIN sessions s ON psd.${referenceColumn} = s.id 
+				 WHERE s.created_by IS NULL`,
+				{ type: QueryTypes.SELECT }
+			)
+
+			// Safely parse results with error handling
+			const totalRecords = parseInt((totalCount && totalCount[0] && totalCount[0].count) || 0)
+			const nullSessions = parseInt((nullSessionCount && nullSessionCount[0] && nullSessionCount[0].count) || 0)
+			const orphanedSessions = parseInt(
+				(orphanedSessionCount && orphanedSessionCount[0] && orphanedSessionCount[0].count) || 0
+			)
+			const sessionsWithNullCreatedBy = parseInt(
+				(sessionWithNullCreatedByCount &&
+					sessionWithNullCreatedByCount[0] &&
+					sessionWithNullCreatedByCount[0].count) ||
+					0
+			)
+
+			// Report issues
+			if (nullSessions > 0) {
+				this.issues.push(`${tableName}.${referenceColumn}: ${nullSessions} NULL session_id values`)
+				console.log(`❌ Found ${nullSessions} NULL ${referenceColumn} values`)
+			}
+
+			if (orphanedSessions > 0) {
+				this.issues.push(`${tableName}.${referenceColumn}: ${orphanedSessions} orphaned session references`)
+				console.log(`❌ Found ${orphanedSessions} orphaned session references (session not found)`)
+			}
+
+			if (sessionsWithNullCreatedBy > 0) {
+				this.issues.push(
+					`${tableName} -> sessions.created_by: ${sessionsWithNullCreatedBy} sessions with NULL created_by`
+				)
+				console.log(
+					`❌ Found ${sessionsWithNullCreatedBy} sessions with NULL created_by (cannot determine tenant)`
+				)
+			}
+
+			if (nullSessions === 0 && orphanedSessions === 0 && sessionsWithNullCreatedBy === 0) {
+				this.passed.push(
+					`${tableName}.${referenceColumn}: All ${totalRecords} records have valid session references`
+				)
+				console.log(`✅ All ${totalRecords} records have valid session references with created_by`)
+			}
+		} catch (error) {
+			this.issues.push(`${tableName}.${referenceColumn}: Error - ${error.message}`)
+			console.log(`❌ Error checking ${tableName}.${referenceColumn}: ${error.message}`)
+		}
+	}
+
+	/**
+	 * Check user_extensions.organization_id (critical for tenant lookup)
+	 */
+	async checkUserExtensionsIntegrity() {
+		console.log('\n🔍 Checking user_extensions.organization_id integrity...')
+		console.log(
+			'This is CRITICAL - user_extensions.organization_id is used to lookup tenant data for all user-based tables'
+		)
+
+		try {
+			if (!(await this.tableExists('user_extensions'))) {
+				this.issues.push('CRITICAL: user_extensions table does not exist')
+				console.log('❌ CRITICAL: user_extensions table does not exist')
+				return
+			}
+
+			// Count total user_extensions records
+			const totalUsers = await this.sequelize.query(`SELECT COUNT(*) as count FROM user_extensions`, {
+				type: QueryTypes.SELECT,
+			})
+
+			// Count users with NULL organization_id
+			const nullOrgUsers = await this.sequelize.query(
+				`SELECT COUNT(*) as count FROM user_extensions WHERE organization_id IS NULL`,
+				{ type: QueryTypes.SELECT }
+			)
+
+			// Safely parse results with error handling
+			const totalUserCount = parseInt((totalUsers && totalUsers[0] && totalUsers[0].count) || 0)
+			const nullOrgCount = parseInt((nullOrgUsers && nullOrgUsers[0] && nullOrgUsers[0].count) || 0)
+
+			console.log(`📊 Total users in user_extensions: ${totalUserCount}`)
+
+			if (nullOrgCount > 0) {
+				this.issues.push(
+					`CRITICAL: user_extensions.organization_id: ${nullOrgCount} users with NULL organization_id`
+				)
+				console.log(`❌ CRITICAL: ${nullOrgCount} users have NULL organization_id`)
+				console.log(`   This means ${nullOrgCount} users cannot be assigned tenant_code/organization_code`)
+
+				// Get sample users with NULL organization_id
+				const sampleUsers = await this.sequelize.query(
+					`SELECT user_id FROM user_extensions WHERE organization_id IS NULL LIMIT 5`,
+					{ type: QueryTypes.SELECT }
+				)
+				console.log(
+					`   Sample user_ids with NULL organization_id: ${sampleUsers.map((u) => u.user_id).join(', ')}`
+				)
+			} else {
+				this.passed.push(
+					`user_extensions.organization_id: All ${totalUserCount} users have valid organization_id`
+				)
+				console.log(`✅ All ${totalUserCount} users have valid organization_id values`)
+			}
+		} catch (error) {
+			this.issues.push(`user_extensions integrity check failed: ${error.message}`)
+			console.log(`❌ Error checking user_extensions: ${error.message}`)
 		}
 	}
 
@@ -279,13 +684,25 @@ class DatabaseIntegrityChecker {
 	}
 
 	async run() {
-		console.log('🔍 Database Integrity Check')
+		console.log('🔍 PRE-MIGRATION INTEGRITY CHECK')
+		console.log('='.repeat(70))
+		console.log('Comprehensive database validation before tenant data migration')
 
 		try {
 			if (!(await this.checkConnection())) {
 				throw new Error('Database connection failed')
 			}
 
+			// NEW: Check reference columns used by helper.js for tenant assignment
+			console.log('\n🎯 REFERENCE COLUMN VALIDATION FOR TENANT MIGRATION')
+			console.log('='.repeat(70))
+			await this.checkOrganizationIdReferences()
+			await this.checkUserIdReferences()
+			await this.checkUserExtensionsIntegrity()
+
+			// Existing orphaned records check
+			console.log('\n🎯 ORPHANED RECORDS VALIDATION')
+			console.log('='.repeat(70))
 			await this.checkOrphanedRecords()
 
 			const isReady = this.generateReport()
