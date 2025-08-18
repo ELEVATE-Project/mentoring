@@ -1,7 +1,7 @@
 'use strict'
-
-require('dotenv').config()
+require('dotenv').config({ path: '../.env' })
 const { Sequelize, QueryTypes } = require('sequelize')
+const nodeEnv = process.env.NODE_ENV || 'development'
 
 /**
  * Generic Database Connection Utility for MentorED Platform
@@ -10,7 +10,18 @@ const { Sequelize, QueryTypes } = require('sequelize')
 class DatabaseConnectionManager {
 	constructor(options = {}) {
 		// Environment-based configuration with fallbacks
-		const databaseUrl = process.env.DEV_DATABASE_URL
+		let databaseUrl
+
+		switch (nodeEnv) {
+			case 'production':
+				databaseUrl = process.env.PROD_DATABASE_URL
+				break
+			case 'test':
+				databaseUrl = process.env.TEST_DATABASE_URL
+				break
+			default:
+				databaseUrl = process.env.DEV_DATABASE_URL
+		}
 
 		if (!databaseUrl) {
 			throw new Error('Database URL not configured. Set DATABASE_URL or DEV_DATABASE_URL environment variable.')
