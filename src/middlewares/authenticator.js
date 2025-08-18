@@ -44,6 +44,7 @@ module.exports = async function (req, res, next) {
 
 		// Check if config.json exists
 		if (fs.existsSync(configFilePath)) {
+			console.log(' config exit')
 			// Read and parse the config.json file
 			const rawData = fs.readFileSync(configFilePath)
 			try {
@@ -109,35 +110,16 @@ module.exports = async function (req, res, next) {
 			}
 		}
 
+		console.log(' decoded tokenen ', req.decodedToken)
+
 		req.decodedToken.id =
 			typeof req.decodedToken?.id === 'number' ? req.decodedToken?.id?.toString() : req.decodedToken?.id
-
-		// CRITICAL: Extract organization_id from organization_ids array BEFORE authorization check
-		if (!req.decodedToken.organization_id && req.decodedToken.organization_ids?.length > 0) {
-			req.decodedToken.organization_id = req.decodedToken.organization_ids[0]
-		}
-
-		if (!req.decodedToken.organization_code && req.decodedToken.organization_codes?.length > 0) {
-			req.decodedToken.organization_code = req.decodedToken.organization_codes[0]
-		}
-
 		req.decodedToken.organization_id =
 			typeof req.decodedToken?.organization_id === 'number'
 				? req.decodedToken?.organization_id?.toString()
 				: req.decodedToken?.organization_id
-		req.decodedToken.organization_code =
-			typeof req.decodedToken?.organization_code === 'number'
-				? req.decodedToken?.organization_code?.toString()
-				: req.decodedToken?.organization_code
 
-		// Convert organization IDs in organizations array to strings
-		if (req.decodedToken?.organizations?.length > 0) {
-			req.decodedToken.organizations = req.decodedToken.organizations.map((org) => ({
-				...org,
-				id: typeof org.id === 'number' ? org.id.toString() : org.id,
-			}))
-		}
-
+		console.log(' req decoded tokenen ', req.decodedToken)
 		if (!req.decodedToken[organizationKey]) {
 			throw createUnauthorizedResponse()
 		}
@@ -161,54 +143,32 @@ module.exports = async function (req, res, next) {
 				})
 			}
 			req.decodedToken.organization_id = organizationId.toString()
-			if (!Array.isArray(req.decodedToken.organizations) || !req.decodedToken.organizations[0]) {
-				req.decodedToken.organizations = [{ id: req.decodedToken.organization_id, roles: [] }]
-			}
-			const rolesArr = Array.isArray(req.decodedToken.organizations[0].roles)
-				? req.decodedToken.organizations[0].roles
-				: []
-			rolesArr.push({ title: common.ADMIN_ROLE })
-			req.decodedToken.organizations[0].roles = rolesArr
+			req.decodedToken.roles.push({ title: common.ADMIN_ROLE })
 		}
 
 		if (!skipFurtherChecks) {
-			if (process.env.SESSION_VERIFICATION_METHOD === common.SESSION_VERIFICATION_METHOD.USER_SERVICE) {
-				// await validateSession(authHeader) // TEMPORARILY BYPASSED - requires User Service
-			}
+			if (process.env.SESSION_VERIFICATION_METHOD === common.SESSION_VERIFICATION_METHOD.USER_SERVICE)
+				await validateSession(authHeader)
 
 			const roleValidation = common.roleValidationPaths.some((path) => req.path.includes(path))
 
 			if (roleValidation) {
-				if (process.env.AUTH_METHOD === common.AUTH_METHOD.NATIVE) {
-					// Extract clean token for user service call
-					let cleanToken = authHeader
-					if (process.env.IS_AUTH_TOKEN_BEARER === 'true') {
-						const [authType, extractedToken] = authHeader.split(' ')
-						if (authType.toLowerCase() === 'bearer') {
-							cleanToken = extractedToken.trim()
-						}
-					}
-					await nativeRoleValidation(decodedToken, cleanToken)
-				} else if (process.env.AUTH_METHOD === common.AUTH_METHOD.KEYCLOAK_PUBLIC_KEY)
+				if (process.env.AUTH_METHOD === common.AUTH_METHOD.NATIVE)
+					await nativeRoleValidation(decodedToken, authHeader)
+				else if (process.env.AUTH_METHOD === common.AUTH_METHOD.KEYCLOAK_PUBLIC_KEY)
 					await dbBasedRoleValidation(decodedToken)
 			}
 
-			// Extract roles from JWT structure - roles are nested in organizations
-			let userRoles = []
-			const orgRoles = req.decodedToken.organizations?.[0]?.roles
-			if (Array.isArray(orgRoles)) {
-				userRoles = orgRoles.map((role) => role.title)
-			} else if (Array.isArray(req.decodedToken.roles)) {
-				// Fallback in case roles are at top-level
-				userRoles = req.decodedToken.roles.map((role) => role.title ?? role)
-			}
-
-			const tenantCode = req.decodedToken?.tenant_code || 'default'
-			const isPermissionValid = await checkPermissions(userRoles, req.path, req.method)
+			const isPermissionValid = await checkPermissions(
+				req.decodedToken.roles.map((role) => role.title),
+				req.path,
+				req.method
+			)
 
 			if (!isPermissionValid) throw createUnauthorizedResponse('PERMISSION_DENIED')
 		}
 
+		console.log('DECODED TOKEN:', req.decodedToken)
 		next()
 	} catch (err) {
 		if (err.message === 'USER_SERVICE_DOWN') {
@@ -307,10 +267,6 @@ async function fetchPermissions(roleTitle, apiPath, module) {
 
 async function verifyToken(token) {
 	try {
-		if (process.env.JWT_DISABLE_VERIFICATION === 'true') {
-			const decoded = jwt.decode(token, { complete: true })
-			return decoded?.payload
-		}
 		return jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
 	} catch (err) {
 		if (err.name === 'TokenExpiredError') throw createUnauthorizedResponse('ACCESS_TOKEN_EXPIRED')
