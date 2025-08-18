@@ -48,7 +48,7 @@ module.exports = class MentorsHelper {
 		queryParams,
 		isAMentor,
 		roles,
-		orgId,
+		orgCode,
 		tenantCode
 	) {
 		try {
@@ -75,11 +75,19 @@ module.exports = class MentorsHelper {
 				tenantCode
 			)
 
+			if (!orgCode) {
+				return responses.failureResponse({
+					message: 'ORGANIZATION_CODE_REQUIRED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			const defaultRuleFilter = await defaultRulesFilter({
 				ruleType: common.DEFAULT_RULES.SESSION_TYPE,
 				requesterId: menteeUserId,
 				roles: roles,
-				requesterOrganizationCode: orgId,
+				requesterOrganizationCode: orgCode,
 				tenantCode: tenantCode,
 			})
 
@@ -1032,6 +1040,14 @@ module.exports = class MentorsHelper {
 					})
 				}
 			}
+			if (!orgId) {
+				return responses.failureResponse({
+					message: 'ORGANIZATION_CODE_REQUIRED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			const defaultRuleFilter = await defaultRulesFilter({
 				ruleType: 'mentor',
 				requesterId: queryParams.menteeId ? queryParams.menteeId : userId,
