@@ -97,7 +97,7 @@ module.exports = class Mentees {
 	async homeFeed(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
+			const organizationCode = req.decodedToken.organizations[0].code
 			const organizationId = req.decodedToken.organization_id
 			const userId = req.decodedToken.id
 
