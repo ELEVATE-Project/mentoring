@@ -7,7 +7,7 @@ const formQueries = require('../database/queries/form')
 const { UniqueConstraintError } = require('sequelize')
 
 const entityTypeQueries = require('../database/queries/entityType')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaultOrgId, getDefaultOrgCode } = require('@helpers/getDefaultOrgId')
 
 const responses = require('@helpers/responses')
 
@@ -129,16 +129,16 @@ module.exports = class FormsHelper {
 			const form = await formQueries.findOneForm(filter, tenantCode)
 			let defaultOrgForm
 			if (!form) {
-				const defaultOrgId = await getDefaultOrgId()
-				if (!defaultOrgId)
+				const defaultOrgCode = await getDefaultOrgCode()
+				if (!defaultOrgCode)
 					return responses.failureResponse({
 						message: 'DEFAULT_ORG_ID_NOT_SET',
 						statusCode: httpStatusCode.bad_request,
 						responseCode: 'CLIENT_ERROR',
 					})
 				filter = id
-					? { id: id, organization_code: defaultOrgId, tenant_code: tenantCode }
-					: { ...bodyData, organization_code: defaultOrgId, tenant_code: tenantCode }
+					? { id: id, organization_code: orgCode, tenant_code: tenantCode }
+					: { ...bodyData, organization_code: defaultOrgCode, tenant_code: tenantCode }
 				defaultOrgForm = await formQueries.findOneForm(filter, tenantCode)
 			}
 			if (!form && !defaultOrgForm) {

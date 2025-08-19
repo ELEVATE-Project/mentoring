@@ -61,7 +61,6 @@ module.exports = class Entity {
 			if (req.body.value) {
 				return await entityTypeService.readUserEntityTypes(
 					req.body,
-					req.decodedToken.id,
 					req.decodedToken.organization_code,
 					req.decodedToken.tenant_code
 				)
