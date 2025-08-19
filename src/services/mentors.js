@@ -953,7 +953,7 @@ module.exports = class MentorsHelper {
 		userId,
 		isAMentor,
 		roles,
-		orgId,
+		orgCode,
 		tenantCode
 	) {
 		try {
@@ -1040,7 +1040,7 @@ module.exports = class MentorsHelper {
 					})
 				}
 			}
-			if (!orgId) {
+			if (!orgCode) {
 				return responses.failureResponse({
 					message: 'ORGANIZATION_CODE_REQUIRED',
 					statusCode: httpStatusCode.bad_request,
@@ -1052,7 +1052,7 @@ module.exports = class MentorsHelper {
 				ruleType: 'mentor',
 				requesterId: queryParams.menteeId ? queryParams.menteeId : userId,
 				roles: roles,
-				requesterOrganizationCode: orgId,
+				requesterOrganizationCode: orgCode,
 				tenantCode: tenantCode,
 			})
 

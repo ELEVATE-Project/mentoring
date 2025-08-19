@@ -104,6 +104,19 @@ module.exports = async function (req, res, next) {
 						continue
 					}
 
+					if (key === 'organization_code') {
+						let orgId = getOrgId(req.headers, decodedToken, configData[organizationKey])
+
+						// Now extract roles using fully dynamic path
+						const rolePathTemplate = configData['organization_code']
+
+						decodedToken[organizationKey] = orgId
+						const resolvedOrgPath = resolvePathTemplate(rolePathTemplate, decodedToken)
+						const org = getNestedValue(decodedToken, resolvedOrgPath) || []
+						req.decodedToken[key] = org
+						continue
+					}
+
 					// For each key in config, assign the corresponding value from decodedToken
 					req.decodedToken[key] = keyValue
 				}

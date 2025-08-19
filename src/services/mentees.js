@@ -290,7 +290,7 @@ module.exports = class MenteesHelper {
 				all_sessions: allSessions.rows,
 				my_sessions: mySessions.rows,
 			}
-			const feedbackData = await feedbackHelper.pending(userId, isAMentor, tenantCode)
+			const feedbackData = await feedbackHelper.pending(userId, isAMentor, organizationCode, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,

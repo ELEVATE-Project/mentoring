@@ -143,7 +143,7 @@ module.exports = class EntityHelper {
 		}
 	}
 
-	static async readUserEntityTypes(body, userId, orgCode, tenantCode) {
+	static async readUserEntityTypes(body, orgCode, tenantCode) {
 		try {
 			const defaultOrgCode = await getDefaultOrgCode()
 			if (!defaultOrgCode)
@@ -164,6 +164,15 @@ module.exports = class EntityHelper {
 			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
 
 			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, orgCode)
+
+			if (prunedEntities.length == 0) {
+				return responses.failureResponse({
+					message: 'ENTITY_TYPE_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
