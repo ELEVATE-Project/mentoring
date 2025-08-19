@@ -147,7 +147,10 @@ module.exports = class UserHelper {
 		}
 		const userExtensionData = this.#getExtensionData(userBody, orgExtension)
 
-		const createResult = await this.#createUser({ ...userExtensionData, roles: userBody.roles }, tenantCode)
+		const createResult = await this.#createUser(
+			{ ...userExtensionData, roles: userBody.organizations[0].roles },
+			tenantCode
+		)
 
 		if (createResult.statusCode != httpStatusCode.ok) return createResult
 		else
@@ -215,7 +218,7 @@ module.exports = class UserHelper {
 
 		// List of optional fields to check
 		const optionalFields = {
-			roles: userDetails?.user_roles,
+			roles: userDetails?.organizations[0].roles,
 			email: userDetails?.email,
 			phone: userDetails?.phone,
 			skipValidation: true,
