@@ -1739,7 +1739,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 			// check if the session is accessible to the user
-			let isAccessible = await this.checkIfSessionIsAccessible(session, userId, isAMentor, '', tenantCode)
+			let isAccessible = await this.checkIfSessionIsAccessible(session, userId, isAMentor, tenantCode)
 
 			if (!isAccessible) {
 				return responses.failureResponse({
