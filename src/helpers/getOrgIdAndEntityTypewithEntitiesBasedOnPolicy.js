@@ -8,15 +8,31 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 	static async getOrganizationIdBasedOnPolicy(userId, organization_code, filterType, tenantCode) {
 		try {
 			let organizationCodes = []
+			let tenantCodes = []
 			filterType = filterType.toLowerCase()
 
 			let visibilityPolicies = []
 			let orgVisibilityPolicies = []
 
 			const policyMap = {
-				[common.MENTEE_ROLE]: ['organization_id', 'external_mentee_visibility_policy'],
-				[common.SESSION]: ['organization_id', 'external_session_visibility_policy'],
-				[common.MENTOR_ROLE]: ['organization_id', 'external_mentor_visibility_policy'],
+				[common.MENTEE_ROLE]: [
+					'organization_id',
+					'external_mentee_visibility_policy',
+					'organization_code',
+					'tenant_code',
+				],
+				[common.SESSION]: [
+					'organization_id',
+					'external_session_visibility_policy',
+					'organization_code',
+					'tenant_code',
+				],
+				[common.MENTOR_ROLE]: [
+					'organization_id',
+					'external_mentor_visibility_policy',
+					'organization_code',
+					'tenant_code',
+				],
 			}
 			visibilityPolicies = policyMap[filterType] || []
 			const attributes = visibilityPolicies
@@ -29,7 +45,7 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 				}
 			)
 
-			if (orgExtension?.organization_id) {
+			if (orgExtension?.organization_code) {
 				const orgPolicyMap = {
 					[common.MENTEE_ROLE]: orgExtension.external_mentee_visibility_policy,
 					[common.SESSION]: orgExtension.external_session_visibility_policy,
@@ -38,16 +54,19 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 				orgVisibilityPolicies = orgPolicyMap[filterType] || []
 				const visibilityPolicy = orgVisibilityPolicies
 				if (visibilityPolicy === common.CURRENT) {
-					organizationCodes.push(orgExtension.organization_id)
+					organizationCodes.push(orgExtension.organization_code)
+					tenantCodes.push(orgExtension.tenant_code)
 				} else if (visibilityPolicy === common.ASSOCIATED || visibilityPolicy === common.ALL) {
-					organizationCodes.push(orgExtension.organization_id)
+					organizationCodes.push(orgExtension.organization_code)
+					tenantCodes.push(orgExtension.tenant_code)
 					let relatedOrgs = []
 					let userOrgDetails = await userRequests.fetchOrgDetails({
-						organizationCode: orgExtension.organization_id,
+						organizationCode: orgExtension.organization_code,
 					})
 					if (userOrgDetails.success && userOrgDetails.data?.result?.related_orgs?.length > 0) {
 						relatedOrgs = userOrgDetails.data.result.related_orgs
 					}
+
 					if (visibilityPolicy === common.ASSOCIATED) {
 						const associatedAdditionalFilter =
 							filterType == common.MENTEE_ROLE
@@ -81,14 +100,18 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 							},
 							tenantCode,
 							{
-								attributes: ['organization_id'],
+								attributes: ['organization_id', 'organization_code', 'tenant_code'],
 							}
 						)
 						if (organizationExtension) {
 							const organizationCodesFromOrgExtension = organizationExtension.map(
-								(orgExt) => orgExt.organization_id
+								(orgExt) => orgExt.organization_code
+							)
+							const tenantCodesFromOrgExtension = organizationExtension.map(
+								(orgExt) => orgExt.tenant_code
 							)
 							organizationCodes.push(...organizationCodesFromOrgExtension)
+							tenantCodes.push(...tenantCodesFromOrgExtension)
 						}
 					} else {
 						// filter out the organizations
@@ -152,14 +175,20 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 							},
 							tenantCode,
 							{
-								attributes: ['organization_id'],
+								attributes: ['organization_id', 'organization_code', 'tenant_code'],
 							}
 						)
 						if (organizationExtension) {
 							const organizationCodesFromOrgExtension = organizationExtension.map(
-								(orgExt) => orgExt.organization_id
+								(orgExt) => orgExt.organization_code
 							)
 							organizationCodes.push(...organizationCodesFromOrgExtension)
+
+							const tenantCodesFromOrgExtension = organizationExtension.map(
+								(orgExt) => orgExt.tenant_code
+							)
+							organizationCodes.push(...organizationCodesFromOrgExtension)
+							tenantCodes.push(...tenantCodesFromOrgExtension)
 						}
 					}
 				}
@@ -167,7 +196,7 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 
 			return {
 				success: true,
-				result: organizationCodes,
+				result: { organizationCodes: organizationCodes, tenantCodes: tenantCodes },
 			}
 		} catch (error) {
 			return {
@@ -183,7 +212,8 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 		defaultOrgCode = '',
 		modelName,
 		filter = {},
-		tenantCode
+		tenantCodes,
+		defaultTenantCode = ''
 	) {
 		try {
 			filter.status = common.ACTIVE_STATUS
@@ -191,6 +221,9 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 			filter.has_entities = true
 			filter.organization_code = {
 				[Op.in]: defaultOrgCode ? [...organization_codes, defaultOrgCode] : organization_codes,
+			}
+			filter.tenant_code = {
+				[Op.in]: defaultTenantCode ? [...tenantCodes, defaultTenantCode] : tenantCodes,
 			}
 			let entityTypes = []
 			if (entity_types) {
@@ -203,7 +236,7 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 				filter.model_names = { [Op.contains]: [modelName] }
 			}
 			//fetch entity types and entities
-			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
+			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
 
 			return {
 				success: true,

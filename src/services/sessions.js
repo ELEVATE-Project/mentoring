@@ -25,7 +25,7 @@ const userRequests = require('@requests/user')
 const utils = require('@generics/utils')
 const bigBlueButtonService = require('./bigBlueButton')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
-const { getDefaultOrgId, getDefaultOrgCode } = require('@helpers/getDefaultOrgId')
+const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const menteeService = require('@services/mentees')
 const { updatedDiff } = require('deep-object-diff')
@@ -211,18 +211,28 @@ module.exports = class SessionsHelper {
 			}
 
 			// Get default org id and entities
-			const defaultOrgCode = await getDefaultOrgCode()
-			if (!defaultOrgCode)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
 			const sessionModelName = await sessionQueries.getModelName()
 			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
 				organization_code: {
-					[Op.in]: [orgCode, defaultOrgCode],
+					[Op.in]: [orgCode, defaults.orgCode],
+				},
+				tenant_code: {
+					[Op.in]: [tenantCode, defaults.tenantCode],
 				},
 				model_names: { [Op.contains]: [sessionModelName] },
 			})
@@ -608,10 +618,16 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const defaultOrgCode = await getDefaultOrgCode()
-			if (!defaultOrgCode)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -621,7 +637,10 @@ module.exports = class SessionsHelper {
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
 				organization_code: {
-					[Op.in]: [orgCode, defaultOrgCode],
+					[Op.in]: [orgCode, defaults.orgCode],
+				},
+				tenant_code: {
+					[Op.in]: [tenantCode, defaults.tenantCode],
 				},
 				model_names: { [Op.contains]: [sessionModelName] },
 			})
@@ -630,7 +649,7 @@ module.exports = class SessionsHelper {
 			if (bodyData.status == common.VALID_STATUS) {
 				bodyData.status = sessionDetail.status
 			}
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgCode)
 			if (!method === common.DELETE_METHOD) {
 				let res = utils.validateInput(bodyData, validationData, sessionModelName, skipValidation)
 				if (!res.success) {
@@ -3237,16 +3256,23 @@ module.exports = class SessionsHelper {
 
 	static async getSampleCSV(orgCode, tenantCode) {
 		try {
-			const defaultOrgCode = await getDefaultOrgCode()
-			if (!defaultOrgCode) {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
 			let path = process.env.SAMPLE_CSV_FILE_PATH
-			if (orgCode != defaultOrgCode) {
+			if (orgCode != defaults.orgCode) {
 				const result = await organisationExtensionQueries.findOne({ organization_code: orgCode }, tenantCode, {
 					attributes: ['uploads'],
 				})

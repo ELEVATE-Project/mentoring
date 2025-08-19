@@ -4,7 +4,7 @@ const entityTypeQueries = require('@database/queries/entityType')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const sessionQueries = require('@database/queries/sessions')
-const { getDefaultOrgId, getDefaultOrgCode } = require('@helpers/getDefaultOrgId')
+const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
 const responses = require('@helpers/responses')
 const httpStatusCode = require('@generics/http-status')
 const { Op } = require('sequelize')
@@ -26,7 +26,7 @@ module.exports = class DefaultRuleHelper {
 	 * The object contains a boolean `isValid` indicating if the validation passed and an array `errors` with the validation errors if any.
 	 */
 
-	static async validateFields(defaultOrgCode, bodyData, tenantCode) {
+	static async validateFields(defaultOrgCode, bodyData, defaultTenantCode) {
 		const isSessionType =
 			bodyData.type === common.DEFAULT_RULES.SESSION_TYPE && !bodyData.is_target_from_sessions_mentor
 		const modelNamePromise = isSessionType ? sessionQueries.getModelName() : mentorExtensionQueries.getModelName()
@@ -36,14 +36,14 @@ module.exports = class DefaultRuleHelper {
 		const [modelName, mentorModelName] = await Promise.all([modelNamePromise, mentorModelNamePromise])
 
 		const validFieldsPromise = Promise.all([
-			entityTypeQueries.findAllEntityTypes([defaultOrgCode], tenantCode, ['id', 'data_type'], {
+			entityTypeQueries.findAllEntityTypes([defaultOrgCode], defaultTenantCode, ['id', 'data_type'], {
 				status: 'ACTIVE',
 				value: bodyData.target_field,
 				model_names: { [Op.contains]: [modelName] },
 				required: true,
 				allow_filtering: true,
 			}),
-			entityTypeQueries.findAllEntityTypes([defaultOrgCode], tenantCode, ['id', 'data_type'], {
+			entityTypeQueries.findAllEntityTypes([defaultOrgCode], defaultTenantCode, ['id', 'data_type'], {
 				status: 'ACTIVE',
 				value: bodyData.requester_field,
 				model_names: { [Op.contains]: [mentorModelName] },
@@ -118,9 +118,9 @@ module.exports = class DefaultRuleHelper {
 		bodyData.requester_field = bodyData.requester_field.toLowerCase()
 
 		try {
-			const defaultOrgCode = await getDefaultOrgCode()
+			const defaults = await getDefaults()
 
-			const validation = await this.validateFields(defaultOrgCode, bodyData, tenantCode)
+			const validation = await this.validateFields(defaults.orgCode, bodyData, defaults.tenantCode)
 
 			if (!validation.isValid) {
 				return responses.failureResponse({
@@ -168,9 +168,9 @@ module.exports = class DefaultRuleHelper {
 		bodyData.requester_field = bodyData.requester_field.toLowerCase()
 
 		try {
-			const defaultOrgCode = await getDefaultOrgCode()
+			const defaults = await getDefaults()
 
-			const validation = await this.validateFields(defaultOrgCode, bodyData, tenantCode)
+			const validation = await this.validateFields(defaults.orgCode, bodyData, defaults.tenantCode)
 
 			if (!validation.isValid) {
 				return responses.failureResponse({

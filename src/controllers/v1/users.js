@@ -106,8 +106,8 @@ module.exports = class Users {
 	 */
 	async add(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
+			const tenantCode = req.body.tenant_code
+			const organizationCode = req.body.organizations[0].code
 			const userId = req.decodedToken.id
 
 			return await userService.add(req.body, userId, organizationCode, tenantCode)

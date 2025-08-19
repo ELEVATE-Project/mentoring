@@ -7,7 +7,7 @@ const formQueries = require('../database/queries/form')
 const { UniqueConstraintError } = require('sequelize')
 
 const entityTypeQueries = require('../database/queries/entityType')
-const { getDefaultOrgId, getDefaultOrgCode } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 const responses = require('@helpers/responses')
 
@@ -126,20 +126,26 @@ module.exports = class FormsHelper {
 			} else {
 				filter = { ...bodyData, organization_code: orgCode, tenant_code: tenantCode }
 			}
-			const form = await formQueries.findOneForm(filter, tenantCode)
+			const form = await formQueries.findOneForm(filter)
 			let defaultOrgForm
 			if (!form) {
-				const defaultOrgCode = await getDefaultOrgCode()
-				if (!defaultOrgCode)
+				const defaults = await getDefaults()
+				if (!defaults.orgCode)
 					return responses.failureResponse({
 						message: 'DEFAULT_ORG_ID_NOT_SET',
 						statusCode: httpStatusCode.bad_request,
 						responseCode: 'CLIENT_ERROR',
 					})
+				if (!defaults.tenantCode)
+					return responses.failureResponse({
+						message: 'DEFAULT_TENANT_CODE_NOT_SET',
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
 				filter = id
-					? { id: id, organization_code: orgCode, tenant_code: tenantCode }
-					: { ...bodyData, organization_code: defaultOrgCode, tenant_code: tenantCode }
-				defaultOrgForm = await formQueries.findOneForm(filter, tenantCode)
+					? { id: id, organization_code: defaults.orgCode, tenant_code: defaults.tenantCode }
+					: { ...bodyData, organization_code: defaults.orgCode, tenant_code: defaults.tenantCode }
+				defaultOrgForm = await formQueries.findOneForm(filter)
 			}
 			if (!form && !defaultOrgForm) {
 				return responses.failureResponse({

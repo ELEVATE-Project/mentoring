@@ -7,7 +7,7 @@ const entityTypeQueries = require('../database/queries/entityType')
 const schedulerServiceUrl = process.env.SCHEDULER_SERVICE_HOST // Port address on which the scheduler service is running
 const mentoringBaseurl = `http://${process.env.APPLICATION_HOST}:${process.env.APPLICATION_PORT}`
 const apiEndpoints = require('../constants/endpoints')
-const defaultOrgCode = process.env.DEFAULT_ORG_CODE
+const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE
 const defaultTenantCode = process.env.DEFAULT_TENANT_CODE
 
 /**

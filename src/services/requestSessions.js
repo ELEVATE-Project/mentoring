@@ -13,7 +13,7 @@ const sessionService = require('@services/sessions')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const utils = require('@generics/utils')
 const kafkaCommunication = require('@generics/kafka-communication')
-const { getDefaultOrgId, getDefaultOrgCode } = require('@helpers/getDefaultOrgId')
+const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
 const entityTypeQueries = require('@database/queries/entityType')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
@@ -119,36 +119,32 @@ module.exports = class requestSessionsHelper {
 			}
 
 			// Get default org code and entities
-			const defaultOrgCode = await getDefaultOrgCode()
-			if (!defaultOrgCode)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
+			if (!defaults.tenantCode)
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 
 			const requestSessionModelName = await sessionRequestQueries.getModelName()
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [organizationCode, defaultOrgCode],
-					},
-					organization_id: {
-						[Op.in]: [organizationId, defaultOrgId],
-					},
-					model_names: { [Op.contains]: [requestSessionModelName] },
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
+				status: 'ACTIVE',
+				organization_code: {
+					[Op.in]: [organizationCode, defaults.orgCode],
 				},
-				tenantCode
-			)
+				tenant_code: {
+					[Op.in]: [tenantCode, defaults.tenantCode],
+				},
+				model_names: { [Op.contains]: [requestSessionModelName] },
+			})
 
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
 			let res = utils.validateInput(bodyData, validationData, requestSessionModelName, SkipValidation)

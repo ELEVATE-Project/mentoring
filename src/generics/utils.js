@@ -737,14 +737,14 @@ function filterEntitiesBasedOnParent(data, defaultOrgId, doNotRemoveDefaultOrg) 
 		let countWithParentId = 0
 		let countOfEachKey = data[key].length
 		data[key].forEach((obj) => {
-			if (obj.parent_id !== null && obj.organization_id != defaultOrgId) {
+			if (obj.parent_id !== null && obj.organization_code != defaultOrgId) {
 				countWithParentId++
 			}
 		})
 
 		let outputArray = data[key]
 		if (countOfEachKey > 1 && countWithParentId == countOfEachKey - 1 && !doNotRemoveDefaultOrg) {
-			outputArray = data[key].filter((obj) => !(obj.organization_id === defaultOrgId && obj.parent_id === null))
+			outputArray = data[key].filter((obj) => !(obj.organization_code === defaultOrgId && obj.parent_id === null))
 		}
 
 		result[key] = outputArray

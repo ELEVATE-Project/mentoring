@@ -4,7 +4,7 @@ const entityTypeQueries = require('../database/queries/entityType')
 const { UniqueConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
-const { getDefaultOrgId, getDefaultOrgCode } = require('@helpers/getDefaultOrgId')
+const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
 const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
@@ -112,17 +112,23 @@ module.exports = class EntityHelper {
 		try {
 			const attributes = ['value', 'label', 'id']
 
-			const defaultOrgCode = await getDefaultOrgCode()
-			if (!defaultOrgCode)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 
 			const entities = await entityTypeQueries.findAllEntityTypes(
-				[orgCode, defaultOrgCode],
-				tenantCode,
+				[orgCode, defaults.orgCode],
+				[defaults.tenantCode, tenantCode],
 				attributes
 			)
 
@@ -145,10 +151,16 @@ module.exports = class EntityHelper {
 
 	static async readUserEntityTypes(body, orgCode, tenantCode) {
 		try {
-			const defaultOrgCode = await getDefaultOrgCode()
-			if (!defaultOrgCode)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -157,11 +169,11 @@ module.exports = class EntityHelper {
 				value: body.value,
 				status: 'ACTIVE',
 				organization_code: {
-					[Op.in]: [orgCode, defaultOrgCode],
+					[Op.in]: [orgCode, defaults.orgCode],
 				},
-				tenant_code: tenantCode,
+				tenant_code: { [Op.in]: [defaults.tenantCode, tenantCode] },
 			}
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
 
 			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, orgCode)
 

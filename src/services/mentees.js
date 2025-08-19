@@ -15,7 +15,7 @@ const bigBlueButtonService = require('./bigBlueButton')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const orgAdminService = require('@services/org-admin')
 const mentorQueries = require('@database/queries/mentorExtension')
-const { getDefaultOrgId, getDefaultOrgCode } = require('@helpers/getDefaultOrgId')
+const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const entityTypeService = require('@services/entity-type')
@@ -59,15 +59,15 @@ module.exports = class MenteesHelper {
 		delete mentee.visible_to_organizations
 		delete mentee.image
 
-		const defaultOrgId = await getDefaultOrgId()
-		if (!defaultOrgId)
+		const defaults = await getDefaults()
+		if (!defaults.orgCode)
 			return responses.failureResponse({
-				message: 'DEFAULT_ORG_ID_NOT_SET',
+				message: 'DEFAULT_ORG_CODE_NOT_SET',
 				statusCode: httpStatusCode.bad_request,
 				responseCode: 'CLIENT_ERROR',
 			})
-		const defaultOrgCode = await getDefaultOrgCode()
-		if (!defaultOrgCode)
+
+		if (!defaults.tenantCode)
 			return responses.failureResponse({
 				message: 'DEFAULT_ORG_CODE_NOT_SET',
 				statusCode: httpStatusCode.bad_request,
@@ -75,19 +75,16 @@ module.exports = class MenteesHelper {
 			})
 		const userExtensionsModelName = await menteeQueries.getModelName()
 
-		let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-			{
-				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [organizationId, defaultOrgId],
-				},
-				organization_code: {
-					[Op.in]: [organizationCode, defaultOrgCode],
-				},
-				model_names: { [Op.contains]: [userExtensionsModelName] },
+		let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
+			status: 'ACTIVE',
+			organization_code: {
+				[Op.in]: [organizationCode, defaults.orgCode],
 			},
-			tenantCode
-		)
+			tenant_code: {
+				[Op.in]: [tenantCode, defaults.tenantCode],
+			},
+			model_names: { [Op.contains]: [userExtensionsModelName] },
+		})
 		const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
 		//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
@@ -129,12 +126,12 @@ module.exports = class MenteesHelper {
 
 		if (!menteeDetails.data.result.organization) {
 			const orgDetails = await organisationExtensionQueries.findOne(
-				{ organization_id: organizationId },
+				{ organization_code: organizationCode },
 				tenantCode,
 				{ attributes: ['name'] }
 			)
 			menteeDetails.data.result['organization'] = {
-				id: organizationId,
+				id: organizationCode,
 				name: orgDetails.name,
 			}
 		}
@@ -838,31 +835,35 @@ module.exports = class MenteesHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			const defaultOrgCode = await getDefaultOrgCode()
-			if (!defaultOrgCode)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			const userExtensionsModelName = await menteeQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_id: {
-						[Op.in]: [organizationId, defaultOrgId],
-					},
-					organization_code: {
-						[Op.in]: [organizationCode, defaultOrgCode],
-					},
-					model_names: { [Op.contains]: [userExtensionsModelName] },
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
+				status: 'ACTIVE',
+				organization_code: {
+					[Op.in]: [organizationCode, defaults.orgCode],
 				},
-				tenantCode
-			)
+				tenant_code: {
+					[Op.in]: [tenantCode, defaults.tenantCode],
+				},
+				model_names: { [Op.contains]: [userExtensionsModelName] },
+			})
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationId)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
 
 			let res = utils.validateInput(data, validationData, userExtensionsModelName, skipValidation)
 			if (!res.success) {
@@ -1151,7 +1152,8 @@ module.exports = class MenteesHelper {
 
 			const filter_type = filterType !== '' ? filterType : common.MENTOR_ROLE
 
-			let organization_ids = []
+			let organization_codes = []
+			let tenantCodes = []
 			const organizations = await getOrgIdAndEntityTypes.getOrganizationIdBasedOnPolicy(
 				tokenInformation.id,
 				tokenInformation.organization_id,
@@ -1160,16 +1162,17 @@ module.exports = class MenteesHelper {
 			)
 
 			if (organizations.success && organizations.result.length > 0) {
-				organization_ids = [...organizations.result]
+				organization_codes = [...organizations.result.organizationCodes]
+				tenantCodes = [...organizations.result.tenantCodes]
 
-				if (organization_ids.length > 0) {
+				if (organization_codes.length > 0) {
 					//get organization list
-					const organizationList = await userRequests.organizationList(organization_ids, tenantCode)
+					const organizationList = await userRequests.organizationList(organization_codes, tenantCodes)
 					if (organizationList.success && organizationList.data?.result?.length > 0) {
 						result.organizations = organizationList.data.result
 					}
 
-					const defaultOrgId = await getDefaultOrgId()
+					const defaults = await getDefaults()
 
 					const modelName = []
 
@@ -1185,12 +1188,13 @@ module.exports = class MenteesHelper {
 					}
 					// get entity type with entities list
 					const getEntityTypesWithEntities = await getOrgIdAndEntityTypes.getEntityTypeWithEntitiesBasedOnOrg(
-						organization_ids,
+						organization_codes,
 						entity_type,
-						defaultOrgId ? defaultOrgId : '',
+						defaults.orgCode ? defaults.orgCode : '',
 						modelName,
 						{},
-						tenantCode
+						tenantCodes,
+						defaults.tenantCode ? defaults.tenantCode : ''
 					)
 
 					if (getEntityTypesWithEntities.success && getEntityTypesWithEntities.result) {
@@ -1198,12 +1202,12 @@ module.exports = class MenteesHelper {
 						if (entityTypesWithEntities.length > 0) {
 							let convertedData = utils.convertEntitiesForFilter(entityTypesWithEntities)
 							let doNotRemoveDefaultOrg = false
-							if (organization_ids.includes(defaultOrgId)) {
+							if (organization_ids.includes(defaults.orgCode)) {
 								doNotRemoveDefaultOrg = true
 							}
 							result.entity_types = utils.filterEntitiesBasedOnParent(
 								convertedData,
-								defaultOrgId,
+								defaults.orgCode,
 								doNotRemoveDefaultOrg
 							)
 						}

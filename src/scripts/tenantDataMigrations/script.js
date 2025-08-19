@@ -16,7 +16,7 @@ console.log('==============================================')
 console.log('\n📋 Environment Configuration:')
 console.log(`   Database URL: ${process.env.DEV_DATABASE_URL ? '✅ Set' : '❌ Missing'}`)
 console.log(`   Default Tenant: ${process.env.DEFAULT_TENANT_CODE}`)
-console.log(`   Default Org Code: ${process.env.DEFAULT_ORG_CODE}`)
+console.log(`   Default Org Code: ${process.env.DEFAULT_ORGANISATION_CODE}`)
 console.log(`   Default Org ID: ${process.env.DEFAULT_ORG_ID || '1'}`)
 
 // Check CSV files

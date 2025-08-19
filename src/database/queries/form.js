@@ -3,7 +3,9 @@ const Form = require('../models/index').Form
 module.exports = class FormsData {
 	static async createForm(data, tenantCode) {
 		try {
-			data.tenant_code = tenantCode
+			if (tenantCode) {
+				data.tenant_code = tenantCode
+			}
 			let form = await Form.create(data, { returning: true })
 			return form
 		} catch (error) {
@@ -11,11 +13,13 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findOneForm(filter, tenantCode, orgCode = null) {
+	static async findOneForm(filter, tenantCode = null, orgCode = null) {
 		try {
-			filter.tenant_code = tenantCode
 			if (orgCode) {
 				filter.organization_code = orgCode
+			}
+			if (tenantCode) {
+				filter.tenant_code = tenantCode
 			}
 			const formData = await Form.findOne({
 				where: filter,
@@ -29,7 +33,9 @@ module.exports = class FormsData {
 
 	static async updateOneForm(filter, update, tenantCode, orgCode = null, options = {}) {
 		try {
-			filter.tenant_code = tenantCode
+			if (tenantCode) {
+				filter.tenant_code = tenantCode
+			}
 			if (orgCode) {
 				filter.organization_code = orgCode
 			}

@@ -329,7 +329,7 @@ const generateMaterializedView = async (modelEntityTypes) => {
 
 const getAllowFilteringEntityTypes = async (tenantCode) => {
 	try {
-		const defaultOrgCode = process.env.DEFAULT_ORG_CODE || 'default_code'
+		const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE || 'default_code'
 
 		return await entityTypeQueries.findAllEntityTypes(
 			defaultOrgCode,

@@ -5,7 +5,7 @@ const common = require('@constants/common')
 const menteeQueries = require('@database/queries/userExtension')
 const sessionQueries = require('@database/queries/sessions')
 const mentorQueries = require('@database/queries/mentorExtension')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const utils = require('@generics/utils')
 const getOrgIdAndEntityTypes = require('@helpers/getOrgIdAndEntityTypewithEntitiesBasedOnPolicy')
 const reportMappingQueries = require('@database/queries/reportRoleMapping')
@@ -38,7 +38,8 @@ module.exports = class ReportsHelper {
 			const filter_type = filterType !== '' ? filterType : common.MENTOR_ROLE
 			const report_filter = reportFilter === '' ? {} : { report_filter: reportFilter }
 
-			let organization_ids = []
+			let organization_codes = []
+			let tenantCodes = []
 			const organizations = await getOrgIdAndEntityTypes.getOrganizationIdBasedOnPolicy(
 				tokenInformation.id,
 				tokenInformation.organization_id,
@@ -46,10 +47,11 @@ module.exports = class ReportsHelper {
 			)
 
 			if (organizations.success && organizations.result.length > 0) {
-				organization_ids = [...organizations.result]
+				organization_codes = [...organizations.result.organizationCodes]
+				tenantCodes = [...organizations.result.tenantCodes]
 
-				if (organization_ids.length > 0) {
-					const defaultOrgId = await getDefaultOrgId()
+				if (organization_codes.length > 0) {
+					const defaults = await getDefaults()
 					const modelName = []
 					const queryMap = {
 						[common.MENTEE_ROLE]: menteeQueries.getModelName,
@@ -62,11 +64,13 @@ module.exports = class ReportsHelper {
 					}
 					// get entity type with entities list
 					const getEntityTypesWithEntities = await getOrgIdAndEntityTypes.getEntityTypeWithEntitiesBasedOnOrg(
-						organization_ids,
+						organization_codes,
 						entity_type,
-						defaultOrgId ? defaultOrgId : '',
+						defaults.orgCode ? defaults.orgCode : '',
 						modelName,
-						report_filter
+						report_filter,
+						tenantCodes,
+						defaults.tenantCode ? defaults.tenantCode : ''
 					)
 
 					if (getEntityTypesWithEntities.success && getEntityTypesWithEntities.result) {
@@ -74,12 +78,12 @@ module.exports = class ReportsHelper {
 						if (entityTypesWithEntities.length > 0) {
 							let convertedData = utils.convertEntitiesForFilter(entityTypesWithEntities)
 							let doNotRemoveDefaultOrg = false
-							if (organization_ids.includes(defaultOrgId)) {
+							if (organization_codes.includes(defaults.orgCode)) {
 								doNotRemoveDefaultOrg = true
 							}
 							result.entity_types = utils.filterEntitiesBasedOnParent(
 								convertedData,
-								defaultOrgId,
+								defaults.orgCode,
 								doNotRemoveDefaultOrg
 							)
 						}

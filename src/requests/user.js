@@ -653,23 +653,26 @@ const listOrganization = function (organizationIds = []) {
  *   .catch(error => console.error(error));
  */
 
-const organizationList = function (organizationIds = [], tenantCode = null) {
+const organizationList = function (organizationCodes = [], tenantCodes = []) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			// Fetch organization details
 			const filter = {
-				organization_id: {
-					[Op.in]: Array.from(organizationIds),
+				organization_code: {
+					[Op.in]: Array.from(organizationCodes),
+				},
+				tenant_code: {
+					[Op.in]: Array.from(tenantCodes),
 				},
 			}
 
 			const organizationDetails = await organisationExtensionQueries.findAll(filter, tenantCode, {
-				attributes: ['name', 'organization_id'],
+				attributes: ['name', 'organization_id', 'organization_code', 'tenant_code'],
 			})
 
 			if (organizationDetails && organizationDetails.length > 0) {
 				organizationDetails.map((orgInfo) => {
-					orgInfo.id = orgInfo.organization_id
+					orgInfo.id = orgInfo.organization_code
 				})
 			}
 

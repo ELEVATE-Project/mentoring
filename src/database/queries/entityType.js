@@ -26,12 +26,12 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async findAllEntityTypes(orgCodes, tenantCode, attributes, filter = {}) {
+	static async findAllEntityTypes(orgCodes, tenantCodes, attributes, filter = {}) {
 		try {
 			const entityData = await EntityType.findAll({
 				where: {
 					organization_code: orgCodes,
-					tenant_code: tenantCode,
+					tenant_code: tenantCodes,
 					...filter,
 				},
 				attributes,
@@ -42,11 +42,11 @@ module.exports = class UserEntityData {
 			return error
 		}
 	}
-	static async findUserEntityTypesAndEntities(filter, tenantCode) {
+	static async findUserEntityTypesAndEntities(filter, tenantCodes) {
 		try {
 			// Only add tenant_code to filter if tenantCode is provided
-			if (tenantCode) {
-				filter.tenant_code = tenantCode
+			if (tenantCodes) {
+				filter.tenant_code = tenantCodes
 			}
 
 			const entityTypes = await EntityType.findAll({
@@ -64,8 +64,8 @@ module.exports = class UserEntityData {
 				}
 
 				// Only add tenant_code to entity filter if tenantCode is provided
-				if (tenantCode) {
-					entityFilter.tenant_code = tenantCode
+				if (tenantCodes) {
+					entityFilter.tenant_code = tenantCodes
 				}
 
 				entities = await Entity.findAll({

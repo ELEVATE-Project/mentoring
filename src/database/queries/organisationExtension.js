@@ -70,9 +70,8 @@ module.exports = class OrganizationExtensionQueries {
 		}
 	}
 
-	static async findAll(filter, tenantCode, options = {}) {
+	static async findAll(filter, options = {}) {
 		try {
-			filter.tenant_code = tenantCode
 			const orgExtensions = await OrganizationExtension.findAll({
 				where: filter,
 				...options,

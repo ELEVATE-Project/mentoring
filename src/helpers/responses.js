@@ -20,7 +20,7 @@ const successResponse = async ({
 	interpolation = false, // Can be true or an object like { title: 'Math' }
 	tenantCode = null,
 }) => {
-	const versions = await form.getAllFormsVersion(tenantCode)
+	const versions = await form.getAllFormsVersion(tenantCode, orgCode)
 	let response = {
 		statusCode,
 		responseCode,

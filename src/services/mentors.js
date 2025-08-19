@@ -13,7 +13,7 @@ const sessionQueries = require('@database/queries/sessions')
 const entityTypeQueries = require('@database/queries/entityType')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const orgAdminService = require('@services/org-admin')
-const { getDefaultOrgId, getDefaultOrgCode } = require('@helpers/getDefaultOrgId')
+const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const moment = require('moment')
@@ -387,10 +387,17 @@ module.exports = class MentorsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			const defaultOrgCode = await getDefaultOrgCode()
-			if (!defaultOrgCode)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -398,11 +405,11 @@ module.exports = class MentorsHelper {
 
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [orgId, defaultOrgId],
-				},
 				organization_code: {
-					[Op.in]: [orgCode, defaultOrgCode],
+					[Op.in]: [orgCode, defaults.orgCode],
+				},
+				tenant_code: {
+					[Op.in]: [tenantCode, defaults.tenantCode],
 				},
 				model_names: { [Op.contains]: [mentorExtensionsModelName] },
 			})
@@ -764,25 +771,31 @@ module.exports = class MentorsHelper {
 
 			mentorExtension = utils.deleteProperties(mentorExtension, ['user_id', 'visible_to_organizations'])
 
-			const defaultOrgCode = await getDefaultOrgCode()
-			if (!defaultOrgCode)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [orgCode, defaultOrgCode],
-					},
-					model_names: { [Op.contains]: [mentorExtensionsModelName] },
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
+				status: 'ACTIVE',
+				organization_code: {
+					[Op.in]: [orgCode, defaults.orgCode],
 				},
-				tenantCode
-			)
+				tenant_code: {
+					[Op.in]: [tenantCode, defaults.tenantCode],
+				},
+				model_names: { [Op.contains]: [mentorExtensionsModelName] },
+			})
 
 			if (mentorExtension.image) {
 				delete mentorExtension.image
@@ -829,7 +842,7 @@ module.exports = class MentorsHelper {
 			}
 			// Conditionally fetch profile details if token exists
 			let userProfile = {}
-			if (tenantCode) {
+			if (tenantCode && id) {
 				const profileResponse = await userRequests.getProfileDetails({ tenantCode, userId: id })
 				// If profileResponse.data.result exists, include it; otherwise, keep userProfile empty
 				if (profileResponse.data.result) {
