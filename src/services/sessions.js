@@ -384,7 +384,7 @@ module.exports = class SessionsHelper {
 
 			const processDbResponse = utils.processDbResponse(data.toJSON(), validationData)
 
-			processDbResponse['resources'] = await this.getResources(data.id)
+			processDbResponse['resources'] = await this.getResources(data.id, tenantCode)
 
 			// Set notification schedulers for the session
 			// Deep clone to avoid unintended modifications to the original object.
@@ -1425,7 +1425,7 @@ module.exports = class SessionsHelper {
 				sessionDetails.mentor_designation = processedEntityType.designation
 			}
 
-			sessionDetails['resources'] = await this.getResources(sessionDetails.id)
+			sessionDetails['resources'] = await this.getResources(sessionDetails.id, tenantCode)
 
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
 				{
@@ -3476,7 +3476,7 @@ module.exports = class SessionsHelper {
 		let resourceInfo = await resourceQueries.bulkCreate(data, tenantCode)
 		return resourceInfo
 	}
-	static async getResources(sessionId) {
+	static async getResources(sessionId, tenantCode) {
 		let resourceInfo = await resourceQueries.find({ session_id: sessionId }, tenantCode)
 
 		if (resourceInfo && resourceInfo.length > 0) {
