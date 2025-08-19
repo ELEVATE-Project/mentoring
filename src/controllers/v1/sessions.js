@@ -493,15 +493,15 @@ module.exports = class Sessions {
 	 */
 	async removeAllSessions(req) {
 		try {
-			if (req.body.mentorIds && req.body.orgId)
+			if (req.body.mentorIds && req.body.orgCode)
 				return responses.failureResponse({
 					message: 'Specify either mentorIds or orgId but not both.',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			else if (!req.body.mentorIds && !req.body.orgId)
+			else if (!req.body.mentorIds && !req.body.orgCode)
 				return responses.failureResponse({
-					message: 'Specify at-least mentorIds or orgId.',
+					message: 'Specify at-least mentorIds or orgCode.',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -513,7 +513,7 @@ module.exports = class Sessions {
 			const removedSessionsResponse = await sessionService.removeAllSessions(
 				{
 					mentorIds: req.body.mentorIds,
-					orgId: req.body.orgId,
+					orgCode: req.body.orgCode,
 				},
 				userId,
 				organizationCode,

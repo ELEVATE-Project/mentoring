@@ -13,7 +13,7 @@ const sessionService = require('@services/sessions')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const utils = require('@generics/utils')
 const kafkaCommunication = require('@generics/kafka-communication')
-const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const entityTypeQueries = require('@database/queries/entityType')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
@@ -22,6 +22,22 @@ const mentorService = require('@services/mentors')
 const mentorQueries = require('@database/queries/mentorExtension')
 const schedulerRequest = require('@requests/scheduler')
 const communicationHelper = require('@helpers/communications')
+
+const defaults = await getDefaults()
+if (!defaults.orgCode) {
+	return responses.failureResponse({
+		message: 'DEFAULT_ORG_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
+}
+if (!defaults.tenantCode) {
+	return responses.failureResponse({
+		message: 'DEFAULT_TENANT_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
+}
 
 module.exports = class requestSessionsHelper {
 	static async checkConnectionRequestExists(userId, targetUserId, tenantCode) {
@@ -253,19 +269,21 @@ module.exports = class requestSessionsHelper {
 			let oppositeUserDetails = await userExtensionQueries.getUsersByUserIds(
 				oppositeUserIds,
 				{
-					attributes: ['user_id', 'image', 'name', 'experience', 'designation', 'organization_id'],
+					attributes: ['user_id', 'image', 'name', 'experience', 'designation', 'organization_code'],
 				},
 				tenantCode
 			)
 
-			const uniqueOrgIds = [...new Set(oppositeUserDetails.map((u) => u.organization_id))]
+			const uniqueOrgCodes = [...new Set(oppositeUserDetails.map((u) => u.organization_code))]
 			const modelName = await userExtensionQueries.getModelName()
 
 			oppositeUserDetails = await entityTypeService.processEntityTypesToAddValueLabels(
 				oppositeUserDetails,
-				uniqueOrgIds,
+				uniqueOrgCodes,
 				modelName,
-				'organization_id'
+				'organization_code',
+				[],
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
 
 			const userDetailsMap = Object.fromEntries(oppositeUserDetails.map((u) => [u.user_id, u]))
@@ -502,11 +520,11 @@ module.exports = class requestSessionsHelper {
 			if (templateCode) {
 				emailForAcceptAndReject(
 					templateCode,
-					orgId.toString(),
+					{ [Op.in]: [orgCode, defaults.orgCode] },
 					getRequestSessionDetails.requestor_id,
 					mentorUserId,
 					'',
-					tenantCode,
+					{ [Op.in]: [tenantCode, defaults.tenantCode] },
 					true
 				)
 			}
@@ -534,7 +552,7 @@ module.exports = class requestSessionsHelper {
 	 * @param {string} organization_code - the code of the user organization.
 	 * @returns {Promise<Object>} A success response indicating the request was rejected.
 	 */
-	static async reject(bodyData, userId, orgId, tenantCode) {
+	static async reject(bodyData, userId, orgCode, tenantCode) {
 		try {
 			// Fetch session request details
 			const getRequestSessionDetails = await sessionRequestQueries.findOneRequest(
@@ -569,7 +587,7 @@ module.exports = class requestSessionsHelper {
 			const templateCode = process.env.MENTOR_REJECT_SESSION_REQUEST_EMAIL_TEMPLATE
 			emailForAcceptAndReject(
 				templateCode,
-				orgId.toString(),
+				{ [Op.in]: [tenantCode, defaults.tenantCode] },
 				rejectedData[0].dataValues.requestor_id,
 				userId,
 				bodyData.reason,
@@ -601,15 +619,6 @@ module.exports = class requestSessionsHelper {
 		try {
 			const requestSessions = await sessionRequestQueries.getRequestSessions(requestSessionId, tenantCode)
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId) {
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
-
 			const targetUserId =
 				userId === requestSessions.requestee_id ? requestSessions.requestor_id : requestSessions.requestee_id
 
@@ -621,7 +630,7 @@ module.exports = class requestSessionsHelper {
 						'name',
 						'user_id',
 						'mentee_visibility',
-						'organization_id',
+						'organization_code',
 						'designation',
 						'area_of_expertise',
 						'education_qualification',
@@ -650,12 +659,12 @@ module.exports = class requestSessionsHelper {
 			// Fetch entity types associated with the user
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [userDetails.organization_id, defaultOrgId],
+				organization_code: {
+					[Op.in]: [userDetails.organization_code, defaults.orgCode],
 				},
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			})
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_id)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_code)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
 
 			if (!requestSessions) {
@@ -798,7 +807,7 @@ function createMentorAvailabilityResponse(data) {
 
 async function emailForAcceptAndReject(
 	templateCode,
-	orgId,
+	orgCode,
 	requestor_id,
 	mentorUserId,
 	rejectReason = '',
@@ -821,7 +830,11 @@ async function emailForAcceptAndReject(
 	emailTemplateCode = templateCode
 
 	// send mail to mentors on session creation if session created by manager
-	const templateData = await notificationQueries.findOneEmailTemplate(emailTemplateCode, orgId, tenantCode)
+	const templateData = await notificationQueries.findOneEmailTemplate(
+		emailTemplateCode,
+		{ [Op.in]: [orgCode, defaults.orgCode] },
+		{ [Op.in]: [tenantCode, defaults.tenantCode] }
+	)
 
 	// If template data is available. create mail data and push to kafka
 	if (templateData) {

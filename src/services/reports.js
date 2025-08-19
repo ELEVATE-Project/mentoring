@@ -18,6 +18,22 @@ const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const fileUploadPath = require('@helpers/uploadFileToCloud')
 const { Op } = require('sequelize')
 
+const defaults = await getDefaults()
+if (!defaults.orgCode) {
+	return responses.failureResponse({
+		message: 'DEFAULT_ORG_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
+}
+if (!defaults.tenantCode) {
+	return responses.failureResponse({
+		message: 'DEFAULT_TENANT_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
+}
+
 module.exports = class ReportsHelper {
 	/**
 	 * Get Entity Types for Reports
@@ -42,8 +58,9 @@ module.exports = class ReportsHelper {
 			let tenantCodes = []
 			const organizations = await getOrgIdAndEntityTypes.getOrganizationIdBasedOnPolicy(
 				tokenInformation.id,
-				tokenInformation.organization_id,
-				filter_type
+				tokenInformation.organization_code,
+				filter_type,
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
 
 			if (organizations.success && organizations.result.length > 0) {
@@ -123,7 +140,7 @@ module.exports = class ReportsHelper {
 	 * @method
 	 * @name getReportData
 	 * @param {String} userId - ID of the user requesting the report.
-	 * @param {String} orgId - ID of the organization.
+	 * @param {String} orgCode - ID of the organization.
 	 * @param {Number} page - Page number for pagination.
 	 * @param {Number} limit - Number of items per page.
 	 * @param {String} reportCode - Code identifying the report type.
@@ -142,7 +159,7 @@ module.exports = class ReportsHelper {
 
 	static async getReportData(
 		userId,
-		orgId, //token id
+		orgCode, //token id
 		page,
 		limit,
 		reportCode,
@@ -164,10 +181,9 @@ module.exports = class ReportsHelper {
 	) {
 		try {
 			// Validate report permissions
-			const reportPermission = await reportMappingQueries.findReportRoleMappingByReportCode(
-				reportCode,
-				tenantCode
-			)
+			const reportPermission = await reportMappingQueries.findReportRoleMappingByReportCode(reportCode, {
+				[Op.in]: [tenantCode, defaults.tenantCode],
+			})
 			if (!reportPermission || reportPermission.dataValues.role_title !== reportRole) {
 				return responses.failureResponse({
 					message: 'REPORT_CODE_NOT_FOUND',
@@ -176,23 +192,15 @@ module.exports = class ReportsHelper {
 				})
 			}
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-
 			let reportConfig
 
 			// Fetch report configuration for the given organization ID
 			const reportConfigWithOrgId = await reportsQueries.findReport(
 				{
 					code: reportCode,
-					organization_id: orgId,
+					organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
 				},
-				tenantCode
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
 			if (reportConfigWithOrgId.length > 0) {
 				reportConfig = reportConfigWithOrgId
@@ -201,9 +209,9 @@ module.exports = class ReportsHelper {
 				const reportConfigWithDefaultOrgId = await reportsQueries.findReport(
 					{
 						code: reportCode,
-						organization_id: defaultOrgId,
+						organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
 					},
-					tenantCode
+					{ [Op.in]: [tenantCode, defaults.tenantCode] }
 				)
 				reportConfig = reportConfigWithDefaultOrgId
 			}
@@ -213,9 +221,9 @@ module.exports = class ReportsHelper {
 			const reportQueryWithOrgId = await reportQueryQueries.findReportQueries(
 				{
 					report_code: reportCode,
-					organization_id: orgId,
+					organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
 				},
-				tenantCode
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
 
 			if (reportQueryWithOrgId.length > 0) {
@@ -224,9 +232,9 @@ module.exports = class ReportsHelper {
 				const reportQueryWithDefaultOrgId = await reportQueryQueries.findReportQueries(
 					{
 						report_code: reportCode,
-						organization_id: defaultOrgId,
+						organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
 					},
-					tenantCode
+					{ [Op.in]: [tenantCode, defaults.tenantCode] }
 				)
 				reportQuery = reportQueryWithDefaultOrgId
 			}
@@ -411,10 +419,13 @@ module.exports = class ReportsHelper {
 
 				const sessionModelName = await sessionQueries.getModelName()
 				let entityTypesDataWithPagination = await getOrgIdAndEntityTypes.getEntityTypeWithEntitiesBasedOnOrg(
-					orgId,
+					orgCode,
 					'',
-					defaultOrgId ? defaultOrgId : '',
-					sessionModelName
+					defaults.orgCode ? defaults.orgCode : '',
+					sessionModelName,
+					{},
+					tenantCode,
+					defaults.tenantCode
 				)
 
 				if (reportDataResult.report_type === common.REPORT_TABLE && resultWithoutPagination) {
@@ -443,10 +454,13 @@ module.exports = class ReportsHelper {
 						)
 
 						let entityTypeFilters = await getOrgIdAndEntityTypes.getEntityTypeWithEntitiesBasedOnOrg(
-							orgId,
+							orgCode,
 							ExtractFilterAndEntityTypesKeys.entityType,
-							defaultOrgId ? defaultOrgId : '',
-							sessionModelName
+							defaults.orgCode ? defaults.orgCode : '',
+							sessionModelName,
+							{},
+							tenantCode,
+							defaults.tenantCode
 						)
 
 						const filtersEntity = entityTypeFilters.result.reduce((acc, item) => {
@@ -470,10 +484,13 @@ module.exports = class ReportsHelper {
 
 					if (downloadCsv === 'true') {
 						let entityTypesData = await getOrgIdAndEntityTypes.getEntityTypeWithEntitiesBasedOnOrg(
-							orgId,
+							orgCode,
 							'',
-							defaultOrgId ? defaultOrgId : '',
-							sessionModelName
+							defaults.orgCode ? defaults.orgCode : '',
+							sessionModelName,
+							{},
+							tenantCode,
+							defaults.tenantCode
 						)
 
 						// Process the data
@@ -496,7 +513,7 @@ module.exports = class ReportsHelper {
 							)
 						)
 
-						const outputFilePath = await this.generateAndUploadCSV(transformedResult, userId, orgId)
+						const outputFilePath = await this.generateAndUploadCSV(transformedResult, userId, orgCode)
 						reportDataResult.reportsDownloadUrl = await utils.getDownloadableUrl(outputFilePath)
 						utils.clearFile(outputFilePath)
 					}
@@ -612,14 +629,14 @@ module.exports = class ReportsHelper {
 	/**
 	 * Generates and uploads a CSV from the provided data.
 	 */
-	static async generateAndUploadCSV(data, userId, orgId) {
+	static async generateAndUploadCSV(data, userId, orgCode) {
 		const outputFileName = utils.generateFileName(common.reportOutputFile, common.csvExtension)
 		const csvData = await utils.generateCSVContent(data)
 		const outputFilePath = path.join(inviteeFileDir, outputFileName)
 		fs.writeFileSync(outputFilePath, csvData)
 
 		const outputFilename = path.basename(outputFilePath)
-		const uploadRes = await fileUploadPath.uploadFileToCloud(outputFilename, inviteeFileDir, userId, orgId)
+		const uploadRes = await fileUploadPath.uploadFileToCloud(outputFilename, inviteeFileDir, userId, orgCode)
 		return uploadRes.result.uploadDest
 	}
 }

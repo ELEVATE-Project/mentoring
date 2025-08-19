@@ -16,7 +16,7 @@ const ProjectRootDir = path.join(__dirname, '../')
 const fileUploadQueries = require('@database/queries/fileUpload')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
 const kafkaCommunication = require('@generics/kafka-communication')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const sessionQueries = require('@database/queries/sessions')
 const entityTypeQueries = require('@database/queries/entityType')
 const { Op } = require('sequelize')
@@ -24,6 +24,22 @@ const moment = require('moment')
 const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const uploadToCloud = require('@helpers/uploadFileToCloud')
+
+const defaults = await getDefaults()
+if (!defaults.orgCode) {
+	return responses.failureResponse({
+		message: 'DEFAULT_ORG_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
+}
+if (!defaults.tenantCode) {
+	return responses.failureResponse({
+		message: 'DEFAULT_TENANT_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
+}
 
 module.exports = class UserInviteHelper {
 	static async uploadSession(data) {
@@ -400,7 +416,7 @@ module.exports = class UserInviteHelper {
 		return { ...restOfSession, custom_entities }
 	}
 
-	static async processSession(session, userId, orgId, validRowsCount, invalidRowsCount) {
+	static async processSession(session, userId, orgCode, validRowsCount, invalidRowsCount) {
 		const requiredFields = [
 			'action',
 			'title',
@@ -547,19 +563,12 @@ module.exports = class UserInviteHelper {
 				)
 			}
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
 			const sessionModelName = await sessionQueries.getModelName()
 
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [orgId, defaultOrgId],
+				organization_code: {
+					[Op.in]: [orgCode, defaults.orgCode],
 				},
 				model_names: { [Op.contains]: [sessionModelName] },
 			})
@@ -784,22 +793,18 @@ module.exports = class UserInviteHelper {
 
 			await this.fetchMentorIds(sessionCreationOutput)
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
 			const sessionModelName = await sessionQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [orgId, defaultOrgId],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [orgCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				model_names: { [Op.contains]: [sessionModelName] },
-			})
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,
 				entities: item.entities,

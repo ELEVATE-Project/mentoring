@@ -25,7 +25,7 @@ const userRequests = require('@requests/user')
 const utils = require('@generics/utils')
 const bigBlueButtonService = require('./bigBlueButton')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
-const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const menteeService = require('@services/mentees')
 const { updatedDiff } = require('deep-object-diff')
@@ -238,7 +238,7 @@ module.exports = class SessionsHelper {
 			})
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgCode)
 			bodyData.status = common.PUBLISHED_STATUS
 			let res = utils.validateInput(bodyData, validationData, sessionModelName, skipValidation)
 			if (!res.success) {
@@ -322,7 +322,7 @@ module.exports = class SessionsHelper {
 			}
 
 			if (bodyData?.resources) {
-				await this.addResources(bodyData.resources, loggedInUserId, data.id)
+				await this.addResources(bodyData.resources, loggedInUserId, data.id, tenantCode)
 				if (notifyUser) {
 					const sessionAttendees = await sessionAttendeesQueries.findAll(
 						{
@@ -350,7 +350,11 @@ module.exports = class SessionsHelper {
 
 					let resourceTemplate = process.env.RESOURCE_ADD_EMAIL_TEMPLATE_CODE
 					// This is the template used to send email to session mentees when resource added
-					let templateData = await notificationQueries.findOneEmailTemplate(resourceTemplate, orgId)
+					let templateData = await notificationQueries.findOneEmailTemplate(
+						resourceTemplate,
+						{ [Op.in]: [orgCode, defaults.orgCode] },
+						{ [Op.in]: [tenantCode, defaults.tenantCode] }
+					)
 
 					sessionAttendees.forEach(async (attendee) => {
 						const payload = {
@@ -426,7 +430,11 @@ module.exports = class SessionsHelper {
 					emailTemplateCode = process.env.MENTOR_PUBLIC_SESSION_INVITE_BY_MANAGER_EMAIL_TEMPLATE
 				}
 				// send mail to mentors on session creation if session created by manager
-				const templateData = await notificationQueries.findOneEmailTemplate(emailTemplateCode, orgId)
+				const templateData = await notificationQueries.findOneEmailTemplate(
+					emailTemplateCode,
+					{ [Op.in]: [orgCode, defaults.orgCode] },
+					{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				)
 
 				// If template data is available. create mail data and push to kafka
 				if (templateData) {
@@ -634,16 +642,19 @@ module.exports = class SessionsHelper {
 
 			const sessionModelName = await sessionQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [orgCode, defaults.orgCode],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [orgCode, defaults.orgCode],
+					},
+					tenant_code: {
+						[Op.in]: [tenantCode, defaults.tenantCode],
+					},
+					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				tenant_code: {
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				},
-				model_names: { [Op.contains]: [sessionModelName] },
-			})
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			if (bodyData.status == common.VALID_STATUS) {
@@ -766,7 +777,7 @@ module.exports = class SessionsHelper {
 					}
 				}
 				if (bodyData?.resources) {
-					await this.addResources(bodyData.resources, userId, sessionId)
+					await this.addResources(bodyData.resources, userId, sessionId, tenantCode)
 
 					bodyData.resources.forEach((element) => {
 						if (element.type === common.SESSION_PRE_RESOURCE_TYPE) {
@@ -905,37 +916,55 @@ module.exports = class SessionsHelper {
 					// isSessionCreatedByManager
 					// 	? (sessionDeleteEmailTemplate = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE)
 					// 	: (sessionDeleteEmailTemplate = process.env.MENTOR_SESSION_DELETE_EMAIL_TEMPLATE)
-					templateData = await notificationQueries.findOneEmailTemplate(sessionDeleteEmailTemplate, orgId)
+					templateData = await notificationQueries.findOneEmailTemplate(
+						sessionDeleteEmailTemplate,
+						{ [Op.in]: [orgCode, defaults.orgCode] },
+						{ [Op.in]: [tenantCode, defaults.tenantCode] }
+					)
 					mentorEmailTemplate = sessionDeleteEmailTemplate
 				} else if (isSessionReschedule && !isSessionCreatedByManager) {
 					templateData = await notificationQueries.findOneEmailTemplate(
 						process.env.MENTOR_SESSION_RESCHEDULE_EMAIL_TEMPLATE,
-						orgId
+						{ [Op.in]: [orgCode, defaults.orgCode] },
+						{ [Op.in]: [tenantCode, defaults.tenantCode] }
 					)
 				} else if (isSessionDataChanged && notifyUser) {
 					// session is edited by the manager
 					// if only title is changed. then a different email has to send to mentor and mentees
 					let sessionUpdateByMangerTemplate = process.env.MENTEE_SESSION_EDITED_BY_MANAGER_EMAIL_TEMPLATE
 					// This is the template used to send email to session mentees when it is edited
-					templateData = await notificationQueries.findOneEmailTemplate(sessionUpdateByMangerTemplate, orgId)
+					templateData = await notificationQueries.findOneEmailTemplate(
+						sessionUpdateByMangerTemplate,
+						{ [Op.in]: [orgCode, defaults.orgCode] },
+						{ [Op.in]: [tenantCode, defaults.tenantCode] }
+					)
 					// This is the email template code we have to use to send email to mentor of a session
 					mentorEmailTemplate = process.env.MENTOR_SESSION_EDITED_BY_MANAGER_EMAIL_TEMPLATE
 				}
 
 				if (preResourceSendEmail) {
 					let preResourceTemplate = process.env.PRE_RESOURCE_EMAIL_TEMPLATE_CODE
-					preOrPostEmailTemplate = await notificationQueries.findOneEmailTemplate(preResourceTemplate, orgId)
+					preOrPostEmailTemplate = await notificationQueries.findOneEmailTemplate(
+						preResourceTemplate,
+						{ [Op.in]: [orgCode, defaults.orgCode] },
+						{ [Op.in]: [tenantCode, defaults.tenantCode] }
+					)
 				}
 				if (postResourceSendEmail) {
 					let postResourceTemplate = process.env.POST_RESOURCE_EMAIL_TEMPLATE_CODE
-					preOrPostEmailTemplate = await notificationQueries.findOneEmailTemplate(postResourceTemplate, orgId)
+					preOrPostEmailTemplate = await notificationQueries.findOneEmailTemplate(
+						postResourceTemplate,
+						{ [Op.in]: [orgCode, defaults.orgCode] },
+						{ [Op.in]: [tenantCode, defaults.tenantCode] }
+					)
 				}
 
 				if (mentorUpdated) {
 					let mentorChangedTemplateName = process.env.SESSION_MENTOR_CHANGED_EMAIL_TEMPLATE
 					mentorChangedTemplate = await notificationQueries.findOneEmailTemplate(
 						mentorChangedTemplateName,
-						orgId
+						{ [Op.in]: [orgCode, defaults.orgCode] },
+						{ [Op.in]: [tenantCode, defaults.tenantCode] }
 					)
 				}
 
@@ -1179,7 +1208,7 @@ module.exports = class SessionsHelper {
 				) {
 					let response = await this.pushSessionRelatedMentorEmailToKafka(
 						mentorEmailTemplate,
-						orgId,
+						orgCode,
 						sessionDetail,
 						updatedSessionData,
 						method,
@@ -1208,7 +1237,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- Session details
 	 */
 
-	static async details(id, userId = '', isAMentor = '', queryParams, roles, orgId, tenantCode) {
+	static async details(id, userId = '', isAMentor = '', queryParams, roles, orgCode, tenantCode) {
 		try {
 			let filter = {}
 			if (utils.isNumeric(id)) {
@@ -1245,9 +1274,9 @@ module.exports = class SessionsHelper {
 						ruleType: common.DEFAULT_RULES.SESSION_TYPE,
 						requesterId: userId,
 						roles: roles,
-						requesterOrganizationId: orgId,
+						requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
 						data: sessionDetails,
-						tenantCode: tenantCode,
+						tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 					})
 				}
 				if (validateDefaultRules?.error && validateDefaultRules?.error?.missingField) {
@@ -1363,21 +1392,13 @@ module.exports = class SessionsHelper {
 			sessionDetails.mentor_name = mentorExtension ? mentorExtension.name : common.USER_NOT_FOUND
 			sessionDetails.mentor_designation = []
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-
 			// Prepare unique orgIds
 			const orgIds = [
 				...new Set(
 					[
 						sessionAccessorDetails.organization_id,
 						sessionDetails.mentor_organization_id,
-						defaultOrgId,
+						defaults.orgCode,
 					].filter(Boolean)
 				),
 			]
@@ -1406,13 +1427,16 @@ module.exports = class SessionsHelper {
 
 			sessionDetails['resources'] = await this.getResources(sessionDetails.id)
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [sessionDetails.mentor_organization_id, defaultOrgId],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [sessionDetails.mentor_organization_id, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				model_names: { [Op.contains]: [sessionModelName] },
-			})
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, sessionDetails.mentor_organization_id)
@@ -2902,7 +2926,7 @@ module.exports = class SessionsHelper {
 	 */
 	static async pushSessionRelatedMentorEmailToKafka(
 		templateCode,
-		orgId,
+		orgCode,
 		sessionDetail,
 		updatedSessionDetails,
 		method,
@@ -2932,7 +2956,11 @@ module.exports = class SessionsHelper {
 				)
 				oldSessionDuration = duration.asMinutes()
 			}
-			const templateData = await notificationQueries.findOneEmailTemplate(templateCode, orgId)
+			const templateData = await notificationQueries.findOneEmailTemplate(
+				templateCode,
+				{ [Op.in]: [orgCode, defaults.orgCode] },
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+			)
 
 			// Construct data
 			const payload = {
@@ -3037,7 +3065,7 @@ module.exports = class SessionsHelper {
 			const successIds = []
 
 			const enrollPromises = menteeDetails.map((menteeData) => {
-				return this.unEnroll(sessionId, menteeData, false, sessionDetails)
+				return this.unEnroll(sessionId, menteeData, false, sessionDetails, tenantCode)
 					.then((response) => {
 						if (response.statusCode == httpStatusCode.accepted) {
 							// Unerolled successfully
@@ -3370,11 +3398,11 @@ module.exports = class SessionsHelper {
 		}
 	}
 
-	static async removeAllSessions(criteria, userId, organizationId, tenantCode) {
+	static async removeAllSessions(criteria, userId, organisationCode, tenantCode) {
 		try {
 			const results = criteria.mentorIds
 				? await this.#removeSessionsByMentorIds(criteria.mentorIds, tenantCode)
-				: await this.#removeSessionsByOrgId(criteria.orgId, tenantCode)
+				: await this.#removeSessionsByOrgCode(criteria.orgCode, tenantCode)
 
 			const successfulMentorIds = []
 			const failedMentorIds = []
@@ -3407,21 +3435,21 @@ module.exports = class SessionsHelper {
 	static async #removeSessionsByMentorIds(mentorIds, tenantCode) {
 		return Promise.allSettled(
 			mentorIds.map(async (mentorId) => {
-				const mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_id'], tenantCode)
+				const mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
 				if (!mentor) throw new MentorError('Invalid Mentor Id', { mentorId })
 
 				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentorId, tenantCode)
-				await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail, mentor.organization_id)
+				await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail, mentor.organization_code)
 				return mentorId
 			})
 		)
 	}
 
-	static async #removeSessionsByOrgId(orgId, tenantCode) {
+	static async #removeSessionsByOrgCode(orgCode, tenantCode) {
 		const mentors = await mentorQueries.getAllMentors(
 			{
-				where: { organization_id: orgId },
-				attributes: ['user_id', 'organization_id'],
+				where: { organization_code: orgCode },
+				attributes: ['user_id', 'organization_code'],
 			},
 			tenantCode
 		)
@@ -3432,24 +3460,24 @@ module.exports = class SessionsHelper {
 					mentor.user_id,
 					tenantCode
 				)
-				await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail, mentor.organization_id)
+				await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail, mentor.organization_code)
 				return mentor.user_id
 			})
 		)
 	}
 
-	static async addResources(data, userId, sessionId) {
+	static async addResources(data, userId, sessionId, tenantCode) {
 		let resoucesList = []
 		data.map((resource) => {
 			resource['created_by'] = userId
 			resource['updated_by'] = userId
 			resource['session_id'] = sessionId
 		})
-		let resourceInfo = await resourceQueries.bulkCreate(data)
+		let resourceInfo = await resourceQueries.bulkCreate(data, tenantCode)
 		return resourceInfo
 	}
 	static async getResources(sessionId) {
-		let resourceInfo = await resourceQueries.find({ session_id: sessionId })
+		let resourceInfo = await resourceQueries.find({ session_id: sessionId }, tenantCode)
 
 		if (resourceInfo && resourceInfo.length > 0) {
 			await Promise.all(

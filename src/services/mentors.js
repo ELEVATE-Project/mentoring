@@ -72,7 +72,7 @@ module.exports = class MentorsHelper {
 					allow_filtering: true,
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				tenantCode
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
 
 			if (!orgCode) {
@@ -88,7 +88,7 @@ module.exports = class MentorsHelper {
 				requesterId: menteeUserId,
 				roles: roles,
 				requesterOrganizationCode: orgCode,
-				tenantCode: tenantCode,
+				tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 			})
 
 			if (defaultRuleFilter.error && defaultRuleFilter.error.missingField) {
@@ -110,6 +110,7 @@ module.exports = class MentorsHelper {
 				search,
 				id,
 				filteredQuery,
+				tenantCode,
 				saasFilter,
 				defaultRuleFilter
 			)
@@ -224,19 +225,22 @@ module.exports = class MentorsHelper {
 			const totalSessionsCreated = await sessionQueries.getCreatedSessionsCountInDateRange(
 				userId,
 				filterStartDate.toISOString(),
-				filterEndDate.toISOString()
+				filterEndDate.toISOString(),
+				tenantCode
 			)
 
 			const totalSessionsAssigned = await sessionQueries.getAssignedSessionsCountInDateRange(
 				userId,
 				filterStartDate.toISOString(),
-				filterEndDate.toISOString()
+				filterEndDate.toISOString(),
+				tenantCode
 			)
 
 			const totalSessionsHosted = await sessionQueries.getHostedSessionsCountInDateRange(
 				userId,
 				Date.parse(filterStartDate) / 1000, // Converts milliseconds to seconds
-				Date.parse(filterEndDate) / 1000
+				Date.parse(filterEndDate) / 1000,
+				tenantCode
 			)
 
 			const result = {
