@@ -10,19 +10,6 @@ const httpStatusCode = require('@generics/http-status')
 const { Op } = require('sequelize')
 const { UniqueConstraintError } = require('sequelize')
 
-const defaults = await getDefaults()
-if (!defaults.orgCode)
-	return responses.failureResponse({
-		message: 'DEFAULT_ORG_CODE_NOT_SET',
-		statusCode: httpStatusCode.bad_request,
-		responseCode: 'CLIENT_ERROR',
-	})
-if (!defaults.tenantCode)
-	return responses.failureResponse({
-		message: 'DEFAULT_TENANT_CODE_NOT_SET',
-		statusCode: httpStatusCode.bad_request,
-		responseCode: 'CLIENT_ERROR',
-	})
 module.exports = class DefaultRuleHelper {
 	/**
 	 * Validates the target and requester fields in the body data.
@@ -131,6 +118,19 @@ module.exports = class DefaultRuleHelper {
 		bodyData.requester_field = bodyData.requester_field.toLowerCase()
 
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			const validation = await this.validateFields(defaults.orgCode, bodyData, defaults.tenantCode)
 
 			if (!validation.isValid) {
@@ -179,6 +179,19 @@ module.exports = class DefaultRuleHelper {
 		bodyData.requester_field = bodyData.requester_field.toLowerCase()
 
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			const validation = await this.validateFields(defaults.orgCode, bodyData, defaults.tenantCode)
 
 			if (!validation.isValid) {
@@ -234,6 +247,19 @@ module.exports = class DefaultRuleHelper {
 	 */
 	static async readAll(orgCode, tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			const defaultRules = await defaultRuleQueries.findAndCountAll({
 				organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
 				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
@@ -262,6 +288,19 @@ module.exports = class DefaultRuleHelper {
 	 */
 	static async readOne(ruleId, orgCode, tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			const defaultRule = await defaultRuleQueries.findOne({
 				id: ruleId,
 				organization_code: { [Op.in]: [orgCode, defaults.orgCode] },

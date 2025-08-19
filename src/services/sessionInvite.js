@@ -25,22 +25,6 @@ const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const uploadToCloud = require('@helpers/uploadFileToCloud')
 
-const defaults = await getDefaults()
-if (!defaults.orgCode) {
-	return responses.failureResponse({
-		message: 'DEFAULT_ORG_CODE_NOT_SET',
-		statusCode: httpStatusCode.bad_request,
-		responseCode: 'CLIENT_ERROR',
-	})
-}
-if (!defaults.tenantCode) {
-	return responses.failureResponse({
-		message: 'DEFAULT_TENANT_CODE_NOT_SET',
-		statusCode: httpStatusCode.bad_request,
-		responseCode: 'CLIENT_ERROR',
-	})
-}
-
 module.exports = class UserInviteHelper {
 	static async uploadSession(data) {
 		return new Promise(async (resolve, reject) => {
@@ -565,6 +549,22 @@ module.exports = class UserInviteHelper {
 
 			const sessionModelName = await sessionQueries.getModelName()
 
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
 				organization_code: {
@@ -794,6 +794,22 @@ module.exports = class UserInviteHelper {
 			await this.fetchMentorIds(sessionCreationOutput)
 
 			const sessionModelName = await sessionQueries.getModelName()
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
 				{

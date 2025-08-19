@@ -23,22 +23,6 @@ const mentorQueries = require('@database/queries/mentorExtension')
 const schedulerRequest = require('@requests/scheduler')
 const communicationHelper = require('@helpers/communications')
 
-const defaults = await getDefaults()
-if (!defaults.orgCode) {
-	return responses.failureResponse({
-		message: 'DEFAULT_ORG_CODE_NOT_SET',
-		statusCode: httpStatusCode.bad_request,
-		responseCode: 'CLIENT_ERROR',
-	})
-}
-if (!defaults.tenantCode) {
-	return responses.failureResponse({
-		message: 'DEFAULT_TENANT_CODE_NOT_SET',
-		statusCode: httpStatusCode.bad_request,
-		responseCode: 'CLIENT_ERROR',
-	})
-}
-
 module.exports = class requestSessionsHelper {
 	static async checkConnectionRequestExists(userId, targetUserId, tenantCode) {
 		const connectionRequest = await connectionQueries.findOneRequest(userId, targetUserId, tenantCode)
@@ -276,6 +260,20 @@ module.exports = class requestSessionsHelper {
 
 			const uniqueOrgCodes = [...new Set(oppositeUserDetails.map((u) => u.organization_code))]
 			const modelName = await userExtensionQueries.getModelName()
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 
 			oppositeUserDetails = await entityTypeService.processEntityTypesToAddValueLabels(
 				oppositeUserDetails,
@@ -515,6 +513,19 @@ module.exports = class requestSessionsHelper {
 				)
 			}
 
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			// Send Email
 			const templateCode = process.env.MENTOR_ACCEPT_SESSION_REQUEST_EMAIL_TEMPLATE
 			if (templateCode) {
@@ -583,6 +594,20 @@ module.exports = class requestSessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 
 			const templateCode = process.env.MENTOR_REJECT_SESSION_REQUEST_EMAIL_TEMPLATE
 			emailForAcceptAndReject(
@@ -656,6 +681,19 @@ module.exports = class requestSessionsHelper {
 				userDetails.image = imageData?.result
 			}
 
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			// Fetch entity types associated with the user
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
@@ -828,7 +866,19 @@ async function emailForAcceptAndReject(
 
 	//assign template data
 	emailTemplateCode = templateCode
-
+	const defaults = await getDefaults()
+	if (!defaults.orgCode)
+		return responses.failureResponse({
+			message: 'DEFAULT_ORG_CODE_NOT_SET',
+			statusCode: httpStatusCode.bad_request,
+			responseCode: 'CLIENT_ERROR',
+		})
+	if (!defaults.tenantCode)
+		return responses.failureResponse({
+			message: 'DEFAULT_TENANT_CODE_NOT_SET',
+			statusCode: httpStatusCode.bad_request,
+			responseCode: 'CLIENT_ERROR',
+		})
 	// send mail to mentors on session creation if session created by manager
 	const templateData = await notificationQueries.findOneEmailTemplate(
 		emailTemplateCode,

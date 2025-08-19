@@ -18,22 +18,6 @@ const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const fileUploadPath = require('@helpers/uploadFileToCloud')
 const { Op } = require('sequelize')
 
-const defaults = await getDefaults()
-if (!defaults.orgCode) {
-	return responses.failureResponse({
-		message: 'DEFAULT_ORG_CODE_NOT_SET',
-		statusCode: httpStatusCode.bad_request,
-		responseCode: 'CLIENT_ERROR',
-	})
-}
-if (!defaults.tenantCode) {
-	return responses.failureResponse({
-		message: 'DEFAULT_TENANT_CODE_NOT_SET',
-		statusCode: httpStatusCode.bad_request,
-		responseCode: 'CLIENT_ERROR',
-	})
-}
-
 module.exports = class ReportsHelper {
 	/**
 	 * Get Entity Types for Reports
@@ -56,6 +40,21 @@ module.exports = class ReportsHelper {
 
 			let organization_codes = []
 			let tenantCodes = []
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
 			const organizations = await getOrgIdAndEntityTypes.getOrganizationIdBasedOnPolicy(
 				tokenInformation.id,
 				tokenInformation.organization_code,
@@ -180,6 +179,19 @@ module.exports = class ReportsHelper {
 		tenantCode
 	) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			// Validate report permissions
 			const reportPermission = await reportMappingQueries.findReportRoleMappingByReportCode(reportCode, {
 				[Op.in]: [tenantCode, defaults.tenantCode],
