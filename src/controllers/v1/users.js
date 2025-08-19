@@ -108,7 +108,7 @@ module.exports = class Users {
 		try {
 			const tenantCode = req.body.tenant_code
 			const organizationCode = req.body.organizations[0].code
-			const userId = req.decodedToken.id
+			const userId = req.body.id
 
 			return await userService.add(req.body, userId, organizationCode, tenantCode)
 		} catch (error) {
@@ -127,9 +127,9 @@ module.exports = class Users {
 	 */
 	async update(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
+			const tenantCode = req.body.tenant_code
+			const organizationCode = req.body.organizations[0].code
+			const userId = req.body.id
 
 			return await userService.update(req.body, req.decodedToken, userId, organizationCode, tenantCode)
 		} catch (error) {
@@ -150,8 +150,6 @@ module.exports = class Users {
 	async delete(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			return await adminService.userDelete(req.body.id.toString(), tenantCode)
 		} catch (error) {
