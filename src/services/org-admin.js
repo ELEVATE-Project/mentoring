@@ -14,7 +14,7 @@ const _ = require('lodash')
 const questionSetQueries = require('../database/queries/question-set')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 module.exports = class OrgAdminService {
 	/**
