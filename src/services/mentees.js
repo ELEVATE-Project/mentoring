@@ -15,7 +15,7 @@ const bigBlueButtonService = require('./bigBlueButton')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const orgAdminService = require('@services/org-admin')
 const mentorQueries = require('@database/queries/mentorExtension')
-const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const entityTypeService = require('@services/entity-type')
@@ -828,13 +828,6 @@ module.exports = class MenteesHelper {
 			data.user_id = userId
 			data.organization_code = organizationCode
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
 			const defaults = await getDefaults()
 			if (!defaults.orgCode)
 				return responses.failureResponse({
@@ -920,7 +913,7 @@ module.exports = class MenteesHelper {
 	 * @param {String} organizationId - Organization ID for validation.
 	 * @returns {Promise<Object>} - Updated mentee extension details.
 	 */
-	static async updateMenteeExtension(data, userId, organizationId, tenantCode) {
+	static async updateMenteeExtension(data, userId, organizationCode, tenantCode) {
 		try {
 			// Encrypt email if provided
 			if (data.email) data.email = emailEncryption.encrypt(data.email.toLowerCase())
@@ -949,23 +942,32 @@ module.exports = class MenteesHelper {
 			}
 
 			// Perform validation
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId) {
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			}
+
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
 			const userExtensionsModelName = await menteeQueries.getModelName()
 			const filter = {
 				status: 'ACTIVE',
-				organization_id: { [Op.in]: [organizationId, defaultOrgId] },
+				organization_code: { [Op.in]: [organizationCode, defaults.orgCode] },
+				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
 
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationId)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
 			let res = utils.validateInput(data, validationData, userExtensionsModelName, skipValidation)
 			if (!res.success) {
 				return responses.failureResponse({
@@ -985,9 +987,10 @@ module.exports = class MenteesHelper {
 				//Do a org policy update for the user only if the data object explicitly includes an
 				//organization.id. This is added for the users/update workflow where
 				//both both user data and organisation can change at the same time.
-				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationId: data.organization.id })
+				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: organizationCode })
 				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
 					data.organization.id,
+					organizationCode,
 					userOrgDetails.data.result.name,
 					tenantCode
 				)
@@ -1078,23 +1081,30 @@ module.exports = class MenteesHelper {
 				})
 			}
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
 			const userExtensionsModelName = await menteeQueries.getModelName()
 			const filter = {
 				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [organizationId, defaultOrgId],
-				},
+				organization_code: { [Op.in]: [organizationCode, defaults.orgCode] },
+				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationId)
@@ -1717,7 +1727,7 @@ module.exports = class MenteesHelper {
 		}
 	}
 
-	static async details(id, organizationId, userId = '', isAMentor = '', roles = '', tenantCode) {
+	static async details(id, organizationCode, userId = '', isAMentor = '', roles = '', tenantCode) {
 		try {
 			let requestedUserExtension = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
 			if (!requestedUserExtension || (!isAMentor && requestedUserExtension.is_mentor == false)) {
@@ -1734,7 +1744,7 @@ module.exports = class MenteesHelper {
 					ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 					requesterId: userId,
 					roles: roles,
-					requesterOrganizationId: organizationId,
+					requesterOrganizationCode: organizationCode,
 					data: requestedUserExtension,
 					tenantCode: tenantCode,
 				})
@@ -1778,25 +1788,33 @@ module.exports = class MenteesHelper {
 				'settings',
 			])
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
 			const menteeExtensionsModelName = await menteeQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_id: {
-						[Op.in]: [organizationId, defaultOrgId],
-					},
-					model_names: { [Op.contains]: [menteeExtensionsModelName] },
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
+				status: 'ACTIVE',
+				organization_code: {
+					[Op.in]: [organizationCode, defaults.orgCode],
 				},
-				tenantCode
-			)
+				tenant_code: {
+					[Op.in]: [tenantCode, defaults.tenantCode],
+				},
+				model_names: { [Op.contains]: [menteeExtensionsModelName] },
+			})
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationId)
@@ -1809,12 +1827,12 @@ module.exports = class MenteesHelper {
 			const connection = await connectionQueries.getConnection(userId, id)
 
 			const orgDetails = await organisationExtensionQueries.findOne(
-				{ organization_id: organizationId },
+				{ organization_code: organizationCode },
 				tenantCode,
-				{ attributes: ['name'] }
+				{ attributes: ['name', 'organization_code', 'organization_id'] }
 			)
 			processDbResponse['organization'] = {
-				id: organizationId,
+				id: orgDetails.organization_id,
 				name: orgDetails.name,
 			}
 

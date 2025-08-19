@@ -26,7 +26,7 @@ module.exports = class UserHelper {
 			}
 
 			// Fallback to DB if no cached data found
-			const entities = await entityTypeQueries.findAllEntityTypes(orgIds, attributes)
+			const entities = await entityTypeQueries.findAllEntityTypes(orgIds, tenantCode, attributes)
 			return entities || null
 		} catch (err) {
 			console.error('Error in findAllEntityTypes:', err)

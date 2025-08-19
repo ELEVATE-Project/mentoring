@@ -13,7 +13,7 @@ const sessionQueries = require('@database/queries/sessions')
 const entityTypeQueries = require('@database/queries/entityType')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const orgAdminService = require('@services/org-admin')
-const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const moment = require('moment')
@@ -384,13 +384,6 @@ module.exports = class MentorsHelper {
 			data.user_id = userId
 			data.organization_code = orgCode
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
 			const defaults = await getDefaults()
 			if (!defaults.orgCode)
 				return responses.failureResponse({
@@ -473,7 +466,7 @@ module.exports = class MentorsHelper {
 	 * @param {Object} data - Updated mentor extension data excluding user_id.
 	 * @returns {Promise<Object>} - Updated mentor extension details.
 	 */
-	static async updateMentorExtension(data, userId, orgId, tenantCode) {
+	static async updateMentorExtension(data, userId, orgCode, tenantCode) {
 		try {
 			// Fetch current mentee extension data
 			const currentUser = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
@@ -502,10 +495,17 @@ module.exports = class MentorsHelper {
 				}
 			})
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -513,12 +513,15 @@ module.exports = class MentorsHelper {
 
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [orgId, defaultOrgId],
+				organization_code: {
+					[Op.in]: [orgCode, defaults.orgCode],
+				},
+				tenant_code: {
+					[Op.in]: [tenantCode, defaults.tenant_code],
 				},
 				model_names: { [Op.contains]: [mentorExtensionsModelName] },
 			})
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgCode)
 			let mentorExtensionsModel = await mentorQueries.getColumns()
 
 			let res = utils.validateInput(data, validationData, mentorExtensionsModelName, skipValidation)
@@ -537,9 +540,11 @@ module.exports = class MentorsHelper {
 				//Do a org policy update for the user only if the data object explicitly includes an
 				//organization.id. This is added for the users/update workflow where
 				//both both user data and organisation can change at the same time.
-				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationId: data.organization.id })
+				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: orgCode })
 				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
 					data.organization.id,
+					orgCode,
+					tenantCode,
 					userOrgDetails.data.result.name
 				)
 				if (!orgPolicies?.organization_id) {

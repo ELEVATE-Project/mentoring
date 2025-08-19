@@ -190,11 +190,6 @@ let enviromentVariables = {
 		optional: true,
 		default: 'default_code',
 	},
-	DEFAULT_ORG_CODE: {
-		message: 'Required default organization code for migration',
-		optional: true,
-		default: 'DEFAULT_ORG',
-	},
 	REFRESH_VIEW_INTERVAL: {
 		message: 'Interval to refresh views in milliseconds',
 		optional: true,
