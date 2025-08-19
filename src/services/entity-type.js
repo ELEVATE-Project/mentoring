@@ -9,19 +9,6 @@ const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
 
-const defaults = await getDefaults()
-if (!defaults.orgCode)
-	return responses.failureResponse({
-		message: 'DEFAULT_ORG_CODE_NOT_SET',
-		statusCode: httpStatusCode.bad_request,
-		responseCode: 'CLIENT_ERROR',
-	})
-if (!defaults.tenantCode)
-	return responses.failureResponse({
-		message: 'DEFAULT_TENANT_CODE_NOT_SET',
-		statusCode: httpStatusCode.bad_request,
-		responseCode: 'CLIENT_ERROR',
-	})
 module.exports = class EntityHelper {
 	/**
 	 * Create entity type.
@@ -125,6 +112,19 @@ module.exports = class EntityHelper {
 	static async readAllSystemEntityTypes(orgCode, tenantCode) {
 		try {
 			const attributes = ['value', 'label', 'id']
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			const entities = await entityTypeQueries.findAllEntityTypes(
 				[orgCode, defaults.orgCode],
 				[defaults.tenantCode, tenantCode],
@@ -150,6 +150,19 @@ module.exports = class EntityHelper {
 
 	static async readUserEntityTypes(body, orgCode, tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			const filter = {
 				value: body.value,
 				status: 'ACTIVE',
@@ -228,6 +241,20 @@ module.exports = class EntityHelper {
 		tenantCode
 	) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
 			if (!orgCodes.includes(defaults.orgCode)) {
 				orgCodes.push(defaults.orgCode)
 			}
