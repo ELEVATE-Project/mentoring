@@ -1,6 +1,6 @@
 'use strict'
 const entityTypeQueries = require('@database/queries/entityType')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const entityQueries = require('@database/queries/entity')
 const { Op } = require('sequelize')
 
@@ -186,10 +186,16 @@ function buildQuery(entityTypes, entities) {
  * @returns {Promise<string>} A promise that resolves to a query string based on the provided model name, configuration, and search term.
  */
 async function getEntityTypeFilter(modelName, config, search, searchOn) {
-	const defaultOrgId = await getDefaultOrgId()
-	if (!defaultOrgId)
+	const defaults = await getDefaults()
+	if (!defaults.orgCode)
 		return responses.failureResponse({
-			message: 'DEFAULT_ORG_ID_NOT_SET',
+			message: 'DEFAULT_ORG_CODE_NOT_SET',
+			statusCode: httpStatusCode.bad_request,
+			responseCode: 'CLIENT_ERROR',
+		})
+	if (!defaults.tenantCode)
+		return responses.failureResponse({
+			message: 'DEFAULT_TENANT_CODE_NOT_SET',
 			statusCode: httpStatusCode.bad_request,
 			responseCode: 'CLIENT_ERROR',
 		})
@@ -201,13 +207,16 @@ async function getEntityTypeFilter(modelName, config, search, searchOn) {
 		entityTypes = config.fields.filter((field) => field.isAnEntityType === true).map((field) => field.name)
 	}
 
-	entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-		status: 'ACTIVE',
-		organization_id: defaultOrgId,
-		model_names: { [Op.contains]: [modelName] },
-		allow_filtering: true,
-		value: entityTypes,
-	})
+	entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+		{
+			status: 'ACTIVE',
+			organization_code: defaults.orgCode,
+			model_names: { [Op.contains]: [modelName] },
+			allow_filtering: true,
+			value: entityTypes,
+		},
+		tenantCode
+	)
 
 	const entityTypeIds = entityTypes.map((entityType) => entityType.id)
 
@@ -217,7 +226,7 @@ async function getEntityTypeFilter(modelName, config, search, searchOn) {
 		entity_type_id: entityTypeIds,
 	}
 
-	const entities = await entityQueries.findAllEntities(filter)
+	const entities = await entityQueries.findAllEntities(filter, tenantCode)
 
 	if (entities.length == 0) {
 		return false

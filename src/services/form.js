@@ -11,6 +11,20 @@ const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 const responses = require('@helpers/responses')
 
+const defaults = await getDefaults()
+if (!defaults.orgCode)
+	return responses.failureResponse({
+		message: 'DEFAULT_ORG_ID_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
+if (!defaults.tenantCode)
+	return responses.failureResponse({
+		message: 'DEFAULT_TENANT_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
+
 module.exports = class FormsHelper {
 	/**
 	 * Create Form.
@@ -129,19 +143,6 @@ module.exports = class FormsHelper {
 			const form = await formQueries.findOneForm(filter)
 			let defaultOrgForm
 			if (!form) {
-				const defaults = await getDefaults()
-				if (!defaults.orgCode)
-					return responses.failureResponse({
-						message: 'DEFAULT_ORG_ID_NOT_SET',
-						statusCode: httpStatusCode.bad_request,
-						responseCode: 'CLIENT_ERROR',
-					})
-				if (!defaults.tenantCode)
-					return responses.failureResponse({
-						message: 'DEFAULT_TENANT_CODE_NOT_SET',
-						statusCode: httpStatusCode.bad_request,
-						responseCode: 'CLIENT_ERROR',
-					})
 				filter = id
 					? { id: id, organization_code: defaults.orgCode, tenant_code: defaults.tenantCode }
 					: { ...bodyData, organization_code: defaults.orgCode, tenant_code: defaults.tenantCode }
@@ -170,7 +171,7 @@ module.exports = class FormsHelper {
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'FORM_VERSION_FETCHED_SUCCESSFULLY',
-				result: (await form.getAllFormsVersion(tenantCode)) || {},
+				result: (await form.getAllFormsVersion({ [Op.in]: [defaults.tenantCode, tenantCode] })) || {},
 			})
 		} catch (error) {
 			return error

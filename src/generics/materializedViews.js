@@ -3,7 +3,6 @@ const entityTypeQueries = require('@database/queries/entityType')
 const { sequelize } = require('@database/models/index')
 const utils = require('@generics/utils')
 const common = require('@constants/common')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
 const searchConfig = require('@configs/search.json')
 const indexQueries = require('@generics/mViewsIndexQueries')
 

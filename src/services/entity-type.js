@@ -4,10 +4,24 @@ const entityTypeQueries = require('../database/queries/entityType')
 const { UniqueConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
-const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
+
+const defaults = await getDefaults()
+if (!defaults.orgCode)
+	return responses.failureResponse({
+		message: 'DEFAULT_ORG_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
+if (!defaults.tenantCode)
+	return responses.failureResponse({
+		message: 'DEFAULT_TENANT_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
 module.exports = class EntityHelper {
 	/**
 	 * Create entity type.
@@ -111,21 +125,6 @@ module.exports = class EntityHelper {
 	static async readAllSystemEntityTypes(orgCode, tenantCode) {
 		try {
 			const attributes = ['value', 'label', 'id']
-
-			const defaults = await getDefaults()
-			if (!defaults.orgCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			if (!defaults.tenantCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_TENANT_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-
 			const entities = await entityTypeQueries.findAllEntityTypes(
 				[orgCode, defaults.orgCode],
 				[defaults.tenantCode, tenantCode],
@@ -151,20 +150,6 @@ module.exports = class EntityHelper {
 
 	static async readUserEntityTypes(body, orgCode, tenantCode) {
 		try {
-			const defaults = await getDefaults()
-			if (!defaults.orgCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			if (!defaults.tenantCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_TENANT_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-
 			const filter = {
 				value: body.value,
 				status: 'ACTIVE',
@@ -228,37 +213,36 @@ module.exports = class EntityHelper {
 	 * @method
 	 * @name processEntityTypesToAddValueLabels
 	 * @param {Array} responseData 				- data to modify
-	 * @param {Array} orgIds 					- org ids
+	 * @param {Array} orgCods					- org ids
 	 * @param {String} modelName 				- model name which the entity search is associated to.
-	 * @param {String} orgIdKey 				- In responseData which key represents org id
+	 * @param {String} orgCodeKey 				- In responseData which key represents org id
 	 * @param {ARRAY} entityType 				- Array of entity types value
 	 * @returns {JSON} 							- modified response data
 	 */
-	static async processEntityTypesToAddValueLabels(responseData, orgIds, modelName, orgIdKey, entityType, tenantCode) {
+	static async processEntityTypesToAddValueLabels(
+		responseData,
+		orgCodes,
+		modelName,
+		orgCodeKey,
+		entityType,
+		tenantCode
+	) {
 		try {
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-
-			if (!orgIds.includes(defaultOrgId)) {
-				orgIds.push(defaultOrgId)
+			if (!orgCodes.includes(defaults.orgCode)) {
+				orgCodes.push(defaults.orgCode)
 			}
 
 			const filter = {
 				status: 'ACTIVE',
 				has_entities: true,
-				organization_id: {
-					[Op.in]: orgIds,
+				organization_code: {
+					[Op.in]: orgCodes,
 				},
 				model_names: {
 					[Op.contains]: Array.isArray(modelName) ? modelName : [modelName],
 				},
 			}
-			if (entityType) filter.value = entityType
+			if (entityType || entityType != []) filter.value = entityType
 			// get entityTypes with entities data
 			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
 			entityTypesWithEntities = JSON.parse(JSON.stringify(entityTypesWithEntities))
@@ -268,11 +252,13 @@ module.exports = class EntityHelper {
 
 			// Use Array.map with async to process each element asynchronously
 			const result = responseData.map(async (element) => {
-				// Prepare the array of orgIds to search
-				const orgIdToSearch = [element[orgIdKey], defaultOrgId]
+				// Prepare the array of orgCodes to search
+				const orgIdToSearch = [element[orgCodeKey], defaults.orgCode]
 
-				// Filter entity types based on orgIds and remove parent entity types
-				let entitTypeData = entityTypesWithEntities.filter((obj) => orgIdToSearch.includes(obj.organization_id))
+				// Filter entity types based on orgCodes and remove parent entity types
+				let entitTypeData = entityTypesWithEntities.filter((obj) =>
+					orgIdToSearch.includes(obj.organization_code)
+				)
 				entitTypeData = utils.removeParentEntityTypes(entitTypeData)
 
 				// Process the data asynchronously to add value labels

@@ -1,16 +1,23 @@
 const NotificationTemplate = require('@database/models/index').NotificationTemplate
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
 
 module.exports = class NotificationTemplateData {
-	static async findOneEmailTemplate(code, orgId, tenantCode) {
+	static async findOneEmailTemplate(code, orgCode, tenantCode) {
 		try {
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId) {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -23,8 +30,8 @@ module.exports = class NotificationTemplateData {
 				code: code,
 				type: 'email',
 				status: 'active',
-				organization_id: orgId ? { [Op.or]: [orgId, defaultOrgId] } : defaultOrgId,
-				tenant_code: tenantCode,
+				organization_code: orgCode ? { [Op.or]: [orgCode, defaults.orgCode] } : defaults.orgCode,
+				tenant_code: { [Op.or]: [tenantCode, defaults.tenantCode] },
 			}
 
 			let templateData = await NotificationTemplate.findAll({
@@ -32,8 +39,8 @@ module.exports = class NotificationTemplateData {
 				raw: true,
 			})
 
-			// If there are multiple results, find the one matching orgId
-			templateData = templateData.find((template) => template.organization_id === orgId) || templateData[0]
+			// If there are multiple results, find the one matching orgCode
+			templateData = templateData.find((template) => template.organization_code === orgCode) || templateData[0]
 
 			if (templateData && templateData.email_header) {
 				const header = await this.getEmailHeader(templateData.email_header, tenantCode)
@@ -56,12 +63,20 @@ module.exports = class NotificationTemplateData {
 
 	static async getEmailHeader(header, tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			const headerData = await NotificationTemplate.findOne({
 				where: {
 					code: header,
 					type: 'emailHeader',
 					status: 'active',
-					tenant_code: tenantCode,
+					tenant_code: { [Op.or]: [tenantCode, defaults.tenantCode] },
 				},
 				raw: true,
 			})
@@ -74,12 +89,20 @@ module.exports = class NotificationTemplateData {
 
 	static async getEmailFooter(footer, tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			const footerData = await NotificationTemplate.findOne({
 				where: {
 					code: footer,
 					type: 'emailFooter',
 					status: 'active',
-					tenant_code: tenantCode,
+					tenant_code: { [Op.or]: [tenantCode, defaults.tenantCode] },
 				},
 				raw: true,
 			})
@@ -92,7 +115,15 @@ module.exports = class NotificationTemplateData {
 
 	static async findOne(filter, tenantCode, options = {}) {
 		try {
-			filter.tenant_code = tenantCode
+			const defaults = await getDefaults()
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			filter.tenant_code = { [Op.or]: [tenantCode, defaults.tenantCode] }
 			return await NotificationTemplate.findOne({
 				where: filter,
 				...options,
@@ -120,7 +151,28 @@ module.exports = class NotificationTemplateData {
 
 	static async findAllNotificationTemplates(filter, tenantCode, options = {}) {
 		try {
-			filter.tenant_code = tenantCode
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			filter.tenant_code = { [Op.or]: [tenantCode, defaults.tenantCode] }
+			if (filter.organization_code) {
+				filter.organization_code = filter.organization_code
+					? { [Op.or]: [orgCode, defaults.orgCode] }
+					: defaults.orgCode
+			}
+
 			const templates = await NotificationTemplate.findAll({
 				where: filter,
 				...options,

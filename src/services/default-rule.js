@@ -4,17 +4,30 @@ const entityTypeQueries = require('@database/queries/entityType')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const sessionQueries = require('@database/queries/sessions')
-const { getDefaultOrgId, getDefaults } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const responses = require('@helpers/responses')
 const httpStatusCode = require('@generics/http-status')
 const { Op } = require('sequelize')
 const { UniqueConstraintError } = require('sequelize')
 
+const defaults = await getDefaults()
+if (!defaults.orgCode)
+	return responses.failureResponse({
+		message: 'DEFAULT_ORG_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
+if (!defaults.tenantCode)
+	return responses.failureResponse({
+		message: 'DEFAULT_TENANT_CODE_NOT_SET',
+		statusCode: httpStatusCode.bad_request,
+		responseCode: 'CLIENT_ERROR',
+	})
 module.exports = class DefaultRuleHelper {
 	/**
 	 * Validates the target and requester fields in the body data.
 	 *
-	 * @param {string} defaultOrgId - The ID of the default organization.
+	 * @param {string} defaultOrgCode - The ID of the default organization.
 	 * @param {Object} bodyData - The data to be validated.
 	 * @param {string} bodyData.type - The type of the rule.
 	 * @param {boolean} bodyData.is_target_from_sessions_mentor - Whether the target is from sessions mentor.
@@ -118,8 +131,6 @@ module.exports = class DefaultRuleHelper {
 		bodyData.requester_field = bodyData.requester_field.toLowerCase()
 
 		try {
-			const defaults = await getDefaults()
-
 			const validation = await this.validateFields(defaults.orgCode, bodyData, defaults.tenantCode)
 
 			if (!validation.isValid) {
@@ -168,8 +179,6 @@ module.exports = class DefaultRuleHelper {
 		bodyData.requester_field = bodyData.requester_field.toLowerCase()
 
 		try {
-			const defaults = await getDefaults()
-
 			const validation = await this.validateFields(defaults.orgCode, bodyData, defaults.tenantCode)
 
 			if (!validation.isValid) {
@@ -182,7 +191,7 @@ module.exports = class DefaultRuleHelper {
 			}
 
 			const [updateCount, updatedDefaultRule] = await defaultRuleQueries.updateOne(
-				{ id: ruleId, organization_id: orgId, tenant_code: tenantCode },
+				{ id: ruleId, organization_code: orgCode, tenant_code: tenantCode },
 				bodyData,
 				tenantCode,
 				{
@@ -220,15 +229,15 @@ module.exports = class DefaultRuleHelper {
 	 * Read all default rules.
 	 * @method
 	 * @name readAll
-	 * @param {String} orgId - Org Id of the user.
+	 * @param {String} orgCode - Org Id of the user.
 	 * @returns {Promise<JSON>} - Found default rules response.
 	 */
 	static async readAll(orgCode, tenantCode) {
 		try {
-			const defaultRules = await defaultRuleQueries.findAndCountAll(
-				{ organization_code: orgCode, tenant_code: tenantCode },
-				tenantCode
-			)
+			const defaultRules = await defaultRuleQueries.findAndCountAll({
+				organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
+				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
+			})
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -248,15 +257,16 @@ module.exports = class DefaultRuleHelper {
 	 * @method
 	 * @name readOne
 	 * @param {String} ruleId - Default rule ID.
-	 * @param {String} orgId - Org Id of the user.
+	 * @param {String} orgCode - Org Id of the user.
 	 * @returns {Promise<JSON>} - Found default rule response.
 	 */
 	static async readOne(ruleId, orgCode, tenantCode) {
 		try {
-			const defaultRule = await defaultRuleQueries.findOne(
-				{ id: ruleId, organization_code: orgCode, tenant_code: tenantCode },
-				tenantCode
-			)
+			const defaultRule = await defaultRuleQueries.findOne({
+				id: ruleId,
+				organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
+				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
+			})
 			if (!defaultRule) {
 				return responses.failureResponse({
 					message: 'DEFAULT_RULE_NOT_FOUND',
@@ -279,7 +289,7 @@ module.exports = class DefaultRuleHelper {
 	 * @method
 	 * @name delete
 	 * @param {String} ruleId - Default rule ID.
-	 * @param {String} orgId - Org Id of the user.
+	 * @param {String} orgCode - Org Id of the user.
 	 * @returns {Promise<JSON>} - Default rule deleted response.
 	 */
 	static async delete(ruleId, orgCode, tenantCode) {

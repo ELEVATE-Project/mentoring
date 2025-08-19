@@ -285,7 +285,7 @@ exports.getConnectionsDetails = async (
 	filter,
 	searchText = '',
 	userId,
-	organizationIds = [],
+	organizationCodes = [],
 	roles = [],
 	tenantCode
 ) => {
@@ -299,8 +299,8 @@ exports.getConnectionsDetails = async (
 			additionalFilter = `AND name ILIKE :search`
 		}
 
-		if (organizationIds.length > 0) {
-			orgFilter = `AND organization_id IN (:organizationIds)`
+		if (organizationCodes.length > 0) {
+			orgFilter = `AND organization_code IN (:organizationCodes)`
 		}
 
 		if (filter?.query?.length > 0) {
@@ -322,7 +322,7 @@ exports.getConnectionsDetails = async (
 		mv.name,
 		mv.user_id,
 		mv.mentee_visibility,
-		mv.organization_id,
+		mv.organization_code,
 		mv.designation,
 		mv.experience,
 		mv.is_mentor,
@@ -353,7 +353,7 @@ exports.getConnectionsDetails = async (
 			...filter?.replacements,
 			search: `%${searchText}%`,
 			userId,
-			organizationIds,
+			organizationCodes,
 			tenantCode,
 		}
 
@@ -423,14 +423,14 @@ exports.updateConnection = async (userId, friendId, updateBody, tenantCode) => {
 	}
 }
 
-exports.getConnectionsCount = async (filter, userId, organizationIds = [], tenantCode) => {
+exports.getConnectionsCount = async (filter, userId, organizationCodes = [], tenantCode) => {
 	try {
 		let orgFilter = ''
 		let filterClause = ''
 		let tenantFilter = ''
 
-		if (organizationIds.length > 0) {
-			orgFilter = `AND ue.organization_id IN (:organizationIds)`
+		if (organizationCodes.length > 0) {
+			orgFilter = `AND ue.organization_code IN (:organizationCodes)`
 		}
 
 		tenantFilter = `AND ue.tenant_code = :tenantCode AND c.tenant_code = :tenantCode`
@@ -455,7 +455,7 @@ exports.getConnectionsCount = async (filter, userId, organizationIds = [], tenan
 		const replacements = {
 			...filter?.replacements,
 			userId,
-			organizationIds,
+			organizationCodes,
 			tenantCode,
 		}
 

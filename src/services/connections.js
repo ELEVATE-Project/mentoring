@@ -7,7 +7,7 @@ const common = require('@constants/common')
 const entityTypeService = require('@services/entity-type')
 const entityTypeQueries = require('@database/queries/entityType')
 const { Op } = require('sequelize')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const utils = require('@generics/utils')
 const communicationHelper = require('@helpers/communications')
@@ -110,14 +110,13 @@ module.exports = class ConnectionHelper {
 				connection = await connectionQueries.getRejectedRequest(userId, friendId, tenantCode)
 			}
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId) {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			}
 
 			const [userExtensionsModelName, userDetails] = await Promise.all([
 				userExtensionQueries.getModelName(),
@@ -127,7 +126,7 @@ module.exports = class ConnectionHelper {
 						'name',
 						'user_id',
 						'mentee_visibility',
-						'organization_id',
+						'organization_code',
 						'designation',
 						'area_of_expertise',
 						'education_qualification',
@@ -153,12 +152,12 @@ module.exports = class ConnectionHelper {
 			// Fetch entity types associated with the user
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [userDetails.organization_id, defaultOrgId],
+				organization_code: {
+					[Op.in]: [userDetails.organization_code, defaults.orgCode],
 				},
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			})
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_id)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_code)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
 
 			if (!connection) {
@@ -213,7 +212,7 @@ module.exports = class ConnectionHelper {
 						'name',
 						'user_id',
 						'mentee_visibility',
-						'organization_id',
+						'organization_code',
 						'designation',
 						'area_of_expertise',
 						'education_qualification',
@@ -230,12 +229,22 @@ module.exports = class ConnectionHelper {
 
 			const userExtensionsModelName = await userExtensionQueries.getModelName()
 
-			const uniqueOrgIds = [...new Set(friendDetails.map((obj) => obj.organization_id))]
+			const defaults = await getDefaults()
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
+			const uniqueOrgCodes = [...new Set(friendDetails.map((obj) => obj.organization_code))]
 			friendDetails = await entityTypeService.processEntityTypesToAddValueLabels(
 				friendDetails,
-				uniqueOrgIds,
+				uniqueOrgCodes,
 				userExtensionsModelName,
-				'organization_id'
+				'organization_code',
+				[],
+				{ [Op.in]: [defaults.tenantCode, tenantCode] }
 			)
 
 			const friendDetailsMap = friendDetails.reduce((acc, friend) => {
@@ -286,7 +295,7 @@ module.exports = class ConnectionHelper {
 	 * @param {string} userId - The ID of the authenticated user.
 	 * @returns {Promise<Object>} A success response indicating the request was accepted.
 	 */
-	static async accept(bodyData, userId, orgId, tenantCode) {
+	static async accept(bodyData, userId, orgCode, tenantCode) {
 		try {
 			const connectionRequest = await this.checkConnectionRequestExists(userId, bodyData.user_id, tenantCode)
 			if (!connectionRequest)
@@ -335,7 +344,7 @@ module.exports = class ConnectionHelper {
 				tenantCode
 			)
 
-			await this.sendConnectionAcceptNotification(bodyData.user_id, userId, orgId, tenantCode)
+			await this.sendConnectionAcceptNotification(bodyData.user_id, userId, orgCode, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -355,7 +364,7 @@ module.exports = class ConnectionHelper {
 	 * @param {string} userId - The ID of the authenticated user.
 	 * @returns {Promise<Object>} A success response indicating the request was rejected.
 	 */
-	static async reject(bodyData, userId, orgId, tenantCode) {
+	static async reject(bodyData, userId, orgCode, tenantCode) {
 		try {
 			const connectionRequest = await this.checkConnectionRequestExists(userId, bodyData.user_id, tenantCode)
 			if (!connectionRequest)
@@ -380,7 +389,7 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Send notification to the mentee who requested the connection
-			await this.sendConnectionRejectionNotification(bodyData.user_id, userId, orgId, tenantCode)
+			await this.sendConnectionRejectionNotification(bodyData.user_id, userId, orgCode, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -399,19 +408,27 @@ module.exports = class ConnectionHelper {
 	 * @param {string} searchText - The search text to filter results.
 	 * @param {Object} queryParams - The query parameters for filtering.
 	 * @param {string} userId - The ID of the authenticated user.
-	 * @param {string} orgId - The organization ID for filtering.
+	 * @param {string} orgCode - The organization ID for filtering.
 	 * @returns {Promise<Object>} A list of filtered connections.
 	 */
-	static async list(pageNo, pageSize, searchText, queryParams, userId, orgId, tenantCode) {
+	static async list(pageNo, pageSize, searchText, queryParams, userId, orgCode, tenantCode) {
 		try {
-			let organizationIds = []
+			let organizationCodes = []
 
-			if (queryParams.organization_ids) {
-				organizationIds = queryParams.organization_ids.split(',')
+			if (queryParams.organization_codes) {
+				organizationCodes = queryParams.organization_codes.split(',')
 			}
 
 			const query = utils.processQueryParametersWithExclusions(queryParams)
 			const userExtensionsModelName = await userExtensionQueries.getModelName()
+
+			const defaults = await getDefaults()
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 
 			// Fetch validation data for filtering connections (excluding roles)
 			const validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
@@ -420,7 +437,7 @@ module.exports = class ConnectionHelper {
 					allow_filtering: true,
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				tenantCode
+				{ [Op.in]: [defaults.tenantCode, tenantCode] }
 			)
 
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData, userExtensionsModelName)
@@ -436,7 +453,7 @@ module.exports = class ConnectionHelper {
 				filteredQuery,
 				searchText,
 				userId,
-				organizationIds,
+				organizationCodes,
 				roles,
 				tenantCode
 			)
@@ -453,13 +470,15 @@ module.exports = class ConnectionHelper {
 			}
 
 			if (extensionDetails.data.length > 0) {
-				const uniqueOrgIds = [...new Set(extensionDetails.data.map((obj) => obj.organization_id))]
+				const uniqueOrgCodes = [...new Set(extensionDetails.data.map((obj) => obj.organization_code))]
 
 				extensionDetails.data = await entityTypeService.processEntityTypesToAddValueLabels(
 					extensionDetails.data,
-					uniqueOrgIds,
+					uniqueOrgCodes,
 					userExtensionsModelName,
-					'organization_id'
+					'organization_code',
+					[],
+					{ [Op.in]: [defaults.tenantCode, tenantCode] }
 				)
 			}
 			const userIds = extensionDetails.data.map((item) => item.user_id)
@@ -492,9 +511,9 @@ module.exports = class ConnectionHelper {
 	 * Send email notification to mentee when connection request is rejected
 	 * @param {string} menteeId - ID of the mentee who sent the connection request
 	 * @param {string} mentorId - ID of the mentor who rejected the request
-	 * @param {string} orgId - Organization ID
+	 * @param {string} orgCode - Organization ID
 	 */
-	static async sendConnectionRejectionNotification(menteeId, mentorId, orgId, tenantCode) {
+	static async sendConnectionRejectionNotification(menteeId, mentorId, orgCode, tenantCode) {
 		try {
 			const templateCode = process.env.CONNECTION_REQUEST_REJECTION_EMAIL_TEMPLATE
 			if (!templateCode) {
@@ -523,7 +542,7 @@ module.exports = class ConnectionHelper {
 			// Get email template
 			const templateData = await notificationQueries.findOneEmailTemplate(
 				templateCode,
-				orgId.toString(),
+				orgCode.toString(),
 				tenantCode
 			)
 
@@ -560,9 +579,9 @@ module.exports = class ConnectionHelper {
 	 * Send email notification to mentee when connection request is accepted
 	 * @param {string} menteeId - ID of the mentee who sent the connection request
 	 * @param {string} mentorId - ID of the mentor who accepted the request
-	 * @param {string} orgId - Organization ID
+	 * @param {string} orgCode - Organization ID
 	 */
-	static async sendConnectionAcceptNotification(menteeId, mentorId, orgId, tenantCode) {
+	static async sendConnectionAcceptNotification(menteeId, mentorId, orgCode, tenantCode) {
 		try {
 			const templateCode = process.env.CONNECTION_REQUEST_ACCEPT_EMAIL_TEMPLATE
 			if (!templateCode) {
@@ -591,7 +610,7 @@ module.exports = class ConnectionHelper {
 			// Get email template
 			const templateData = await notificationQueries.findOneEmailTemplate(
 				templateCode,
-				orgId.toString(),
+				orgCode.toString(),
 				tenantCode
 			)
 
