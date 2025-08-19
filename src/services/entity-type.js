@@ -278,7 +278,7 @@ module.exports = class EntityHelper {
 			}
 			if (entityType) filter.value = entityType
 			// get entityTypes with entities data
-			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
+			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodes)
 			entityTypesWithEntities = JSON.parse(JSON.stringify(entityTypesWithEntities))
 			if (!entityTypesWithEntities.length > 0) {
 				return responseData
