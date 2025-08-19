@@ -514,7 +514,9 @@ module.exports = class MenteesHelper {
 				sessions.rows,
 				uniqueOrgIds,
 				common.sessionModelName,
-				'mentor_organization_id'
+				'mentor_organization_id',
+				[],
+				tenantCode
 			)
 		}
 
@@ -661,7 +663,9 @@ module.exports = class MenteesHelper {
 					sessionDetails.rows,
 					uniqueOrgIds,
 					common.sessionModelName,
-					'mentor_organization_id'
+					'mentor_organization_id',
+					[],
+					tenantCode
 				)
 			}
 			if (sessionDetails && sessionDetails.rows) {

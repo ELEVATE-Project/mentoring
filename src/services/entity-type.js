@@ -238,7 +238,7 @@ module.exports = class EntityHelper {
 		modelName,
 		orgCodeKey,
 		entityType,
-		tenantCodes
+		tenantCodes = []
 	) {
 		try {
 			const defaults = await getDefaults()

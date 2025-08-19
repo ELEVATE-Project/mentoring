@@ -2641,7 +2641,9 @@ module.exports = class SessionsHelper {
 				sessions,
 				uniqueOrgIds,
 				common.sessionModelName,
-				'mentor_organization_id'
+				'mentor_organization_id',
+				[],
+				tenantCode
 			)
 
 			await Promise.all(
