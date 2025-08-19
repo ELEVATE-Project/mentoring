@@ -265,15 +265,16 @@ module.exports = class UserHelper {
 		const roleChangePayload = {
 			user_id: userExtensionData.id,
 			organization_id: userExtensionData.organization.id,
+			organization_code: userExtensionData.organizations[0].code,
 		}
 
 		let isRoleChanged = false
 
 		const menteeExtension = await menteeQueries.getMenteeExtension(
 			userExtensionData.id,
-			['organization_id', 'is_mentor'],
+			['organization_id', 'is_mentor', 'organization_code', 'tenant_code'],
 			false,
-			decodedToken.tenant_code
+			userExtensionData.tenant_code
 		)
 
 		if (!menteeExtension) throw new Error('User Not Found')
@@ -295,7 +296,7 @@ module.exports = class UserHelper {
 				roleChangePayload,
 				userExtensionData,
 				decodedToken,
-				decodedToken.tenant_code
+				userExtensionData.tenant_code
 			)
 			return roleChangeResult
 		} else {
@@ -306,14 +307,14 @@ module.exports = class UserHelper {
 				? await menteesService.updateMenteeExtension(
 						userExtensionData,
 						userExtensionData.id,
-						userExtensionData.organization.id,
-						decodedToken.tenant_code
+						userExtensionData.organizations[0].code,
+						userExtensionData.tenant_code
 				  )
 				: await mentorsService.updateMentorExtension(
 						userExtensionData,
 						userExtensionData.id,
-						userExtensionData.organization.id,
-						decodedToken.tenant_code
+						userExtensionData.organizations[0].code,
+						userExtensionData.tenant_code
 				  )
 			return user
 		}

@@ -313,7 +313,7 @@ module.exports = class OrgAdminService {
 		try {
 			// Get default organisation details
 			let defaultOrgDetails = await userRequests.fetchOrgDetails({
-				organizationCode: process.env.DEFAULT_ORG_CODE || process.env.DEFAULT_ORGANISATION_CODE,
+				organizationCode: process.env.DEFAULT_ORGANISATION_CODE,
 			})
 
 			let defaultOrgId
@@ -586,19 +586,25 @@ module.exports = class OrgAdminService {
 		}
 	}
 
-	static async uploadSampleCSV(filepath, orgId, tenantCode) {
-		const defaultOrgId = await getDefaultOrgId()
-		if (!defaultOrgId) {
+	static async uploadSampleCSV(filepath, orgCode, tenantCode) {
+		const defaults = await getDefaults()
+		if (!defaults.orgCode)
 			return responses.failureResponse({
-				message: 'DEFAULT_ORG_ID_NOT_SET',
+				message: 'DEFAULT_ORG_CODE_NOT_SET',
 				statusCode: httpStatusCode.bad_request,
 				responseCode: 'CLIENT_ERROR',
 			})
-		}
+
+		if (!defaults.tenantCode)
+			return responses.failureResponse({
+				message: 'DEFAULT_TENANT_CODE_NOT_SET',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
 
 		const newData = { uploads: { session_csv_path: filepath } }
-		if (orgId != defaultOrgId) {
-			let result = await organisationExtensionQueries.update(newData, orgId)
+		if (orgId != defaults.orgCode) {
+			let result = await organisationExtensionQueries.update(newData, orgCode, tenantCode)
 			if (!result) {
 				return responses.failureResponse({
 					message: 'CSV_UPDATE_FAILED',
