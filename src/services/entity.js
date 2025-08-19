@@ -4,6 +4,7 @@ const entityTypeQueries = require('../database/queries/entity')
 const { UniqueConstraintError, ForeignKeyConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 module.exports = class EntityHelper {
 	/**
