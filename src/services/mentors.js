@@ -134,7 +134,7 @@ module.exports = class MentorsHelper {
 				common.sessionModelName,
 				'mentor_organization_id',
 				[],
-				tenantCode
+				[tenantCode]
 			)
 
 			upcomingSessions.data = await this.sessionMentorDetails(upcomingSessions.data, tenantCode)
@@ -1199,7 +1199,7 @@ module.exports = class MentorsHelper {
 					mentorExtensionsModelName,
 					'organization_id',
 					[],
-					tenantCode
+					[tenantCode]
 				)
 			}
 
@@ -1443,7 +1443,7 @@ module.exports = class MentorsHelper {
 				common.sessionModelName,
 				'mentor_organization_id',
 				[],
-				tenantCode
+				[tenantCode]
 			)
 
 			return responses.successResponse({

@@ -516,7 +516,7 @@ module.exports = class MenteesHelper {
 				common.sessionModelName,
 				'mentor_organization_id',
 				[],
-				tenantCode
+				[tenantCode]
 			)
 		}
 
@@ -665,7 +665,7 @@ module.exports = class MenteesHelper {
 					common.sessionModelName,
 					'mentor_organization_id',
 					[],
-					tenantCode
+					[tenantCode]
 				)
 			}
 			if (sessionDetails && sessionDetails.rows) {
@@ -1424,7 +1424,8 @@ module.exports = class MenteesHelper {
 						organizationIds,
 						userExtensionModelName,
 						'organization_id',
-						tenantCode // Pass tenantCode to the entity processing service
+						[],
+						[tenantCode] // Pass tenantCode to the entity processing service
 					)
 					console.log(
 						`Entity processing result:`,

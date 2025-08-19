@@ -281,7 +281,7 @@ module.exports = class requestSessionsHelper {
 				modelName,
 				'organization_code',
 				[],
-				tenantCode
+				[tenantCode]
 			)
 
 			const userDetailsMap = Object.fromEntries(oppositeUserDetails.map((u) => [u.user_id, u]))

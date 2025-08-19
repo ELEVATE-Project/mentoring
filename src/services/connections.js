@@ -244,7 +244,7 @@ module.exports = class ConnectionHelper {
 				userExtensionsModelName,
 				'organization_code',
 				[],
-				tenantCode
+				[tenantCode]
 			)
 
 			const friendDetailsMap = friendDetails.reduce((acc, friend) => {
@@ -478,7 +478,7 @@ module.exports = class ConnectionHelper {
 					userExtensionsModelName,
 					'organization_code',
 					[],
-					tenantCode
+					[tenantCode]
 				)
 			}
 			const userIds = extensionDetails.data.map((item) => item.user_id)

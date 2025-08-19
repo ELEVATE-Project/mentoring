@@ -90,7 +90,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 			[await menteeExtensionQueries.getModelName()],
 			'organization_id',
 			[],
-			tenantCode
+			[tenantCode]
 		)
 
 		// Fetch organization details for each unique organization ID

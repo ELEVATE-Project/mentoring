@@ -2643,7 +2643,7 @@ module.exports = class SessionsHelper {
 				common.sessionModelName,
 				'mentor_organization_id',
 				[],
-				tenantCode
+				[tenantCode]
 			)
 
 			await Promise.all(
