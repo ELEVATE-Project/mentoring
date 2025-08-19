@@ -181,7 +181,7 @@ module.exports = class UserHelper {
 		}
 
 		const orgExtension = await this.#createOrUpdateOrg(
-			{ id: userDetails.data.result.organizations[0].id, code: userDetails.data.result.organizations[0].code },
+			{ id: userDetails.data.result.organization.id, code: userDetails.data.result.organization.code },
 			decodedToken.tenant_code
 		)
 
@@ -215,10 +215,14 @@ module.exports = class UserHelper {
 				code: orgExtension.organization_code,
 			},
 		}
+		let roles = userDetails?.user_roles
+		if (userDetails.organizations) {
+			roles = userDetails.organizations[0].roles
+		}
 
 		// List of optional fields to check
 		const optionalFields = {
-			roles: userDetails?.organizations[0].roles,
+			roles: roles,
 			email: userDetails?.email,
 			phone: userDetails?.phone,
 			skipValidation: true,
@@ -387,7 +391,7 @@ module.exports = class UserHelper {
 		if (!userDetails.data.result) {
 			return 'FAILED_TO_GET_REQUIRED_USER_DETAILS'
 		} else {
-			const requiredFields = ['id', 'user_roles', 'email', 'name', 'organizations']
+			const requiredFields = ['id', 'user_roles', 'email', 'name', 'organization_code', 'organization_id']
 			for (const field of requiredFields) {
 				if (!userDetails.data.result[field] || userDetails.data.result[field] == null) {
 					return 'FAILED_TO_GET_REQUIRED_USER_DETAILS'
