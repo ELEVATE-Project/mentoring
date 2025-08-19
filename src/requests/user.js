@@ -792,7 +792,7 @@ const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false,
 			}
 
 			const organizationDetails = await organisationExtensionQueries.findAll(filter, tenantCode, {
-				attributes: ['name', 'organization_id'],
+				attributes: ['name', 'organization_id', 'organization_code'],
 			})
 
 			// Map organization details for quick access

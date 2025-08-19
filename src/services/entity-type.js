@@ -238,7 +238,7 @@ module.exports = class EntityHelper {
 		modelName,
 		orgCodeKey,
 		entityType,
-		tenantCode
+		tenantCodes
 	) {
 		try {
 			const defaults = await getDefaults()
@@ -259,6 +259,10 @@ module.exports = class EntityHelper {
 				orgCodes.push(defaults.orgCode)
 			}
 
+			if (!tenantCodes.includes(defaults.tenantCode)) {
+				tenantCodes.push(defaults.tenantCode)
+			}
+
 			const filter = {
 				status: 'ACTIVE',
 				has_entities: true,
@@ -268,8 +272,11 @@ module.exports = class EntityHelper {
 				model_names: {
 					[Op.contains]: Array.isArray(modelName) ? modelName : [modelName],
 				},
+				tenant_code: {
+					[Op.in]: tenantCodes,
+				},
 			}
-			if (entityType || entityType != []) filter.value = entityType
+			if (entityType) filter.value = entityType
 			// get entityTypes with entities data
 			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
 			entityTypesWithEntities = JSON.parse(JSON.stringify(entityTypesWithEntities))

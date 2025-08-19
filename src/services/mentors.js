@@ -1432,12 +1432,15 @@ module.exports = class MentorsHelper {
 				}
 				item.is_assigned = item.mentor_id !== item.created_by
 			})
-			const uniqueOrgIds = [...new Set(sessionDetails.rows.map((obj) => obj.mentor_organization_id))]
+			// const uniqueOrgIds = [...new Set(sessionDetails.rows.map((obj) => obj.mentor_organization_id))]
+			const uniqueOrgIds = [...new Set(sessionDetails.rows.map((obj) => obj.organization.organization_code))]
+
 			sessionDetails.rows = await entityTypeService.processEntityTypesToAddValueLabels(
 				sessionDetails.rows,
 				uniqueOrgIds,
 				common.sessionModelName,
-				'mentor_organization_id'
+				'mentor_organization_id',
+				tenantCode
 			)
 
 			return responses.successResponse({
