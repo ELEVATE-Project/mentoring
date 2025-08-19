@@ -134,7 +134,9 @@ module.exports = class UserHelper {
 	}
 
 	static async #createUserWithBody(userBody, tenantCode) {
-		const orgExtension = await this.#createOrUpdateOrg({ id: userBody.organization_id.toString() }, tenantCode)
+		let orgId = userBody.organizations[0].id
+		let orgCode = userBody.organizations[0].code
+		const orgExtension = await this.#createOrUpdateOrg({ id: orgId.toString(), code: orgCode }, tenantCode)
 
 		if (!orgExtension) {
 			return responses.failureResponse({
@@ -176,7 +178,7 @@ module.exports = class UserHelper {
 		}
 
 		const orgExtension = await this.#createOrUpdateOrg(
-			{ id: userDetails.data.result.organization_id },
+			{ id: userDetails.data.result.organizations[0].id, code: userDetails.data.result.organizations[0].code },
 			decodedToken.tenant_code
 		)
 
@@ -207,6 +209,7 @@ module.exports = class UserHelper {
 			name: userDetails?.name,
 			organization: {
 				id: orgExtension.organization_id,
+				code: orgExtension.organization_code,
 			},
 		}
 
@@ -234,13 +237,13 @@ module.exports = class UserHelper {
 
 	static async #createOrUpdateOrg(orgData, tenantCode) {
 		// Use organization_id as organization_code for lookup since they're the same in user service data
-		let orgExtension = await organisationExtensionQueries.getById(orgData.id, tenantCode)
+		let orgExtension = await organisationExtensionQueries.getById(orgData.code, tenantCode)
 		if (orgExtension) return orgExtension
 
 		const orgExtensionData = {
 			...common.getDefaultOrgPolicies(),
 			organization_id: orgData.id,
-			organization_code: orgData.id,
+			organization_code: orgData.code,
 			created_by: 1,
 			updated_by: 1,
 			tenant_code: tenantCode,
@@ -252,9 +255,22 @@ module.exports = class UserHelper {
 	static async #createUser(userExtensionData, tenantCode) {
 		const isAMentor = userExtensionData.roles.some((role) => role.title == common.MENTOR_ROLE)
 		const orgId = userExtensionData.organization.id
+		const orgCode = userExtensionData.organization.code
 		const user = isAMentor
-			? await mentorsService.createMentorExtension(userExtensionData, userExtensionData.id, orgId, tenantCode)
-			: await menteesService.createMenteeExtension(userExtensionData, userExtensionData.id, orgId, tenantCode)
+			? await mentorsService.createMentorExtension(
+					userExtensionData,
+					userExtensionData.id,
+					orgCode,
+					tenantCode,
+					orgId
+			  )
+			: await menteesService.createMenteeExtension(
+					userExtensionData,
+					userExtensionData.id,
+					orgCode,
+					tenantCode,
+					orgId
+			  )
 		return user
 	}
 
@@ -265,7 +281,7 @@ module.exports = class UserHelper {
 		const roleChangePayload = {
 			user_id: userExtensionData.id,
 			organization_id: userExtensionData.organization.id,
-			organization_code: userExtensionData.organizations[0].code,
+			organization_code: userExtensionData.organization.code,
 		}
 
 		let isRoleChanged = false
@@ -307,13 +323,13 @@ module.exports = class UserHelper {
 				? await menteesService.updateMenteeExtension(
 						userExtensionData,
 						userExtensionData.id,
-						userExtensionData.organizations[0].code,
+						userExtensionData.organization.code,
 						userExtensionData.tenant_code
 				  )
 				: await mentorsService.updateMentorExtension(
 						userExtensionData,
 						userExtensionData.id,
-						userExtensionData.organizations[0].code,
+						userExtensionData.organization.code,
 						userExtensionData.tenant_code
 				  )
 			return user
@@ -368,7 +384,7 @@ module.exports = class UserHelper {
 		if (!userDetails.data.result) {
 			return 'FAILED_TO_GET_REQUIRED_USER_DETAILS'
 		} else {
-			const requiredFields = ['id', 'user_roles', 'email', 'name', 'organization', 'organization_id']
+			const requiredFields = ['id', 'user_roles', 'email', 'name', 'organizations']
 			for (const field of requiredFields) {
 				if (!userDetails.data.result[field] || userDetails.data.result[field] == null) {
 					return 'FAILED_TO_GET_REQUIRED_USER_DETAILS'
