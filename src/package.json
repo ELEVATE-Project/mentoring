@@ -37,7 +37,7 @@
 		"dotenv": "^10.0.0",
 		"elevate-logger": "^3.1.0",
 		"elevate-node-cache": "^1.0.6",
-		"elevate-services-health-check": "^0.0.3",
+		"elevate-services-health-check": "^0.0.6",
 		"express": "^4.17.1",
 		"express-validator": "^5.3.1",
 		"fn-args": "^4.0.0",
