@@ -47,7 +47,7 @@ class MentoringDataMigrator {
 
 		// Default values for fallback
 		this.defaultTenantCode = process.env.DEFAULT_TENANT_CODE || 'default'
-		this.defaultOrgCode = process.env.DEFAULT_ORG_CODE || 'default'
+		this.defaultOrgCode = process.env.DEFAULT_ORGANIZATION_CODE || 'default_code'
 
 		// Table-specific default values configuration
 		this.tableSpecificDefaults = {

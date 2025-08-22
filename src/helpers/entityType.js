@@ -25,8 +25,25 @@ module.exports = class UserHelper {
 				return cachedEntities
 			}
 
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			// Fallback to DB if no cached data found
-			const entities = await entityTypeQueries.findAllEntityTypes(orgIds, tenantCode, attributes)
+			const entities = await entityTypeQueries.findAllEntityTypes(
+				orgIds,
+				{ [Op.in]: [defaults.tenantCode, tenantCode] },
+				attributes
+			)
 			return entities || null
 		} catch (err) {
 			console.error('Error in findAllEntityTypes:', err)

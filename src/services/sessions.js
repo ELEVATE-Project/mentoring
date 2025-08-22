@@ -238,7 +238,7 @@ module.exports = class SessionsHelper {
 			})
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgCode)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			bodyData.status = common.PUBLISHED_STATUS
 			let res = utils.validateInput(bodyData, validationData, sessionModelName, skipValidation)
 			if (!res.success) {
@@ -660,7 +660,7 @@ module.exports = class SessionsHelper {
 			if (bodyData.status == common.VALID_STATUS) {
 				bodyData.status = sessionDetail.status
 			}
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgCode)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			if (!method === common.DELETE_METHOD) {
 				let res = utils.validateInput(bodyData, validationData, sessionModelName, skipValidation)
 				if (!res.success) {
@@ -3232,6 +3232,21 @@ module.exports = class SessionsHelper {
 				})
 			}
 
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			const creationData = {
 				name: utils.extractFilename(filePath),
 				input_path: filePath,
@@ -3240,6 +3255,8 @@ module.exports = class SessionsHelper {
 				organization_code: organizationCode,
 				created_by: userId,
 				tenant_code: tenantCode,
+				defaultTenantCode: defaults.orgCode,
+				defaultOrganiztionCode: defaults.tenantCode,
 			}
 
 			const result = await fileUploadQueries.create(creationData, tenantCode)
@@ -3278,6 +3295,7 @@ module.exports = class SessionsHelper {
 						organization_id: organizationId,
 						organization_code: organizationCode,
 						org_name: orgDetails.name,
+						tenant_code: tenantCode,
 					},
 				},
 				{

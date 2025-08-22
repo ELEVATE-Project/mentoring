@@ -15,8 +15,7 @@ module.exports = class OrganizationService {
 					code: { [Op.in]: [bodyData.mentee_feedback_question_set, bodyData.mentor_feedback_question_set] },
 					tenant_code: tenantCode,
 				},
-				['id', 'code'],
-				tenantCode
+				['id', 'code']
 			)
 			if (
 				questionSets.length === 0 ||

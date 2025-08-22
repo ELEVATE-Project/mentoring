@@ -220,11 +220,7 @@ module.exports = class OrgAdmin {
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
 
-			const updateTheme = await orgAdminService.updateTheme(
-				req.body,
-				req.decodedToken.organization_code,
-				tenantCode
-			)
+			const updateTheme = await orgAdminService.updateTheme(req.body, organizationCode, tenantCode)
 			return updateTheme
 		} catch (error) {
 			return error

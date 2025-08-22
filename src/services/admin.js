@@ -539,27 +539,29 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async unenrollFromUpcomingSessions(userId) {
+	static async unenrollFromUpcomingSessions(userId, tenantCode) {
 		try {
-			const upcomingSessions = await sessionQueries.getAllUpcomingSessions(false)
+			const upcomingSessions = await sessionQueries.getAllUpcomingSessions(false, tenantCode)
 
 			const upcomingSessionsId = upcomingSessions.map((session) => session.id)
 			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
 				userId,
-				upcomingSessionsId
+				upcomingSessionsId,
+				tenantCode
 			)
 			if (usersUpcomingSessions.length === 0) {
 				return true
 			}
 			await Promise.all(
 				usersUpcomingSessions.map(async (session) => {
-					await sessionQueries.updateEnrollmentCount(session.session_id, true)
+					await sessionQueries.updateEnrollmentCount(session.session_id, true, tenantCode)
 				})
 			)
 
 			const unenrollFromUpcomingSessions = await sessionAttendeesQueries.unenrollFromUpcomingSessions(
 				userId,
-				upcomingSessionsId
+				upcomingSessionsId,
+				tenantCode
 			)
 			return true
 		} catch (error) {

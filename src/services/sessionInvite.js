@@ -7,11 +7,8 @@ const path = require('path')
 const csv = require('csvtojson')
 const axios = require('axios')
 const common = require('@constants/common')
-const fileService = require('@services/files')
-const request = require('request')
 const userRequests = require('@requests/user')
 const sessionService = require('@services/sessions')
-const { isAMentor } = require('@generics/utils')
 const ProjectRootDir = path.join(__dirname, '../')
 const fileUploadQueries = require('@database/queries/fileUpload')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
@@ -33,6 +30,10 @@ module.exports = class UserInviteHelper {
 				const userId = data.user.id
 				const orgId = data.user.organization_id
 				const notifyUser = true
+				const tenantCode = data.user.tenant_code
+				const orgCode = data.user.organization_code
+				const defaultOrgCode = data.user.defaultOrganiztionCode
+				const defaultTenantCode = data.user.defaultTenantCode
 
 				const mentor = await menteeExtensionQueries.getMenteeExtension(userId, ['is_mentor'], false, tenantCode)
 				if (!mentor) throw createUnauthorizedResponse('USER_NOT_FOUND')
@@ -55,7 +56,11 @@ module.exports = class UserInviteHelper {
 					userId,
 					orgId,
 					notifyUser,
-					isMentor
+					isMentor,
+					tenantCode,
+					orgCode,
+					defaultOrgCode,
+					defaultTenantCode
 				)
 				if (createResponse.success == false) console.log(':::::::::', createResponse.message)
 				const outputFilename = path.basename(createResponse.result.outputFilePath)
@@ -82,7 +87,8 @@ module.exports = class UserInviteHelper {
 				if (templateCode) {
 					const templateData = await notificationTemplateQueries.findOneEmailTemplate(
 						templateCode,
-						data.user.organization_id
+						data.user.organization_code,
+						defaults.tenantCode
 					)
 
 					if (templateData) {
@@ -400,7 +406,7 @@ module.exports = class UserInviteHelper {
 		return { ...restOfSession, custom_entities }
 	}
 
-	static async processSession(session, userId, orgCode, validRowsCount, invalidRowsCount) {
+	static async processSession(session, userId, orgCode, validRowsCount, invalidRowsCount, tenantCode) {
 		const requiredFields = [
 			'action',
 			'title',
@@ -565,13 +571,18 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [orgCode, defaults.orgCode],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [orgCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				model_names: { [Op.contains]: [sessionModelName] },
-			})
+				{
+					[Op.in]: [tenantCode, defaults.tenantCode],
+				}
+			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,
 				entities: item.entities,
@@ -708,7 +719,18 @@ module.exports = class UserInviteHelper {
 		}
 	}
 
-	static async processSessionDetails(csvData, sessionFileDir, userId, orgId, notifyUser, isMentor) {
+	static async processSessionDetails(
+		csvData,
+		sessionFileDir,
+		userId,
+		orgId,
+		notifyUser,
+		isMentor,
+		tenantCode,
+		orgCode,
+		defaultOrgCode,
+		defaultTenantCode
+	) {
 		try {
 			const outputFileName = utils.generateFileName(common.sessionOutputFile, common.csvExtension)
 			let rowsWithStatus = []
@@ -721,7 +743,14 @@ module.exports = class UserInviteHelper {
 							validRowsCount: valid,
 							invalidRowsCount: invalid,
 							processedSession,
-						} = await this.processSession(session, userId, orgId, validRowsCount, invalidRowsCount)
+						} = await this.processSession(
+							session,
+							userId,
+							orgId,
+							validRowsCount,
+							invalidRowsCount,
+							tenantCode
+						)
 						validRowsCount = valid
 						invalidRowsCount = invalid
 						rowsWithStatus.push(processedSession)
@@ -788,7 +817,9 @@ module.exports = class UserInviteHelper {
 				userId,
 				orgId,
 				isMentor,
-				notifyUser
+				notifyUser,
+				tenantCode,
+				orgCode
 			)
 
 			await this.fetchMentorIds(sessionCreationOutput)
@@ -932,7 +963,7 @@ module.exports = class UserInviteHelper {
 		}
 	}
 
-	static async processCreateData(SessionsArray, userId, orgId, isMentor, notifyUser) {
+	static async processCreateData(SessionsArray, userId, orgId, isMentor, notifyUser, tenantCode, orgCode) {
 		const output = []
 		for (const data of SessionsArray) {
 			if (data.status != 'Invalid') {
@@ -951,8 +982,10 @@ module.exports = class UserInviteHelper {
 						dataWithoutId,
 						userId,
 						orgId,
+						orgCode,
 						isMentor,
-						notifyUser
+						notifyUser,
+						tenantCode
 					)
 					if (sessionCreation.statusCode === httpStatusCode.created) {
 						data.statusMessage = this.appendWithComma(data.statusMessage, sessionCreation.message)
@@ -994,7 +1027,9 @@ module.exports = class UserInviteHelper {
 						userId,
 						data.method,
 						orgId,
-						notifyUser
+						orgCode,
+						notifyUser,
+						tenantCode
 					)
 					if (sessionUpdateOrDelete.statusCode === httpStatusCode.accepted) {
 						data.statusMessage = this.appendWithComma(data.statusMessage, sessionUpdateOrDelete.message)

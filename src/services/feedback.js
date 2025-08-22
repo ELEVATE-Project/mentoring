@@ -8,6 +8,7 @@ const feedbackQueries = require('@database/queries/feedback')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const responses = require('@helpers/responses')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 module.exports = class MenteesHelper {
 	/**
@@ -347,16 +348,30 @@ module.exports = class MenteesHelper {
 
 const getFeedbackQuestions = async function (formCode, tenantCode) {
 	try {
+		const defaults = await getDefaults()
+		if (!defaults.orgCode)
+			return responses.failureResponse({
+				message: 'DEFAULT_ORG_CODE_NOT_SET',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		if (!defaults.tenantCode)
+			return responses.failureResponse({
+				message: 'DEFAULT_TENANT_CODE_NOT_SET',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+
 		let questionSet = await questionSetQueries.findOneQuestionSet({
 			code: formCode,
-			tenant_code: tenantCode,
+			tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 		})
 
 		let result = {}
 		if (questionSet && questionSet.questions) {
 			let questions = await questionsQueries.find({
 				id: questionSet.questions,
-				tenant_code: tenantCode,
+				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 			})
 			const questionIndexMap = new Map()
 			questionSet.questions.forEach((id, index) => {

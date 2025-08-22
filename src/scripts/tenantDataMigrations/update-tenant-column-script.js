@@ -396,12 +396,12 @@ class TenantMigrationFinalizer {
 		console.log('\n📊 PHASE 5: Creating unique indexes...')
 		console.log('='.repeat(50))
 
-		// Based on "Unique constraints" column from provided data - ONLY what was specified
+		// Updated unique constraints to include tenant_code for Citus distribution compatibility
 		const indexConfigs = [
 			{
 				table: 'availabilities',
-				name: 'unique_availabilities_event_name',
-				columns: 'event_name',
+				name: 'unique_availabilities_event_name_tenant',
+				columns: 'tenant_code, event_name',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
@@ -430,20 +430,20 @@ class TenantMigrationFinalizer {
 			},
 			{
 				table: 'forms',
-				name: 'unique_forms_type_subtype_org',
-				columns: 'type, sub_type, organization_id',
+				name: 'unique_forms_type_subtype_org_tenant',
+				columns: 'type, sub_type, organization_id, tenant_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
 				table: 'modules',
-				name: 'unique_modules_code',
-				columns: 'code',
+				name: 'unique_modules_code_tenant',
+				columns: 'code, tenant_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
 				table: 'notification_templates',
-				name: 'unique_notification_templates_code_org',
-				columns: 'code, organization_id',
+				name: 'unique_notification_templates_code_org_tenant',
+				columns: 'code, organization_id, tenant_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
@@ -454,8 +454,8 @@ class TenantMigrationFinalizer {
 			},
 			{
 				table: 'report_role_mapping',
-				name: 'unique_report_role_mapping_role_code',
-				columns: 'role_title, report_code',
+				name: 'unique_report_role_mapping_role_code_tenant',
+				columns: 'role_title, report_code, tenant_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
@@ -465,16 +465,28 @@ class TenantMigrationFinalizer {
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
+				table: 'reports',
+				name: 'unique_reports_code_organization_tenant',
+				columns: 'code, organization_id, tenant_code',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
+				table: 'report_queries',
+				name: 'unique_report_queries_code_organization_tenant',
+				columns: 'report_code, organization_id, tenant_code',
+				condition: 'WHERE deleted_at IS NULL',
+			},
+			{
 				table: 'role_extensions',
-				name: 'unique_role_extensions_title',
-				columns: 'title',
+				name: 'unique_role_extensions_title_tenant',
+				columns: 'title, tenant_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
 				table: 'user_extensions',
-				name: 'unique_user_extensions_user_tenant_email_phone_name',
-				columns: 'user_id, tenant_code, email, phone, name',
-				condition: 'WHERE deleted_at IS NULL',
+				name: 'unique_user_extensions_user_tenant_email_phone',
+				columns: 'user_id, tenant_code, email, phone',
+				condition: 'WHERE deleted_at IS NULL AND email IS NOT NULL AND phone IS NOT NULL',
 			},
 		]
 

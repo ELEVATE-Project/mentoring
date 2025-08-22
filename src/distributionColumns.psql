@@ -11,7 +11,6 @@ SELECT create_distributed_table('issues', 'tenant_code');
 SELECT create_distributed_table('modules', 'tenant_code');
 SELECT create_distributed_table('notification_templates', 'tenant_code');
 SELECT create_distributed_table('organization_extension', 'tenant_code');
-SELECT create_distributed_table('post_session_details', 'tenant_code');
 SELECT create_distributed_table('question_sets', 'tenant_code');
 SELECT create_distributed_table('questions', 'tenant_code');
 SELECT create_distributed_table('report_queries', 'tenant_code');

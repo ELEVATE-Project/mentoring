@@ -126,8 +126,8 @@ module.exports = class EntityHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			const entities = await entityTypeQueries.findAllEntityTypes(
-				[orgCode, defaults.orgCode],
-				[defaults.tenantCode, tenantCode],
+				{ [Op.or]: [orgCode, defaults.orgCode] },
+				{ [Op.in]: [tenantCode, defaults.tenantCode] },
 				attributes
 			)
 
@@ -171,9 +171,9 @@ module.exports = class EntityHelper {
 				},
 				tenant_code: { [Op.in]: [defaults.tenantCode, tenantCode] },
 			}
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
 
-			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, orgCode)
+			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 
 			if (prunedEntities.length == 0) {
 				return responses.failureResponse({

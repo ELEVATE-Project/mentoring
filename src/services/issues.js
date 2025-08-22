@@ -40,7 +40,7 @@ module.exports = class issuesHelper {
 			if (process.env.ENABLE_EMAIL_FOR_REPORT_ISSUE === 'true') {
 				const templateData = await notificationTemplateQueries.findOneEmailTemplate(
 					process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE,
-					decodedToken.organization_id,
+					decodedToken.organization_code,
 					tenantCode
 				)
 

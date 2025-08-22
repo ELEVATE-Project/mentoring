@@ -69,7 +69,7 @@ module.exports = class MenteeExtensionQueries {
 		}
 	}
 
-	static async addVisibleToOrg(organizationId, newRelatedOrgs, options = {}) {
+	static async addVisibleToOrg(organizationId, newRelatedOrgs, options = {}, tenantCode) {
 		// Update user extension and concat related org to the org id
 		await MenteeExtension.update(
 			{
@@ -94,6 +94,7 @@ module.exports = class MenteeExtensionQueries {
 							},
 						},
 					],
+					tenant_code: tenantCode,
 				},
 				...options,
 				individualHooks: true,
@@ -125,6 +126,7 @@ module.exports = class MenteeExtensionQueries {
 							},
 						},
 					],
+					tenant_code: tenantCode,
 				},
 				individualHooks: true,
 				...options,

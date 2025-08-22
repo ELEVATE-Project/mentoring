@@ -414,7 +414,7 @@ module.exports = class MentorsHelper {
 			})
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgCode)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			let res = utils.validateInput(data, validationData, mentorExtensionsModelName, skipValidation)
 			if (!res.success) {
 				return responses.failureResponse({
@@ -523,7 +523,7 @@ module.exports = class MentorsHelper {
 				},
 				model_names: { [Op.contains]: [mentorExtensionsModelName] },
 			})
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgCode)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			let mentorExtensionsModel = await mentorQueries.getColumns()
 
 			let res = utils.validateInput(data, validationData, mentorExtensionsModelName, skipValidation)
@@ -813,7 +813,7 @@ module.exports = class MentorsHelper {
 			}
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgCode)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			const processDbResponse = utils.processDbResponse(mentorExtension, validationData)
 			const totalSessionHosted = await sessionQueries.countHostedSessions(id, tenantCode)
 

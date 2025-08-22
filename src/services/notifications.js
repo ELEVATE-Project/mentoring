@@ -16,7 +16,7 @@ module.exports = class Notifications {
 	 * @returns
 	 */
 
-	static async sendNotification(notificationJobId, notificataionTemplate, jobCreatorOrgId = '', tenantCode) {
+	static async sendNotification(notificationJobId, notificataionTemplate, jobCreatorOrgCode = '', tenantCode) {
 		try {
 			// Data contains notificationJobId and notificationTemplate.
 			// Extract sessionId from incoming notificationJobId.
@@ -39,7 +39,7 @@ module.exports = class Notifications {
 			// Get email template based on incoming request.
 			let emailTemplate = await notificationQueries.findOneEmailTemplate(
 				notificataionTemplate,
-				jobCreatorOrgId,
+				jobCreatorOrgCode,
 				tenantCode
 			)
 

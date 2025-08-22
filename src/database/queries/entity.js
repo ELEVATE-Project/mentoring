@@ -14,7 +14,7 @@ module.exports = class UserEntityData {
 
 	static async findAllEntities(filter, tenantCode, options = {}) {
 		try {
-			if (tenantCodes) {
+			if (tenantCode) {
 				filter.tenant_code = tenantCode
 			}
 			return await Entity.findAll({
