@@ -250,6 +250,8 @@ exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 			},
 			{
 				where: {
+					mentor_id: userId,
+					created_by: userId,
 					id: { [Op.in]: upcomingSessionIds },
 					tenant_code: tenantCode,
 				},
@@ -261,6 +263,7 @@ exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 			},
 			{
 				where: {
+					user_id: userId,
 					session_id: { [Op.in]: upcomingSessionIds },
 					tenant_code: tenantCode,
 				},
@@ -1030,6 +1033,19 @@ exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 		return sessionsToDelete
 	} catch (error) {
 		throw error
+	}
+}
+
+exports.addOwnership = async (sessionId, mentorId) => {
+	try {
+		await sessionOwnership.create({
+			user_id: mentorId,
+			session_id: sessionId,
+			type: common.SESSION_OWNERSHIP_TYPE.MENTOR,
+		})
+		return true
+	} catch (error) {
+		return error
 	}
 }
 

@@ -21,6 +21,7 @@ const userExtensionQueries = require('@database/queries/userExtension')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { sequelize } = require('@database/models/index')
 const { literal } = require('sequelize')
+const sessionOwnerships = require('@database/queries/sessionOwnership')
 
 // Generic notification helper class
 class NotificationHelper {
@@ -268,6 +269,7 @@ module.exports = class AdminService {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+
 			if (requestSessions.allSessionRequestIds.length > 0) {
 				const { allSessionRequestIds = [], requestedSessions = [], receivedSessions = [] } = requestSessions
 
@@ -316,6 +318,7 @@ module.exports = class AdminService {
 					userInfo.organization_code || ''
 				) //removedSessionsDetail , orgId : "1")
 			}
+
 
 			// send email to SM when mentee is deleted from the private sessions if it is upcoming
 			await this.notifySessionManagerIfMenteeDeleted(userId, userInfo, result)
@@ -687,7 +690,7 @@ module.exports = class AdminService {
 					tenant_code: tenantCode,
 				})
 
-				if (attendeeCount === 1) {
+				if (attendeeCount === 1 && session.mentor_id == session.created_by) {
 					// This is a one-on-one private session, cancel it and notify mentor
 					const notificationSent = await this.notifyMentorAboutPrivateSessionCancellation(
 						session.mentor_id,
@@ -704,6 +707,11 @@ module.exports = class AdminService {
 					await sessionQueries.updateRecords(
 						{ deleted_at: new Date() },
 						{ where: { id: session.id, tenant_code: tenantCode } },
+						transaction
+					)
+					await sessionOwnerships.updateRecords(
+						{ deleted_at: new Date() },
+						{ where: { id: session.id, user_id: session.mentor_id } },
 						transaction
 					)
 
@@ -1089,7 +1097,10 @@ module.exports = class AdminService {
 
 				// update upcoming sessions of mentor to set as deleted if he created only
 				const sessionIds = [...new Set(upcomingSessions.map((s) => s.id))]
-				await sessionQueries.updateRecords({ deleted_at: new Date() }, { where: { id: sessionIds } })
+				await sessionQueries.updateRecords(
+					{ deleted_at: new Date() },
+					{ where: { id: sessionIds, created_by: mentorUserId } }
+				)
 			} else {
 				result.isSessionManagerNotifiedForMentorDelete = true
 			}
@@ -1334,6 +1345,7 @@ module.exports = class AdminService {
 				const managerSessions = sessionsByManager[managerId]
 
 				// Get session manager details
+
 				const managerDetails = await userExtensionQueries.getUsersByUserIds([managerId], {
 					attributes: ['name', 'email'],
 					tenantCode,
@@ -1394,6 +1406,7 @@ module.exports = class AdminService {
 					},
 					false,
 					tenantCode
+
 				)
 
 				if (attendeeDetails.length > 0) {

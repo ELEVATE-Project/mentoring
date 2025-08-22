@@ -804,8 +804,10 @@ const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false,
 			await Promise.all(
 				userDetails.map(async function (user) {
 					if (user.email) {
-						const decryptedEmail = await emailEncryption.decryptAndValidate(user.email)
-						user.email = decryptedEmail || user.email // Keep original if decryption fails
+						let decryptedEmail = await emailEncryption.decryptAndValidate(user.email)
+						if (decryptedEmail) {
+							user.email = decryptedEmail
+						}
 					}
 
 					if (user.image) {

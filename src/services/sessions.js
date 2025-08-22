@@ -335,7 +335,7 @@ module.exports = class SessionsHelper {
 						sessionAttendeesIds.push(attendee.mentee_id)
 					})
 
-					const attendeesAccounts = await userRequests.getUserDetailedList(sessionAttendeesIds, tenantCode)
+					const attendeesAccounts = await userRequests.getUserDetailedList(sessionAttendeesIds, tenantCode, false, true)
 
 					sessionAttendees.map((attendee) => {
 						for (let index = 0; index < attendeesAccounts.result.length; index++) {
@@ -793,8 +793,18 @@ module.exports = class SessionsHelper {
 					})
 				}
 
-				if (bodyData.mentor_id != sessionDetail.mentor_id) {
+				if (bodyData.mentor_id && bodyData.mentor_id != sessionDetail.mentor_id) {
+					await sessionQueries.addOwnership(sessionId, bodyData.mentor_id)
 					mentorUpdated = true
+					const newMentor = await mentorExtensionQueries.getMentorExtension(
+						bodyData.mentor_id,
+						['name'],
+						true
+					)
+					if (newMentor?.name) {
+						bodyData.mentor_name = newMentor.name
+					}
+					this.setMentorPassword(sessionId, bodyData.mentor_id)
 				}
 
 				const { rowsAffected, updatedRows } = await sessionQueries.updateOne(
@@ -821,7 +831,9 @@ module.exports = class SessionsHelper {
 					// Confirm if session is edited or not.
 					const updatedSessionDetails = updatedDiff(sessionDetail, updatedSessionData)
 					delete updatedSessionDetails.updated_at
-					delete updatedSessionDetails.mentor_id
+					if (updatedSessionDetails.mentor_id) {
+						delete updatedSessionDetails.mentor_id
+					}
 					const keys = Object.keys(updatedSessionDetails)
 					if (keys.length > 0) {
 						isSessionDataChanged = true
@@ -3063,7 +3075,7 @@ module.exports = class SessionsHelper {
 			}
 
 			// Get mentee name and email from user service
-			const menteeAccounts = await userRequests.getUserDetailedList(menteeIds, tenantCode)
+			const menteeAccounts = await userRequests.getUserDetailedList(menteeIds, tenantCode, false, true)
 
 			if (!menteeAccounts.result || !menteeAccounts.result.length > 0) {
 				return responses.failureResponse({

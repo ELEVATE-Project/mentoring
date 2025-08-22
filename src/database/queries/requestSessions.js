@@ -279,7 +279,7 @@ exports.markRequestsAsDeleted = async (requestSessionIds = [], tenantCode) => {
 exports.getPendingSessionRequests = async (userId, tenant_code) => {
 	try {
 		const query = `
-			SELECT rs.*, rm.requestee_id
+			SELECT rs.*, rm.requestee_id as userId
 			FROM session_request rs
 			INNER JOIN session_request_mapping rm ON rs.id = rm.request_session_id
 			WHERE rm.requestee_id = :userId 

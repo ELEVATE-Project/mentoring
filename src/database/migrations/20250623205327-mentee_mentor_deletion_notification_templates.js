@@ -43,7 +43,7 @@ module.exports = {
 			{
 				code: 'session_deleted_mentor_deletion_email',
 				subject: '{sessionName} Deleted',
-				body: `<p>Hi {attendeeName},</p><p><strong>{sessionName}</strong></p><p>This session has been deleted. Mentor for this session is no longer available.</p><p>You can search for other sessions or mentors on the platform.</p>`,
+				body: `<p>Hi,</p><p><strong>{sessionName}</strong></p><p>This session has been deleted. Mentor for this session is no longer available.</p>`,
 			},
 		]
 
