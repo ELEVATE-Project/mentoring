@@ -35,7 +35,7 @@ module.exports = (sequelize, DataTypes) => {
 			},
 			mentor_id: {
 				type: DataTypes.STRING,
-				allowNull: false,
+				allowNull: true,
 			},
 			session_reschedule: {
 				type: DataTypes.INTEGER,

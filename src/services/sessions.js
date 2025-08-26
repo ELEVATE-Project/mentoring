@@ -923,6 +923,10 @@ module.exports = class SessionsHelper {
 				let mentorChangedTemplate
 				if (method == common.DELETE_METHOD) {
 					let sessionDeleteEmailTemplate = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE
+					if (!sessionDetail.mentor_id && sessionDetail.mentor_name == common.USER_NOT_FOUND) {
+						sessionDeleteEmailTemplate = process.env.SESSION_CREATOR_DELETE_SESSION_EMAIL_TEMPLATE
+					}
+
 					// commenting this part for 2.6 release products confirmed to use the new delete email template for all.
 					// Keeping this logic because if new template for mentor deleting a session is added we can use it.
 					// isSessionCreatedByManager
@@ -998,7 +1002,9 @@ module.exports = class SessionsHelper {
 							type: 'email',
 							email: {
 								to: attendee.attendeeEmail,
-								subject: templateData.subject,
+								subject: utils.composeEmailBody(templateData.subject, {
+									sessionTitle: sessionDetail.title,
+								}),
 								body: utils.composeEmailBody(templateData.body, {
 									name: attendee.attendeeName,
 									sessionTitle: sessionDetail.title,
@@ -1692,6 +1698,7 @@ module.exports = class SessionsHelper {
 				userId = userTokenData.user_id
 				email = userTokenData.email
 				name = userTokenData.name
+
 				emailTemplateCode = process.env.MENTEE_SESSION_ENROLLMENT_BY_MANAGER_EMAIL_TEMPLATE // update with new template
 				enrollmentType = common.INVITED
 			}
@@ -1750,6 +1757,21 @@ module.exports = class SessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+			let creatorName
+			if (
+				enrollmentType === common.INVITED &&
+				session.type == common.SESSION_TYPE.PUBLIC &&
+				session.created_by != session.mentor_id
+			) {
+				emailTemplateCode = process.env.MENTEE_PUBLIC_SESSION_ENROLLMENT_BY_MANAGER_EMAIL_TEMPLATE
+				const sessionCreatorName = await menteeExtensionQueries.getMenteeExtension(
+					session.created_by,
+					['name'],
+					true
+				)
+				creatorName = sessionCreatorName.name
+			}
+
 			// check if the session is accessible to the user
 			let isAccessible = await this.checkIfSessionIsAccessible(session, userId, isAMentor, tenantCode)
 
@@ -1817,6 +1839,7 @@ module.exports = class SessionsHelper {
 							name,
 							sessionTitle: session.title,
 							mentorName: session.mentor_name,
+							managerName: creatorName ? creatorName : '',
 							startDate: utils.getTimeZone(session.start_date, common.dateFormat, session.time_zone),
 							startTime: utils.getTimeZone(session.start_date, common.timeFormat, session.time_zone),
 							sessionDuration: Math.round(elapsedMinutes),
