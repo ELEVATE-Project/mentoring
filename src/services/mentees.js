@@ -1296,6 +1296,8 @@ module.exports = class MenteesHelper {
 				)
 
 				if (connectionDetails?.data?.length > 0) {
+					pageNo = null
+					pageSize = null
 					connectedMenteeIds = connectionDetails.data.map((item) => item.user_id)
 					// if (!connectedMenteeIds.includes(userId)) {
 					// 	connectedMenteeIds.push(userId)

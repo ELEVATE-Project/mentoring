@@ -1174,7 +1174,10 @@ module.exports = class AdminService {
 
 		// Delete the sessions
 		const sessionIds = [...new Set(sessionsToUpdate.map((s) => s.id))]
-		await sessionQueries.updateRecords({ mentor_name: common.USER_NOT_FOUND }, { where: { id: sessionIds } })
+		await sessionQueries.updateRecords(
+			{ mentor_name: common.USER_NOT_FOUND, mentor_id: null },
+			{ where: { id: sessionIds } }
+		)
 
 		console.log(`Update ${sessionIds.length} sessions with assigned mentor`)
 		return true

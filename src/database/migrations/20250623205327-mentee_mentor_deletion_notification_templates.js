@@ -33,7 +33,7 @@ module.exports = {
 			{
 				code: 'session_request_rejected_mentor_deletion_email',
 				subject: 'Session Request Rejected',
-				body: `<p>Hi {menteeName},</p><p><strong>{sessionName}</strong></p><p>This session request has been rejected and deleted. Requested Mentor for this session is no longer available.</p><p>You can search for other mentors and send new session requests.</p>`,
+				body: `<p>Hi,</p><p><strong>{sessionName}</strong></p><p>This session request has been rejected and deleted. Requested Mentor for this session is no longer available.</p>`,
 			},
 			{
 				code: 'session_manager_mentor_deletion_email',
