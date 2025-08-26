@@ -302,7 +302,7 @@ const getListOfUserDetails = function (userIds, excludeDeletedRecords = false) {
  *   .catch(error => console.error(error));
  */
 
-const getListOfUserDetailsByEmail = function (emailIds) {
+const getListOfUserDetailsByEmail = function (emailIds, tenantCode) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			const encryptedEmailIds = emailIds.map((email) => {
@@ -312,7 +312,7 @@ const getListOfUserDetailsByEmail = function (emailIds) {
 				return emailEncryption.encrypt(email)
 			})
 
-			const userDetails = await menteeQueries.getUsersByEmailIds(encryptedEmailIds)
+			const userDetails = await menteeQueries.getUsersByEmailIds(encryptedEmailIds, tenantCode)
 
 			let ids = []
 

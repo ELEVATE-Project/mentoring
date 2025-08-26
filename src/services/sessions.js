@@ -163,7 +163,13 @@ module.exports = class SessionsHelper {
 				}
 			}
 			// Check if mentor is available for this session's time slot
-			const timeSlot = await this.isTimeSlotAvailable(mentorIdToCheck, bodyData.start_date, bodyData.end_date)
+			const timeSlot = await this.isTimeSlotAvailable(
+				mentorIdToCheck,
+				bodyData.start_date,
+				bodyData.end_date,
+				undefined,
+				tenantCode
+			)
 
 			// If time slot not available return corresponding error
 			if (timeSlot.isTimeSlotAvailable === false) {
@@ -335,7 +341,12 @@ module.exports = class SessionsHelper {
 						sessionAttendeesIds.push(attendee.mentee_id)
 					})
 
-					const attendeesAccounts = await userRequests.getUserDetailedList(sessionAttendeesIds, tenantCode, false, true)
+					const attendeesAccounts = await userRequests.getUserDetailedList(
+						sessionAttendeesIds,
+						tenantCode,
+						false,
+						true
+					)
 
 					sessionAttendees.map((attendee) => {
 						for (let index = 0; index < attendeesAccounts.result.length; index++) {
@@ -379,8 +390,8 @@ module.exports = class SessionsHelper {
 				}
 			}
 
-			await this.setMentorPassword(data.id, data.mentor_id)
-			await this.setMenteePassword(data.id, data.created_at)
+			await this.setMentorPassword(data.id, data.mentor_id, tenantCode)
+			await this.setMenteePassword(data.id, data.created_at, tenantCode)
 
 			const processDbResponse = utils.processDbResponse(data.toJSON(), validationData)
 
@@ -614,7 +625,13 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const timeSlot = await this.isTimeSlotAvailable(userId, bodyData.start_date, bodyData.end_date, sessionId)
+			const timeSlot = await this.isTimeSlotAvailable(
+				userId,
+				bodyData.start_date,
+				bodyData.end_date,
+				sessionId,
+				tenantCode
+			)
 			if (timeSlot.isTimeSlotAvailable === false) {
 				return responses.failureResponse({
 					message: {
@@ -804,7 +821,7 @@ module.exports = class SessionsHelper {
 					if (newMentor?.name) {
 						bodyData.mentor_name = newMentor.name
 					}
-					this.setMentorPassword(sessionId, bodyData.mentor_id)
+					this.setMentorPassword(sessionId, bodyData.mentor_id, tenantCode)
 				}
 
 				const { rowsAffected, updatedRows } = await sessionQueries.updateOne(
@@ -1287,6 +1304,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 
+			// Check if user already enrolled using existing logic
 			let sessionAttendee = await sessionAttendeesQueries.findOne(
 				{
 					session_id: sessionDetails.id,
@@ -1791,7 +1809,13 @@ module.exports = class SessionsHelper {
 				type: enrollmentType,
 			}
 
-			await sessionAttendeesQueries.create(attendee, tenantCode)
+			// Optimized: Use findOrCreate to handle enrollment atomically
+			const enrollmentResult = await sessionAttendeesQueries.findOrCreateAttendee(attendee, tenantCode)
+
+			if (!enrollmentResult.created) {
+				// User was already enrolled - this shouldn't happen due to earlier check, but handle gracefully
+				sessionAttendee = enrollmentResult.attendee
+			}
 			//	await sessionEnrollmentQueries.create(_.omit(attendee, 'time_zone'))
 
 			if (session.created_by !== userId) {
@@ -1874,8 +1898,9 @@ module.exports = class SessionsHelper {
 				name = userTokenData.name
 				emailTemplateCode = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE // update with new template
 			}
+			// Optimized: Get session with mentor details in single query instead of separate calls
 			if (!session || Object.keys(session).length === 0) {
-				session = await sessionQueries.findById(sessionId, tenantCode)
+				session = await sessionQueries.findByIdWithMentorDetails(sessionId, tenantCode)
 			}
 
 			if (!session) {
@@ -1886,14 +1911,8 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(
-				session.mentor_id,
-				['name'],
-				true,
-				tenantCode
-			)
-
-			session.mentor_name = mentorDetails.name
+			// Extract mentor name from included association instead of separate query
+			session.mentor_name = session.mentor_extension?.name || 'Unknown'
 
 			const deletedRows = await sessionAttendeesQueries.unEnrollFromSession(sessionId, userId, tenantCode)
 			if (deletedRows === 0) {
@@ -2190,19 +2209,22 @@ module.exports = class SessionsHelper {
 	 * @name setMentorPassword
 	 * @param {String} sessionId - session id.
 	 * @param {String} userId - user id.
+	 * @param {String} tenantCode - tenant code for multi-tenant isolation.
 	 * @returns {JSON} - updated session data.
 	 */
 
-	static async setMentorPassword(sessionId, userId) {
+	static async setMentorPassword(sessionId, userId, tenantCode) {
 		try {
 			let hashPassword = utils.hash('' + sessionId + userId + '')
 			const result = await sessionQueries.updateOne(
 				{
 					id: sessionId,
+					tenant_code: tenantCode,
 				},
 				{
 					mentor_password: hashPassword,
-				}
+				},
+				tenantCode
 			)
 
 			return result
@@ -2216,20 +2238,23 @@ module.exports = class SessionsHelper {
 	 * @method
 	 * @name setMenteePassword
 	 * @param {String} sessionId - session id.
-	 * @param {String} userId - user id.
+	 * @param {String} createdAt - created at timestamp.
+	 * @param {String} tenantCode - tenant code for multi-tenant isolation.
 	 * @returns {JSON} - update session data.
 	 */
 
-	static async setMenteePassword(sessionId, createdAt) {
+	static async setMenteePassword(sessionId, createdAt, tenantCode) {
 		try {
 			let hashPassword = utils.hash(sessionId + createdAt)
 			const result = await sessionQueries.updateOne(
 				{
 					id: sessionId,
+					tenant_code: tenantCode,
 				},
 				{
 					mentee_password: hashPassword,
-				}
+				},
+				tenantCode
 			)
 
 			return result
@@ -2339,12 +2364,15 @@ module.exports = class SessionsHelper {
 				if (recordingInfo?.data?.response) {
 					const { recordings } = recordingInfo.data.response
 
-					// Update recording info in post_session_table
-					await postSessionQueries.create({
-						session_id: sessionId,
-						recording_url: recordings.recording.playback.format.url,
-						recording: recordings,
-					})
+					// Optimized: Create post session details with built-in session validation
+					await postSessionQueries.createWithSessionValidation(
+						{
+							session_id: sessionId,
+							recording_url: recordings.recording.playback.format.url,
+							recording: recordings,
+						},
+						tenantCode
+					)
 				}
 			}
 
@@ -2455,12 +2483,20 @@ module.exports = class SessionsHelper {
 	 * @param {String} id - user id.
 	 * @param {String} startDate - start date in utc.
 	 * @param {String} endDate - end date in utc.
+	 * @param {String} sessionId - session id to exclude from check.
+	 * @param {String} tenantCode - tenant code for multi-tenant isolation.
 	 * @returns {String} - STAR_AND_END_DATE_OVERLAP/START_DATE_OVERLAP/END_DATE_OVERLAP.
 	 */
 
-	static async isTimeSlotAvailable(id, startDate, endDate, sessionId) {
+	static async isTimeSlotAvailable(id, startDate, endDate, sessionId, tenantCode) {
 		try {
-			const sessions = await sessionQueries.getSessionByUserIdAndTime(id, startDate, endDate, sessionId)
+			const sessions = await sessionQueries.getSessionByUserIdAndTime(
+				id,
+				startDate,
+				endDate,
+				sessionId,
+				tenantCode
+			)
 			if (
 				!sessions ||
 				(sessions.startDateResponse.length < process.env.SESSION_CREATION_MENTOR_LIMIT &&

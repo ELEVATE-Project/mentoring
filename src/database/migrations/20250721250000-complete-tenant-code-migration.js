@@ -6,7 +6,7 @@ module.exports = {
 			console.log('🚀 Starting simplified tenant-code column addition migration...')
 			console.log('='.repeat(70))
 
-			// Tables that need tenant_code column (all 25 tables from helper.js)
+			// Tables that need tenant_code column (all 26 tables from helper.js)
 			const allTables = [
 				'availabilities',
 				'connection_requests',
@@ -21,6 +21,7 @@ module.exports = {
 				'modules',
 				'notification_templates',
 				'organization_extension',
+				'post_session_details',
 				'question_sets',
 				'questions',
 				'report_queries',

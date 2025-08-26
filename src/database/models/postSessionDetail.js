@@ -13,6 +13,11 @@ module.exports = (sequelize, DataTypes) => {
 				allowNull: false,
 				primaryKey: true,
 			},
+			tenant_code: {
+				type: DataTypes.STRING,
+				allowNull: false,
+				primaryKey: true,
+			},
 			recording: {
 				type: DataTypes.JSON,
 			},

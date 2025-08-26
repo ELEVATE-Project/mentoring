@@ -559,16 +559,29 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
-	static async getAllUsersByIds(ids) {
+	static async getAllUsersByIds(ids, tenantCode) {
 		try {
 			const excludeUserIds = ids.length === 0
 			const userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.map((id) => `'${id}'`).join(',')})`
+			const tenantFilterClause = tenantCode ? `tenant_code = '${tenantCode}'` : ''
+
+			// Combine filters with proper AND logic
+			let whereClause = ''
+			if (userFilterClause && tenantFilterClause) {
+				whereClause = `${userFilterClause} AND ${tenantFilterClause}`
+			} else if (userFilterClause) {
+				whereClause = userFilterClause
+			} else if (tenantFilterClause) {
+				whereClause = tenantFilterClause
+			} else {
+				whereClause = '1=1' // Default to all records if no filters
+			}
 
 			const query = `
 				SELECT *
 				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
 				WHERE
-					${userFilterClause}
+					${whereClause}
 				`
 
 			const results = await Sequelize.query(query, {
@@ -595,16 +608,29 @@ module.exports = class MenteeExtensionQueries {
 	 * const users = await getUsersByEmailIds(emailIds);
 	 * console.log(users); // Outputs an array of user records matching the provided email IDs.
 	 */
-	static async getUsersByEmailIds(emailIds) {
+	static async getUsersByEmailIds(emailIds, tenantCode) {
 		try {
-			const userFilterClause =
+			const emailFilterClause =
 				emailIds.length === 0 ? '' : `email IN (${emailIds.map((id) => `'${id}'`).join(',')})`
+			const tenantFilterClause = tenantCode ? `tenant_code = '${tenantCode}'` : ''
+
+			// Combine filters with proper AND logic
+			let whereClause = ''
+			if (emailFilterClause && tenantFilterClause) {
+				whereClause = `${emailFilterClause} AND ${tenantFilterClause}`
+			} else if (emailFilterClause) {
+				whereClause = emailFilterClause
+			} else if (tenantFilterClause) {
+				whereClause = tenantFilterClause
+			} else {
+				whereClause = '1=1' // Default to all records if no filters
+			}
 
 			const query = `
 				SELECT *
 				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
 				WHERE
-					${userFilterClause}
+					${whereClause}
 				`
 
 			const results = await Sequelize.query(query, {

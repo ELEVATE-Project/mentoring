@@ -19,8 +19,9 @@ module.exports = class availabilityHelper {
 	 * @param {Object} decodedToken - The decoded token object.
 	 * @returns {Promise<Object>} - The response object.
 	 */
-	static async create(bodyData, decodedToken, tenantCode) {
+	static async create(bodyData, decodedToken) {
 		try {
+			const tenantCode = decodedToken.tenant_code
 			bodyData['created_by'] = decodedToken.id
 			bodyData['updated_by'] = decodedToken.id
 			bodyData['user_id'] = decodedToken.id
@@ -59,8 +60,9 @@ module.exports = class availabilityHelper {
 	 * @param {Object} decodedToken - The decoded token object.
 	 * @returns {Promise<Object>} - The response object.
 	 */
-	static async update(id, bodyData, decodedToken, tenantCode) {
+	static async update(id, bodyData, decodedToken) {
 		try {
+			const tenantCode = decodedToken.tenant_code
 			const filter = { id, created_by: decodedToken.id, tenant_code: tenantCode }
 			const [rowsAffected] = await availabilityQueries.updateAvailability(filter, bodyData, tenantCode)
 
@@ -88,8 +90,9 @@ module.exports = class availabilityHelper {
 	 * @param {Object} decodedToken - The decoded token object.
 	 * @returns {Promise<Object>} - The response object.
 	 */
-	static async delete(id, decodedToken, tenantCode) {
+	static async delete(id, decodedToken) {
 		try {
+			const tenantCode = decodedToken.tenant_code
 			const filter = { id, created_by: decodedToken.id, tenant_code: tenantCode }
 			const rowsAffected = await availabilityQueries.deleteAvailability(filter, tenantCode)
 			console.log(rowsAffected)

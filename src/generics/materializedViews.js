@@ -332,7 +332,7 @@ const getAllowFilteringEntityTypes = async (tenantCode) => {
 
 		return await entityTypeQueries.findAllEntityTypes(
 			defaultOrgCode,
-			tenantCode || process.env.DEFAULT_TENANT_CODE || 'default',
+			tenantCode || process.env.DEFAULT_TENANT_CODE,
 			['id', 'value', 'label', 'data_type', 'organization_id', 'has_entities', 'model_names'],
 			{
 				allow_filtering: true,

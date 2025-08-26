@@ -17,6 +17,7 @@ const startCase = require('lodash/startCase')
 const common = require('@constants/common')
 const crypto = require('crypto')
 const _ = require('lodash')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 const hash = (str) => {
 	const salt = bcryptJs.genSaltSync(10)
@@ -143,9 +144,7 @@ const capitalize = (str) => {
 	return startCase(str)
 }
 const isAMentor = (roles) => {
-	return roles && Array.isArray(roles)
-		? roles.some((role) => role.title == common.MENTOR_ROLE || role.title == common.ADMIN_ROLE)
-		: false
+	return roles && Array.isArray(roles) ? roles.some((role) => role.title == common.MENTOR_ROLE) : false
 }
 function isNumeric(value) {
 	return /^\d+$/.test(value)
@@ -730,14 +729,14 @@ function convertEntitiesForFilter(entityTypes) {
 	return result
 }
 
-function filterEntitiesBasedOnParent(data, defaultOrgId, doNotRemoveDefaultOrg) {
+function filterEntitiesBasedOnParent(data, defaultOrgCode, doNotRemoveDefaultOrg) {
 	let result = {}
 
 	for (let key in data) {
 		let countWithParentId = 0
 		let countOfEachKey = data[key].length
 		data[key].forEach((obj) => {
-			if (obj.parent_id !== null && obj.organization_code != defaultOrgId) {
+			if (obj.parent_id !== null && obj.organization_code != defaultOrgCode) {
 				countWithParentId++
 			}
 		})

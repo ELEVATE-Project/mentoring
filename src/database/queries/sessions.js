@@ -56,6 +56,25 @@ exports.findById = async (id, tenantCode) => {
 	}
 }
 
+exports.findByIdWithMentorDetails = async (id, tenantCode) => {
+	try {
+		// Optimized: Get session with mentor details in single query for un-enrollment flow
+		return await Session.findOne({
+			where: { id, tenant_code: tenantCode },
+			include: [
+				{
+					model: Session.sequelize.models.MentorExtension,
+					as: 'mentor_extension',
+					attributes: ['name'],
+					where: { tenant_code: tenantCode },
+				},
+			],
+		})
+	} catch (error) {
+		return error
+	}
+}
+
 exports.updateOne = async (filter, update, tenantCode, options = {}) => {
 	try {
 		filter.tenant_code = tenantCode

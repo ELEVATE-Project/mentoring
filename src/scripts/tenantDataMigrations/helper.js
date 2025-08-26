@@ -203,6 +203,13 @@ class MentoringDataMigrator {
 				updateColumns: ['tenant_code', 'organization_code'],
 				hasPartitionKey: true,
 			},
+			{
+				name: 'post_session_details',
+				sessionIdColumn: 'session_id',
+				updateColumns: ['tenant_code'],
+				hasPartitionKey: true,
+				useSessionLookup: true,
+			},
 		]
 	}
 
@@ -427,18 +434,122 @@ class MentoringDataMigrator {
 	}
 
 	/**
-	 * Undistribute a table temporarily for updates
+	 * Get foreign key constraints referencing a table
+	 */
+	async getForeignKeyConstraints(tableName) {
+		try {
+			const result = await this.sequelize.query(
+				`
+				SELECT 
+					tc.table_name,
+					tc.constraint_name,
+					kcu.column_name,
+					ccu.table_name AS foreign_table_name,
+					ccu.column_name AS foreign_column_name
+				FROM information_schema.table_constraints AS tc 
+				JOIN information_schema.key_column_usage AS kcu
+					ON tc.constraint_name = kcu.constraint_name
+				JOIN information_schema.constraint_column_usage AS ccu
+					ON ccu.constraint_name = tc.constraint_name
+				WHERE tc.constraint_type = 'FOREIGN KEY' 
+					AND ccu.table_name = '${tableName}'
+			`,
+				{ type: this.sequelize.QueryTypes.SELECT }
+			)
+
+			return result
+		} catch (error) {
+			console.log(`⚠️  Error getting foreign keys for ${tableName}: ${error.message}`)
+			return []
+		}
+	}
+
+	/**
+	 * Drop foreign key constraints temporarily
+	 */
+	async dropForeignKeyConstraints(tableName) {
+		const constraints = await this.getForeignKeyConstraints(tableName)
+		const droppedConstraints = []
+
+		for (const constraint of constraints) {
+			try {
+				await this.sequelize.query(`
+					ALTER TABLE ${constraint.table_name} 
+					DROP CONSTRAINT ${constraint.constraint_name}
+				`)
+				droppedConstraints.push(constraint)
+				console.log(`🔑 Dropped FK constraint: ${constraint.table_name}.${constraint.constraint_name}`)
+			} catch (error) {
+				console.log(`⚠️  Could not drop FK constraint ${constraint.constraint_name}: ${error.message}`)
+			}
+		}
+
+		return droppedConstraints
+	}
+
+	/**
+	 * Recreate foreign key constraints
+	 */
+	async recreateForeignKeyConstraints(droppedConstraints) {
+		for (const constraint of droppedConstraints) {
+			try {
+				await this.sequelize.query(`
+					ALTER TABLE ${constraint.table_name} 
+					ADD CONSTRAINT ${constraint.constraint_name} 
+					FOREIGN KEY (${constraint.column_name}) 
+					REFERENCES ${constraint.foreign_table_name}(${constraint.foreign_column_name})
+				`)
+				console.log(`🔑 Recreated FK constraint: ${constraint.table_name}.${constraint.constraint_name}`)
+			} catch (error) {
+				console.log(`⚠️  Could not recreate FK constraint ${constraint.constraint_name}: ${error.message}`)
+			}
+		}
+	}
+
+	/**
+	 * Undistribute a table temporarily for updates with foreign key handling
 	 */
 	async undistributeTable(tableName) {
 		try {
+			const citusEnabled = await this.isCitusEnabled()
 			const isDistributed = await this.isTableDistributed(tableName)
-			if (isDistributed) {
+
+			if (!citusEnabled || !isDistributed) {
+				return false
+			}
+
+			// Tables that require special FK handling when Citus is enabled
+			const tablesWithForeignKeys = [
+				'entity_types', // Referenced by: entities.entity_type_id, entity_types.parent_id
+				'sessions', // Referenced by: post_session_details.session_id, session_attendees.session_id, resources.session_id
+				'permissions', // Referenced by: role_permission_mapping.permission_id
+			]
+
+			let droppedConstraints = []
+			if (tablesWithForeignKeys.includes(tableName)) {
+				console.log(`🔑 Handling foreign key constraints for ${tableName}...`)
+				droppedConstraints = await this.dropForeignKeyConstraints(tableName)
+			}
+
+			try {
 				await this.sequelize.query(`SELECT undistribute_table('${tableName}')`)
 				console.log(`✅ Undistributed table: ${tableName}`)
 				this.stats.tablesUndistributed++
+
+				// Store dropped constraints for later recreation
+				if (droppedConstraints.length > 0) {
+					this.droppedConstraints = this.droppedConstraints || {}
+					this.droppedConstraints[tableName] = droppedConstraints
+				}
+
 				return true
+			} catch (undistributeError) {
+				// If undistribute fails, recreate the dropped constraints
+				if (droppedConstraints.length > 0) {
+					await this.recreateForeignKeyConstraints(droppedConstraints)
+				}
+				throw undistributeError
 			}
-			return false
 		} catch (error) {
 			console.log(`⚠️  Could not undistribute ${tableName}: ${error.message}`)
 			return false
@@ -446,13 +557,28 @@ class MentoringDataMigrator {
 	}
 
 	/**
-	 * Redistribute table after updates
+	 * Redistribute table after updates with foreign key constraint restoration
 	 */
 	async redistributeTable(tableName) {
 		try {
+			const citusEnabled = await this.isCitusEnabled()
+
+			if (!citusEnabled) {
+				console.log(`✅ Skipping distribution for ${tableName} - Citus not enabled`)
+				return false
+			}
+
 			await this.sequelize.query(`SELECT create_distributed_table('${tableName}', 'tenant_code')`)
 			console.log(`✅ Redistributed table: ${tableName}`)
 			this.stats.tablesRedistributed++
+
+			// Recreate foreign key constraints if they were dropped (only for Citus)
+			if (this.droppedConstraints && this.droppedConstraints[tableName]) {
+				console.log(`🔑 Recreating foreign key constraints for ${tableName}...`)
+				await this.recreateForeignKeyConstraints(this.droppedConstraints[tableName])
+				delete this.droppedConstraints[tableName]
+			}
+
 			return true
 		} catch (error) {
 			console.log(`⚠️  Could not redistribute ${tableName}: ${error.message}`)
@@ -975,67 +1101,82 @@ class MentoringDataMigrator {
 	}
 
 	/**
-	 * Individual processing for session lookup tables (fallback)
+	 * Individual processing for session lookup tables (Citus-compatible)
 	 */
 	async processSessionLookupIndividually(tableName, tableConfig) {
 		const sessionIdColumn = tableConfig.sessionIdColumn
 
-		// Inner join: post_session_details -> sessions -> user_extensions, group by organization_id
-		const [sessionOrgs] = await this.sequelize.query(`
-			SELECT DISTINCT ue.organization_id::text as org_id
-			FROM ${tableName} psd
-			INNER JOIN sessions s ON psd.${sessionIdColumn} = s.id
-			INNER JOIN user_extensions ue ON ue.user_id = s.created_by
-			WHERE ue.organization_id IS NOT NULL
-			ORDER BY org_id
+		// For Citus distributed tables, we need to avoid complex joins
+		// Instead, we'll use a simpler approach: get all sessions first, then match
+		console.log(`🔄 Processing ${tableName} with Citus-compatible approach...`)
+
+		// Step 1: Check what columns exist in the table first
+		const tableColumns = await this.checkTableColumns(tableName)
+		const hasOrgCode = tableColumns.includes('organization_code')
+
+		// Build WHERE clause based on available columns
+		let whereClause = 'tenant_code IS NULL'
+		if (hasOrgCode) {
+			whereClause += ' OR organization_code IS NULL'
+		}
+
+		const [sessionIds] = await this.sequelize.query(`
+			SELECT DISTINCT ${sessionIdColumn} as session_id
+			FROM ${tableName}
+			WHERE ${whereClause}
 		`)
 
-		console.log(`🔄 Processing ${tableName} with ${sessionOrgs.length} organizations individually`)
+		if (sessionIds.length === 0) {
+			console.log(`✅ No rows to update in ${tableName}`)
+			return 0
+		}
 
+		// Step 2: Use a simple UPDATE with correlated subquery to avoid complex joins
 		const transaction = await this.sequelize.transaction()
 		let totalUpdated = 0
 
 		try {
-			// Process organizations in batches
-			for (let i = 0; i < sessionOrgs.length; i += this.BATCH_SIZE) {
-				const orgBatch = sessionOrgs.slice(i, i + this.BATCH_SIZE)
+			// Build SET clause - only update columns that exist in the table
+			const setClauses = []
 
-				for (const org of orgBatch) {
-					const orgData = this.orgLookupCache.get(org.org_id)
-					if (!orgData) continue
-
-					// Build SET clause using CSV data
-					const setClauses = []
-					if (tableConfig.updateColumns.includes('tenant_code')) {
-						setClauses.push(`tenant_code = '${orgData.tenant_code}'`)
-					}
-					if (tableConfig.updateColumns.includes('organization_code')) {
-						setClauses.push(`organization_code = '${orgData.organization_code}'`)
-					}
-					setClauses.push('updated_at = NOW()')
-
-					const [, metadata] = await this.sequelize.query(
-						`
-						UPDATE ${tableName} 
-						SET ${setClauses.join(', ')}
-						FROM sessions s, user_extensions ue
-						WHERE ${tableName}.${sessionIdColumn} = s.id
-						AND ue.user_id = s.created_by
-						AND ue.organization_id::text = '${org.org_id}'
-					`,
-						{ transaction }
-					)
-
-					totalUpdated += metadata.rowCount || 0
-				}
+			if (tableConfig.updateColumns.includes('tenant_code') && tableColumns.includes('tenant_code')) {
+				setClauses.push(`tenant_code = s.tenant_code`)
 			}
 
+			if (tableConfig.updateColumns.includes('organization_code') && tableColumns.includes('organization_code')) {
+				setClauses.push(`organization_code = COALESCE(s.organization_code, '${this.defaults.orgCode}')`)
+			}
+
+			setClauses.push('updated_at = NOW()')
+
+			// Build WHERE clause for UPDATE (only check columns that exist)
+			let updateWhereClause = `${tableName}.tenant_code IS NULL`
+			if (hasOrgCode) {
+				updateWhereClause += ` OR ${tableName}.organization_code IS NULL`
+			}
+
+			// Use UPDATE with FROM clause (PostgreSQL syntax)
+			const [, metadata] = await this.sequelize.query(
+				`
+				UPDATE ${tableName} 
+				SET ${setClauses.join(', ')}
+				FROM sessions s 
+				WHERE ${tableName}.${sessionIdColumn} = s.id
+				AND s.tenant_code IS NOT NULL
+				AND (${updateWhereClause})
+			`,
+				{ transaction }
+			)
+
+			totalUpdated = metadata.rowCount || 0
 			await transaction.commit()
-			return totalUpdated
 		} catch (error) {
 			await transaction.rollback()
 			throw error
 		}
+
+		console.log(`✅ Updated ${totalUpdated} rows in ${tableName} using correlated update`)
+		return totalUpdated
 	}
 
 	/**

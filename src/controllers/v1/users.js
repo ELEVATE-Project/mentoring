@@ -30,7 +30,7 @@ module.exports = class Users {
 
 			const pendingFeedBacks = await feedbackService.pending(
 				userId,
-				isAMentor(req.decodedToken.organizations[0].roles),
+				isAMentor(req.decodedToken.organization.roles),
 				organizationCode,
 				tenantCode
 			)
@@ -107,7 +107,7 @@ module.exports = class Users {
 	async add(req) {
 		try {
 			const tenantCode = req.body.tenant_code
-			const organizationCode = req.body.organizations[0].code
+			const organizationCode = req.body.organization.code
 			const userId = req.body.id
 
 			return await userService.add(req.body, userId, organizationCode, tenantCode)
@@ -128,7 +128,7 @@ module.exports = class Users {
 	async update(req) {
 		try {
 			const tenantCode = req.body.tenant_code
-			const organizationCode = req.body.organizations[0].code
+			const organizationCode = req.body.organization.code
 			const userId = req.body.id
 
 			return await userService.update(req.body, req.decodedToken, userId, organizationCode, tenantCode)

@@ -11,6 +11,25 @@ exports.create = async (data, tenantCode) => {
 	}
 }
 
+exports.findOrCreateAttendee = async (data, tenantCode) => {
+	try {
+		data.tenant_code = tenantCode
+		// Sequelize approach: Atomic find or create - eliminates separate existence check
+		const [attendee, created] = await SessionAttendee.findOrCreate({
+			where: {
+				session_id: data.session_id,
+				mentee_id: data.mentee_id,
+				tenant_code: tenantCode,
+			},
+			defaults: data, // Data to use if creating new record
+		})
+
+		return { attendee, created }
+	} catch (error) {
+		return error
+	}
+}
+
 exports.findOne = async (filter, tenantCode, options = {}) => {
 	try {
 		filter.tenant_code = tenantCode
@@ -51,6 +70,24 @@ exports.unEnrollFromSession = async (sessionId, userId, tenantCode) => {
 		})
 
 		return result
+	} catch (error) {
+		return error
+	}
+}
+
+exports.unEnrollFromSessionWithValidation = async (sessionId, userId, tenantCode) => {
+	try {
+		const { sequelize } = SessionAttendee
+		const deleteQuery = `
+			DELETE sa FROM session_attendees sa
+			INNER JOIN sessions s ON sa.session_id = s.id AND sa.tenant_code = s.tenant_code
+			WHERE sa.session_id = :sessionId AND sa.mentee_id = :userId AND sa.tenant_code = :tenantCode
+		`
+		const [results] = await sequelize.query(deleteQuery, {
+			replacements: { sessionId, userId, tenantCode },
+			type: sequelize.QueryTypes.DELETE,
+		})
+		return results.affectedRows || 0
 	} catch (error) {
 		return error
 	}
@@ -185,26 +222,26 @@ exports.countEnrolledSessions = async (mentee_id, tenantCode) => {
 
 exports.getEnrolledSessionsCountInDateRange = async (startDate, endDate, mentee_id, tenantCode) => {
 	try {
-		let sessionEnrollments = await SessionEnrollment.findAll({
+		// Optimized: Sequelize associations - handles large datasets without memory issues
+		// Single query with JOIN through associations instead of separate queries + in-memory processing
+		const count = await SessionAttendee.count({
 			where: {
-				mentee_id: mentee_id,
+				created_at: { [Op.between]: [startDate, endDate] },
 				tenant_code: tenantCode,
 			},
-		})
-		const sessionIds = sessionEnrollments.map((enrollment) => enrollment.session_id)
-		if (sessionIds.length <= 0) {
-			return 0
-		}
-		return await SessionAttendee.count({
-			where: {
-				created_at: {
-					[Op.between]: [startDate, endDate],
+			include: [
+				{
+					model: SessionEnrollment,
+					as: 'enrollment',
+					where: {
+						mentee_id: mentee_id,
+						tenant_code: tenantCode,
+					},
+					attributes: [], // Don't select enrollment data, just use for filtering
 				},
-				session_id: sessionIds,
-				mentee_id: mentee_id,
-				tenant_code: tenantCode,
-			},
+			],
 		})
+		return count || 0
 	} catch (error) {
 		return error
 	}
@@ -212,26 +249,25 @@ exports.getEnrolledSessionsCountInDateRange = async (startDate, endDate, mentee_
 
 exports.getAttendedSessionsCountInDateRange = async (startDate, endDate, mentee_id, tenantCode) => {
 	try {
-		let sessionEnrollments = await SessionEnrollment.findAll({
+		// Optimized: Sequelize associations - same as enrolled count but filters by joined_at
+		const count = await SessionAttendee.count({
 			where: {
-				mentee_id: mentee_id,
+				joined_at: { [Op.between]: [startDate, endDate] },
 				tenant_code: tenantCode,
 			},
-		})
-		const sessionIds = sessionEnrollments.map((enrollment) => enrollment.session_id)
-		if (sessionIds.length <= 0) {
-			return 0
-		}
-		return await SessionAttendee.count({
-			where: {
-				joined_at: {
-					[Op.between]: [startDate, endDate],
+			include: [
+				{
+					model: SessionEnrollment,
+					as: 'enrollment',
+					where: {
+						mentee_id: mentee_id,
+						tenant_code: tenantCode,
+					},
+					attributes: [], // Don't select enrollment data, just use for filtering
 				},
-				session_id: sessionIds,
-				mentee_id: mentee_id,
-				tenant_code: tenantCode,
-			},
+			],
 		})
+		return count || 0
 	} catch (error) {
 		console.error(error)
 		return error

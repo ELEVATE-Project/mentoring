@@ -134,8 +134,8 @@ module.exports = class UserHelper {
 	}
 
 	static async #createUserWithBody(userBody, tenantCode) {
-		let orgId = userBody.organizations[0].id
-		let orgCode = userBody.organizations[0].code
+		let orgId = userBody.organization.id
+		let orgCode = userBody.organization.code
 		const orgExtension = await this.#createOrUpdateOrg({ id: orgId.toString(), code: orgCode }, tenantCode)
 
 		if (!orgExtension) {
@@ -148,7 +148,7 @@ module.exports = class UserHelper {
 		const userExtensionData = this.#getExtensionData(userBody, orgExtension)
 
 		const createResult = await this.#createUser(
-			{ ...userExtensionData, roles: userBody.organizations[0].roles },
+			{ ...userExtensionData, roles: userBody.organization.roles },
 			tenantCode
 		)
 
@@ -216,8 +216,8 @@ module.exports = class UserHelper {
 			},
 		}
 		let roles = userDetails?.user_roles
-		if (userDetails.organizations) {
-			roles = userDetails.organizations[0].roles
+		if (userDetails.organization) {
+			roles = userDetails.organization.roles
 		}
 
 		// List of optional fields to check

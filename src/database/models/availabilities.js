@@ -51,15 +51,5 @@ module.exports = (sequelize, DataTypes) => {
 		{ sequelize, modelName: 'Availability', tableName: 'availabilities', freezeTableName: true, paranoid: true }
 	)
 
-	Availability.associate = (models) => {
-		Availability.belongsTo(models.Session, {
-			foreignKey: 'session_id',
-			as: 'session',
-			scope: {
-				deleted_at: null,
-			},
-		})
-	}
-
 	return Availability
 }

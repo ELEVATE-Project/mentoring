@@ -66,6 +66,32 @@ module.exports = class ResourcessData {
 		}
 	}
 
+	static async deleteResourceByIdWithSessionValidation(resourceId, tenantCode) {
+		try {
+			// Sequelize approach: Find resource with session validation through association
+			const resource = await Resources.findOne({
+				where: { id: resourceId, tenant_code: tenantCode },
+				include: [
+					{
+						model: Resources.sequelize.models.Sessions,
+						as: 'session',
+						where: { tenant_code: tenantCode },
+						attributes: ['id'], // Only verify session exists
+					},
+				],
+			})
+
+			if (!resource) {
+				return 0 // No resource found or session invalid
+			}
+
+			await resource.destroy()
+			return 1 // Successfully deleted
+		} catch (error) {
+			return error
+		}
+	}
+
 	static async find(filter, tenantCode, projection = {}) {
 		try {
 			const ResourcesData = await Resources.findAll({

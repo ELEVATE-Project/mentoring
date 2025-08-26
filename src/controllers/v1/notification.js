@@ -30,7 +30,7 @@ module.exports = class NotificationTemplate {
 	async template(req) {
 		try {
 			if (
-				!utilsHelper.validateRoleAccess(req.decodedToken.organizations[0].roles, [
+				!utilsHelper.validateRoleAccess(req.decodedToken.organization.roles, [
 					common.ADMIN_ROLE,
 					common.ORG_ADMIN_ROLE,
 				])

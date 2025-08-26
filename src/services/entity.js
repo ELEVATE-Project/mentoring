@@ -25,23 +25,24 @@ module.exports = class EntityHelper {
 			updated_by: id,
 		}
 		try {
-			const entity = await entityTypeQueries.createEntity(sanitizedData, tenantCode)
+			// Optimized: Validate entity_type exists before creation - better UX than constraint errors
+			const entity = await entityTypeQueries.createEntityWithValidation(sanitizedData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_CREATED_SUCCESSFULLY',
 				result: entity,
 			})
 		} catch (error) {
-			if (error instanceof UniqueConstraintError) {
+			if (error.message === 'ENTITY_TYPE_NOT_FOUND') {
 				return responses.failureResponse({
-					message: 'ENTITY_ALREADY_EXISTS',
+					message: 'ENTITY_TYPE_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			if (error instanceof ForeignKeyConstraintError) {
+			if (error instanceof UniqueConstraintError) {
 				return responses.failureResponse({
-					message: 'ENTITY_TYPE_NOT_FOUND',
+					message: 'ENTITY_ALREADY_EXISTS',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -309,12 +310,10 @@ module.exports = class EntityHelper {
 				filter['entity_type_id'] = entityType
 			}
 
-			const attributes = ['id', 'entity_type_id', 'value', 'label', 'status', 'type', 'created_by', 'created_at']
-
-			const entities = await entityTypeQueries.getAllEntities(
+			// Optimized: Get entities with entity_type details included - eliminates N+1 queries for clients
+			const entities = await entityTypeQueries.getAllEntitiesWithEntityTypeDetails(
 				filter,
 				{ [Op.in]: [defaults.tenantCode, tenantCode] },
-				attributes,
 				pageNo,
 				pageSize,
 				searchText

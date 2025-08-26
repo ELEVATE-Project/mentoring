@@ -39,7 +39,7 @@ module.exports = class Sessions {
 					req.body,
 					req.decodedToken.id,
 					req.method,
-					req.decodedToken.organizations[0].id,
+					req.decodedToken.organization.id,
 					req.decodedToken.organization_code,
 					notifyUser,
 					req.decodedToken.tenant_code
@@ -53,9 +53,9 @@ module.exports = class Sessions {
 				const sessionCreated = await sessionService.create(
 					req.body,
 					req.decodedToken.id,
-					req.decodedToken.organizations[0].id,
+					req.decodedToken.organization.id,
 					req.decodedToken.organization_code,
-					isAMentor(req.decodedToken.organizations[0].roles),
+					isAMentor(req.decodedToken.organization.roles),
 					notifyUser,
 					req.decodedToken.tenant_code
 				)
@@ -82,9 +82,9 @@ module.exports = class Sessions {
 			const sessionDetails = await sessionService.details(
 				req.params.id,
 				req.decodedToken ? req.decodedToken.id : '',
-				req.decodedToken ? isAMentor(req.decodedToken.organizations[0].roles) : '',
+				req.decodedToken ? isAMentor(req.decodedToken.organization.roles) : '',
 				req.query,
-				req.decodedToken.organizations[0].roles,
+				req.decodedToken.organization.roles,
 				req.decodedToken.organization_code,
 				req.decodedToken ? req.decodedToken.tenant_code : ''
 			)
@@ -119,8 +119,8 @@ module.exports = class Sessions {
 				req.searchText,
 				req.searchOn,
 				req.query,
-				isAMentor(req.decodedToken.organizations[0].roles),
-				req.decodedToken.organizations[0].roles,
+				isAMentor(req.decodedToken.organization.roles),
+				req.decodedToken.organization.roles,
 				organizationCode,
 				tenantCode
 			)
@@ -169,11 +169,11 @@ module.exports = class Sessions {
 				req.params.id,
 				req.decodedToken,
 				req.headers['timezone'],
-				isAMentor(req.decodedToken.organizations[0].roles),
+				isAMentor(req.decodedToken.organization.roles),
 				isSelfEnrolled,
 				session,
-				req.decodedToken.organizations[0].roles,
-				req.decodedToken.organizations[0].id,
+				req.decodedToken.organization.roles,
+				req.decodedToken.organization.id,
 				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
@@ -240,8 +240,12 @@ module.exports = class Sessions {
 
 	async completed(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
+
 			const isBBB = req.query.source == common.BBB_VALUE ? true : false
-			const sessionsCompleted = await sessionService.completed(req.params.id, isBBB, req.decodedToken.tenant_code)
+			const sessionsCompleted = await sessionService.completed(req.params.id, isBBB, tenantCode)
 			return sessionsCompleted
 		} catch (error) {
 			return error
@@ -401,7 +405,7 @@ module.exports = class Sessions {
 				req.body.mentees, // Array of mentee ids
 				req.headers['timezone'],
 				userId,
-				req.decodedToken.organizations[0].id, // organizationId
+				req.decodedToken.organization.id, // organizationId
 				organizationCode, // organizationCode
 				tenantCode
 			)

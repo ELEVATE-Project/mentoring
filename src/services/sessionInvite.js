@@ -498,7 +498,7 @@ module.exports = class UserInviteHelper {
 			if (session.mentees.length != 0 && Array.isArray(session.mentees)) {
 				const validEmails = await this.validateAndCategorizeEmails(session)
 				if (validEmails.length != 0) {
-					const menteeDetails = await userRequests.getListOfUserDetailsByEmail(validEmails)
+					const menteeDetails = await userRequests.getListOfUserDetailsByEmail(validEmails, tenantCode)
 					session.mentees = menteeDetails.result
 				} else if (session.mentees.some((item) => typeof item === 'string')) {
 					session.statusMessage = this.appendWithComma(session.statusMessage, ' Mentee Details are incorrect')
@@ -525,7 +525,7 @@ module.exports = class UserInviteHelper {
 					session.status = 'Invalid'
 					session.statusMessage = this.appendWithComma(session.statusMessage, 'Invalid Mentor Email')
 				} else {
-					const mentorId = await userRequests.getListOfUserDetailsByEmail([mentorEmail])
+					const mentorId = await userRequests.getListOfUserDetailsByEmail([mentorEmail], tenantCode)
 					const mentor_Id = mentorId.result[0]
 
 					if (isNaN(mentor_Id)) {
@@ -772,7 +772,14 @@ module.exports = class UserInviteHelper {
 							validRowsCount: valid,
 							invalidRowsCount: invalid,
 							processedSession,
-						} = await this.processSession(session, userId, orgId, validRowsCount, invalidRowsCount)
+						} = await this.processSession(
+							session,
+							userId,
+							orgId,
+							validRowsCount,
+							invalidRowsCount,
+							tenantCode
+						)
 						validRowsCount = valid
 						invalidRowsCount = invalid
 						session.method = 'POST'
@@ -822,7 +829,7 @@ module.exports = class UserInviteHelper {
 				orgCode
 			)
 
-			await this.fetchMentorIds(sessionCreationOutput)
+			await this.fetchMentorIds(sessionCreationOutput, tenantCode)
 
 			const sessionModelName = await sessionQueries.getModelName()
 
@@ -1058,7 +1065,9 @@ module.exports = class UserInviteHelper {
 						userId,
 						data.method,
 						orgId,
-						notifyUser
+						orgCode,
+						notifyUser,
+						tenantCode
 					)
 					if (sessionDelete.statusCode === httpStatusCode.accepted) {
 						data.statusMessage = this.appendWithComma(data.statusMessage, sessionDelete.message)
@@ -1080,7 +1089,7 @@ module.exports = class UserInviteHelper {
 		return output
 	}
 
-	static async fetchMentorIds(sessionCreationOutput) {
+	static async fetchMentorIds(sessionCreationOutput, tenantCode) {
 		for (const item of sessionCreationOutput) {
 			const mentorIdPromise = item.mentor_id
 			if (!isNaN(mentorIdPromise) && mentorIdPromise) {

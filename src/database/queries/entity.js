@@ -12,6 +12,30 @@ module.exports = class UserEntityData {
 		}
 	}
 
+	static async createEntityWithValidation(data, tenantCode) {
+		try {
+			// Sequelize approach: Validate entity_type exists first
+			const EntityType = Entity.sequelize.models.EntityType
+			const entityType = await EntityType.findOne({
+				where: {
+					id: data.entity_type_id,
+					tenant_code: tenantCode,
+				},
+				attributes: ['id'], // Only verify existence
+			})
+
+			if (!entityType) {
+				throw new Error('ENTITY_TYPE_NOT_FOUND')
+			}
+
+			// Create entity with validated entity_type_id
+			data.tenant_code = tenantCode
+			return await Entity.create(data, { returning: true })
+		} catch (error) {
+			throw error
+		}
+	}
+
 	static async findAllEntities(filter, tenantCode, options = {}) {
 		try {
 			if (tenantCode) {
@@ -79,6 +103,42 @@ module.exports = class UserEntityData {
 			return await Entity.findAndCountAll({
 				where: whereClause,
 				attributes: attributes,
+				offset: limit * (page - 1),
+				limit: limit,
+				order: [
+					['created_at', 'DESC'],
+					['id', 'ASC'],
+				],
+			})
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async getAllEntitiesWithEntityTypeDetails(filters, tenantCode, page, limit, search) {
+		try {
+			let whereClause = {
+				...filters,
+				// MANDATORY: Include tenant_code filtering
+				tenant_code: tenantCode,
+			}
+
+			if (search) {
+				whereClause[Op.or] = [{ label: { [Op.iLike]: `%${search}%` } }]
+			}
+
+			// Optimized: Include entity_type details via association instead of forcing N+1 queries
+			return await Entity.findAndCountAll({
+				where: whereClause,
+				attributes: ['id', 'entity_type_id', 'value', 'label', 'status', 'type', 'created_by', 'created_at'],
+				include: [
+					{
+						model: Entity.sequelize.models.EntityType,
+						as: 'entity_type',
+						attributes: ['id', 'value', 'label'], // Include entity_type details
+						where: { tenant_code: tenantCode },
+					},
+				],
 				offset: limit * (page - 1),
 				limit: limit,
 				order: [

@@ -2,18 +2,25 @@
 
 const entityTypeQueries = require('@database/queries/entityType')
 const cacheHelper = require('@cache/helper')
+const responses = require('@helpers/responses')
+const httpStatusCode = require('@generics/http-status')
+const { Op } = require('sequelize')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 module.exports = class UserHelper {
 	/**
-	 * Retrieves entity types for given org IDs and tenant.
+	 * Retrieves entity types for given org codes and tenant.
 	 * First tries cache; if not found, fetches from DB.
 	 */
-	static async findAllEntityTypes(orgIds, tenantCode = '', attributes) {
+	static async findAllEntityTypes(orgCodes, tenantCode = '', attributes) {
 		try {
 			const cachedEntities = []
 
-			for (const orgId of orgIds) {
-				const key = `entityType:${tenantCode}:${orgId}`
+			// Handle orgCodes as either array or string
+			const orgCodeArray = Array.isArray(orgCodes) ? orgCodes : [orgCodes]
+
+			for (const orgCode of orgCodeArray) {
+				const key = `entityType:${tenantCode}:${orgCode}`
 				const cachedData = await cacheHelper.redisGet(key)
 
 				if (cachedData) {
@@ -40,7 +47,7 @@ module.exports = class UserHelper {
 				})
 			// Fallback to DB if no cached data found
 			const entities = await entityTypeQueries.findAllEntityTypes(
-				orgIds,
+				orgCodes,
 				{ [Op.in]: [defaults.tenantCode, tenantCode] },
 				attributes
 			)

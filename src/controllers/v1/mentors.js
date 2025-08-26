@@ -34,8 +34,8 @@ module.exports = class Mentors {
 				req.searchText,
 				req.params.menteeId ? req.params.menteeId : userId,
 				req.query,
-				isAMentor(req.decodedToken.organizations[0].roles),
-				req.decodedToken.organizations[0].roles,
+				isAMentor(req.decodedToken.organization.roles),
+				req.decodedToken.organization.roles,
 				organizationCode,
 				tenantCode
 			)
@@ -59,7 +59,7 @@ module.exports = class Mentors {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const roles = req.decodedToken.organizations[0].roles
+			const roles = req.decodedToken.organization.roles
 
 			return await mentorsService.read(
 				req.params.id,
@@ -95,7 +95,7 @@ module.exports = class Mentors {
 			const reports = await mentorsService.reports(
 				userId,
 				req.query.filterType,
-				req.decodedToken.organizations[0].roles,
+				req.decodedToken.organization.roles,
 				organizationCode,
 				tenantCode
 			)
@@ -152,8 +152,8 @@ module.exports = class Mentors {
 				req.searchOn,
 				req.query,
 				userId,
-				isAMentor(req.decodedToken.organizations[0].roles),
-				req.decodedToken.organizations[0].roles,
+				isAMentor(req.decodedToken.organization.roles),
+				req.decodedToken.organization.roles,
 				organizationCode,
 				tenantCode
 			)
@@ -183,7 +183,7 @@ module.exports = class Mentors {
 				req.pageSize,
 				req.searchText,
 				req.query.status,
-				req.decodedToken.organizations[0].roles,
+				req.decodedToken.organization.roles,
 				organizationCode,
 				tenantCode
 			)
