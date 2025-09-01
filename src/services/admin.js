@@ -19,6 +19,7 @@ const moment = require('moment')
 const connectionQueries = require('@database/queries/connection')
 const userExtensionQueries = require('@database/queries/userExtension')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const { Op } = require('sequelize')
 const { sequelize } = require('@database/models/index')
 const { literal } = require('sequelize')
 const sessionOwnerships = require('@database/queries/sessionOwnership')
@@ -318,7 +319,6 @@ module.exports = class AdminService {
 					userInfo.organization_code || ''
 				) //removedSessionsDetail , orgId : "1")
 			}
-
 
 			// send email to SM when mentee is deleted from the private sessions if it is upcoming
 			await this.notifySessionManagerIfMenteeDeleted(userId, userInfo, result)
@@ -1409,7 +1409,6 @@ module.exports = class AdminService {
 					},
 					false,
 					tenantCode
-
 				)
 
 				if (attendeeDetails.length > 0) {

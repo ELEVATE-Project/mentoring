@@ -5,9 +5,8 @@ const KafkaProducer = require('@generics/kafka-communication')
 
 const formQueries = require('../database/queries/form')
 const { UniqueConstraintError } = require('sequelize')
-
-const entityTypeQueries = require('../database/queries/entityType')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const { Op } = require('sequelize')
 
 const responses = require('@helpers/responses')
 
@@ -27,7 +26,6 @@ module.exports = class FormsHelper {
 		try {
 			bodyData['organization_id'] = orgId
 			bodyData['organization_code'] = orgCode
-			bodyData['tenant_code'] = tenantCode
 			const form = await formQueries.createForm(bodyData, tenantCode)
 
 			await utils.internalDel('formVersion')
@@ -65,19 +63,15 @@ module.exports = class FormsHelper {
 			if (id) {
 				filter = {
 					id: id,
-					organization_code: orgCode,
-					tenant_code: tenantCode,
 				}
 			} else {
 				filter = {
 					type: bodyData.type,
 					sub_type: bodyData.sub_type,
-					organization_code: orgCode,
-					tenant_code: tenantCode,
 				}
 			}
 
-			const result = await formQueries.updateOneForm(filter, bodyData, tenantCode)
+			const result = await formQueries.updateOneForm(filter, bodyData, tenantCode, orgCode)
 
 			if (result === 'ENTITY_ALREADY_EXISTS') {
 				return responses.failureResponse({
@@ -122,9 +116,9 @@ module.exports = class FormsHelper {
 		try {
 			let filter = {}
 			if (id) {
-				filter = { id: id, organization_code: orgCode, tenant_code: tenantCode }
+				filter = { id: id }
 			} else {
-				filter = { ...bodyData, organization_code: orgCode, tenant_code: tenantCode }
+				filter = { ...bodyData }
 			}
 			const defaults = await getDefaults()
 			if (!defaults.orgCode)
@@ -139,13 +133,19 @@ module.exports = class FormsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			const form = await formQueries.findOneForm(filter)
+			const form = await formQueries.findOneForm(
+				filter,
+				{ [Op.in]: [defaults.tenantCode, tenantCode] },
+				defaults.orgCode
+			)
 			let defaultOrgForm
 			if (!form) {
-				filter = id
-					? { id: id, organization_code: defaults.orgCode, tenant_code: defaults.tenantCode }
-					: { ...bodyData, organization_code: defaults.orgCode, tenant_code: defaults.tenantCode }
-				defaultOrgForm = await formQueries.findOneForm(filter)
+				filter = id ? { id: id } : { ...bodyData }
+				defaultOrgForm = await formQueries.findOneForm(
+					filter,
+					{ [Op.in]: [defaults.tenantCode, tenantCode] },
+					defaults.orgCode
+				)
 			}
 			if (!form && !defaultOrgForm) {
 				return responses.failureResponse({

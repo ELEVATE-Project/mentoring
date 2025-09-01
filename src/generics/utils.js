@@ -17,7 +17,6 @@ const startCase = require('lodash/startCase')
 const common = require('@constants/common')
 const crypto = require('crypto')
 const _ = require('lodash')
-const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 const hash = (str) => {
 	const salt = bcryptJs.genSaltSync(10)
