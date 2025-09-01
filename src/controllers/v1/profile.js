@@ -230,7 +230,7 @@ module.exports = class Mentees {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const roles = req.decodedToken.organization ? req.decodedToken.roles : []
+			const roles = req.decodedToken.roles
 
 			return await menteesService.details(
 				req.params.id,

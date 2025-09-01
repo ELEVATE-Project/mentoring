@@ -1789,10 +1789,10 @@ module.exports = class MenteesHelper {
 						responseCode: 'CLIENT_ERROR',
 					})
 				}
-				totalSessionHosted = await sessionQueries.countHostedSessions(id)
+				totalSessionHosted = await sessionQueries.countHostedSessions(id, tenantCode)
 			}
 			// Check for accessibility for reading shared mentor profile
-			const isAccessible = await checkIfUserIsAccessible(userId, requestedUserExtension)
+			const isAccessible = await checkIfUserIsAccessible(userId, requestedUserExtension, tenantCode)
 
 			// Throw access error
 			if (!isAccessible) {
@@ -1844,14 +1844,14 @@ module.exports = class MenteesHelper {
 			})
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationId)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			const processDbResponse = utils.processDbResponse(mentorExtension, validationData)
 
 			const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
 
 			processDbResponse.profile_mandatory_fields = profileMandatoryFields
 
-			const connection = await connectionQueries.getConnection(userId, id)
+			const connection = await connectionQueries.getConnection(userId, id, tenantCode)
 
 			const orgDetails = await organisationExtensionQueries.findOne(
 				{ organization_code: organizationCode },

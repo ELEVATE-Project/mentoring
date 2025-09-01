@@ -1466,7 +1466,7 @@ module.exports = class SessionsHelper {
 			})
 
 			if (mentorExtension?.user_id) {
-				const validationData = removeDefaultOrgEntityTypes(entityTypeData, mentorExtension.organization_id)
+				const validationData = removeDefaultOrgEntityTypes(entityTypeData, defaults.orgCode)
 				const processedEntityType = utils.processDbResponse(
 					{
 						designation: mentorExtension.designation,
@@ -1491,7 +1491,7 @@ module.exports = class SessionsHelper {
 			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, sessionDetails.mentor_organization_id)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 
 			const processDbResponse = utils.processDbResponse(sessionDetails, validationData)
 

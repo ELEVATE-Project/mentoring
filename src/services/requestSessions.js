@@ -146,7 +146,7 @@ module.exports = class requestSessionsHelper {
 				model_names: { [Op.contains]: [requestSessionModelName] },
 			})
 
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			let res = utils.validateInput(bodyData, validationData, requestSessionModelName, SkipValidation)
 			if (!res.success) {
 				return responses.failureResponse({
@@ -702,7 +702,7 @@ module.exports = class requestSessionsHelper {
 				},
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			})
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_code)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
 
 			if (!requestSessions) {
