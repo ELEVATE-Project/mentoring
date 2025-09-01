@@ -26,7 +26,7 @@ module.exports = class Feedback {
 		try {
 			const feedbackFormData = await feedbackService.forms(
 				req.params.id,
-				req.decodedToken.organization.roles,
+				req.decodedToken.roles,
 				req.decodedToken.tenant_code
 			)
 			return feedbackFormData
@@ -43,13 +43,13 @@ module.exports = class Feedback {
 	 * @param {String} req.params.id - form id.
 	 * @param {Object} req.body - Form submission data.
 	 * @param {String} req.decodedToken.id - User Id.
-	 * @param {String} req.decodedToken.organization.roles - User role.
+	 * @param {String} req.decodedToken.roles - User role.
 	 * @returns {JSON} - returns feedback submission data.
 	 */
 
 	async submit(req) {
 		try {
-			const isAMentor = req.decodedToken.organization.roles.some((role) => role.title == common.MENTOR_ROLE)
+			const isAMentor = req.decodedToken.roles.some((role) => role.title == common.MENTOR_ROLE)
 			if (isAMentor && !req.body.feedback_as) {
 				return responses.failureResponse({
 					message: 'FEEDBACK_AS_NOT_PASSED',

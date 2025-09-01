@@ -39,7 +39,7 @@ module.exports = class Sessions {
 					req.body,
 					req.decodedToken.id,
 					req.method,
-					req.decodedToken.organization.id,
+					req.decodedToken.organization_id,
 					req.decodedToken.organization_code,
 					notifyUser,
 					req.decodedToken.tenant_code
@@ -53,9 +53,9 @@ module.exports = class Sessions {
 				const sessionCreated = await sessionService.create(
 					req.body,
 					req.decodedToken.id,
-					req.decodedToken.organization.id,
+					req.decodedToken.organization_id,
 					req.decodedToken.organization_code,
-					isAMentor(req.decodedToken.organization.roles),
+					isAMentor(req.decodedToken.roles),
 					notifyUser,
 					req.decodedToken.tenant_code
 				)
@@ -82,9 +82,9 @@ module.exports = class Sessions {
 			const sessionDetails = await sessionService.details(
 				req.params.id,
 				req.decodedToken ? req.decodedToken.id : '',
-				req.decodedToken ? isAMentor(req.decodedToken.organization.roles) : '',
+				req.decodedToken ? isAMentor(req.decodedToken.roles) : '',
 				req.query,
-				req.decodedToken.organization.roles,
+				req.decodedToken.roles,
 				req.decodedToken.organization_code,
 				req.decodedToken ? req.decodedToken.tenant_code : ''
 			)
@@ -119,8 +119,8 @@ module.exports = class Sessions {
 				req.searchText,
 				req.searchOn,
 				req.query,
-				isAMentor(req.decodedToken.organization.roles),
-				req.decodedToken.organization.roles,
+				isAMentor(req.decodedToken.roles),
+				req.decodedToken.roles,
 				organizationCode,
 				tenantCode
 			)
@@ -169,11 +169,11 @@ module.exports = class Sessions {
 				req.params.id,
 				req.decodedToken,
 				req.headers['timezone'],
-				isAMentor(req.decodedToken.organization.roles),
+				isAMentor(req.decodedToken.roles),
 				isSelfEnrolled,
 				session,
-				req.decodedToken.organization.roles,
-				req.decodedToken.organization.id,
+				req.decodedToken.roles,
+				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
@@ -405,7 +405,7 @@ module.exports = class Sessions {
 				req.body.mentees, // Array of mentee ids
 				req.headers['timezone'],
 				userId,
-				req.decodedToken.organization.id, // organizationId
+				req.decodedToken.organization_id, // organizationId
 				organizationCode, // organizationCode
 				tenantCode
 			)

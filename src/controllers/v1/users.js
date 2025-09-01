@@ -30,7 +30,7 @@ module.exports = class Users {
 
 			const pendingFeedBacks = await feedbackService.pending(
 				userId,
-				isAMentor(req.decodedToken.organization.roles),
+				isAMentor(req.decodedToken.roles),
 				organizationCode,
 				tenantCode
 			)

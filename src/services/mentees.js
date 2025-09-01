@@ -447,15 +447,32 @@ module.exports = class MenteesHelper {
 		let query = utils.processQueryParametersWithExclusions(queryParams)
 		const sessionModelName = await sessionQueries.getModelName()
 
+		const defaults = await getDefaults()
+
+		if (!defaults.tenantCode)
+			return responses.failureResponse({
+				message: 'DEFAULT_ORG_CODE_NOT_SET',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+
+		if (!defaults.orgCode)
+			return responses.failureResponse({
+				message: 'DEFAULT_ORG_CODE_NOT_SET',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+
 		let validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
 			{
 				status: 'ACTIVE',
 				allow_filtering: true,
 				model_names: { [Op.contains]: [sessionModelName] },
 			},
-			tenantCode
+			{
+				[Op.in]: [tenantCode, defaults.tenantCode],
+			}
 		)
-
 		let filteredQuery = utils.validateAndBuildFilters(query, validationData, sessionModelName)
 
 		// Create saas filter for view query
@@ -489,7 +506,7 @@ module.exports = class MenteesHelper {
 			requesterId: userId,
 			roles: roles,
 			requesterOrganizationCode: organizationCode,
-			tenantCode: tenantCode,
+			tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 		})
 
 		if (defaultRuleFilter.error && defaultRuleFilter.error.missingField) {

@@ -32,14 +32,11 @@ class TenantMigrationFinalizer {
 		})
 		this.sequelize = this.dbManager.getSequelize()
 
-		// Tables configuration from helper.js (excluding tables that don't need migration)
 		this.allTables = [
 			'availabilities',
 			'connection_requests',
 			'connections',
 			'default_rules',
-			'entities',
-			'entity_types',
 			'feedbacks',
 			'file_uploads',
 			'forms',
@@ -47,19 +44,21 @@ class TenantMigrationFinalizer {
 			'modules',
 			'notification_templates',
 			'organization_extension',
-			'post_session_details',
 			'question_sets',
 			'questions',
 			'report_queries',
 			'report_role_mapping',
 			'report_types',
 			'reports',
-			'resources',
 			'role_extensions',
-			'session_attendees',
 			'session_request',
-			'sessions',
 			'user_extensions',
+			'entity_types',
+			'sessions',
+			'entities',
+			'post_session_details',
+			'resources',
+			'session_attendees',
 		]
 
 		this.tablesWithOrgCode = [
@@ -225,7 +224,7 @@ class TenantMigrationFinalizer {
 			resources: 'tenant_code,id',
 			role_extensions: 'tenant_code,title',
 			session_attendees: 'tenant_code, id',
-			session_request: 'tenant_code',
+			session_request: 'tenant_code, id',
 			sessions: 'tenant_code, id',
 
 			// Default for all other tables
@@ -1750,7 +1749,7 @@ class TenantMigrationFinalizer {
 		const tablesToDelete = ['session_enrollments', 'session_ownerships', 'session_request_mapping']
 
 		// Tables to exclude from tenant migration (keep unchanged)
-		const tablesToExclude = ['post_session_details']
+		const tablesToExclude = []
 
 		// Delete specified tables
 		for (const tableName of tablesToDelete) {
