@@ -171,7 +171,9 @@ module.exports = class EntityHelper {
 				},
 				tenant_code: { [Op.in]: [defaults.tenantCode, tenantCode] },
 			}
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+				[Op.in]: [defaults.tenantCode, tenantCode],
+			})
 
 			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 
