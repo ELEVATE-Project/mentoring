@@ -17,7 +17,7 @@ module.exports = class Mentees {
 			const organizationId = req.decodedToken.organization_id
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const roles = req.decodedToken.organization ? req.decodedToken.roles : []
+			const roles = req.decodedToken.roles
 
 			if (isAMentor(roles)) {
 				return await mentorsService.createMentorExtension(
@@ -55,7 +55,7 @@ module.exports = class Mentees {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const roles = req.decodedToken.organization ? req.decodedToken.roles : []
+			const roles = req.decodedToken.roles
 
 			if (isAMentor(roles)) {
 				return await mentorsService.updateMentorExtension(req.body, userId, organizationCode, tenantCode)
@@ -79,7 +79,7 @@ module.exports = class Mentees {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const roles = req.decodedToken.organization ? req.decodedToken.roles : []
+			const roles = req.decodedToken.roles
 
 			if (isAMentor(roles)) {
 				return await mentorsService.getMentorExtension(req.query.id || userId, tenantCode)
@@ -104,7 +104,7 @@ module.exports = class Mentees {
 			const organizationId = req.decodedToken.organization_id
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-			const roles = req.decodedToken.organization ? req.decodedToken.roles : []
+			const roles = req.decodedToken.roles
 
 			if (isAMentor(roles)) {
 				return await mentorsService.read(userId, organizationCode, '', '', roles, tenantCode)
