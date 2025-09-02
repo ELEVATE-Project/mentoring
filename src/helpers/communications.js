@@ -95,13 +95,7 @@ exports.updateUser = async (userId, name, tenantCode) => {
  */
 exports.createOrUpdateUser = async ({ userId, name, email, image, tenantCode }) => {
 	try {
-		const user = await userExtensionQueries.getUserById(
-			userId,
-			{
-				attributes: ['meta'],
-			},
-			tenantCode
-		)
+		const user = await userExtensionQueries.getMenteeExtension(userId, ['meta'], false, tenantCode)
 
 		if (user && user.meta?.communications_user_id) {
 			// Update user information if already exists in the communication service
