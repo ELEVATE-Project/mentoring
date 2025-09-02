@@ -193,9 +193,11 @@ module.exports = class ReportsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			// Validate report permissions
-			const reportPermission = await reportMappingQueries.findReportRoleMappingByReportCode(reportCode, {
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			})
+			const reportPermission = await reportMappingQueries.findReportRoleMappingByReportCode(
+				reportCode,
+				[tenantCode, defaults.tenantCode],
+				[defaults.orgCode, orgCode]
+			)
 			if (!reportPermission || reportPermission.dataValues.role_title !== reportRole) {
 				return responses.failureResponse({
 					message: 'REPORT_CODE_NOT_FOUND',

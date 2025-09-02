@@ -48,10 +48,14 @@ module.exports = class ReportRoleMappingQueries {
 		}
 	}
 
-	static async findReportRoleMappingByReportCode(reportCode, tenantCode, organizationCode) {
+	static async findReportRoleMappingByReportCode(reportCode, tenantCodes, organizationCodes) {
 		try {
 			return await ReportRoleMapping.findOne({
-				where: { report_code: reportCode, tenant_code: tenantCode, organization_code: organizationCode },
+				where: {
+					report_code: reportCode,
+					tenant_code: { [Op.in]: tenantCodes },
+					organization_code: { [Op.in]: organizationCodes },
+				},
 			})
 		} catch (error) {
 			throw error

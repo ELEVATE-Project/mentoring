@@ -35,8 +35,8 @@ module.exports = class ReportsHelper {
 		try {
 			const readMapping = await mappingQueries.findReportRoleMappingByReportCode(
 				code,
-				tenantCode,
-				organizationCode
+				[tenantCode],
+				[organizationCode]
 			)
 			if (!readMapping) {
 				return responses.failureResponse({
