@@ -144,7 +144,6 @@ module.exports = class Mentors {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
 			const userId = req.decodedToken.id
-
 			return await mentorsService.list(
 				req.pageNo,
 				req.pageSize,
