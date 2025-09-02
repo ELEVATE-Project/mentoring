@@ -133,19 +133,11 @@ module.exports = class FormsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			const form = await formQueries.findOneForm(
-				filter,
-				{ [Op.in]: [defaults.tenantCode, tenantCode] },
-				defaults.orgCode
-			)
+			const form = await formQueries.findOneForm(filter)
 			let defaultOrgForm
 			if (!form) {
 				filter = id ? { id: id } : { ...bodyData }
-				defaultOrgForm = await formQueries.findOneForm(
-					filter,
-					{ [Op.in]: [defaults.tenantCode, tenantCode] },
-					defaults.orgCode
-				)
+				defaultOrgForm = await formQueries.findOneForm(filter, defaults.tenantCode, defaults.orgCode)
 			}
 			if (!form && !defaultOrgForm) {
 				return responses.failureResponse({
