@@ -112,7 +112,7 @@ module.exports = class MenteesHelper {
 
 		if (mentee?.meta?.communications_user_id) {
 			try {
-				const chat = await communicationHelper.login(id)
+				const chat = await communicationHelper.login(id, tenantCode)
 				communications = chat
 			} catch (error) {
 				console.error('Failed to log in to communication service:', error)
@@ -1046,12 +1046,12 @@ module.exports = class MenteesHelper {
 			if (currentUser?.meta?.communications_user_id) {
 				const promises = []
 				if (data.name && data.name !== currentUser.name) {
-					promises.push(communicationHelper.updateUser(userId, data.name))
+					promises.push(communicationHelper.updateUser(userId, data.name, tenantCode))
 				}
 
 				if (data.image && data.image !== currentUser.image) {
 					const downloadableUrl = (await userRequests.getDownloadableUrl(data.image))?.result
-					promises.push(communicationHelper.updateAvatar(userId, downloadableUrl))
+					promises.push(communicationHelper.updateAvatar(userId, downloadableUrl, tenantCode))
 				}
 
 				await Promise.all(promises)
@@ -1700,9 +1700,9 @@ module.exports = class MenteesHelper {
 	 * //   }
 	 * // }
 	 */
-	static async getCommunicationToken(id) {
+	static async getCommunicationToken(id, tenantCode) {
 		try {
-			const token = await communicationHelper.login(id)
+			const token = await communicationHelper.login(id, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -1734,9 +1734,9 @@ module.exports = class MenteesHelper {
 	 *
 	 * @throws {Error} If an error other than 'unauthorized' occurs, it will not be caught here and may be handled upstream.
 	 */
-	static async logout(id) {
+	static async logout(id, tenantCode) {
 		try {
-			const response = await communicationHelper.logout(id)
+			const response = await communicationHelper.logout(id, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -1904,9 +1904,9 @@ module.exports = class MenteesHelper {
 	 * const response = await ClassName.externalMapping({ external_user_id: 'abc-123' });
 	 * // response => { statusCode: 200, message: 'COMMUNICATION_TOKEN_FETCHED_SUCCESSFULLY', result: 'internal-user-id' }
 	 */
-	static async externalMapping(body) {
+	static async externalMapping(body, tenantCode) {
 		try {
-			const userId = await communicationHelper.resolve(body.external_user_id)
+			const userId = await communicationHelper.resolve(body.external_user_id, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
