@@ -42,7 +42,13 @@ const { Op } = require('sequelize')
  * // }
  */
 
-exports.buildSearchFilter = async function buildSearchFilter({ searchOn, searchConfig, search, modelName }) {
+exports.buildSearchFilter = async function buildSearchFilter({
+	searchOn,
+	searchConfig,
+	search,
+	modelName,
+	tenantCode,
+}) {
 	try {
 		if (!search || search.trim() === '') {
 			return {
@@ -85,7 +91,7 @@ exports.buildSearchFilter = async function buildSearchFilter({ searchOn, searchC
 		})
 		let falseSearchOnEntity
 		if (hasEntityTypeField) {
-			const entityTypeQuery = await getEntityTypeFilter(modelName, searchConfig, search, searchOn)
+			const entityTypeQuery = await getEntityTypeFilter(modelName, searchConfig, search, searchOn, tenantCode)
 
 			if (entityTypeQuery == false) {
 				const entityFields = configFields.filter((field) => field.isAnEntityType).map((field) => field.name)
@@ -100,7 +106,17 @@ exports.buildSearchFilter = async function buildSearchFilter({ searchOn, searchC
 		if (falseSearchOnEntity) {
 			return false
 		}
-		const whereClause = whereClauses.length > 0 ? `AND (${whereClauses.join(' OR ')})` : ''
+
+		let whereClause = ''
+		if (whereClauses.length > 0) {
+			whereClause = `AND (${whereClauses.join(' OR ')})`
+		}
+
+		if (tenantCode && whereClause) {
+			whereClause += ` AND tenant_code = '${tenantCode}'`
+		} else if (tenantCode && !whereClause) {
+			whereClause = `AND tenant_code = '${tenantCode}'`
+		}
 		const positionQuery = positionQueries.join(',\n    ')
 
 		const sortQuery = `
@@ -185,7 +201,7 @@ function buildQuery(entityTypes, entities) {
  *
  * @returns {Promise<string>} A promise that resolves to a query string based on the provided model name, configuration, and search term.
  */
-async function getEntityTypeFilter(modelName, config, search, searchOn) {
+async function getEntityTypeFilter(modelName, config, search, searchOn, tenantCode) {
 	const defaults = await getDefaults()
 	if (!defaults.orgCode)
 		return responses.failureResponse({
@@ -215,7 +231,7 @@ async function getEntityTypeFilter(modelName, config, search, searchOn) {
 			allow_filtering: true,
 			value: entityTypes,
 		},
-		tenantCode
+		{ [Op.in]: [tenantCode, defaults.tenantCode] }
 	)
 
 	const entityTypeIds = entityTypes.map((entityType) => entityType.id)
@@ -226,7 +242,7 @@ async function getEntityTypeFilter(modelName, config, search, searchOn) {
 		entity_type_id: entityTypeIds,
 	}
 
-	const entities = await entityQueries.findAllEntities(filter, tenantCode)
+	const entities = await entityQueries.findAllEntities(filter, { [Op.in]: [tenantCode, defaults.tenantCode] })
 
 	if (entities.length == 0) {
 		return false

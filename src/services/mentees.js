@@ -483,6 +483,7 @@ module.exports = class MenteesHelper {
 			searchConfig: searchConfig.search.session,
 			search,
 			modelName: sessionModelName,
+			tenantCode: tenantCode,
 		})
 		// return false response when buildSearchFilter() returns negative response
 		// buildSearchFilter() false when search on only contains entity type and no valid matches.

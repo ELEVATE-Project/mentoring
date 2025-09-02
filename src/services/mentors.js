@@ -1004,7 +1004,7 @@ module.exports = class MentorsHelper {
 				delete queryParams.fields
 			}
 
-			let organization_ids = []
+			let organization_codes = []
 			let directory = false
 
 			const [sortBy, order] = ['name'].includes(queryParams.sort_by)
@@ -1015,8 +1015,8 @@ module.exports = class MentorsHelper {
 				if (queryParams.hasOwnProperty(key) & ((key === 'email') | (key === 'name'))) {
 					userServiceQueries[key] = queryParams[key]
 				}
-				if (queryParams.hasOwnProperty(key) & (key === 'organization_ids')) {
-					organization_ids = queryParams[key].split(',')
+				if (queryParams.hasOwnProperty(key) & (key === 'organization_codes')) {
+					organization_codes = queryParams[key].split(',')
 				}
 
 				if (
@@ -1068,7 +1068,7 @@ module.exports = class MentorsHelper {
 			const saasFilter = await this.filterMentorListBasedOnSaasPolicy(
 				userId,
 				isAMentor,
-				organization_ids,
+				organization_codes,
 				tenantCode
 			)
 
@@ -1079,6 +1079,7 @@ module.exports = class MentorsHelper {
 					searchConfig: searchConfig.search.mentor,
 					search: searchText,
 					modelName: mentorExtensionsModelName,
+					tenantCode: tenantCode,
 				})
 
 				if (!searchFilter) {
@@ -1129,7 +1130,7 @@ module.exports = class MentorsHelper {
 					connectedQuery,
 					searchText,
 					queryParams.mentorId ? queryParams.mentorId : userId,
-					organization_ids,
+					organization_codes,
 					[] // roles can be passed if needed
 				)
 
@@ -1164,7 +1165,8 @@ module.exports = class MentorsHelper {
 				false,
 				searchFilter,
 				hasValidEmails ? emailIds : searchText,
-				defaultRuleFilter
+				defaultRuleFilter,
+				tenantCode
 			)
 			// Early return for empty results
 			if (extensionDetails.count === 0 || extensionDetails.data.length === 0) {
@@ -1181,28 +1183,28 @@ module.exports = class MentorsHelper {
 			const mentorIds = extensionDetails.data.map((item) => item.user_id)
 			const userDetails = await userRequests.getUserDetailedList(mentorIds, tenantCode)
 
-			//Extract unique organization_ids
-			const organizationIds = [...new Set(extensionDetails.data.map((user) => user.organization_id))]
+			//Extract unique organization_codes
+			const organizationCodes = [...new Set(extensionDetails.data.map((user) => user.organization_code))]
 
-			//Query organization table (only if there are IDs to query)
+			//Query organization table (only if there are codes to query)
 			let organizationDetails = []
-			if (organizationIds.length > 0) {
+			if (organizationCodes.length > 0) {
 				const orgFilter = {
-					organization_id: {
-						[Op.in]: organizationIds,
+					organization_code: {
+						[Op.in]: organizationCodes,
 					},
 				}
 				organizationDetails = await organisationExtensionQueries.findAll(orgFilter, tenantCode, {
-					attributes: ['name', 'organization_id'],
+					attributes: ['name', 'organization_code'],
 					raw: true, // Ensure plain objects
 				})
 			}
 
-			//Create a map of organization_id to organization details
+			//Create a map of organization_code to organization details
 			const orgMap = {}
 			organizationDetails.forEach((org) => {
-				orgMap[org.organization_id] = {
-					id: org.organization_id,
+				orgMap[org.organization_code] = {
+					id: org.organization_code,
 					name: org.name,
 				}
 			})
@@ -1213,7 +1215,7 @@ module.exports = class MentorsHelper {
 					...user,
 					id: user.user_id, // Add 'id' key, to be removed later
 					email: user.email ? (await emailEncryption.decryptAndValidate(user.email)) || user.email : null, // Decrypt email
-					organization: orgMap[user.organization_id] || null,
+					organization: orgMap[user.organization_code] || null,
 				}))
 			)
 
@@ -1223,9 +1225,9 @@ module.exports = class MentorsHelper {
 			if (extensionDetails.data.length > 0) {
 				extensionDetails.data = await entityTypeService.processEntityTypesToAddValueLabels(
 					extensionDetails.data,
-					organizationIds,
+					organizationCodes,
 					mentorExtensionsModelName,
-					'organization_id',
+					'organization_code',
 					[],
 					[tenantCode]
 				)
@@ -1247,7 +1249,7 @@ module.exports = class MentorsHelper {
 						delete userDetail.user_id
 						delete userDetail.mentor_visibility
 						delete userDetail.mentee_visibility
-						delete userDetail.organization_id
+						delete userDetail.organization_code
 						delete userDetail.meta
 						return userDetail
 					}
@@ -1306,13 +1308,13 @@ module.exports = class MentorsHelper {
 	 * @param {Boolean} isAMentor 				- user mentor or not.
 	 * @returns {JSON} 							- List of filtered sessions
 	 */
-	static async filterMentorListBasedOnSaasPolicy(userId, isAMentor, organization_ids = [], tenantCode) {
+	static async filterMentorListBasedOnSaasPolicy(userId, isAMentor, organization_codes = [], tenantCode) {
 		try {
 			// Always query mentee extension for mentor list filtering policy
 			// Even if user is also a mentor/admin, we need their mentee visibility policy
 			const userPolicyDetails = await menteeQueries.getMenteeExtension(
 				userId,
-				['external_mentor_visibility', 'organization_id'],
+				['external_mentor_visibility', 'organization_code'],
 				false,
 				tenantCode
 			)
@@ -1329,40 +1331,42 @@ module.exports = class MentorsHelper {
 			let filter = ''
 			// searching for specific organization
 			let additionalFilter = ``
-			if (organization_ids.length !== 0) {
-				additionalFilter = `AND "organization_id" in (${organization_ids.map((id) => `'${id}'`).join(',')}) `
+			if (organization_codes.length !== 0) {
+				additionalFilter = `AND "organization_code" in (${organization_codes
+					.map((code) => `'${code}'`)
+					.join(',')}) `
 			}
 
-			if (userPolicyDetails.external_mentor_visibility && userPolicyDetails.organization_id) {
+			if (userPolicyDetails.external_mentor_visibility && userPolicyDetails.organization_code) {
 				// Filter user data based on policy
 				// generate filter based on condition
 				if (userPolicyDetails.external_mentor_visibility === common.CURRENT) {
 					/**
 					 * if user external_mentor_visibility is current. He can only see his/her organizations mentors
-					 * so we will check mentor's organization_id and user organization_id are matching
+					 * so we will check mentor's organization_code and user organization_code are matching
 					 */
-					filter = `AND "organization_id" = '${userPolicyDetails.organization_id}'`
+					filter = `AND "organization_code" = '${userPolicyDetails.organization_code}'`
 				} else if (userPolicyDetails.external_mentor_visibility === common.ASSOCIATED) {
 					/**
 					 * If user external_mentor_visibility is associated
-					 * <<point**>> first we need to check if mentor's visible_to_organizations contain the user organization_id and verify mentor's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
+					 * <<point**>> first we need to check if mentor's visible_to_organizations contain the user organization_code and verify mentor's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
 					 */
 
 					filter =
 						additionalFilter +
-						`AND ( ('${userPolicyDetails.organization_id}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT')`
+						`AND ( ('${userPolicyDetails.organization_code}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT')`
 
 					if (additionalFilter.length === 0)
-						filter += ` OR organization_id = '${userPolicyDetails.organization_id}' )`
+						filter += ` OR organization_code = '${userPolicyDetails.organization_code}' )`
 					else filter += `)`
 				} else if (userPolicyDetails.external_mentor_visibility === common.ALL) {
 					/**
-					 * We need to check if mentor's visible_to_organizations contain the user organization_id and verify mentor's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
+					 * We need to check if mentor's visible_to_organizations contain the user organization_code and verify mentor's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
 					 * OR if mentor visibility is ALL that mentor is also accessible
 					 */
 					filter =
 						additionalFilter +
-						`AND (('${userPolicyDetails.organization_id}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT' ) OR "mentor_visibility" = 'ALL' OR "organization_id" = '${userPolicyDetails.organization_id}')`
+						`AND (('${userPolicyDetails.organization_code}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT' ) OR "mentor_visibility" = 'ALL' OR "organization_code" = '${userPolicyDetails.organization_code}')`
 				}
 			}
 

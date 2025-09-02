@@ -226,7 +226,8 @@ module.exports = class MentorExtensionQueries {
 		returnOnlyUserId,
 		searchFilter = '',
 		searchText,
-		defaultFilter = ''
+		defaultFilter = '',
+		tenantCode
 	) {
 		try {
 			const excludeUserIds = ids.length === 0
@@ -251,7 +252,7 @@ module.exports = class MentorExtensionQueries {
 			}
 
 			let projectionClause =
-				'name,email,designation,organization_id,area_of_expertise,education_qualification,custom_entity_text,user_id,rating,mentor_visibility,mentee_visibility,meta'
+				'name,email,designation,organization_code,area_of_expertise,education_qualification,custom_entity_text,user_id,rating,mentor_visibility,mentee_visibility,meta'
 
 			if (returnOnlyUserId) {
 				projectionClause = 'user_id'
@@ -273,11 +274,13 @@ module.exports = class MentorExtensionQueries {
 					${additionalFilter}
 					${defaultFilterClause}
 					AND is_mentor = true
+					AND tenant_code = :tenantCode
 			`
 
 			const replacements = {
 				...filter.replacements, // Add filter parameters to replacements
 				search: `%${searchText}%`,
+				tenantCode: tenantCode,
 			}
 
 			if (searchFilter && searchFilter?.sortQuery !== '') {
@@ -317,6 +320,7 @@ module.exports = class MentorExtensionQueries {
 				${additionalFilter}
 				${defaultFilterClause}
 				AND is_mentor = true
+				AND tenant_code = :tenantCode
 			;
 		`
 			const count = await Sequelize.query(countQuery, {
