@@ -316,7 +316,7 @@ exports.getConnectionsDetails = async (
 			rolesFilter = `AND is_mentor = false`
 		}
 
-		const userFilterClause = `mv.user_id IN (SELECT friend_id FROM ${Connection.tableName} WHERE user_id = :userId)`
+		const userFilterClause = `mv.user_id IN (SELECT friend_id FROM ${Connection.tableName} WHERE user_id = :userId AND tenant_code = :tenantCode)`
 
 		const projectionClause = `
 		mv.name,
@@ -340,9 +340,9 @@ exports.getConnectionsDetails = async (
             SELECT ${projectionClause}
             FROM ${common.materializedViewsPrefix + MenteeExtension.tableName} mv
             LEFT JOIN ${Connection.tableName} c 
-            ON c.friend_id = mv.user_id AND c.user_id = :userId
+            ON c.friend_id = mv.user_id AND c.user_id = :userId AND c.tenant_code = :tenantCode AND mv.tenant_code = :tenantCode
             WHERE ${userFilterClause}
-            AND c.tenant_code = :tenantCode
+            AND mv.tenant_code = :tenantCode
             ${orgFilter}
             ${filterClause}
             ${rolesFilter}
@@ -375,9 +375,9 @@ exports.getConnectionsDetails = async (
 		    SELECT count(*) AS "count"
 		    FROM ${common.materializedViewsPrefix + MenteeExtension.tableName} mv
 		    LEFT JOIN ${Connection.tableName} c 
-		    ON c.friend_id = mv.user_id AND c.user_id = :userId
+		    ON c.friend_id = mv.user_id AND c.user_id = :userId AND c.tenant_code = :tenantCode AND mv.tenant_code = :tenantCode
 		    WHERE ${userFilterClause}
-		    AND c.tenant_code = :tenantCode
+		    AND mv.tenant_code = :tenantCode
 		    ${filterClause}
 		    ${rolesFilter}
 		    ${orgFilter}

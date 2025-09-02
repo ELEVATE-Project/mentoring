@@ -93,21 +93,25 @@ exports.updateUser = async (userId, name) => {
  * @returns {Promise<void>} Resolves if creation or updates are successful.
  * @throws Will throw an error if any request fails.
  */
-exports.createOrUpdateUser = async ({ userId, name, email, image }) => {
+exports.createOrUpdateUser = async ({ userId, name, email, image, tenantCode }) => {
 	try {
-		const user = await userExtensionQueries.getUserById(userId, {
-			attributes: ['meta'],
-		})
+		const user = await userExtensionQueries.getUserById(
+			userId,
+			{
+				attributes: ['meta'],
+			},
+			tenantCode
+		)
 
 		if (user && user.meta?.communications_user_id) {
 			// Update user information if already exists in the communication service
 			await Promise.all([
 				image ? this.updateAvatar(userId, image) : Promise.resolve(),
-				name ? this.updateUser(userId, name) : Promise.resolve(),
+				name ? this.updateUser(userId, name, tenantCode) : Promise.resolve(),
 			])
 		} else {
 			// Create new user in the communication service
-			await this.create(userId, name, email, image)
+			await this.create(userId, name, email, image, tenantCode)
 		}
 	} catch (error) {
 		console.error('Error in createOrUpdateUser:', error.message)
@@ -125,9 +129,9 @@ exports.createOrUpdateUser = async ({ userId, name, email, image }) => {
  * @returns {Promise<Object>} An object containing the user_id from the communication service.
  * @throws Will throw an error if the signup request fails for reasons other than unauthorized access.
  */
-exports.create = async (userId, name, email, image) => {
+exports.create = async (userId, name, email, image, tenantCode) => {
 	try {
-		const signup = await communicationRequests.signup({ userId, name, email, image })
+		const signup = await communicationRequests.signup({ userId, name, email, image, tenantCode })
 
 		if (signup.result.user_id) {
 			// Update the user's metadata with the communication service user ID
@@ -137,7 +141,8 @@ exports.create = async (userId, name, email, image) => {
 				{
 					returning: true,
 					raw: true,
-				}
+				},
+				tenantCode
 			)
 		}
 		return {
@@ -179,7 +184,7 @@ exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage
 				if (user?.image) {
 					userImage = (await userRequests.getDownloadableUrl(user.image))?.result
 				}
-				await this.create(user.user_id, user.name, user.email, userImage)
+				await this.create(user.user_id, user.name, user.email, userImage, tenantCode)
 			}
 		}
 

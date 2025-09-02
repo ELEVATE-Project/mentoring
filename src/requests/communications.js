@@ -37,10 +37,10 @@ apiClient.interceptors.response.use(
  * @returns {Promise<Object>} The response data from the signup request.
  * @throws Will throw an error if the signup request fails.
  */
-exports.signup = async ({ userId, name, email, image }) => {
+exports.signup = async ({ userId, name, email, image, tenantCode }) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_SIGNUP
-		const body = { user_id: userId, name, email }
+		const body = { user_id: userId, name, email, tenant_code: tenantCode }
 		if (image) {
 			body.image_url = image
 		}
@@ -145,10 +145,10 @@ exports.updateAvatar = async (userId, imageUrl) => {
  * @returns {Promise<Object>} The response data from the update user request.
  * @throws Will throw an error if the request fails.
  */
-exports.updateUser = async (userId, name) => {
+exports.updateUser = async (userId, name, tenantCode) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_UPDATE_USER
-		const body = { user_id: userId, name }
+		const body = { user_id: userId, name, tenant_code: tenantCode }
 
 		const response = await apiClient.post(url, body)
 		return response.data
