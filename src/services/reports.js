@@ -281,6 +281,7 @@ module.exports = class ReportsHelper {
 						session_type: sessionType ? utils.convertToTitleCase(sessionType) : null,
 						start_date: dateRange.start_date || null,
 						end_date: dateRange.end_date || null,
+						tenantCode: tenantCode,
 					}
 
 					let query = reportQuery[0].query.replace(/:sort_type/g, replacements.sort_type)
@@ -336,6 +337,7 @@ module.exports = class ReportsHelper {
 					offset: common.getPaginationOffset(page, limit),
 					sort_column: sortColumn || '',
 					sort_type: sortType.toUpperCase() || 'ASC',
+					tenantCode: tenantCode,
 				}
 
 				const noPaginationReplacements = {
