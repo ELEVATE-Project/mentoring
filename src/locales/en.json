@@ -176,7 +176,7 @@
 	"SESSION_CREATION_LIMIT_EXCEDED_FOR_GIVEN_MENTOR": "The selected mentor has a session scheduled at the specified time.",
 	"MENTEES_NOT_FOUND": "Mentee not found.",
 	"COMMUNICATION_SERVICE_UNAVAILABLE": "Communication service is currently unavailable. Please try again later.",
-	"CANNOT_EDIT_MENTOR_AND_TYPE": "Session cannot edit mentor and type.",
+	"CANNOT_EDIT_MENTOR_AND_TYPE": "Session cannot edit type.",
 	"DEFAULT_RULE_CREATED_SUCCESSFULLY": "The default rule has been created successfully.",
 	"DEFAULT_RULE_ALREADY_EXISTS": "The default rule already exists.",
 	"DEFAULT_RULE_NOT_FOUND": "The default rule was not found.",

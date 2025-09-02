@@ -251,6 +251,8 @@ exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 
 		const foundSessions = await Session.findAll({
 			where: {
+				mentor_id: userId,
+				created_by: userId,
 				id: { [Op.in]: sessionIds },
 				[Op.or]: [{ start_date: { [Op.gt]: currentEpochTime } }, { status: common.PUBLISHED_STATUS }],
 				tenant_code: tenantCode,

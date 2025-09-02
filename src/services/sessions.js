@@ -546,11 +546,8 @@ module.exports = class SessionsHelper {
 				}
 			}
 
-			if (bodyData.mentor_id && bodyData.type) {
-				if (
-					sessionDetail.dataValues.mentor_id != bodyData.mentor_id ||
-					sessionDetail.dataValues.type != bodyData.type
-				) {
+			if (bodyData.type) {
+				if (sessionDetail.dataValues.type != bodyData.type) {
 					return responses.failureResponse({
 						message: 'CANNOT_EDIT_MENTOR_AND_TYPE',
 						statusCode: httpStatusCode.bad_request,
