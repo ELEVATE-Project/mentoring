@@ -1717,6 +1717,13 @@ module.exports = class MenteesHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Handle all other errors
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'COMMUNICATION_TOKEN_FETCH_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
 		}
 	}
 
