@@ -167,7 +167,8 @@ module.exports = class Users {
 	 */
 	async requestCount(req) {
 		try {
-			return await userService.requestCount(req.decodedToken.id)
+			const tenantCode = req.body.tenant_code
+			return await userService.requestCount(req.decodedToken.id, tenantCode)
 		} catch (error) {
 			console.log(error)
 			return error
