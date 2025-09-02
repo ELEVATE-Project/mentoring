@@ -1,4 +1,5 @@
 const ReportRoleMapping = require('@database/models/index').ReportRoleMapping
+const { Op } = require('sequelize')
 
 module.exports = class ReportRoleMappingQueries {
 	static async createReportRoleMapping(data, tenantCode) {
