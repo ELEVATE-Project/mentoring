@@ -593,12 +593,12 @@ module.exports = class MentorsHelper {
 			if (currentUser?.meta?.communications_user_id) {
 				const promises = []
 				if (data.name && data.name !== currentUser.name) {
-					promises.push(communicationHelper.updateUser(userId, data.name, tenantCode))
+					promises.push(communicationHelper.updateUser(userId, data.name))
 				}
 
 				if (data.image && data.image !== currentUser.image) {
 					const downloadableUrl = (await userRequests.getDownloadableUrl(data.image))?.result
-					promises.push(communicationHelper.updateAvatar(userId, downloadableUrl, tenantCode))
+					promises.push(communicationHelper.updateAvatar(userId, downloadableUrl))
 				}
 
 				await Promise.all(promises)
@@ -845,7 +845,7 @@ module.exports = class MentorsHelper {
 
 			if (mentorExtension?.meta?.communications_user_id) {
 				try {
-					const chat = await communicationHelper.login(id, tenantCode)
+					const chat = await communicationHelper.login(id)
 					communications = chat
 				} catch (error) {
 					console.error('Failed to log in to communication service:', error)

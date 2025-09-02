@@ -40,11 +40,11 @@ apiClient.interceptors.response.use(
 exports.signup = async ({ userId, name, email, image, tenantCode }) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_SIGNUP
-		const body = { user_id: userId, name, email }
+		const body = { user_id: userId, name, email, tenant_code: tenantCode }
 		if (image) {
 			body.image_url = image
 		}
-		const response = await apiClient.post(url, body, tenantCode)
+		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
 		console.error('Signup error:', err.message)
@@ -60,11 +60,12 @@ exports.signup = async ({ userId, name, email, image, tenantCode }) => {
  * @returns {Promise<Object>} The response data from the login request.
  * @throws Will throw an error if the login request fails.
  */
-exports.login = async ({ userId, tenantCode }) => {
+exports.login = async ({ userId }) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_LOGIN
 		const body = { user_id: userId }
-		const response = await apiClient.post(url, body, tenantCode)
+
+		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
 		console.error('Login error:', err.message)
@@ -80,11 +81,12 @@ exports.login = async ({ userId, tenantCode }) => {
  * @returns {Promise<Object>} The response data from the logout request.
  * @throws Will throw an error if the logout request fails.
  */
-exports.logout = async ({ userId, tenantCode }) => {
+exports.logout = async ({ userId }) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_LOGOUT
 		const body = { user_id: userId }
-		const response = await apiClient.post(url, body, tenantCode)
+
+		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
 		console.error('Logout error:', err.message)
@@ -101,12 +103,12 @@ exports.logout = async ({ userId, tenantCode }) => {
  * @returns {Promise<Object>} The response data from the create chat room request.
  * @throws Will throw an error if the request fails.
  */
-exports.createChatRoom = async ({ userIds, initialMessage, tenantCode }) => {
+exports.createChatRoom = async ({ userIds, initialMessage }) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_CREATE_CHAT_ROOM
 		const body = { usernames: userIds, initial_message: initialMessage }
 
-		const response = await apiClient.post(url, body, tenantCode)
+		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
 		console.error('Create Chat Room error:', err.message)
@@ -122,12 +124,12 @@ exports.createChatRoom = async ({ userIds, initialMessage, tenantCode }) => {
  * @returns {Promise<Object>} The response data from the update avatar request.
  * @throws Will throw an error if the request fails.
  */
-exports.updateAvatar = async (userId, imageUrl, tenantCode) => {
+exports.updateAvatar = async (userId, imageUrl) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_UPDATE_AVATAR
 		const body = { user_id: userId, image_url: imageUrl }
 
-		const response = await apiClient.post(url, body, tenantCode)
+		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
 		console.error('Update Avatar error:', err.message)
@@ -146,9 +148,9 @@ exports.updateAvatar = async (userId, imageUrl, tenantCode) => {
 exports.updateUser = async (userId, name, tenantCode) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_UPDATE_USER
-		const body = { user_id: userId, name }
+		const body = { user_id: userId, name, tenant_code: tenantCode }
 
-		const response = await apiClient.post(url, body, tenantCode)
+		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
 		console.error('Update User error:', err.message)
@@ -170,12 +172,12 @@ exports.updateUser = async (userId, name, tenantCode) => {
  * const data = await getUserId('external-user-123');
  * // data => { result: { user_id: 'internal-user-456' }, ... }
  */
-exports.getUserId = async (userId, tenantCode) => {
+exports.getUserId = async (userId) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_GET_USER_ID
 		const body = { external_user_id: userId }
 
-		const response = await apiClient.post(url, body, tenantCode)
+		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
 		console.error('getUserId error:', err.message)
@@ -199,12 +201,12 @@ exports.getUserId = async (userId, tenantCode) => {
  * const result = await setActiveStatus('5HmCfpoB7jp2uibTC', false, true);
  * // result => { result: { success: true }, statusCode: 200, message: 'NAME_UPDATED' }
  */
-exports.setActiveStatus = async (userId, active_status, confirm_relinquish = false, tenantCode) => {
+exports.setActiveStatus = async (userId, active_status, confirm_relinquish = false) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_USERS_SET_ACTIVE_STATUS
 		const body = { user_id: userId, activeStatus: active_status, confirmRelinquish: confirm_relinquish }
 
-		const response = await apiClient.post(url, body, tenantCode)
+		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
 		console.error('Update User error:', err.message)
@@ -226,12 +228,12 @@ exports.setActiveStatus = async (userId, active_status, confirm_relinquish = fal
  * const result = await removeAvatar('5HmCfpoB7jp2uibTC');
  * // result => { result: { success: true }, statusCode: 200, message: 'AVATAR_REMOVED' }
  */
-exports.removeAvatar = async (userId, tenantCode) => {
+exports.removeAvatar = async (userId) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_USERS_REMOVE_AVATAR
 		const body = { user_id: userId }
 
-		const response = await apiClient.post(url, body, tenantCode)
+		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
 		console.error('Remove Avatar User error:', err.message)
