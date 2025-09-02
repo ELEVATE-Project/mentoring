@@ -62,7 +62,7 @@ module.exports = class ReportsHelper {
 				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
 
-			if (organizations.success && organizations.result.length > 0) {
+			if (organizations.success && organizations.result) {
 				organization_codes = [...organizations.result.organizationCodes]
 				tenantCodes = [...organizations.result.tenantCodes]
 
