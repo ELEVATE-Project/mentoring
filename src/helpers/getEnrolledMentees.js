@@ -138,7 +138,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 						: '',
 					email: user.email,
 					type: user.type,
-					organization: user.organization.name,
+					organization: user.organization?.name || '',
 				}))
 			)
 
