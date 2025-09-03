@@ -733,9 +733,12 @@ module.exports = class SessionsHelper {
 			const sessionRelatedJobIds = common.notificationJobIdPrefixes.map((element) => element + sessionDetail.id)
 			if (method == common.DELETE_METHOD) {
 				if (sessionDetail.status == common.PUBLISHED_STATUS) {
-					await sessionQueries.deleteSession({
-						id: sessionId,
-					})
+					await sessionQueries.deleteSession(
+						{
+							id: sessionId,
+						},
+						tenantCode
+					)
 					message = 'SESSION_DELETED_SUCCESSFULLY'
 
 					// Delete scheduled jobs associated with deleted session
