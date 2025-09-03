@@ -259,7 +259,8 @@ module.exports = class OrgAdminService {
 					'', //userId not required
 					policyData, // data to update
 					{}, //options
-					{ organization_id: decodedToken.organization_id } //custom filter for where clause
+					{ organization_id: decodedToken.organization_id }, //custom filter for where clause
+					tenantCode
 				)
 				// commenting as part of first level SAAS changes. will need this in the code next level
 				// await sessionQueries.updateSession(
@@ -459,7 +460,7 @@ module.exports = class OrgAdminService {
 			}
 			if (utils.validateRoleAccess(bodyData.roles, common.MENTOR_ROLE))
 				await mentorQueries.updateMentorExtension(bodyData.user_id, updateData, {}, {}, false, tenantCode)
-			else await menteeQueries.updateMenteeExtension(bodyData.user_id, updateData, {}, {}, false, tenantCode)
+			else await menteeQueries.updateMenteeExtension(bodyData.user_id, updateData, {}, {}, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'UPDATE_ORG_SUCCESSFULLY',

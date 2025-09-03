@@ -136,6 +136,7 @@ exports.create = async (userId, name, email, image, tenantCode) => {
 					returning: true,
 					raw: true,
 				},
+				{},
 				tenantCode
 			)
 		}
