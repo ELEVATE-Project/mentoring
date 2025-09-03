@@ -147,6 +147,7 @@ module.exports = class UserHelper {
 		}
 		const userExtensionData = this.#getExtensionData(userBody, orgExtension)
 
+		console.log('=====', userExtensionData)
 		const createResult = await this.#createUser({ ...userExtensionData, roles: userBody.roles }, tenantCode)
 
 		if (createResult.statusCode != httpStatusCode.ok) return createResult
@@ -257,6 +258,7 @@ module.exports = class UserHelper {
 	}
 
 	static async #createUser(userExtensionData, tenantCode) {
+		console.log('========', userExtensionData, tenantCode)
 		const isAMentor = userExtensionData.roles.some((role) => role.title == common.MENTOR_ROLE)
 		const orgId = userExtensionData.organization_id
 		const orgCode = userExtensionData.organization_code
@@ -281,6 +283,7 @@ module.exports = class UserHelper {
 	static #checkOrgChange = (existingOrgId, newOrgId) => existingOrgId !== newOrgId
 
 	static async #updateUser(userExtensionData, decodedToken) {
+		console.log('========', userExtensionData, decodedToken)
 		const isAMentee = userExtensionData.roles.some((role) => role.title === common.MENTEE_ROLE)
 		const roleChangePayload = {
 			user_id: userExtensionData.id,
