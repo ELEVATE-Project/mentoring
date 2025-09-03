@@ -666,7 +666,7 @@ const organizationList = function (organizationCodes = [], tenantCodes = []) {
 				},
 			}
 
-			const organizationDetails = await organisationExtensionQueries.findAll(filter, tenantCode, {
+			const organizationDetails = await organisationExtensionQueries.findAll(filter, {
 				attributes: ['name', 'organization_id', 'organization_code', 'tenant_code'],
 			})
 

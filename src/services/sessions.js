@@ -3019,6 +3019,8 @@ module.exports = class SessionsHelper {
 		tenantCode
 	) {
 		try {
+			const defaults = await getDefaults()
+
 			const userDetails = await mentorExtensionQueries.getMentorExtension(
 				sessionDetail.mentor_id,
 				['name', 'email'],

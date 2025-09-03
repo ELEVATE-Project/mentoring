@@ -222,9 +222,6 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 			filter.organization_code = {
 				[Op.in]: defaultOrgCode ? [...organization_codes, defaultOrgCode] : organization_codes,
 			}
-			filter.tenant_code = {
-				[Op.in]: defaultTenantCode ? [...tenantCodes, defaultTenantCode] : tenantCodes,
-			}
 			let entityTypes = []
 			if (entity_types) {
 				entityTypes = entity_types.split(',')
@@ -236,8 +233,12 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 				filter.model_names = { [Op.contains]: [modelName] }
 			}
 			//fetch entity types and entities
-			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
-
+			// Handle both array and string cases for tenantCodes
+			const tenantCodeArray = Array.isArray(tenantCodes) ? tenantCodes : [tenantCodes]
+			const finalTenantCodes = defaultTenantCode ? [...tenantCodeArray, defaultTenantCode] : tenantCodeArray
+			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+				[Op.in]: finalTenantCodes,
+			})
 			return {
 				success: true,
 				result: entityTypesWithEntities,

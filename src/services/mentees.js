@@ -1188,15 +1188,13 @@ module.exports = class MenteesHelper {
 			let tenantCodes = []
 			const organizations = await getOrgIdAndEntityTypes.getOrganizationIdBasedOnPolicy(
 				tokenInformation.id,
-				tokenInformation.organization_id,
+				tokenInformation.organization_code,
 				filter_type,
 				tenantCode
 			)
-
-			if (organizations.success && organizations.result.length > 0) {
-				organization_codes = [...organizations.result.organizationCodes]
-				tenantCodes = [...organizations.result.tenantCodes]
-
+			if (organizations.success) {
+				organization_codes = organizations.result.organizationCodes
+				tenantCodes = organizations.result.tenantCodes
 				if (organization_codes.length > 0) {
 					//get organization list
 					const organizationList = await userRequests.organizationList(organization_codes, tenantCodes)
@@ -1228,13 +1226,13 @@ module.exports = class MenteesHelper {
 						tenantCodes,
 						defaults.tenantCode ? defaults.tenantCode : ''
 					)
-
+					console.log('=====', getEntityTypesWithEntities.result)
 					if (getEntityTypesWithEntities.success && getEntityTypesWithEntities.result) {
 						let entityTypesWithEntities = getEntityTypesWithEntities.result
 						if (entityTypesWithEntities.length > 0) {
 							let convertedData = utils.convertEntitiesForFilter(entityTypesWithEntities)
 							let doNotRemoveDefaultOrg = false
-							if (organization_ids.includes(defaults.orgCode)) {
+							if (organization_codes.includes(defaults.orgCode)) {
 								doNotRemoveDefaultOrg = true
 							}
 							result.entity_types = utils.filterEntitiesBasedOnParent(
