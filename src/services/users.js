@@ -134,9 +134,8 @@ module.exports = class UserHelper {
 	}
 
 	static async #createUserWithBody(userBody, tenantCode) {
-		console.log('=======', userBody)
 		let orgId = userBody.organization_id
-		let orgCode = userBody.organization_code
+		let orgCode = userBody.organizations[0].code
 		const orgExtension = await this.#createOrUpdateOrg({ id: orgId.toString(), code: orgCode }, tenantCode)
 
 		if (!orgExtension) {
@@ -148,10 +147,7 @@ module.exports = class UserHelper {
 		}
 		const userExtensionData = this.#getExtensionData(userBody, orgExtension)
 
-		const createResult = await this.#createUser(
-			{ ...userExtensionData, roles: userBody.organization.roles },
-			tenantCode
-		)
+		const createResult = await this.#createUser({ ...userExtensionData, roles: userBody.roles }, tenantCode)
 
 		if (createResult.statusCode != httpStatusCode.ok) return createResult
 		else
