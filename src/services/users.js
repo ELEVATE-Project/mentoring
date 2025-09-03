@@ -147,10 +147,7 @@ module.exports = class UserHelper {
 		}
 		const userExtensionData = this.#getExtensionData(userBody, orgExtension)
 
-		const createResult = await this.#createUser(
-			{ ...userExtensionData, roles: userBody.organization.roles },
-			tenantCode
-		)
+		const createResult = await this.#createUser({ ...userExtensionData, roles: userBody.roles }, tenantCode)
 
 		if (createResult.statusCode != httpStatusCode.ok) return createResult
 		else
