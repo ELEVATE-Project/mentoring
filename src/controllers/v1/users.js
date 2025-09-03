@@ -149,7 +149,7 @@ module.exports = class Users {
 	 */
 	async delete(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
+			const tenantCode = req.body.tenant_code
 
 			return await adminService.userDelete(req.body.id.toString(), tenantCode)
 		} catch (error) {
