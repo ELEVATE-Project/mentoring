@@ -147,7 +147,6 @@ module.exports = class UserHelper {
 		}
 		const userExtensionData = this.#getExtensionData(userBody, orgExtension)
 
-		console.log('=====', userExtensionData)
 		const createResult = await this.#createUser({ ...userExtensionData, roles: userBody.roles }, tenantCode)
 
 		if (createResult.statusCode != httpStatusCode.ok) return createResult
@@ -258,10 +257,9 @@ module.exports = class UserHelper {
 	}
 
 	static async #createUser(userExtensionData, tenantCode) {
-		console.log('========', userExtensionData, tenantCode)
 		const isAMentor = userExtensionData.roles.some((role) => role.title == common.MENTOR_ROLE)
-		const orgId = userExtensionData.organization_id
-		const orgCode = userExtensionData.organization_code
+		const orgId = userExtensionData.organization.id
+		const orgCode = userExtensionData.organization.code
 		const user = isAMentor
 			? await mentorsService.createMentorExtension(
 					userExtensionData,
@@ -283,12 +281,11 @@ module.exports = class UserHelper {
 	static #checkOrgChange = (existingOrgId, newOrgId) => existingOrgId !== newOrgId
 
 	static async #updateUser(userExtensionData, decodedToken) {
-		console.log('========', userExtensionData, decodedToken)
 		const isAMentee = userExtensionData.roles.some((role) => role.title === common.MENTEE_ROLE)
 		const roleChangePayload = {
 			user_id: userExtensionData.id,
-			organization_id: userExtensionData.organization_id,
-			organization_code: userExtensionData.organization_code,
+			organization_id: userExtensionData.organization.id,
+			organization_code: userExtensionData.organization.code,
 		}
 
 		let isRoleChanged = false
@@ -297,7 +294,7 @@ module.exports = class UserHelper {
 			userExtensionData.id,
 			['organization_id', 'is_mentor', 'organization_code', 'tenant_code'],
 			false,
-			userExtensionData.tenant_code
+			decodedToken.tenant_code
 		)
 
 		if (!menteeExtension) throw new Error('User Not Found')
@@ -319,7 +316,7 @@ module.exports = class UserHelper {
 				roleChangePayload,
 				userExtensionData,
 				decodedToken,
-				userExtensionData.tenant_code
+				decodedToken.tenant_code
 			)
 			return roleChangeResult
 		} else {
@@ -330,14 +327,14 @@ module.exports = class UserHelper {
 				? await menteesService.updateMenteeExtension(
 						userExtensionData,
 						userExtensionData.id,
-						userExtensionData.organization_code,
-						userExtensionData.tenant_code
+						userExtensionData.organization.code,
+						decodedToken.tenant_code
 				  )
 				: await mentorsService.updateMentorExtension(
 						userExtensionData,
 						userExtensionData.id,
-						userExtensionData.organization_code,
-						userExtensionData.tenant_code
+						userExtensionData.organization.code,
+						decodedToken.tenant_code
 				  )
 			return user
 		}
