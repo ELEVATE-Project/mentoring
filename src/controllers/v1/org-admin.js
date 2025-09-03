@@ -56,9 +56,7 @@ module.exports = class OrgAdmin {
 
 	async roleChange(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
+			const tenantCode = req.body.tenant_code
 
 			let changedRoleDetails = await orgAdminService.roleChange(req.body, {}, req.decodedToken, tenantCode)
 			return changedRoleDetails

@@ -160,9 +160,9 @@ module.exports = class OrgAdminService {
 			}
 
 			if (bodyData.organization_id) {
-				bodyData.organization_id = bodyData.organization_id.toString()
+				bodyData.organization_code = bodyData.organization_code.toString()
 				let organizationDetails = await userRequests.fetchOrgDetails({
-					organizationId: bodyData.organization_id,
+					organizationCode: bodyData.organization_code,
 				})
 				if (!(organizationDetails.success && organizationDetails.data && organizationDetails.data.result)) {
 					return responses.failureResponse({
@@ -174,7 +174,9 @@ module.exports = class OrgAdminService {
 
 				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
 					bodyData.organization_id,
-					organizationDetails.data.result.name
+					bodyData.organization_code,
+					organizationDetails.data.result.name,
+					tenantCode
 				)
 				if (!orgPolicies?.organization_id) {
 					return responses.failureResponse({
@@ -184,6 +186,7 @@ module.exports = class OrgAdminService {
 					})
 				}
 				menteeDetails.organization_id = bodyData.organization_id
+				menteeDetails.organization_code = bodyData.organization_code
 				const newPolicy = await this.constructOrgPolicyObject(orgPolicies)
 				menteeDetails = _.merge({}, menteeDetails, newPolicy, updateData)
 				menteeDetails.visible_to_organizations = Array.from(
@@ -198,7 +201,8 @@ module.exports = class OrgAdminService {
 				menteeDetails,
 				'',
 				'',
-				true
+				true,
+				tenantCode
 			)
 
 			if (!mentorCreationData) {
