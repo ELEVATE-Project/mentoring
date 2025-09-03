@@ -1702,7 +1702,6 @@ module.exports = class MenteesHelper {
 	 */
 	static async getCommunicationToken(id, tenantCode) {
 		try {
-			console.log('=== getCommunicationToken: Attempting login first ===')
 			const token = await communicationHelper.login(id, tenantCode)
 
 			return responses.successResponse({
@@ -1711,12 +1710,10 @@ module.exports = class MenteesHelper {
 				result: token,
 			})
 		} catch (error) {
-			if (error.message == 'unauthorized') {
-				console.log('=== getCommunicationToken: Login failed, attempting signup and retry ===')
-
+			if (error.message == 'unauthorized' || error.message.includes('USER_NOT_FOUND')) {
 				try {
-					// Get user details for signup
-					const user = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
+					// Get user details for signup (unscoped to include encrypted email field)
+					const user = await menteeQueries.getMenteeExtension(id, [], true, tenantCode)
 					if (!user) {
 						return responses.failureResponse({
 							statusCode: httpStatusCode.not_found,
@@ -1725,11 +1722,17 @@ module.exports = class MenteesHelper {
 						})
 					}
 
-					console.log('Got user details for signup:', { name: user.name, email: user.email })
+					// Check if email exists, if not try to get from decoded token or generate one
+					if (!user.email) {
+						return responses.failureResponse({
+							statusCode: httpStatusCode.bad_request,
+							message: 'USER_EMAIL_REQUIRED_FOR_COMMUNICATION_SIGNUP',
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
 
 					// Attempt signup with user details
 					await communicationHelper.create(id, user.name, user.email, user.image, tenantCode)
-					console.log('Signup successful, retrying login')
 
 					// Retry login after successful signup
 					const token = await communicationHelper.login(id, tenantCode)
@@ -1740,7 +1743,6 @@ module.exports = class MenteesHelper {
 						result: token,
 					})
 				} catch (signupError) {
-					console.error('Signup and retry failed:', signupError.message)
 					return responses.failureResponse({
 						statusCode: httpStatusCode.internal_server_error,
 						message: 'COMMUNICATION_SIGNUP_AND_LOGIN_FAILED',

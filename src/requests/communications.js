@@ -47,7 +47,6 @@ exports.signup = async ({ userId, name, email, image, tenantCode }) => {
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('Signup error:', err.message)
 		throw err
 	}
 }
@@ -67,7 +66,11 @@ exports.login = async ({ userId, tenantCode }) => {
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('Login error:', err.message)
+		if (err.response && err.response.data && err.response.data.message) {
+			const error = new Error(err.response.data.message)
+			error.statusCode = err.response.status
+			throw error
+		}
 		throw err
 	}
 }
