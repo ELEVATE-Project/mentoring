@@ -1702,6 +1702,7 @@ module.exports = class MenteesHelper {
 	 */
 	static async getCommunicationToken(id, tenantCode) {
 		try {
+			console.log('=== getCommunicationToken: Attempting login first ===')
 			const token = await communicationHelper.login(id, tenantCode)
 
 			return responses.successResponse({
@@ -1711,11 +1712,41 @@ module.exports = class MenteesHelper {
 			})
 		} catch (error) {
 			if (error.message == 'unauthorized') {
-				return responses.failureResponse({
-					statusCode: httpStatusCode.not_found,
-					message: 'COMMUNICATION_TOKEN_NOT_FOUND',
-					responseCode: 'CLIENT_ERROR',
-				})
+				console.log('=== getCommunicationToken: Login failed, attempting signup and retry ===')
+
+				try {
+					// Get user details for signup
+					const user = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
+					if (!user) {
+						return responses.failureResponse({
+							statusCode: httpStatusCode.not_found,
+							message: 'USER_NOT_FOUND',
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+
+					console.log('Got user details for signup:', { name: user.name, email: user.email })
+
+					// Attempt signup with user details
+					await communicationHelper.create(id, user.name, user.email, user.image, tenantCode)
+					console.log('Signup successful, retrying login')
+
+					// Retry login after successful signup
+					const token = await communicationHelper.login(id, tenantCode)
+
+					return responses.successResponse({
+						statusCode: httpStatusCode.ok,
+						message: 'COMMUNICATION_TOKEN_FETCHED_SUCCESSFULLY_AFTER_SIGNUP',
+						result: token,
+					})
+				} catch (signupError) {
+					console.error('Signup and retry failed:', signupError.message)
+					return responses.failureResponse({
+						statusCode: httpStatusCode.internal_server_error,
+						message: 'COMMUNICATION_SIGNUP_AND_LOGIN_FAILED',
+						responseCode: 'SERVER_ERROR',
+					})
+				}
 			}
 
 			// Handle all other errors
