@@ -240,10 +240,7 @@ module.exports = class Sessions {
 
 	async completed(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
-			const userId = req.decodedToken.id
-
+			const tenantCode = req.decodedToken?.tenant_code
 			const isBBB = req.query.source == common.BBB_VALUE ? true : false
 			const sessionsCompleted = await sessionService.completed(req.params.id, isBBB, tenantCode)
 			return sessionsCompleted

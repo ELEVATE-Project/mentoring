@@ -206,6 +206,18 @@ exports.deleteSession = async (filter, tenantCode) => {
 	}
 }
 
+exports.findSessionForPublicEndpoint = async (sessionId) => {
+	try {
+		return await Session.findOne({
+			where: { id: sessionId },
+			attributes: ['id', 'tenant_code', 'title', 'status'],
+			raw: true,
+		})
+	} catch (error) {
+		return error
+	}
+}
+
 exports.updateSession = async (filter, update, tenantCode, options = {}) => {
 	try {
 		filter.tenant_code = tenantCode

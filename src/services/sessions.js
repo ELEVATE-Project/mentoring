@@ -2296,12 +2296,31 @@ module.exports = class SessionsHelper {
 
 	static async completed(sessionId, isBBB, tenantCode) {
 		try {
-			const sessionDetails = await sessionQueries.findOne(
-				{
-					id: sessionId,
-				},
-				tenantCode
-			)
+			let sessionDetails
+
+			// If tenantCode is provided (authenticated request), use it directly
+			if (tenantCode) {
+				sessionDetails = await sessionQueries.findOne(
+					{
+						id: sessionId,
+					},
+					tenantCode
+				)
+			} else {
+				// For public endpoints (BBB callback), get session first to extract tenant_code
+				const sessionData = await sessionQueries.findSessionForPublicEndpoint(sessionId)
+				if (sessionData && sessionData.tenant_code) {
+					tenantCode = sessionData.tenant_code
+					// Now get the full session details with proper tenant context
+					sessionDetails = await sessionQueries.findOne(
+						{
+							id: sessionId,
+						},
+						tenantCode
+					)
+				}
+			}
+
 			if (!sessionDetails) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
