@@ -2620,11 +2620,15 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			sessions = await this.populateSessionDetails({
-				sessions: sessions,
-				timezone: timezone,
-				transformEntities: true,
-			})
+			sessions = await this.populateSessionDetails(
+				{
+					sessions: sessions,
+					timezone: timezone,
+					transformEntities: true,
+				},
+				false,
+				tenantCode
+			)
 
 			const parser = new Parser({ fields: CSVFields, header: true, includeEmptyRows: true, defaultValue: null })
 			const csv = parser.parse(sessions)
@@ -2701,7 +2705,8 @@ module.exports = class SessionsHelper {
 	 */
 	static async populateSessionDetails(
 		{ sessions, timezone, page, limit, transformEntities = false },
-		sendEpochTime = false
+		sendEpochTime = false,
+		tenantCode
 	) {
 		try {
 			const uniqueOrgIds = [...new Set(sessions.map((obj) => obj.mentor_organization_id))]
@@ -2803,7 +2808,8 @@ module.exports = class SessionsHelper {
 					page: page,
 					limit: limit,
 				},
-				true
+				true,
+				tenantCode
 			)
 
 			const formattedSessionList = sessions.rows.map((session, index) => ({

@@ -1226,7 +1226,6 @@ module.exports = class MenteesHelper {
 						tenantCodes,
 						defaults.tenantCode ? defaults.tenantCode : ''
 					)
-					console.log('=====', getEntityTypesWithEntities.result)
 					if (getEntityTypesWithEntities.success && getEntityTypesWithEntities.result) {
 						let entityTypesWithEntities = getEntityTypesWithEntities.result
 						if (entityTypesWithEntities.length > 0) {
