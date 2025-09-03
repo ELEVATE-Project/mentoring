@@ -1011,7 +1011,7 @@ module.exports = class MenteesHelper {
 				//both both user data and organisation can change at the same time.
 				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: organizationCode })
 				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
-					data.organization.id,
+					data.organization_id,
 					organizationCode,
 					userOrgDetails.data.result.name,
 					tenantCode
@@ -1023,7 +1023,7 @@ module.exports = class MenteesHelper {
 						responseCode: 'CLIENT_ERROR',
 					})
 				}
-				data.organization_id = data.organization.id
+				data.organization_id = data.organizationid
 				const newPolicy = await orgAdminService.constructOrgPolicyObject(orgPolicies, true)
 				data = _.merge({}, data, newPolicy)
 				data.visible_to_organizations = Array.from(

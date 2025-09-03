@@ -134,8 +134,9 @@ module.exports = class UserHelper {
 	}
 
 	static async #createUserWithBody(userBody, tenantCode) {
-		let orgId = userBody.organization.id
-		let orgCode = userBody.organization.code
+		console.log('=======', userBody)
+		let orgId = userBody.organization_id
+		let orgCode = userBody.organization_code
 		const orgExtension = await this.#createOrUpdateOrg({ id: orgId.toString(), code: orgCode }, tenantCode)
 
 		if (!orgExtension) {
@@ -261,8 +262,8 @@ module.exports = class UserHelper {
 
 	static async #createUser(userExtensionData, tenantCode) {
 		const isAMentor = userExtensionData.roles.some((role) => role.title == common.MENTOR_ROLE)
-		const orgId = userExtensionData.organization.id
-		const orgCode = userExtensionData.organization.code
+		const orgId = userExtensionData.organization_id
+		const orgCode = userExtensionData.organization_code
 		const user = isAMentor
 			? await mentorsService.createMentorExtension(
 					userExtensionData,
@@ -287,8 +288,8 @@ module.exports = class UserHelper {
 		const isAMentee = userExtensionData.roles.some((role) => role.title === common.MENTEE_ROLE)
 		const roleChangePayload = {
 			user_id: userExtensionData.id,
-			organization_id: userExtensionData.organization.id,
-			organization_code: userExtensionData.organization.code,
+			organization_id: userExtensionData.organization_id,
+			organization_code: userExtensionData.organization_code,
 		}
 
 		let isRoleChanged = false
@@ -330,13 +331,13 @@ module.exports = class UserHelper {
 				? await menteesService.updateMenteeExtension(
 						userExtensionData,
 						userExtensionData.id,
-						userExtensionData.organization.code,
+						userExtensionData.organization_code,
 						userExtensionData.tenant_code
 				  )
 				: await mentorsService.updateMentorExtension(
 						userExtensionData,
 						userExtensionData.id,
-						userExtensionData.organization.code,
+						userExtensionData.organization_code,
 						userExtensionData.tenant_code
 				  )
 			return user
