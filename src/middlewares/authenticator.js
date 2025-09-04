@@ -132,7 +132,6 @@ module.exports = async function (req, res, next) {
 				? req.decodedToken?.organization_id?.toString()
 				: req.decodedToken?.organization_id
 
-		console.log(' req decoded tokenen ', req.decodedToken)
 		if (!req.decodedToken[organizationKey]) {
 			throw createUnauthorizedResponse()
 		}
