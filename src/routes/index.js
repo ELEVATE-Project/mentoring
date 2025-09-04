@@ -81,6 +81,17 @@ module.exports = (app) => {
 		let controllerResponse
 		let validationError
 
+		// Debug log for session completion requests
+		if (req.originalUrl && req.originalUrl.includes('/sessions/completed')) {
+			console.log('🔥 BBB CALLBACK DETECTED 🔥')
+			console.log('Full URL:', req.originalUrl)
+			console.log('Method:', req.method)
+			console.log('Headers:', req.headers)
+			console.log('Query:', req.query)
+			console.log('Body:', req.body)
+			console.log('Params:', req.params)
+		}
+
 		const version = (req.params.version.match(/^v\d+$/) || [])[0] // Match version like v1, v2, etc.
 		const controllerName = (req.params.controller.match(/^[a-zA-Z0-9_-]+$/) || [])[0] // Allow only alphanumeric characters, underscore, and hyphen
 		const file = req.params.file ? (req.params.file.match(/^[a-zA-Z0-9_-]+$/) || [])[0] : null // Same validation as controller, or null if file is not provided
