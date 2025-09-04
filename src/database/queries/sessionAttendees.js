@@ -1,6 +1,5 @@
 const SessionAttendee = require('@database/models/index').SessionAttendee
 const { Op } = require('sequelize')
-const SessionEnrollment = require('@database/models/index').SessionEnrollment
 
 exports.create = async (data, tenantCode) => {
 	try {
@@ -294,15 +293,21 @@ exports.findPendingFeedbackSessions = async (menteeId, completedSessionIds, tena
 			console.error('findPendingFeedbackSessions: tenantCode is required but undefined')
 			throw new Error('tenantCode is required')
 		}
-		let sessionEnrollments = await SessionEnrollment.findAll({
+
+		// Get all session attendee records for the mentee
+		let allSessionAttendees = await SessionAttendee.findAll({
 			where: {
 				mentee_id: menteeId,
 				tenant_code: tenantCode,
 			},
+			raw: true,
 		})
-		const sessionIds = sessionEnrollments.map((enrollment) => enrollment.session_id)
-		const filteredSessionIds = sessionIds.filter((sessionId) => !completedSessionIds.includes(sessionId))
 
+		// Get session IDs excluding those already with feedback
+		const allSessionIds = allSessionAttendees.map((attendee) => attendee.session_id)
+		const filteredSessionIds = allSessionIds.filter((sessionId) => !completedSessionIds.includes(sessionId))
+
+		// Find attendees who actually joined and haven't skipped feedback
 		const filter = {
 			mentee_id: menteeId,
 			joined_at: {
@@ -310,8 +315,8 @@ exports.findPendingFeedbackSessions = async (menteeId, completedSessionIds, tena
 			},
 			is_feedback_skipped: false,
 			session_id: filteredSessionIds,
+			tenant_code: tenantCode,
 		}
-		filter.tenant_code = tenantCode
 
 		return await SessionAttendee.findAll({
 			where: filter,
