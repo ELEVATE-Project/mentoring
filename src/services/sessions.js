@@ -2299,14 +2299,7 @@ module.exports = class SessionsHelper {
 			let sessionDetails
 
 			// If tenantCode is provided (authenticated request), use it directly
-			if (tenantCode) {
-				sessionDetails = await sessionQueries.findOne(
-					{
-						id: sessionId,
-					},
-					tenantCode
-				)
-			} else {
+			if (tenantCode && isBBB) {
 				// For public endpoints (BBB callback), get session first to extract tenant_code
 				const sessionData = await sessionQueries.findSessionForPublicEndpoint(sessionId)
 				if (sessionData && sessionData.tenant_code) {
@@ -2320,7 +2313,12 @@ module.exports = class SessionsHelper {
 					)
 				}
 			}
-
+			sessionDetails = await sessionQueries.findOne(
+				{
+					id: sessionId,
+				},
+				tenantCode
+			)
 			if (!sessionDetails) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
@@ -2336,12 +2334,28 @@ module.exports = class SessionsHelper {
 				},
 				tenantCode
 			)
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			if (resourceInfo && resourceInfo.length > 0) {
 				let postResourceTemplate = process.env.POST_RESOURCE_EMAIL_TEMPLATE_CODE
 				let templateData = await notificationQueries.findOneEmailTemplate(
 					postResourceTemplate,
 					sessionDetails.mentor_organization_id,
-					tenantCode
+					{ [Op.in]: [defaults.tenantCode, tenantCode] }
 				)
 
 				let sessionAttendees = await sessionAttendeesQueries.findAll(

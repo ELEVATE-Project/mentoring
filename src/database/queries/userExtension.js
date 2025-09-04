@@ -525,9 +525,14 @@ module.exports = class MenteeExtensionQueries {
 				search: `%${searchText}%`,
 			}
 
+			// Always provide offset and limit replacements since they're in the query
 			if (page !== null && limit !== null) {
 				replacements.offset = limit * (page - 1)
 				replacements.limit = limit
+			} else {
+				// Provide defaults if page/limit not specified
+				replacements.offset = 0
+				replacements.limit = 5 // Default limit
 			}
 
 			let results = await Sequelize.query(query, {

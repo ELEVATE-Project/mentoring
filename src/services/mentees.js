@@ -312,7 +312,7 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Mentees join session link.
 	 */
 
-	static async joinSession(sessionId, userId, organizationId, tenantCode) {
+	static async joinSession(sessionId, userId, organizationCode, tenantCode) {
 		try {
 			const mentee = await menteeExtensionQueries.getMenteeExtension(
 				userId,
@@ -366,12 +366,12 @@ module.exports = class MenteesHelper {
 				await sessionAttendeesQueries.updateOne(
 					{
 						id: sessionAttendee.id,
-						tenant_code: tenantCode,
 					},
 					{
 						meeting_info: meetingInfo,
 						joined_at: utils.utcFormat(),
-					}
+					},
+					tenantCode
 				)
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
@@ -395,12 +395,12 @@ module.exports = class MenteesHelper {
 				await sessionAttendeesQueries.updateOne(
 					{
 						id: sessionAttendee.id,
-						tenant_code: tenantCode,
 					},
 					{
 						meeting_info: meetingInfo,
 						joined_at: utils.utcFormat(),
-					}
+					},
+					tenantCode
 				)
 			}
 
