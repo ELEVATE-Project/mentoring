@@ -240,7 +240,9 @@ module.exports = class Sessions {
 
 	async completed(req) {
 		try {
-			const tenantCode = req.decodedToken?.tenant_code
+			// Get tenant_code from JWT token (authenticated requests) or request body (scheduled jobs)
+			const tenantCode = req.decodedToken?.tenant_code || req.body?.tenant_code
+
 			const isBBB = req.query.source == common.BBB_VALUE ? true : false
 			const sessionsCompleted = await sessionService.completed(req.params.id, isBBB, tenantCode)
 			return sessionsCompleted

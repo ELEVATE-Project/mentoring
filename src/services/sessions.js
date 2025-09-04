@@ -418,6 +418,11 @@ module.exports = class SessionsHelper {
 					email_template_code: jobsToCreate[jobIndex].emailTemplate,
 					job_creator_org_id: orgId,
 				}
+
+				// Add tenant_code for session completion jobs
+				if (jobsToCreate[jobIndex].jobId.includes('job_to_mark_session_as_completed_')) {
+					reqBody.tenant_code = tenantCode
+				}
 				// Create the scheduler job with the calculated delay and other parameters
 				await schedulerRequest.createSchedulerJob(
 					jobsToCreate[jobIndex].jobId,
