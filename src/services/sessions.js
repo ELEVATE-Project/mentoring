@@ -2311,14 +2311,20 @@ module.exports = class SessionsHelper {
 
 	static async completed(sessionId, isBBB, tenantCode) {
 		try {
+			console.log('=== SESSION SERVICE COMPLETION DEBUG START ===')
+			console.log('Input parameters:', { sessionId, isBBB, tenantCode })
+
 			let sessionDetails
 
 			// If tenantCode is provided (authenticated request), use it directly
 			if (tenantCode && isBBB) {
+				console.log('BBB callback with tenantCode - getting session for public endpoint...')
 				// For public endpoints (BBB callback), get session first to extract tenant_code
 				const sessionData = await sessionQueries.findSessionForPublicEndpoint(sessionId)
+				console.log('Session data from public endpoint:', sessionData)
 				if (sessionData && sessionData.tenant_code) {
 					tenantCode = sessionData.tenant_code
+					console.log('Updated tenantCode from session data:', tenantCode)
 					// Now get the full session details with proper tenant context
 					sessionDetails = await sessionQueries.findOne(
 						{
@@ -2326,14 +2332,18 @@ module.exports = class SessionsHelper {
 						},
 						tenantCode
 					)
+					console.log('Full session details from findOne:', sessionDetails)
 				}
 			}
+
+			console.log('Getting session details with tenantCode:', tenantCode)
 			sessionDetails = await sessionQueries.findOne(
 				{
 					id: sessionId,
 				},
 				tenantCode
 			)
+			console.log('Final session details:', sessionDetails)
 			if (!sessionDetails) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
@@ -2417,7 +2427,15 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			await sessionQueries.updateOne(
+			console.log('Updating session status to COMPLETED...')
+			console.log('Update parameters:', {
+				sessionId: sessionId,
+				status: common.COMPLETED_STATUS,
+				completed_at: utils.utcFormat(),
+				tenantCode: tenantCode,
+			})
+
+			const updateResult = await sessionQueries.updateOne(
 				{
 					id: sessionId,
 				},
@@ -2428,6 +2446,8 @@ module.exports = class SessionsHelper {
 				tenantCode,
 				{ returning: false, raw: true }
 			)
+
+			console.log('Session update result:', updateResult)
 
 			if (sessionDetails.meeting_info.value == common.BBB_VALUE && isBBB) {
 				const recordingInfo = await bigBlueButtonRequests.getRecordings(sessionId)
@@ -2447,11 +2467,18 @@ module.exports = class SessionsHelper {
 				}
 			}
 
+			console.log('Session completion process finished successfully!')
+			console.log('=== SESSION SERVICE COMPLETION DEBUG END ===')
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				result: [],
 			})
 		} catch (error) {
+			console.log('=== SESSION SERVICE COMPLETION ERROR ===')
+			console.log('Error in session service completion:', error)
+			console.log('Error stack:', error.stack)
+			console.log('========================================')
 			throw error
 		}
 	}

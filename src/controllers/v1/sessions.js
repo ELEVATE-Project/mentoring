@@ -240,18 +240,47 @@ module.exports = class Sessions {
 
 	async completed(req) {
 		try {
+			console.log('=== SESSION COMPLETION DEBUG START ===')
+			console.log('Request Method:', req.method)
+			console.log('Request URL:', req.originalUrl)
+			console.log('Session ID:', req.params.id)
+			console.log('Query params:', req.query)
+			console.log('Request body:', req.body)
+			console.log('Has decodedToken:', !!req.decodedToken)
+
 			let tenantCode = req.decodedToken?.tenant_code
+			console.log('Initial tenantCode from JWT:', tenantCode)
 
 			// For scheduled jobs or BBB callbacks without tokens, get tenant_code from session
 			if (!tenantCode) {
+				console.log('No tenantCode from JWT, fetching from session...')
 				const sessionData = await sessionService.getSessionTenantCode(req.params.id)
+				console.log('Session data from DB:', sessionData)
 				tenantCode = sessionData?.tenant_code
+				console.log('Final tenantCode from session:', tenantCode)
 			}
 
 			const isBBB = req.query.source == common.BBB_VALUE ? true : false
+			console.log('Is BBB callback:', isBBB)
+			console.log('BBB_VALUE constant:', common.BBB_VALUE)
+
+			console.log('Calling sessionService.completed with:', {
+				sessionId: req.params.id,
+				isBBB: isBBB,
+				tenantCode: tenantCode,
+			})
+
 			const sessionsCompleted = await sessionService.completed(req.params.id, isBBB, tenantCode)
+
+			console.log('Session completion result:', sessionsCompleted)
+			console.log('=== SESSION COMPLETION DEBUG END ===')
+
 			return sessionsCompleted
 		} catch (error) {
+			console.log('=== SESSION COMPLETION ERROR ===')
+			console.log('Error in completion controller:', error)
+			console.log('Error stack:', error.stack)
+			console.log('=================================')
 			return error
 		}
 	}
