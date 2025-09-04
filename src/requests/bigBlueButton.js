@@ -26,6 +26,10 @@ const createMeeting = function (meetingId, meetingName, attendeePW, moderatorPW,
 	return new Promise(async (resolve, reject) => {
 		try {
 			let endMeetingCallBackUrl = process.env.MEETING_END_CALLBACK_EVENTS + '%2F' + meetingId + '%3Fsource%3DBBB'
+			console.log('🔍 BBB CALLBACK URL DEBUG:')
+			console.log('Environment var MEETING_END_CALLBACK_EVENTS:', process.env.MEETING_END_CALLBACK_EVENTS)
+			console.log('Constructed endMeetingCallBackUrl:', endMeetingCallBackUrl)
+			console.log('Decoded URL:', decodeURIComponent(endMeetingCallBackUrl))
 			let sessionEndUrl = process.env.BIG_BLUE_BUTTON_SESSION_END_URL
 			let lastUserTimeout = process.env.BIG_BLUE_BUTTON_LAST_USER_TIMEOUT_MINUTES || 15
 
