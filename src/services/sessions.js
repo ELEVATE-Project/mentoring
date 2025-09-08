@@ -1182,7 +1182,7 @@ module.exports = class SessionsHelper {
 								to: attendee.attendeeEmail,
 								subject: mentorChangedTemplate.subject,
 								body: utils.composeEmailBody(mentorChangedTemplate.body, {
-									newMentorName: sessionDetail.mentor_name,
+									newMentorName: bodyData.mentor_name,
 									sessionTitle: sessionDetail.title,
 									startDate: utils.getTimeZone(
 										sessionDetail.start_date,
