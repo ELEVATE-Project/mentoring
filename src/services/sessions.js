@@ -152,7 +152,8 @@ module.exports = class SessionsHelper {
 				const isMenteeAccessible = await menteeService.checkIfMenteeIsAccessible(
 					allValidMenteesDetails,
 					loggedInUserId,
-					isAMentor
+					isAMentor,
+					tenantCode
 				)
 				if (!isMenteeAccessible && bodyData.type === common.SESSION_TYPE.PRIVATE) {
 					return responses.failureResponse({
@@ -167,7 +168,6 @@ module.exports = class SessionsHelper {
 				mentorIdToCheck,
 				bodyData.start_date,
 				bodyData.end_date,
-				undefined,
 				tenantCode
 			)
 
@@ -626,8 +626,8 @@ module.exports = class SessionsHelper {
 				userId,
 				bodyData.start_date,
 				bodyData.end_date,
-				sessionId,
-				tenantCode
+				tenantCode,
+				sessionId
 			)
 			if (timeSlot.isTimeSlotAvailable === false) {
 				return responses.failureResponse({
@@ -2580,7 +2580,7 @@ module.exports = class SessionsHelper {
 	 * @returns {String} - STAR_AND_END_DATE_OVERLAP/START_DATE_OVERLAP/END_DATE_OVERLAP.
 	 */
 
-	static async isTimeSlotAvailable(id, startDate, endDate, sessionId, tenantCode) {
+	static async isTimeSlotAvailable(id, startDate, endDate, tenantCode, sessionId) {
 		try {
 			const sessions = await sessionQueries.getSessionByUserIdAndTime(
 				id,
