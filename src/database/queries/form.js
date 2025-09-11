@@ -1,4 +1,5 @@
 const Form = require('../models/index').Form
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 module.exports = class FormsData {
 	static async createForm(data, tenantCode) {
@@ -13,18 +14,29 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findOneForm(filter, tenantCode = null, orgCode = null) {
+	static async findOneForm(filter, tenantCode, orgCode = null) {
 		try {
 			if (orgCode) {
 				filter.organization_code = orgCode
 			}
-			if (tenantCode) {
-				filter.tenant_code = tenantCode
-			}
-			const formData = await Form.findOne({
+			filter.tenant_code = tenantCode
+
+			// First try to find form for specific tenant
+			let formData = await Form.findOne({
 				where: filter,
 				raw: true,
 			})
+
+			// If no form found and not already using default tenant, try default tenant
+			if (!formData && tenantCode !== (await getDefaults()).tenantCode) {
+				const defaults = await getDefaults()
+				const defaultFilter = { ...filter, tenant_code: defaults.tenantCode }
+				formData = await Form.findOne({
+					where: defaultFilter,
+					raw: true,
+				})
+			}
+
 			return formData
 		} catch (error) {
 			throw error
@@ -33,9 +45,7 @@ module.exports = class FormsData {
 
 	static async updateOneForm(filter, update, tenantCode, orgCode = null, options = {}) {
 		try {
-			if (tenantCode) {
-				filter.tenant_code = tenantCode
-			}
+			filter.tenant_code = tenantCode
 			if (orgCode) {
 				filter.organization_code = orgCode
 			}

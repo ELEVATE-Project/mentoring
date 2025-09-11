@@ -1,6 +1,7 @@
 const EntityType = require('../models/index').EntityType
 const Entity = require('../models/index').Entity
 const { Op } = require('sequelize')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 //const Sequelize = require('../models/index').sequelize
 
 module.exports = class UserEntityData {
@@ -44,10 +45,16 @@ module.exports = class UserEntityData {
 	}
 	static async findUserEntityTypesAndEntities(filter, tenantCodes) {
 		try {
-			// Only add tenant_code to filter if tenantCode is provided
-			if (tenantCodes) {
-				filter.tenant_code = tenantCodes
+			const defaults = await getDefaults()
+
+			// Handle tenant codes properly - if array provided, use it; otherwise include default
+			let finalTenantCodes = tenantCodes
+			if (!Array.isArray(tenantCodes)) {
+				// If single tenant code provided, include default tenant as fallback
+				finalTenantCodes = tenantCodes ? [tenantCodes, defaults.tenantCode] : [defaults.tenantCode]
 			}
+
+			filter.tenant_code = { [Op.in]: finalTenantCodes }
 
 			const entityTypes = await EntityType.findAll({
 				where: filter,
@@ -61,17 +68,12 @@ module.exports = class UserEntityData {
 				const entityFilter = {
 					entity_type_id: entityTypeIds,
 					status: 'ACTIVE',
-				}
-
-				// Only add tenant_code to entity filter if tenantCode is provided
-				if (tenantCodes) {
-					entityFilter.tenant_code = tenantCodes
+					tenant_code: { [Op.in]: finalTenantCodes },
 				}
 
 				entities = await Entity.findAll({
 					where: entityFilter,
 					raw: true,
-					//attributes: { exclude: ['entity_type_id'] },
 				})
 			}
 
@@ -158,7 +160,10 @@ module.exports = class UserEntityData {
 
 	static async findAllEntityTypesAndEntities(filter, tenantCode) {
 		try {
-			filter.tenant_code = tenantCode
+			const defaults = await getDefaults()
+			const tenantCodes = [tenantCode, defaults.tenantCode]
+
+			filter.tenant_code = { [Op.in]: tenantCodes }
 			const entityTypes = await EntityType.findAll({
 				where: filter,
 				raw: true,
@@ -168,9 +173,12 @@ module.exports = class UserEntityData {
 
 			// Fetch all matching entities using the IDs
 			const entities = await Entity.findAll({
-				where: { entity_type_id: entityTypeIds, status: 'ACTIVE', tenant_code: tenantCode },
+				where: {
+					entity_type_id: entityTypeIds,
+					status: 'ACTIVE',
+					tenant_code: { [Op.in]: tenantCodes },
+				},
 				raw: true,
-				//attributes: { exclude: ['entity_type_id'] },
 			})
 
 			const result = entityTypes.map((entityType) => {

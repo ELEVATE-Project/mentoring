@@ -89,7 +89,7 @@ module.exports = class SessionsHelper {
 			bodyData.created_by = loggedInUserId
 			bodyData.updated_by = loggedInUserId
 			let menteeIdsToEnroll = bodyData.mentees ? bodyData.mentees : []
-			const mentorIdToCheck = String(bodyData.mentor_id || loggedInUserId)
+			const mentorIdToCheck = bodyData.mentor_id || loggedInUserId
 			const isSessionCreatedByManager = !!bodyData.mentor_id
 
 			if (bodyData.type == common.SESSION_TYPE.PRIVATE && menteeIdsToEnroll.length === 0) {
@@ -2179,7 +2179,8 @@ module.exports = class SessionsHelper {
 					session.title,
 					session.mentee_password,
 					session.mentor_password,
-					sessionDuration
+					sessionDuration,
+					tenantCode
 				)
 				if (!meetingDetails.success) {
 					return responses.failureResponse({
@@ -3014,7 +3015,7 @@ module.exports = class SessionsHelper {
 
 			// Fetch mentee details
 			const mentees = await menteeExtensionQueries.getUsersByUserIds(
-				menteeIds.map((id) => String(id)),
+				menteeIds,
 				{
 					attributes: ['user_id', 'email', 'name', 'is_mentor'],
 				},
@@ -3542,7 +3543,7 @@ module.exports = class SessionsHelper {
 
 	static async validateMentorExtensions(userIds, tenantCode) {
 		try {
-			const filteredUserIds = userIds.filter((id) => typeof id === 'number').map((id) => String(id))
+			const filteredUserIds = userIds.filter((id) => id != null && id !== '')
 			const mentors = await mentorExtensionQueries.getMentorExtensions(filteredUserIds, [], tenantCode)
 			const mentorMap = new Map(mentors.map((mentor) => [mentor.user_id, mentor]))
 			const validMentors = []
@@ -3563,7 +3564,7 @@ module.exports = class SessionsHelper {
 
 	static async validateMenteeExtensions(userIds, tenantCode) {
 		try {
-			const filteredUserIds = userIds.filter((id) => typeof id === 'number').map((id) => String(id))
+			const filteredUserIds = userIds.filter((id) => id != null && id !== '')
 			const mentees = await menteeExtensionQueries.getMenteeExtensions(filteredUserIds, [], tenantCode)
 			const menteeMap = new Map(mentees.map((mentee) => [mentee.user_id, mentee]))
 			const validMentees = []

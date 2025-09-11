@@ -74,16 +74,12 @@ module.exports = class OrgAdmin {
 
 	async inheritEntityType(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			let entityTypeDetails = await orgAdminService.inheritEntityType(
 				req.body.entity_type_value,
 				req.body.target_entity_type_label,
 				req.decodedToken.organization_code,
 				req.decodedToken,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 			return entityTypeDetails
 		} catch (error) {

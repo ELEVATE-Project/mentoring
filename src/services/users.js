@@ -69,7 +69,7 @@ module.exports = class UserHelper {
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
-				message: 'USERS_FETCHED_SUCCESSFULLY',
+				message: userDetails.message || 'USERS_FETCHED_SUCCESSFULLY',
 				result: userDetails.result,
 			})
 		} catch (error) {

@@ -1,4 +1,5 @@
 const ReportType = require('@database/models/index').ReportType
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 module.exports = class ReportTypeQueries {
 	static async createReportType(data, tenantCode) {
@@ -14,11 +15,25 @@ module.exports = class ReportTypeQueries {
 		try {
 			const { where: optionsWhere = {}, ...rest } = options || {}
 			const where = { ...optionsWhere, title: title, tenant_code: tenantCode }
-			const reportType = await ReportType.findOne({
+
+			// First try to find report type for specific tenant
+			let reportType = await ReportType.findOne({
 				...rest,
 				where,
 				raw: true,
 			})
+
+			// If no report type found and not already using default tenant, try default tenant
+			if (!reportType && tenantCode !== (await getDefaults()).tenantCode) {
+				const defaults = await getDefaults()
+				const defaultWhere = { ...optionsWhere, title: title, tenant_code: defaults.tenantCode }
+				reportType = await ReportType.findOne({
+					...rest,
+					where: defaultWhere,
+					raw: true,
+				})
+			}
+
 			return reportType
 		} catch (error) {
 			throw error

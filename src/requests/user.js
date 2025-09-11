@@ -851,6 +851,34 @@ const getProfileDetails = async ({ tenantCode, userId }) => {
 	}
 }
 
+/**
+ * Get tenant domain by tenant code
+ * @method
+ * @name getTenantDomain
+ * @param {String} tenantCode - tenant code
+ * @returns {String} - domain for the tenant
+ */
+const getTenantDomain = async (tenantCode) => {
+	try {
+		if (!tenantCode) {
+			throw new Error('TENANT_CODE_REQUIRED')
+		}
+
+		const apiUrl = `${userBaseUrl}/tenant/domain/${tenantCode}`
+		const internalToken = true
+		const domainResponse = await requests.get(apiUrl, '', internalToken)
+
+		if (domainResponse && domainResponse.success && domainResponse.data?.result?.domain) {
+			return domainResponse.data.result.domain
+		} else {
+			throw new Error('TENANT_DOMAIN_NOT_FOUND')
+		}
+	} catch (error) {
+		console.error('Error fetching tenant domain:', error)
+		throw error
+	}
+}
+
 module.exports = {
 	fetchOrgDetails, // dependent on releated orgs  And query on code
 	fetchUserDetails, // dependendt on languages and prefered lang etc
@@ -868,4 +896,5 @@ module.exports = {
 	organizationList,
 	getOrgDetails,
 	getProfileDetails,
+	getTenantDomain,
 }

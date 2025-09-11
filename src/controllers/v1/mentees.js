@@ -40,17 +40,13 @@ module.exports = class Mentees {
 
 	async sessions(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const sessions = await menteesService.sessions(
-				userId,
+				req.decodedToken.id,
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
-				organizationCode,
-				tenantCode
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return sessions
 		} catch (error) {
@@ -73,11 +69,12 @@ module.exports = class Mentees {
 
 	async reports(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
-			const reports = await menteesService.reports(userId, req.query.filterType, organizationCode, tenantCode)
+			const reports = await menteesService.reports(
+				req.decodedToken.id,
+				req.query.filterType,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 			return reports
 		} catch (error) {
 			return error

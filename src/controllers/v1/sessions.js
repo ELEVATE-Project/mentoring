@@ -291,9 +291,7 @@ module.exports = class Sessions {
 
 	async getRecording(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
-			const recording = await sessionService.getRecording(req.params.id, tenantCode)
+			const recording = await sessionService.getRecording(req.params.id, req.decodedToken.tenant_code)
 			return recording
 		} catch (error) {
 			return error
@@ -343,16 +341,12 @@ module.exports = class Sessions {
 		const internalMeetingId = req.params.id
 		const recordingUrl = req.body.recordingUrl
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const sessionUpdated = await sessionService.updateRecordingUrl(
 				internalMeetingId,
 				recordingUrl,
-				userId,
-				organizationCode,
-				tenantCode
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return sessionUpdated
 		} catch (error) {

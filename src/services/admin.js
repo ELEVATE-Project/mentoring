@@ -22,7 +22,7 @@ const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 const { sequelize } = require('@database/models/index')
 const { literal } = require('sequelize')
-const sessionOwnerships = require('@database/queries/sessionOwnership')
+// sessionOwnership removed - functionality replaced by direct Session queries
 
 // Generic notification helper class
 class NotificationHelper {
@@ -713,11 +713,7 @@ module.exports = class AdminService {
 						{ where: { id: session.id, tenant_code: tenantCode } },
 						transaction
 					)
-					await sessionOwnerships.updateRecords(
-						{ deleted_at: new Date() },
-						{ where: { id: session.id, user_id: session.mentor_id } },
-						transaction
-					)
+					// sessionOwnership deletion removed - no longer needed with direct Session mentor_id management
 
 					console.log(`Cancelled private session ${session.id} due to mentee deletion`)
 				}

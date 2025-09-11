@@ -4,9 +4,9 @@ const common = require('@constants/common')
 const sequelize = require('sequelize')
 
 const moment = require('moment')
-const SessionOwnership = require('../models/index').SessionOwnership
+// SessionOwnership removed - functionality replaced by direct Session queries
 const Sequelize = require('@database/models/index').sequelize
-const sessionOwnership = require('@database/queries/sessionOwnership')
+// sessionOwnership removed - functionality replaced by direct Session queries
 
 exports.getColumns = async () => {
 	try {
@@ -252,20 +252,9 @@ exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 			],
 		}) */
 
-		const filter = {
-			user_id: userId,
-		}
-
-		const option = {
-			attributes: ['session_id'],
-		}
-		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
-
 		const foundSessions = await Session.findAll({
 			where: {
-				mentor_id: userId,
-				created_by: userId,
-				id: { [Op.in]: sessionIds },
+				[Op.or]: [{ mentor_id: userId }, { created_by: userId }],
 				[Op.or]: [{ start_date: { [Op.gt]: currentEpochTime } }, { status: common.PUBLISHED_STATUS }],
 				tenant_code: tenantCode,
 			},
@@ -410,24 +399,12 @@ exports.countHostedSessions = async (id, tenantCode) => {
 
 exports.getCreatedSessionsCountInDateRange = async (mentorId, startDate, endDate, tenantCode) => {
 	try {
-		const filter = {
-			user_id: mentorId,
-			type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
-		}
-
-		const option = {
-			attributes: ['session_id'],
-		}
-		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
-
 		const count = await Session.count({
 			where: {
-				id: { [Op.in]: sessionIds },
 				created_at: {
 					[Op.between]: [startDate, endDate],
 				},
-				mentor_id: mentorId, // Check mentor_id
-				created_by: mentorId, // Check created_by
+				created_by: mentorId, // Sessions created by this user
 				tenant_code: tenantCode,
 			},
 		})
@@ -448,24 +425,13 @@ exports.getCreatedSessionsCountInDateRange = async (mentorId, startDate, endDate
 
 exports.getAssignedSessionsCountInDateRange = async (mentorId, startDate, endDate, tenantCode) => {
 	try {
-		const filter = {
-			user_id: mentorId,
-			type: common.SESSION_OWNERSHIP_TYPE.MENTOR,
-		}
-
-		const option = {
-			attributes: ['session_id'],
-		}
-		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
-
 		const count = await Session.count({
 			where: {
-				id: { [Op.in]: sessionIds },
 				created_at: {
 					[Op.between]: [startDate, endDate],
 				},
 				mentor_id: mentorId,
-				created_by: { [Op.ne]: mentorId },
+				created_by: { [Op.ne]: mentorId }, // Sessions assigned to mentor but not created by them
 				tenant_code: tenantCode,
 			},
 		})
@@ -477,19 +443,9 @@ exports.getAssignedSessionsCountInDateRange = async (mentorId, startDate, endDat
 
 exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate, tenantCode) => {
 	try {
-		const filter = {
-			user_id: mentorId,
-			type: common.SESSION_OWNERSHIP_TYPE.MENTOR,
-		}
-
-		const option = {
-			attributes: ['session_id'],
-		}
-		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
-
 		const count = await Session.count({
 			where: {
-				id: { [Op.in]: sessionIds },
+				mentor_id: mentorId, // Sessions where this user is the mentor
 				status: 'COMPLETED',
 				start_date: {
 					[Op.between]: [startDate, endDate],
@@ -540,22 +496,13 @@ exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate,
 
 exports.getMentorsUpcomingSessions = async (page, limit, search = '', mentorId, tenantCode) => {
 	try {
-		const filter = {
-			user_id: mentorId,
-		}
-
-		const option = {
-			attributes: ['session_id'],
-		}
-		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
-
 		const currentEpochTime = moment().unix()
 
 		const sessionAttendeesData = await Session.findAndCountAll({
 			where: {
 				[Op.and]: [
 					{
-						id: { [Op.in]: sessionIds },
+						[Op.or]: [{ mentor_id: mentorId }, { created_by: mentorId }],
 						status: 'PUBLISHED',
 						start_date: {
 							[Op.gt]: currentEpochTime,
@@ -950,17 +897,9 @@ exports.deactivateAndReturnMentorSessions = async (userId, tenantCode) => {
 		const currentEpochTime = moment().unix()
 		const currentDateTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
 
-		const filter = {
-			user_id: userId,
-		}
-
-		const option = {
-			attributes: ['session_id'],
-		}
-		const sessionIds = await sessionOwnership.findAll(filter, tenantCode, option, true)
 		const foundSessions = await Session.findAll({
 			where: {
-				id: { [Op.in]: sessionIds },
+				[Op.or]: [{ mentor_id: userId }, { created_by: userId }],
 				[Op.or]: [{ start_date: { [Op.gt]: currentEpochTime } }, { status: common.PUBLISHED_STATUS }],
 				tenant_code: tenantCode,
 			},
@@ -1071,11 +1010,8 @@ exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 
 exports.addOwnership = async (sessionId, mentorId) => {
 	try {
-		await sessionOwnership.create({
-			user_id: mentorId,
-			session_id: sessionId,
-			type: common.SESSION_OWNERSHIP_TYPE.MENTOR,
-		})
+		// Update session to assign mentor directly
+		await Session.update({ mentor_id: mentorId }, { where: { id: sessionId } })
 		return true
 	} catch (error) {
 		return error

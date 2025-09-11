@@ -1,4 +1,5 @@
 const SessionAttendee = require('@database/models/index').SessionAttendee
+const Session = require('@database/models/index').Session
 const { Op } = require('sequelize')
 
 exports.create = async (data, tenantCode) => {
@@ -77,16 +78,37 @@ exports.unEnrollFromSession = async (sessionId, userId, tenantCode) => {
 exports.unEnrollFromSessionWithValidation = async (sessionId, userId, tenantCode) => {
 	try {
 		const { sequelize } = SessionAttendee
-		const deleteQuery = `
-			DELETE sa FROM session_attendees sa
-			INNER JOIN sessions s ON sa.session_id = s.id AND sa.tenant_code = s.tenant_code
-			WHERE sa.session_id = :sessionId AND sa.mentee_id = :userId AND sa.tenant_code = :tenantCode
-		`
-		const [results] = await sequelize.query(deleteQuery, {
-			replacements: { sessionId, userId, tenantCode },
-			type: sequelize.QueryTypes.DELETE,
+
+		// Use Sequelize transaction for atomic operation
+		const result = await sequelize.transaction(async (transaction) => {
+			// First validate that session exists with matching tenant_code
+			const session = await Session.findOne({
+				where: {
+					id: sessionId,
+					tenant_code: tenantCode,
+				},
+				attributes: ['id'],
+				transaction,
+			})
+
+			if (!session) {
+				return 0 // Session doesn't exist or tenant mismatch
+			}
+
+			// Session exists and tenant matches, safe to delete attendee
+			const deletedRows = await SessionAttendee.destroy({
+				where: {
+					session_id: sessionId,
+					mentee_id: userId,
+					tenant_code: tenantCode,
+				},
+				transaction,
+			})
+
+			return deletedRows
 		})
-		return results.affectedRows || 0
+
+		return result || 0
 	} catch (error) {
 		return error
 	}
