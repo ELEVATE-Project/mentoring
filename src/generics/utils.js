@@ -143,7 +143,7 @@ const capitalize = (str) => {
 	return startCase(str)
 }
 const isAMentor = (roles) => {
-	return roles.some((role) => role.title == common.MENTOR_ROLE)
+	return roles && Array.isArray(roles) ? roles.some((role) => role.title == common.MENTOR_ROLE) : false
 }
 function isNumeric(value) {
 	return /^\d+$/.test(value)
@@ -477,11 +477,11 @@ const validateRoleAccess = (roles, requiredRoles) => {
 	}
 }
 
-const removeDefaultOrgEntityTypes = (entityTypes, orgId) => {
+const removeDefaultOrgEntityTypes = (entityTypes, orgCode) => {
 	const entityTypeMap = new Map()
 	entityTypes.forEach((entityType) => {
 		if (!entityTypeMap.has(entityType.value)) entityTypeMap.set(entityType.value, entityType)
-		else if (entityType.organization_id === orgId) entityTypeMap.set(entityType.value, entityType)
+		else if (entityType.organization_code === orgCode) entityTypeMap.set(entityType.value, entityType)
 	})
 	return Array.from(entityTypeMap.values())
 }
@@ -728,21 +728,21 @@ function convertEntitiesForFilter(entityTypes) {
 	return result
 }
 
-function filterEntitiesBasedOnParent(data, defaultOrgId, doNotRemoveDefaultOrg) {
+function filterEntitiesBasedOnParent(data, defaultOrgCode, doNotRemoveDefaultOrg) {
 	let result = {}
 
 	for (let key in data) {
 		let countWithParentId = 0
 		let countOfEachKey = data[key].length
 		data[key].forEach((obj) => {
-			if (obj.parent_id !== null && obj.organization_id != defaultOrgId) {
+			if (obj.parent_id !== null && obj.organization_code != defaultOrgCode) {
 				countWithParentId++
 			}
 		})
 
 		let outputArray = data[key]
 		if (countOfEachKey > 1 && countWithParentId == countOfEachKey - 1 && !doNotRemoveDefaultOrg) {
-			outputArray = data[key].filter((obj) => !(obj.organization_id === defaultOrgId && obj.parent_id === null))
+			outputArray = data[key].filter((obj) => !(obj.organization_code === defaultOrgId && obj.parent_id === null))
 		}
 
 		result[key] = outputArray

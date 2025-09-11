@@ -44,7 +44,9 @@ module.exports = class Mentees {
 				req.decodedToken.id,
 				req.pageNo,
 				req.pageSize,
-				req.searchText
+				req.searchText,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return sessions
 		} catch (error) {
@@ -67,7 +69,12 @@ module.exports = class Mentees {
 
 	async reports(req) {
 		try {
-			const reports = await menteesService.reports(req.decodedToken.id, req.query.filterType)
+			const reports = await menteesService.reports(
+				req.decodedToken.id,
+				req.query.filterType,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 			return reports
 		} catch (error) {
 			return error
@@ -86,17 +93,22 @@ module.exports = class Mentees {
 
 	async homeFeed(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const organizationId = req.decodedToken.organization_id
+			const userId = req.decodedToken.id
 			const homeFeed = await menteesService.homeFeed(
-				req.decodedToken.id,
+				userId,
 				isAMentor(req.decodedToken.roles),
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
 				req.query,
 				req.decodedToken.roles,
-				req.decodedToken.organization_id,
+				organizationCode,
 				req.query.start_date,
-				req.query.end_date
+				req.query.end_date,
+				tenantCode
 			)
 			return homeFeed
 		} catch (error) {
@@ -116,7 +128,11 @@ module.exports = class Mentees {
 
 	async joinSession(req) {
 		try {
-			const session = await menteesService.joinSession(req.params.id, req.decodedToken.id)
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const userId = req.decodedToken.id
+
+			const session = await menteesService.joinSession(req.params.id, userId, organizationCode, tenantCode)
 			return session
 		} catch (error) {
 			return error
@@ -125,13 +141,19 @@ module.exports = class Mentees {
 
 	async list(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationCode = req.decodedToken.organization_code
+			const userId = req.decodedToken.id
+
 			return await menteesService.list(
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
 				req.query,
-				req.decodedToken.id,
-				isAMentor(req.decodedToken.roles)
+				userId,
+				isAMentor(req.decodedToken.roles),
+				organizationCode,
+				tenantCode
 			)
 		} catch (error) {
 			return error

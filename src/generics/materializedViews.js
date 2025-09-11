@@ -3,7 +3,6 @@ const entityTypeQueries = require('@database/queries/entityType')
 const { sequelize } = require('@database/models/index')
 const utils = require('@generics/utils')
 const common = require('@constants/common')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
 const searchConfig = require('@configs/search.json')
 const indexQueries = require('@generics/mViewsIndexQueries')
 
@@ -327,12 +326,13 @@ const generateMaterializedView = async (modelEntityTypes) => {
 	}
 }
 
-const getAllowFilteringEntityTypes = async () => {
+const getAllowFilteringEntityTypes = async (tenantCode) => {
 	try {
-		const defaultOrgId = await getDefaultOrgId()
+		const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE || 'default_code'
 
 		return await entityTypeQueries.findAllEntityTypes(
-			defaultOrgId,
+			defaultOrgCode,
+			tenantCode || process.env.DEFAULT_TENANT_CODE,
 			['id', 'value', 'label', 'data_type', 'organization_id', 'has_entities', 'model_names'],
 			{
 				allow_filtering: true,
@@ -343,9 +343,9 @@ const getAllowFilteringEntityTypes = async () => {
 	}
 }
 
-const triggerViewBuild = async () => {
+const triggerViewBuild = async (tenantCode) => {
 	try {
-		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes()
+		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes(tenantCode)
 		const entityTypesGroupedByModel = await groupByModelNames(allowFilteringEntityTypes)
 
 		await Promise.all(
@@ -423,9 +423,9 @@ const refreshNextView = (currentIndex, modelNames) => {
 	}
 }
 
-const triggerPeriodicViewRefresh = async () => {
+const triggerPeriodicViewRefresh = async (tenantCode) => {
 	try {
-		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes()
+		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes(tenantCode)
 		const modelNames = await modelNameCollector(allowFilteringEntityTypes)
 		const interval = process.env.REFRESH_VIEW_INTERVAL
 		let currentIndex = 0
@@ -441,8 +441,8 @@ const triggerPeriodicViewRefresh = async () => {
 		console.log(err)
 	}
 }
-const checkAndCreateMaterializedViews = async () => {
-	const allowFilteringEntityTypes = await getAllowFilteringEntityTypes()
+const checkAndCreateMaterializedViews = async (tenantCode) => {
+	const allowFilteringEntityTypes = await getAllowFilteringEntityTypes(tenantCode)
 	const entityTypesGroupedByModel = await groupByModelNames(allowFilteringEntityTypes)
 
 	await sequelize.query('CREATE EXTENSION IF NOT EXISTS pg_trgm;', {

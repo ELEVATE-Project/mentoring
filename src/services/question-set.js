@@ -13,9 +13,9 @@ module.exports = class questionsSetHelper {
 	 * @returns {JSON} - Create question set
 	 */
 
-	static async create(bodyData, decodedToken) {
+	static async create(bodyData, decodedToken, tenantCode, organizationCode) {
 		try {
-			let questions = await questionQueries.find({ id: bodyData.questions })
+			let questions = await questionQueries.find({ id: bodyData.questions, tenant_code: tenantCode })
 			if (questions.length != bodyData.questions.length) {
 				return responses.failureResponse({
 					message: 'QUESTION_NOT_FOUND',
@@ -25,6 +25,7 @@ module.exports = class questionsSetHelper {
 			}
 			const questionSetData = {
 				code: bodyData.code,
+				tenant_code: tenantCode,
 			}
 			let questionSet = await questionSetQueries.findOneQuestionSet(questionSetData)
 			if (questionSet) {
@@ -37,6 +38,8 @@ module.exports = class questionsSetHelper {
 			questionSetData['questions'] = bodyData.questions
 			questionSetData['created_by'] = decodedToken.id
 			questionSetData['updated_by'] = decodedToken.id
+			questionSetData['tenant_code'] = tenantCode
+			questionSetData['organization_code'] = organizationCode
 			questionSet = await questionSetQueries.createQuestionSet(questionSetData)
 
 			return responses.successResponse({
@@ -59,10 +62,10 @@ module.exports = class questionsSetHelper {
 	 * @returns {JSON} - Update question set.
 	 */
 
-	static async update(questionSetId, bodyData, decodedToken) {
+	static async update(questionSetId, bodyData, decodedToken, tenantCode) {
 		try {
 			if (bodyData.questions) {
-				let questionInfo = await questionQueries.find({ id: bodyData.questions })
+				let questionInfo = await questionQueries.find({ id: bodyData.questions, tenant_code: tenantCode })
 				if (questionInfo.length != bodyData.questions.length) {
 					return responses.failureResponse({
 						message: 'QUESTION_NOT_FOUND',
@@ -75,12 +78,13 @@ module.exports = class questionsSetHelper {
 				id: questionSetId,
 				created_by: decodedToken.id,
 				code: bodyData.code,
+				tenant_code: tenantCode,
 			}
 			const questionSetData = {
 				created_by: decodedToken.id,
 				questions: bodyData.questions,
 			}
-			const questionSet = await questionSetQueries.updateOneQuestionSet(filter, questionSetData)
+			const questionSet = await questionSetQueries.updateOneQuestionSet(filter, questionSetData, tenantCode)
 			if (questionSet === 'QUESTIONS_SET_NOT_FOUND') {
 				return responses.failureResponse({
 					message: 'QUESTIONS_SET_NOT_FOUND',
@@ -107,10 +111,11 @@ module.exports = class questionsSetHelper {
 	 * @returns {JSON} - Read question set.
 	 */
 
-	static async read(questionsSetId, questionSetCode) {
+	static async read(questionsSetId, questionSetCode, tenantCode) {
 		try {
 			const filter = {
 				id: questionsSetId,
+				tenant_code: tenantCode,
 			}
 			if (questionSetCode) {
 				filter.code = questionSetCode

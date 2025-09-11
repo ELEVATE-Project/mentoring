@@ -37,17 +37,16 @@ apiClient.interceptors.response.use(
  * @returns {Promise<Object>} The response data from the signup request.
  * @throws Will throw an error if the signup request fails.
  */
-exports.signup = async ({ userId, name, email, image }) => {
+exports.signup = async ({ userId, name, email, image, tenantCode }) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_SIGNUP
-		const body = { user_id: userId, name, email }
+		const body = { user_id: userId, name, email, tenant_code: tenantCode }
 		if (image) {
 			body.image_url = image
 		}
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('Signup error:', err.message)
 		throw err
 	}
 }
@@ -60,15 +59,18 @@ exports.signup = async ({ userId, name, email, image }) => {
  * @returns {Promise<Object>} The response data from the login request.
  * @throws Will throw an error if the login request fails.
  */
-exports.login = async ({ userId }) => {
+exports.login = async ({ userId, tenantCode }) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_LOGIN
-		const body = { user_id: userId }
-
+		const body = { user_id: userId, tenant_code: tenantCode }
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('Login error:', err.message)
+		if (err.response && err.response.data && err.response.data.message) {
+			const error = new Error(err.response.data.message)
+			error.statusCode = err.response.status
+			throw error
+		}
 		throw err
 	}
 }
@@ -81,11 +83,10 @@ exports.login = async ({ userId }) => {
  * @returns {Promise<Object>} The response data from the logout request.
  * @throws Will throw an error if the logout request fails.
  */
-exports.logout = async ({ userId }) => {
+exports.logout = async ({ userId, tenantCode }) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_LOGOUT
-		const body = { user_id: userId }
-
+		const body = { user_id: userId, tenant_code: tenantCode }
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
@@ -103,10 +104,10 @@ exports.logout = async ({ userId }) => {
  * @returns {Promise<Object>} The response data from the create chat room request.
  * @throws Will throw an error if the request fails.
  */
-exports.createChatRoom = async ({ userIds, initialMessage }) => {
+exports.createChatRoom = async ({ userIds, initialMessage, tenantCode }) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_CREATE_CHAT_ROOM
-		const body = { usernames: userIds, initial_message: initialMessage }
+		const body = { usernames: userIds, initial_message: initialMessage, tenant_code: tenantCode }
 
 		const response = await apiClient.post(url, body)
 		return response.data
@@ -124,10 +125,10 @@ exports.createChatRoom = async ({ userIds, initialMessage }) => {
  * @returns {Promise<Object>} The response data from the update avatar request.
  * @throws Will throw an error if the request fails.
  */
-exports.updateAvatar = async (userId, imageUrl) => {
+exports.updateAvatar = async (userId, imageUrl, tenantCode) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_UPDATE_AVATAR
-		const body = { user_id: userId, image_url: imageUrl }
+		const body = { user_id: userId, image_url: imageUrl, tenant_code: tenantCode }
 
 		const response = await apiClient.post(url, body)
 		return response.data
@@ -145,10 +146,10 @@ exports.updateAvatar = async (userId, imageUrl) => {
  * @returns {Promise<Object>} The response data from the update user request.
  * @throws Will throw an error if the request fails.
  */
-exports.updateUser = async (userId, name) => {
+exports.updateUser = async (userId, name, tenantCode) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_UPDATE_USER
-		const body = { user_id: userId, name }
+		const body = { user_id: userId, name, tenant_code: tenantCode }
 
 		const response = await apiClient.post(url, body)
 		return response.data
@@ -172,10 +173,10 @@ exports.updateUser = async (userId, name) => {
  * const data = await getUserId('external-user-123');
  * // data => { result: { user_id: 'internal-user-456' }, ... }
  */
-exports.getUserId = async (userId) => {
+exports.getUserId = async (userId, tenantCode) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_GET_USER_ID
-		const body = { external_user_id: userId }
+		const body = { external_user_id: userId, tenant_code: tenantCode }
 
 		const response = await apiClient.post(url, body)
 		return response.data
@@ -201,10 +202,15 @@ exports.getUserId = async (userId) => {
  * const result = await setActiveStatus('5HmCfpoB7jp2uibTC', false, true);
  * // result => { result: { success: true }, statusCode: 200, message: 'NAME_UPDATED' }
  */
-exports.setActiveStatus = async (userId, active_status, confirm_relinquish = false) => {
+exports.setActiveStatus = async (userId, active_status, confirm_relinquish = false, tenantCode) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_USERS_SET_ACTIVE_STATUS
-		const body = { user_id: userId, activeStatus: active_status, confirmRelinquish: confirm_relinquish }
+		const body = {
+			user_id: userId,
+			activeStatus: active_status,
+			confirmRelinquish: confirm_relinquish,
+			tenant_code: tenantCode,
+		}
 
 		const response = await apiClient.post(url, body)
 		return response.data
@@ -228,10 +234,10 @@ exports.setActiveStatus = async (userId, active_status, confirm_relinquish = fal
  * const result = await removeAvatar('5HmCfpoB7jp2uibTC');
  * // result => { result: { success: true }, statusCode: 200, message: 'AVATAR_REMOVED' }
  */
-exports.removeAvatar = async (userId) => {
+exports.removeAvatar = async (userId, tenantCode) => {
 	try {
 		const url = apiEndpoints.COMMUNICATION_USERS_REMOVE_AVATAR
-		const body = { user_id: userId }
+		const body = { user_id: userId, tenant_code: tenantCode }
 
 		const response = await apiClient.post(url, body)
 		return response.data

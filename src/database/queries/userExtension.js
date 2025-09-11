@@ -23,20 +23,26 @@ module.exports = class MenteeExtensionQueries {
 			return error
 		}
 	}
-	static async createMenteeExtension(data) {
+	static async createMenteeExtension(data, tenantCode) {
 		try {
+			data.tenant_code = tenantCode
 			return await MenteeExtension.create(data, { returning: true })
 		} catch (error) {
 			throw error
 		}
 	}
 
-	static async updateMenteeExtension(userId, data, options = {}, customFilter = {}) {
+	static async updateMenteeExtension(userId, data, options = {}, customFilter = {}, tenantCode) {
 		try {
 			if (data.user_id) {
 				delete data['user_id']
 			}
-			const whereClause = _.isEmpty(customFilter) ? { user_id: userId } : customFilter
+			let whereClause
+			if (_.isEmpty(customFilter)) {
+				whereClause = { user_id: userId, tenant_code: tenantCode }
+			} else {
+				whereClause = { ...customFilter, tenant_code: tenantCode }
+			}
 
 			// If `meta` is included in `data`, use `jsonb_set` to merge changes safely
 			if (data.meta) {
@@ -63,7 +69,7 @@ module.exports = class MenteeExtensionQueries {
 		}
 	}
 
-	static async addVisibleToOrg(organizationId, newRelatedOrgs, options = {}) {
+	static async addVisibleToOrg(organizationId, newRelatedOrgs, options = {}, tenantCode) {
 		// Update user extension and concat related org to the org id
 		await MenteeExtension.update(
 			{
@@ -88,6 +94,7 @@ module.exports = class MenteeExtensionQueries {
 							},
 						},
 					],
+					tenant_code: tenantCode,
 				},
 				...options,
 				individualHooks: true,
@@ -119,6 +126,7 @@ module.exports = class MenteeExtensionQueries {
 							},
 						},
 					],
+					tenant_code: tenantCode,
 				},
 				individualHooks: true,
 				...options,
@@ -156,42 +164,51 @@ module.exports = class MenteeExtensionQueries {
 			type: Sequelize.QueryTypes.UPDATE,
 		})
 	}
-	static async getMenteeExtension(userId, attributes = [], unScoped = false) {
+	static async getMenteeExtension(userId, attributes = [], unScoped = false, tenantCode) {
 		try {
 			const queryOptions = {
-				where: { user_id: userId },
+				where: {
+					user_id: userId,
+					tenant_code: tenantCode,
+				},
 				raw: true,
 			}
+
 			// If attributes are passed update query
 			if (attributes.length > 0) {
 				queryOptions.attributes = attributes
 			}
+
 			let mentee
 			if (unScoped) {
 				mentee = await MenteeExtension.unscoped().findOne(queryOptions)
 			} else {
 				mentee = await MenteeExtension.findOne(queryOptions)
 			}
+
 			if (mentee && mentee.email) {
 				mentee.email = await emailEncryption.decrypt(mentee.email.toLowerCase())
 			}
+
 			return mentee
 		} catch (error) {
 			throw error
 		}
 	}
 
-	static async deleteMenteeExtension(userId, force = false) {
+	static async deleteMenteeExtension(userId, force = false, tenantCode) {
 		try {
-			return await MenteeExtension.destroy({
-				where: { user_id: userId },
-				...(force ? { force: true } : {}),
-			})
+			const options = { where: { user_id: userId, tenant_code: tenantCode } }
+
+			if (force) {
+				options.force = true
+			}
+			return await MenteeExtension.destroy(options)
 		} catch (error) {
 			throw error
 		}
 	}
-	static async removeMenteeDetails(userId) {
+	static async removeMenteeDetails(userId, tenantCode) {
 		try {
 			const modelAttributes = MenteeExtension.rawAttributes
 
@@ -227,6 +244,7 @@ module.exports = class MenteeExtensionQueries {
 			return await MenteeExtension.update(fieldsToNullify, {
 				where: {
 					user_id: userId,
+					tenant_code: tenantCode,
 				},
 			})
 		} catch (error) {
@@ -235,11 +253,28 @@ module.exports = class MenteeExtensionQueries {
 		}
 	}
 
-	static async getUsersByUserIds(ids, options = {}, unscoped = false) {
+	static async deleteMenteeExtension(userId, tenantCode) {
+		try {
+			// Completely delete the mentee extension record
+			const result = await MenteeExtension.destroy({
+				where: {
+					user_id: userId,
+					tenant_code: tenantCode,
+				},
+			})
+
+			return result
+		} catch (error) {
+			return error
+		}
+	}
+
+	static async getUsersByUserIds(ids, options = {}, tenantCode, unscoped = false) {
 		try {
 			const query = {
 				where: {
 					user_id: ids,
+					tenant_code: tenantCode,
 				},
 				...options,
 				returning: true,
@@ -365,9 +400,9 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
-	static async getMenteeExtensions(userIds, attributes = []) {
+	static async getMenteeExtensions(userIds, attributes = [], tenantCode) {
 		try {
-			const queryOptions = { where: { user_id: { [Op.in]: userIds } }, raw: true }
+			const queryOptions = { where: { user_id: { [Op.in]: userIds }, tenant_code: tenantCode }, raw: true }
 			// If attributes are passed update query
 			if (attributes.length > 0) {
 				queryOptions.attributes = attributes
@@ -378,16 +413,16 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
-	static async findOneFromView(userId) {
+	static async findOneFromView(userId, tenantCode) {
 		try {
 			let query = `
 				SELECT *
 				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
-				WHERE user_id = :userId
+				WHERE user_id = :userId AND tenant_code = :tenantCode
 				LIMIT 1
 			`
 			const user = await Sequelize.query(query, {
-				replacements: { userId },
+				replacements: { userId, tenantCode },
 				type: QueryTypes.SELECT,
 			})
 
@@ -406,7 +441,8 @@ module.exports = class MenteeExtensionQueries {
 		additionalProjectionClause = '',
 		returnOnlyUserId,
 		searchText = '',
-		defaultFilter = ''
+		defaultFilter = '',
+		tenantCode
 	) {
 		try {
 			const excludeUserIds = ids.length === 0
@@ -426,6 +462,9 @@ module.exports = class MenteeExtensionQueries {
 			if (excludeUserIds && filter.query.length === 0) {
 				saasFilterClause = saasFilterClause.replace('AND ', '') // Remove "AND" if excludeUserIds is true and filter is empty
 			}
+
+			// Tenant filtering enabled - materialized view now includes tenant_code column
+			const tenantFilterClause = tenantCode ? `AND tenant_code = '${tenantCode}'` : ''
 
 			let projectionClause = `
 				user_id,
@@ -449,35 +488,54 @@ module.exports = class MenteeExtensionQueries {
 				filterClause = filterClause.startsWith('AND') ? filterClause : 'AND ' + filterClause
 			}
 
-			let query = `
+			// Build WHERE clause dynamically to avoid empty conditions
+			const whereConditions = [
+				userFilterClause,
+				filterClause,
+				saasFilterClause,
+				additionalFilter,
+				defaultFilter,
+				tenantFilterClause,
+			].filter((condition) => condition && condition.trim() !== '')
+
+			let whereClause = ''
+			if (whereConditions.length > 0) {
+				// Clean up AND prefixes and join conditions
+				const cleanedConditions = whereConditions.map((condition, index) => {
+					if (index === 0) {
+						// First condition shouldn't have AND prefix
+						return condition.replace(/^AND\s+/, '')
+					}
+					// Subsequent conditions should have AND prefix
+					return condition.startsWith('AND ') ? condition : `AND ${condition}`
+				})
+				whereClause = `WHERE ${cleanedConditions.join(' ')}`
+			}
+
+			const query = `
 				SELECT ${projectionClause}
 				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
-				WHERE
-					${userFilterClause}
-					${filterClause}
-					${saasFilterClause}
-					${additionalFilter}
-					${defaultFilter}
-				`
-
-			if (limit != null && page != null) {
-				query += `
-			     OFFSET :offset
-			     LIMIT :limit
-			   `
-			}
+				${whereClause}
+				OFFSET :offset
+				LIMIT :limit
+			`
 
 			const replacements = {
 				...filter.replacements, // Add filter parameters to replacements
 				search: `%${searchText}%`,
 			}
 
+			// Always provide offset and limit replacements since they're in the query
 			if (page !== null && limit !== null) {
 				replacements.offset = limit * (page - 1)
 				replacements.limit = limit
+			} else {
+				// Provide defaults if page/limit not specified
+				replacements.offset = 0
+				replacements.limit = 5 // Default limit
 			}
 
-			const results = await Sequelize.query(query, {
+			let results = await Sequelize.query(query, {
 				type: QueryTypes.SELECT,
 				replacements: replacements,
 			})
@@ -506,16 +564,29 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
-	static async getAllUsersByIds(ids) {
+	static async getAllUsersByIds(ids, tenantCode) {
 		try {
 			const excludeUserIds = ids.length === 0
 			const userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.map((id) => `'${id}'`).join(',')})`
+			const tenantFilterClause = tenantCode ? `tenant_code = '${tenantCode}'` : ''
+
+			// Combine filters with proper AND logic
+			let whereClause = ''
+			if (userFilterClause && tenantFilterClause) {
+				whereClause = `${userFilterClause} AND ${tenantFilterClause}`
+			} else if (userFilterClause) {
+				whereClause = userFilterClause
+			} else if (tenantFilterClause) {
+				whereClause = tenantFilterClause
+			} else {
+				whereClause = '1=1' // Default to all records if no filters
+			}
 
 			const query = `
 				SELECT *
 				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
 				WHERE
-					${userFilterClause}
+					${whereClause}
 				`
 
 			const results = await Sequelize.query(query, {
@@ -542,16 +613,29 @@ module.exports = class MenteeExtensionQueries {
 	 * const users = await getUsersByEmailIds(emailIds);
 	 * console.log(users); // Outputs an array of user records matching the provided email IDs.
 	 */
-	static async getUsersByEmailIds(emailIds) {
+	static async getUsersByEmailIds(emailIds, tenantCode) {
 		try {
-			const userFilterClause =
+			const emailFilterClause =
 				emailIds.length === 0 ? '' : `email IN (${emailIds.map((id) => `'${id}'`).join(',')})`
+			const tenantFilterClause = tenantCode ? `tenant_code = '${tenantCode}'` : ''
+
+			// Combine filters with proper AND logic
+			let whereClause = ''
+			if (emailFilterClause && tenantFilterClause) {
+				whereClause = `${emailFilterClause} AND ${tenantFilterClause}`
+			} else if (emailFilterClause) {
+				whereClause = emailFilterClause
+			} else if (tenantFilterClause) {
+				whereClause = tenantFilterClause
+			} else {
+				whereClause = '1=1' // Default to all records if no filters
+			}
 
 			const query = `
 				SELECT *
 				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
 				WHERE
-					${userFilterClause}
+					${whereClause}
 				`
 
 			const results = await Sequelize.query(query, {

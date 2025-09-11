@@ -5,9 +5,9 @@ const fileService = require('@services/files')
 const request = require('request')
 
 module.exports = class uploadFileToCloud {
-	static async uploadFileToCloud(fileName, folderPath, userId = '', orgId, dynamicPath = '') {
+	static async uploadFileToCloud(fileName, folderPath, userId = '', orgCode, dynamicPath = '') {
 		try {
-			const getSignedUrl = await fileService.getSignedUrl(fileName, userId, orgId, dynamicPath)
+			const getSignedUrl = await fileService.getSignedUrl(fileName, userId, orgCode, dynamicPath)
 			if (!getSignedUrl.result) {
 				throw new Error('FAILED_TO_GENERATE_SIGNED_URL')
 			}

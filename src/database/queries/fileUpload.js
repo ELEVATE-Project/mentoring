@@ -1,8 +1,9 @@
 'use strict'
 const FileUpload = require('../models/index').FileUpload
 
-exports.create = async (data) => {
+exports.create = async (data, tenantCode) => {
 	try {
+		data.tenant_code = tenantCode
 		const createFileUpload = await FileUpload.create(data)
 		const result = createFileUpload.get({ plain: true })
 		return result
@@ -11,7 +12,7 @@ exports.create = async (data) => {
 	}
 }
 
-exports.findOne = async (filter, options = {}) => {
+exports.findOne = async (filter, tenantCode, options = {}) => {
 	try {
 		return await FileUpload.findOne({
 			where: filter,
@@ -23,8 +24,9 @@ exports.findOne = async (filter, options = {}) => {
 	}
 }
 
-exports.update = async (filter, update, options = {}) => {
+exports.update = async (filter, tenantCode, update, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
 		const [res] = await FileUpload.update(update, {
 			where: filter,
 			...options,
@@ -37,10 +39,10 @@ exports.update = async (filter, update, options = {}) => {
 	}
 }
 
-exports.listUploads = async (page, limit, status, organization_id) => {
+exports.listUploads = async (page, limit, status, orgCode, tenantCode) => {
 	try {
 		let filterQuery = {
-			where: {},
+			where: { tenant_code: tenantCode },
 			attributes: {
 				exclude: ['created_at', 'updated_at', 'deleted_at', 'updated_by'],
 			},
@@ -48,8 +50,8 @@ exports.listUploads = async (page, limit, status, organization_id) => {
 			limit: parseInt(limit, 10),
 		}
 
-		if (organization_id) {
-			filterQuery.where.organization_id = organization_id
+		if (orgCode) {
+			filterQuery.where.organization_code = orgCode
 		}
 
 		if (status) {

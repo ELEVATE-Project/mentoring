@@ -23,7 +23,8 @@ module.exports = class admin {
 
 	async userDelete(req) {
 		try {
-			const userDelete = await adminService.userDelete(req.query.userId)
+			const tenantCode = req.decodedToken.tenant_code
+			const userDelete = await adminService.userDelete(req.query.userId, tenantCode)
 			return userDelete
 		} catch (error) {
 			return error
@@ -39,7 +40,8 @@ module.exports = class admin {
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
-			const userDelete = await adminService.triggerViewRebuild(req.decodedToken)
+			const tenantCode = req.decodedToken.tenant_code
+			const userDelete = await adminService.triggerViewRebuild(req.decodedToken, tenantCode)
 			return userDelete
 		} catch (error) {
 			return error
@@ -54,21 +56,26 @@ module.exports = class admin {
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
-			return await adminService.triggerPeriodicViewRefresh(req.decodedToken)
+			const tenantCode = req.decodedToken.tenant_code
+			return await adminService.triggerPeriodicViewRefresh(req.decodedToken, tenantCode)
 		} catch (err) {
 			console.log(err)
 		}
 	}
 	async triggerViewRebuildInternal(req) {
 		try {
-			return await adminService.triggerViewRebuild()
+			// Internal method - use default tenant or extract from query if needed
+			const tenantCode = req.query.tenant_code || null
+			return await adminService.triggerViewRebuild(null, tenantCode)
 		} catch (error) {
 			return error
 		}
 	}
 	async triggerPeriodicViewRefreshInternal(req) {
 		try {
-			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name)
+			// Internal method - use default tenant or extract from query if needed
+			const tenantCode = req.query.tenant_code || null
+			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name, tenantCode)
 		} catch (err) {
 			console.log(err)
 		}

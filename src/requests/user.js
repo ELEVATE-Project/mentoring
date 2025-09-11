@@ -49,6 +49,7 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
 
 		const internalToken = true
 		const orgDetails = await requests.get(orgReadUrl, '', internalToken)
+
 		return orgDetails
 	} catch (error) {
 		console.error('Error fetching organization details:', error)
@@ -73,9 +74,12 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
  *   .catch(error => console.error(error));
  */
 
-const getOrgDetails = async function ({ organizationId }) {
+const getOrgDetails = async function ({ organizationId, tenantCode }) {
 	try {
-		const organizationDetails = await organisationExtensionQueries.findOne({ organization_id: organizationId })
+		const organizationDetails = await organisationExtensionQueries.findOne(
+			{ organization_id: organizationId },
+			tenantCode
+		)
 		return {
 			success: true,
 			data: {
@@ -183,17 +187,34 @@ const fetchUserDetails = async ({ token, userId }) => {
  *   .catch(error => console.error(error));
  */
 
-const getUserDetails = async (userId) => {
+const getUserDetails = async (userId, tenantCode) => {
 	try {
-		const userDetails = await menteeQueries.getMenteeExtension(userId)
+		// Only pass tenantCode if it exists
+		const userDetails = await menteeQueries.getMenteeExtension(
+			userId,
+			[],
+			false,
+			tenantCode || null // or just: tenantCode
+		)
+
+		if (!userDetails) {
+			return {
+				data: {
+					result: null,
+				},
+			}
+		}
+
 		if (userDetails.image) {
 			const downloadImageResponse = await getDownloadableUrl(userDetails.image)
 			userDetails.image = downloadImageResponse.result
 		}
+
 		userDetails.user_roles = [{ title: common.MENTEE_ROLE }]
 		if (userDetails.is_mentor) {
 			userDetails.user_roles.push({ title: common.MENTOR_ROLE })
 		}
+
 		if (userDetails.email) {
 			userDetails.email = await emailEncryption.decrypt(userDetails.email)
 		}
@@ -281,7 +302,7 @@ const getListOfUserDetails = function (userIds, excludeDeletedRecords = false) {
  *   .catch(error => console.error(error));
  */
 
-const getListOfUserDetailsByEmail = function (emailIds) {
+const getListOfUserDetailsByEmail = function (emailIds, tenantCode) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			const encryptedEmailIds = emailIds.map((email) => {
@@ -291,7 +312,7 @@ const getListOfUserDetailsByEmail = function (emailIds) {
 				return emailEncryption.encrypt(email)
 			})
 
-			const userDetails = await menteeQueries.getUsersByEmailIds(encryptedEmailIds)
+			const userDetails = await menteeQueries.getUsersByEmailIds(encryptedEmailIds, tenantCode)
 
 			let ids = []
 
@@ -369,7 +390,7 @@ const share = function (profileId) {
  *   .catch(error => console.error(error));
  */
 
-const list = function (userType, pageNo, pageSize, searchText) {
+const list = function (userType, pageNo, pageSize, searchText, tenantCode) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			const filter = {
@@ -392,7 +413,8 @@ const list = function (userType, pageNo, pageSize, searchText) {
 				(additionalProjectionClause = `name,email,organization_id`),
 				(returnOnlyUserId = false),
 				searchText ? searchText : '',
-				(defaultFilter = '')
+				(defaultFilter = ''),
+				tenantCode
 			)
 
 			let foundKeys = {}
@@ -631,23 +653,26 @@ const listOrganization = function (organizationIds = []) {
  *   .catch(error => console.error(error));
  */
 
-const organizationList = function (organizationIds = []) {
+const organizationList = function (organizationCodes = [], tenantCodes = []) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			// Fetch organization details
 			const filter = {
-				organization_id: {
-					[Op.in]: Array.from(organizationIds),
+				organization_code: {
+					[Op.in]: Array.from(organizationCodes),
+				},
+				tenant_code: {
+					[Op.in]: Array.from(tenantCodes),
 				},
 			}
 
 			const organizationDetails = await organisationExtensionQueries.findAll(filter, {
-				attributes: ['name', 'organization_id'],
+				attributes: ['name', 'organization_id', 'organization_code', 'tenant_code'],
 			})
 
 			if (organizationDetails && organizationDetails.length > 0) {
 				organizationDetails.map((orgInfo) => {
-					orgInfo.id = orgInfo.organization_id
+					orgInfo.id = orgInfo.organization_code
 				})
 			}
 
@@ -734,7 +759,7 @@ const getDownloadableUrl = function (path) {
  *   .catch(error => console.error(error));
  */
 
-const getUserDetailedList = function (userIds, deletedUsers = false, unscopped = false) {
+const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false, unscopped = false) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			// Fetch user details
@@ -748,7 +773,7 @@ const getUserDetailedList = function (userIds, deletedUsers = false, unscopped =
 			if (deletedUsers) {
 				options = { paranoid: false }
 			}
-			const userDetails = await menteeQueries.getUsersByUserIds(userIds, options, unscopped)
+			const userDetails = await menteeQueries.getUsersByUserIds(userIds, options, tenantCode, unscopped)
 
 			// Extract unique organization IDs and create a mapping for organization details
 			const organizationIds = new Set()
@@ -766,8 +791,8 @@ const getUserDetailedList = function (userIds, deletedUsers = false, unscopped =
 				},
 			}
 
-			const organizationDetails = await organisationExtensionQueries.findAll(filter, {
-				attributes: ['name', 'organization_id'],
+			const organizationDetails = await organisationExtensionQueries.findAll(filter, tenantCode, {
+				attributes: ['name', 'organization_id', 'organization_code'],
 			})
 
 			// Map organization details for quick access
@@ -826,6 +851,34 @@ const getProfileDetails = async ({ tenantCode, userId }) => {
 	}
 }
 
+/**
+ * Get tenant domain by tenant code
+ * @method
+ * @name getTenantDomain
+ * @param {String} tenantCode - tenant code
+ * @returns {String} - domain for the tenant
+ */
+const getTenantDomain = async (tenantCode) => {
+	try {
+		if (!tenantCode) {
+			throw new Error('TENANT_CODE_REQUIRED')
+		}
+
+		const apiUrl = `${userBaseUrl}/tenant/domain/${tenantCode}`
+		const internalToken = true
+		const domainResponse = await requests.get(apiUrl, '', internalToken)
+
+		if (domainResponse && domainResponse.success && domainResponse.data?.result?.domain) {
+			return domainResponse.data.result.domain
+		} else {
+			throw new Error('TENANT_DOMAIN_NOT_FOUND')
+		}
+	} catch (error) {
+		console.error('Error fetching tenant domain:', error)
+		throw error
+	}
+}
+
 module.exports = {
 	fetchOrgDetails, // dependent on releated orgs  And query on code
 	fetchUserDetails, // dependendt on languages and prefered lang etc
@@ -843,4 +896,5 @@ module.exports = {
 	organizationList,
 	getOrgDetails,
 	getProfileDetails,
+	getTenantDomain,
 }

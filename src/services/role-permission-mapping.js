@@ -18,23 +18,12 @@ module.exports = class modulesHelper {
 
 	static async create(roleTitle, permissionId, id) {
 		try {
-			const permission = await permissionsQueries.findPermissionId(permissionId)
-			if (!permission) {
-				return responses.failureResponse({
-					message: 'PERMISSION_NOT_FOUND',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
-			const data = {
-				role_title: roleTitle,
-				permission_id: permissionId,
-				module: permission.module,
-				request_type: permission.request_type,
-				api_path: permission.api_path,
-				created_by: id,
-			}
-			const rolePermissionMapping = await rolePermissionMappingQueries.create(data)
+			// Optimized: Single method that validates permission and creates mapping
+			const rolePermissionMapping = await rolePermissionMappingQueries.createWithPermissionValidation(
+				roleTitle,
+				permissionId,
+				id
+			)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ROLE_PERMISSION_CREATED_SUCCESSFULLY',
@@ -46,6 +35,13 @@ module.exports = class modulesHelper {
 				},
 			})
 		} catch (error) {
+			if (error.message === 'PERMISSION_NOT_FOUND') {
+				return responses.failureResponse({
+					message: 'PERMISSION_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			if (error instanceof UniqueConstraintError) {
 				return responses.failureResponse({
 					message: 'ROLE_PERMISSION_ALREADY_EXISTS',
