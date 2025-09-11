@@ -23,8 +23,6 @@ module.exports = class OrgAdmin {
 	async setOrgPolicies(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			const orgPolicies = await orgAdminService.setOrgPolicies(req.decodedToken, req.body, tenantCode)
 			return orgPolicies
@@ -36,10 +34,7 @@ module.exports = class OrgAdmin {
 	async getOrgPolicies(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
-			//req.decodedToken.organization_code
 			const orgPolicies = await orgAdminService.getOrgPolicies(req.decodedToken, tenantCode)
 			return orgPolicies
 		} catch (error) {
@@ -102,8 +97,6 @@ module.exports = class OrgAdmin {
 	async updateOrganization(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			const updateOrg = await orgAdminService.updateOrganization(req.body, tenantCode)
 			return updateOrg
@@ -124,8 +117,6 @@ module.exports = class OrgAdmin {
 	async deactivateUpcomingSession(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			const response = await orgAdminService.deactivateUpcomingSession(
 				req.body.user_ids,
@@ -150,8 +141,6 @@ module.exports = class OrgAdmin {
 	async updateRelatedOrgs(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			return await orgAdminService.updateRelatedOrgs(
 				req.body.delta_organization_ids,
@@ -167,8 +156,6 @@ module.exports = class OrgAdmin {
 	async setDefaultQuestionSets(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			return await orgAdminService.setDefaultQuestionSets(req.body, req.decodedToken, tenantCode)
 		} catch (error) {
@@ -187,7 +174,6 @@ module.exports = class OrgAdmin {
 	async uploadSampleCSV(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const userId = req.decodedToken.id
 
 			const updatePath = await orgAdminService.uploadSampleCSV(
 				req.body.file_path,
@@ -212,7 +198,6 @@ module.exports = class OrgAdmin {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
 			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			const updateTheme = await orgAdminService.updateTheme(req.body, organizationCode, tenantCode)
 			return updateTheme
@@ -232,8 +217,6 @@ module.exports = class OrgAdmin {
 	async themeDetails(req) {
 		try {
 			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
 
 			const themeDetails = await orgAdminService.themeDetails(
 				req.query.organizationCode ? req.query.organizationCode : req.decodedToken.organization_code,
