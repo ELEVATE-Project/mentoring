@@ -112,10 +112,9 @@ exports.buildSearchFilter = async function buildSearchFilter({
 			whereClause = `AND (${whereClauses.join(' OR ')})`
 		}
 
-		if (tenantCode && whereClause) {
-			whereClause += ` AND tenant_code = '${tenantCode}'`
-		} else if (tenantCode && !whereClause) {
-			whereClause = `AND tenant_code = '${tenantCode}'`
+		if (tenantCode) {
+			const tenantFilter = ` AND tenant_code = '${tenantCode}'`
+			whereClause = whereClause ? whereClause + tenantFilter : `AND tenant_code = '${tenantCode}'`
 		}
 		const positionQuery = positionQueries.join(',\n    ')
 

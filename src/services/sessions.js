@@ -3404,8 +3404,8 @@ module.exports = class SessionsHelper {
 				organization_code: organizationCode,
 				created_by: userId,
 				tenant_code: tenantCode,
-				defaultTenantCode: defaults.orgCode,
-				defaultOrganiztionCode: defaults.tenantCode,
+				defaultTenantCode: defaults.tenantCode,
+				defaultOrganizationCode: defaults.orgCode,
 			}
 
 			const result = await fileUploadQueries.create(creationData, tenantCode)

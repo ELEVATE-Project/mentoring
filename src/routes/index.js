@@ -5,23 +5,12 @@
  * Description : Routes for available service
  */
 
-console.log('Loading validator...')
 const validator = require('@middlewares/validator')
-console.log('✅ Validator loaded')
-console.log('Loading authenticator...')
 const authenticator = require('@middlewares/authenticator')
-console.log('✅ Authenticator loaded')
-console.log('Loading pagination...')
 const pagination = require('@middlewares/pagination')
-console.log('✅ Pagination loaded')
-console.log('Loading express-validator...')
 const expressValidator = require('express-validator')
-console.log('✅ Express-validator loaded')
-console.log('Loading elevate-logger...')
 const { elevateLog, correlationId } = require('elevate-logger')
 const logger = elevateLog.init()
-console.log('✅ Elevate-logger loaded')
-console.log('Loading fs and path...')
 const fs = require('fs')
 const path = require('path')
 

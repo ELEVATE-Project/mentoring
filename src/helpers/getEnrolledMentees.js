@@ -116,7 +116,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 			const org = organizationDetails.find((org) => org.organization_id == user.organization_id)
 			return {
 				...user,
-				organization: org ? { name: org.name } : { name: 'Unknown Organization' },
+				organization: org ? { name: org.name } : { name: 'Organization Not Available' },
 			}
 		})
 
