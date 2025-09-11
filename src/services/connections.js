@@ -85,7 +85,6 @@ module.exports = class ConnectionHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			console.error(error)
 			throw error
 		}
 	}
@@ -176,7 +175,6 @@ module.exports = class ConnectionHelper {
 				result: connection,
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -283,7 +281,6 @@ module.exports = class ConnectionHelper {
 				result: { data: connectionsWithDetails, count: connections.count },
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -352,7 +349,6 @@ module.exports = class ConnectionHelper {
 				result: updateConnection,
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -396,7 +392,6 @@ module.exports = class ConnectionHelper {
 				message: 'CONNECTION_REQUEST_REJECTED',
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -502,7 +497,6 @@ module.exports = class ConnectionHelper {
 				result: extensionDetails,
 			})
 		} catch (error) {
-			console.error('Error in list function:', error)
 			throw error
 		}
 	}
@@ -517,7 +511,6 @@ module.exports = class ConnectionHelper {
 		try {
 			const templateCode = process.env.CONNECTION_REQUEST_REJECTION_EMAIL_TEMPLATE
 			if (!templateCode) {
-				console.log('CONNECTION_REQUEST_REJECTION_EMAIL_TEMPLATE not configured, skipping notification')
 				return
 			}
 
@@ -535,7 +528,6 @@ module.exports = class ConnectionHelper {
 			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
-				console.log('Unable to fetch user details for connection rejection notification')
 				return
 			}
 
@@ -563,13 +555,10 @@ module.exports = class ConnectionHelper {
 					},
 				}
 
-				console.log('CONNECTION REJECTION EMAIL PAYLOAD: ', payload)
 				await kafkaCommunication.pushEmailToKafka(payload)
 			} else {
-				console.log(`Email template not found for code: ${templateCode}`)
 			}
 		} catch (error) {
-			console.error('Error sending connection rejection notification:', error)
 			// Don't throw error to avoid breaking the main rejection flow
 		}
 	}
@@ -585,7 +574,6 @@ module.exports = class ConnectionHelper {
 		try {
 			const templateCode = process.env.CONNECTION_REQUEST_ACCEPT_EMAIL_TEMPLATE
 			if (!templateCode) {
-				console.log('CONNECTION_REQUEST_ACCEPT_EMAIL_TEMPLATE not configured, skipping notification')
 				return
 			}
 
@@ -603,7 +591,6 @@ module.exports = class ConnectionHelper {
 			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
-				console.log('Unable to fetch user details for connection rejection notification')
 				return
 			}
 
@@ -631,13 +618,10 @@ module.exports = class ConnectionHelper {
 					},
 				}
 
-				console.log('CONNECTION ACCEPT EMAIL PAYLOAD: ', payload)
 				await kafkaCommunication.pushEmailToKafka(payload)
 			} else {
-				console.log(`Email template not found for code: ${templateCode}`)
 			}
 		} catch (error) {
-			console.error('Error sending connection accept notification:', error)
 			// Don't throw error to avoid breaking the main rejection flow
 		}
 	}

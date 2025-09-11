@@ -77,7 +77,6 @@ exports.getAllRequests = async (userId, status, tenantCode) => {
 
 		return sessionRequest
 	} catch (error) {
-		console.error('Error in getAllRequests:', error)
 		throw error
 	}
 }
@@ -299,7 +298,6 @@ exports.getPendingSessionRequests = async (userId, tenant_code) => {
 
 		return pendingRequests || []
 	} catch (error) {
-		console.error('Error getting pending session requests :', error)
 		throw error
 	}
 }
@@ -329,7 +327,6 @@ exports.getCount = async (userId, status, tenantCode) => {
 
 		return sessionRequest
 	} catch (error) {
-		console.error('Error in getCount:', error)
 		throw error
 	}
 }

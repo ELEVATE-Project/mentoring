@@ -36,7 +36,6 @@ module.exports = class Mentees {
 				organizationId
 			)
 		} catch (error) {
-			console.error(error)
 			return error
 		}
 	}

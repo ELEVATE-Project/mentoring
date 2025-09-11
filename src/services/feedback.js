@@ -164,7 +164,6 @@ module.exports = class MenteesHelper {
 				},
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -333,7 +332,6 @@ module.exports = class MenteesHelper {
 				})
 			}
 		} catch (error) {
-			console.log(error, 'error')
 			throw error
 		}
 	}

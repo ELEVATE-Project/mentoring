@@ -19,7 +19,6 @@ apiClient.interceptors.response.use(
 	(response) => response,
 	(error) => {
 		if (error.response && error.response.status === 401) {
-			console.error('Unauthorized: 401 error')
 			return Promise.reject(new Error('unauthorized'))
 		}
 		return Promise.reject(error)
@@ -90,7 +89,6 @@ exports.logout = async ({ userId, tenantCode }) => {
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('Logout error:', err.message)
 		throw err
 	}
 }
@@ -112,7 +110,6 @@ exports.createChatRoom = async ({ userIds, initialMessage, tenantCode }) => {
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('Create Chat Room error:', err.message)
 		throw err
 	}
 }
@@ -133,7 +130,6 @@ exports.updateAvatar = async (userId, imageUrl, tenantCode) => {
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('Update Avatar error:', err.message)
 		throw err
 	}
 }
@@ -154,7 +150,6 @@ exports.updateUser = async (userId, name, tenantCode) => {
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('Update User error:', err.message)
 		throw err
 	}
 }
@@ -181,7 +176,6 @@ exports.getUserId = async (userId, tenantCode) => {
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('getUserId error:', err.message)
 		throw err
 	}
 }
@@ -215,7 +209,6 @@ exports.setActiveStatus = async (userId, active_status, confirm_relinquish = fal
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('Update User error:', err.message)
 		throw err
 	}
 }
@@ -242,7 +235,6 @@ exports.removeAvatar = async (userId, tenantCode) => {
 		const response = await apiClient.post(url, body)
 		return response.data
 	} catch (err) {
-		console.error('Remove Avatar User error:', err.message)
 		throw err
 	}
 }

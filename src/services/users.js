@@ -73,7 +73,6 @@ module.exports = class UserHelper {
 				result: userDetails.result,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -106,7 +105,6 @@ module.exports = class UserHelper {
 				})
 			}
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -118,7 +116,6 @@ module.exports = class UserHelper {
 			const result = await this.#createOrUpdateUserAndOrg(userId, isNewUser, decodedToken)
 			return result
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -361,7 +358,6 @@ module.exports = class UserHelper {
 
 			return !userExists // Return true if user does not exist
 		} catch (error) {
-			console.error('HERE: ', error)
 			throw error
 		}
 	}
@@ -416,7 +412,6 @@ module.exports = class UserHelper {
 				result: response,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}

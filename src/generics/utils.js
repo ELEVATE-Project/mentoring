@@ -244,9 +244,7 @@ const entityTypeMapGenerator = (entityTypeData) => {
 			}
 		})
 		return entityTypeMap
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 function restructureBody(requestBody, entityData, allowedKeys) {
@@ -315,9 +313,7 @@ function restructureBody(requestBody, entityData, allowedKeys) {
 		if (Object.keys(requestBody.meta).length === 0) requestBody.meta = null
 		if (Object.keys(requestBody.custom_entity_text).length === 0) requestBody.custom_entity_text = null
 		return requestBody
-	} catch (error) {
-		console.error(error)
-	}
+	} catch (error) {}
 }
 
 function processDbResponse(responseBody, entityType) {
@@ -970,7 +966,6 @@ function applyDefaultFilters(filters, columnConfigs) {
 
 function getDynamicFilterCondition(filters, columnMappings, baseQuery, columnConfig) {
 	if (!filters || typeof filters !== 'object') {
-		console.log('Filters is not an object or is empty')
 		return baseQuery // Return the base query unchanged
 	}
 
@@ -978,7 +973,6 @@ function getDynamicFilterCondition(filters, columnMappings, baseQuery, columnCon
 		.map(([column, value]) => {
 			let mappedColumn = columnMappings[column]
 			if (!mappedColumn) {
-				console.log(`No mapping found for column: ${column}`)
 				return null // Skip if no mapping is found for the column
 			}
 
@@ -996,7 +990,7 @@ function getDynamicFilterCondition(filters, columnMappings, baseQuery, columnCon
 					// If value is already in seconds, use it directly
 					return `total_mentoring_seconds ${filterType} ${value}`
 				}
-				console.error(`Invalid time format for filtering ${column}`)
+
 				return null
 			}
 
@@ -1081,7 +1075,6 @@ function isStrictValidDate(dateString) {
 
 function getDynamicSearchCondition(search, columnMappings, baseQuery) {
 	if (!search || typeof search !== 'object') {
-		console.log('Search is not an object or is empty')
 		return '' // Early exit if search is not valid
 	}
 
@@ -1089,7 +1082,6 @@ function getDynamicSearchCondition(search, columnMappings, baseQuery) {
 		.map(([column, value]) => {
 			const mappedColumn = columnMappings[column]
 			if (!mappedColumn) {
-				console.log(`No mapping found for column: ${column}`)
 				return null // Skip if no mapping is found for the column
 			}
 

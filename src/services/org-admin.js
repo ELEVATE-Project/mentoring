@@ -40,7 +40,6 @@ module.exports = class OrgAdminService {
 				return await this.changeRoleToMentor(bodyData, updateData, tenantCode)
 			}
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -133,7 +132,6 @@ module.exports = class OrgAdminService {
 				},
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -221,7 +219,6 @@ module.exports = class OrgAdminService {
 				},
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -393,7 +390,6 @@ module.exports = class OrgAdminService {
 				result: inheritedEntityType,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -466,7 +462,6 @@ module.exports = class OrgAdminService {
 				message: 'UPDATE_ORG_SUCCESSFULLY',
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -521,7 +516,6 @@ module.exports = class OrgAdminService {
 				},
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -636,9 +630,7 @@ module.exports = class OrgAdminService {
 					updated_by: orgExtension.updated_by,
 				},
 			})
-		} catch (error) {
-			console.log(error)
-		}
+		} catch (error) {}
 	}
 
 	static async uploadSampleCSV(filepath, orgCode, tenantCode) {

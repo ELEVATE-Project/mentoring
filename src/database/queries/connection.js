@@ -86,7 +86,6 @@ exports.getRejectedRequest = async (userId, friendId, tenantCode) => {
 		})
 		return result
 	} catch (error) {
-		console.log(error)
 		throw error
 	}
 }

@@ -153,7 +153,6 @@ module.exports = class FormsHelper {
 				result: form ? form : defaultOrgForm,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}

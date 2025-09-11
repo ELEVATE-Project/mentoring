@@ -614,7 +614,6 @@ module.exports = class MenteesHelper {
 			}
 			return filter
 		} catch (err) {
-			console.log(err)
 			throw err
 		}
 	}
@@ -1420,7 +1419,6 @@ module.exports = class MenteesHelper {
 						try {
 							decryptedEmail = await emailEncryption.decrypt(user.email)
 						} catch (decryptError) {
-							console.error(`Email decryption failed for user ${user.user_id}:`, decryptError.message)
 							// Keep original email or set to null if decryption fails
 							decryptedEmail = null
 						}
@@ -1437,7 +1435,6 @@ module.exports = class MenteesHelper {
 
 			// Step 5: Process entity types (reuse organizationIds) with error handling
 			if (extensionDetails.data.length > 0) {
-				console.log(`Processing ${extensionDetails.data.length} users with entity types...`)
 				try {
 					const processedData = await entityTypeService.processEntityTypesToAddValueLabels(
 						extensionDetails.data,
@@ -1455,13 +1452,10 @@ module.exports = class MenteesHelper {
 					if (Array.isArray(processedData)) {
 						extensionDetails.data = processedData
 					} else {
-						console.error('Entity processing returned non-array, keeping original data')
 						// Keep original data if processing fails
 					}
 				} catch (entityError) {
-					console.error('Entity processing failed:', entityError.message)
 					// Keep original data if processing fails
-					console.log('Keeping original user data due to entity processing error')
 				}
 			}
 
@@ -1492,7 +1486,7 @@ module.exports = class MenteesHelper {
 				typeof extensionDetails.data,
 				Array.isArray(extensionDetails.data) ? extensionDetails.data.length : 'Not an array'
 			)
-			console.log(`Final response count:`, extensionDetails.count)
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTEE_LIST',
@@ -1683,7 +1677,7 @@ module.exports = class MenteesHelper {
 	 *
 	 * @example
 	 * const response = await getCommunicationToken(123);
-	 * console.log(response);
+
 	 * // {
 	 * //   responseCode: "OK",
 	 * //   message: "Communication token fetched successfully!",
@@ -1920,7 +1914,6 @@ module.exports = class MenteesHelper {
 				},
 			})
 		} catch (error) {
-			console.error(error)
 			return error
 		}
 	}

@@ -47,7 +47,6 @@ module.exports = class availabilityHelper {
 				result: availability,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -78,7 +77,6 @@ module.exports = class availabilityHelper {
 				message: 'AVAILABILITY_UPDATED_SUCCESSFULLY',
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -95,7 +93,6 @@ module.exports = class availabilityHelper {
 			const tenantCode = decodedToken.tenant_code
 			const filter = { id, created_by: decodedToken.id, tenant_code: tenantCode }
 			const rowsAffected = await availabilityQueries.deleteAvailability(filter, tenantCode)
-			console.log(rowsAffected)
 			if (rowsAffected === 0) {
 				return responses.failureResponse({
 					message: 'AVAILABILITY_NOT_FOUND',
@@ -108,7 +105,6 @@ module.exports = class availabilityHelper {
 				message: 'AVAILABILITY_DELETED_SUCCESSFULLY',
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -296,7 +292,6 @@ module.exports = class availabilityHelper {
 			})
 
 			const end = performance.now()
-			console.log(`Elapsed time: ${end - start} milliseconds`)
 
 			let updatedAvailabilities = userAvailabilities
 
@@ -323,7 +318,6 @@ module.exports = class availabilityHelper {
 				result: mergedDataWithSessions,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -400,7 +394,6 @@ module.exports = class availabilityHelper {
 				},
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -457,7 +450,6 @@ module.exports = class availabilityHelper {
 			})
 
 			const end = performance.now()
-			console.log(`Elapsed time: ${end - start} milliseconds`)
 
 			let updatedAvailabilities = userAvailabilities
 			if (sessions && process.env.MULTIPLE_BOOKING === 'false') {
@@ -482,7 +474,6 @@ module.exports = class availabilityHelper {
 				result: userDetails,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}

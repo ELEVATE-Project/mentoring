@@ -64,7 +64,6 @@ module.exports = class MenteeExtensionQueries {
 				...options,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -248,7 +247,6 @@ module.exports = class MenteeExtensionQueries {
 				},
 			})
 		} catch (error) {
-			console.error('An error occurred:', error)
 			throw error
 		}
 	}
@@ -295,7 +293,6 @@ module.exports = class MenteeExtensionQueries {
 
 			return result
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -611,7 +608,7 @@ module.exports = class MenteeExtensionQueries {
 	 * @example
 	 * const emailIds = ['user1@example.com', 'user2@example.com'];
 	 * const users = await getUsersByEmailIds(emailIds);
-	 * console.log(users); // Outputs an array of user records matching the provided email IDs.
+
 	 */
 	static async getUsersByEmailIds(emailIds, tenantCode) {
 		try {

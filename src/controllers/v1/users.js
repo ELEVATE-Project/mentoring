@@ -90,7 +90,6 @@ module.exports = class Users {
 
 			return await userService.create(req.decodedToken, userId, organizationCode, tenantCode)
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}
@@ -112,7 +111,6 @@ module.exports = class Users {
 
 			return await userService.add(req.body, userId, organizationCode, tenantCode)
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}
@@ -133,7 +131,6 @@ module.exports = class Users {
 
 			return await userService.update(req.body, req.decodedToken, userId, organizationCode, tenantCode)
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}
@@ -152,7 +149,6 @@ module.exports = class Users {
 			const tenantCode = req.body.tenant_code
 			return await adminService.userDelete(req.body.id.toString(), tenantCode)
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}
@@ -169,7 +165,6 @@ module.exports = class Users {
 			const tenantCode = req.body.tenant_code
 			return await userService.requestCount(req.decodedToken.id, tenantCode)
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}

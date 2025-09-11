@@ -191,7 +191,6 @@ module.exports = class EntityHelper {
 				result: { entity_types: prunedEntities },
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}

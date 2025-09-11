@@ -34,7 +34,6 @@ module.exports = class SessionsHelper {
 				message: 'RESOURCE_DELETED_SUCCESSFULLY',
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}

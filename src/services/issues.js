@@ -80,7 +80,6 @@ module.exports = class issuesHelper {
 				message: 'ISSUE_REPORTED_SUCCESSFULLY',
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}

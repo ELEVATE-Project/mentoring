@@ -50,21 +50,15 @@ const createSchedulerJob = function (jobId, delay, jobName, requestBody = {}, ur
 
 	const apiUrl = schedulerServiceUrl + apiEndpoints.CREATE_SCHEDULER_JOB
 	try {
-		console.log(apiUrl, 'options', options)
 		request.post(apiUrl, options, (err, data) => {
 			if (err) {
-				console.error('Error in createSchedulerJob POST request:', err)
 			} else {
 				if (data.body.success) {
-					console.log('Request made to scheduler successfully (createSchedulerJob)')
 				} else {
-					console.error('Error in createSchedulerJob POST request response:', data.body)
 				}
 			}
 		})
-	} catch (error) {
-		console.error('Error in createSchedulerJob ', error)
-	}
+	} catch (error) {}
 }
 
 /**
@@ -85,18 +79,13 @@ const updateDelayOfScheduledJob = function (bodyData) {
 	try {
 		request.post(apiUrl, options, (err, data) => {
 			if (err) {
-				console.error('Error in updateDelayOfScheduledJob POST request:', err)
 			} else {
 				if (data.body.success) {
-					console.log('Request made to scheduler successfully (updateDelayOfScheduledJob)')
 				} else {
-					console.error('Error in updateDelayOfScheduledJob POST request response:', data.body)
 				}
 			}
 		})
-	} catch (error) {
-		console.error('Error in updateDelayOfScheduledJob ', error)
-	}
+	} catch (error) {}
 }
 
 /**
@@ -118,18 +107,13 @@ const removeScheduledJob = function (bodyData) {
 	try {
 		request.post(apiUrl, options, (err, data) => {
 			if (err) {
-				console.error('Error in removeScheduledJob POST request:', err)
 			} else {
 				if (data.body.success) {
-					console.log('Request made to scheduler successfully (removeScheduledJob)')
 				} else {
-					console.error('Error in updateDelayOfScheduledJob POST request response:', data.body)
 				}
 			}
 		})
-	} catch (error) {
-		console.error('Error in removeScheduledJob ', error)
-	}
+	} catch (error) {}
 }
 
 module.exports = {

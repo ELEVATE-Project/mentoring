@@ -13,16 +13,17 @@ const utils = require('@generics/utils')
 const userRequests = require('@requests/user')
 
 /**
- * Create Meeting.
+ * Create Meeting with enhanced tenant isolation.
  * @method
  * @name createMeeting
- * @param {String} meetingId - meeting Id.
+ * @param {String} meetingId - meeting Id (also used as session ID for isolation).
  * @param {String} meetingName - meeting name.
  * @param {String} attendeePW - Attendee Password.
  * @param {String} moderatorPW - Moderator Password.
  * @param {Number} sessionDuration - session duration in minutes.
- * @param {String} tenantCode - tenant code for domain resolution.
+ * @param {String} tenantCode - tenant code for domain resolution and isolation.
  * @returns {String} - Meeting success message.
+ * @description Includes sessionId and tenantCode in callback URLs for enhanced isolation and DC benefits.
  */
 
 const createMeeting = function (meetingId, meetingName, attendeePW, moderatorPW, sessionDuration, tenantCode) {
@@ -35,34 +36,40 @@ const createMeeting = function (meetingId, meetingName, attendeePW, moderatorPW,
 			if (tenantCode) {
 				try {
 					const domain = await userRequests.getTenantDomain(tenantCode)
-					endMeetingCallBackUrl = `https://${domain}/mentoring/v1/sessions/completed/${meetingId}?source=BBB`
-					sessionEndUrl = `https://${domain}/mentoring/v1/sessions/end`
+					// Enhanced isolation: Include both sessionId and tenantCode for better DC routing and caching
+					endMeetingCallBackUrl = `https://${domain}/mentoring/v1/sessions/completed/${meetingId}?source=BBB&sessionId=${meetingId}&tenantCode=${tenantCode}`
+					sessionEndUrl = `https://${domain}/mentoring/v1/sessions/end?sessionId=${meetingId}&tenantCode=${tenantCode}`
 
 					// URL encode the callback URL for BBB
 					endMeetingCallBackUrl = encodeURIComponent(endMeetingCallBackUrl)
-
-					console.log('🔍 BBB DOMAIN-BASED URL DEBUG:')
-					console.log('Tenant Code:', tenantCode)
-					console.log('Resolved Domain:', domain)
-					console.log('Constructed endMeetingCallBackUrl:', endMeetingCallBackUrl)
-					console.log('Decoded URL:', decodeURIComponent(endMeetingCallBackUrl))
-					console.log('Session End URL:', sessionEndUrl)
 				} catch (error) {
-					console.error('Error resolving tenant domain, falling back to env vars:', error)
-					// Fallback to environment variables if domain resolution fails
+					// Error resolving tenant domain, falling back to env vars
+					// Fallback to environment variables with enhanced isolation parameters
 					endMeetingCallBackUrl =
-						process.env.MEETING_END_CALLBACK_EVENTS + '%2F' + meetingId + '%3Fsource%3DBBB'
-					sessionEndUrl = process.env.BIG_BLUE_BUTTON_SESSION_END_URL
+						process.env.MEETING_END_CALLBACK_EVENTS +
+						'%2F' +
+						meetingId +
+						'%3Fsource%3DBBB%26sessionId%3D' +
+						meetingId +
+						'%26tenantCode%3D' +
+						encodeURIComponent(tenantCode)
+					sessionEndUrl =
+						process.env.BIG_BLUE_BUTTON_SESSION_END_URL +
+						'?sessionId=' +
+						meetingId +
+						'&tenantCode=' +
+						tenantCode
 				}
 			} else {
 				// Fallback to environment variables if no tenantCode provided
-				endMeetingCallBackUrl = process.env.MEETING_END_CALLBACK_EVENTS + '%2F' + meetingId + '%3Fsource%3DBBB'
-				sessionEndUrl = process.env.BIG_BLUE_BUTTON_SESSION_END_URL
-
-				console.log('🔍 BBB ENV-BASED URL DEBUG:')
-				console.log('Environment var MEETING_END_CALLBACK_EVENTS:', process.env.MEETING_END_CALLBACK_EVENTS)
-				console.log('Constructed endMeetingCallBackUrl:', endMeetingCallBackUrl)
-				console.log('Decoded URL:', decodeURIComponent(endMeetingCallBackUrl))
+				// Include sessionId for basic isolation even without tenantCode
+				endMeetingCallBackUrl =
+					process.env.MEETING_END_CALLBACK_EVENTS +
+					'%2F' +
+					meetingId +
+					'%3Fsource%3DBBB%26sessionId%3D' +
+					meetingId
+				sessionEndUrl = process.env.BIG_BLUE_BUTTON_SESSION_END_URL + '?sessionId=' + meetingId
 			}
 			let lastUserTimeout = process.env.BIG_BLUE_BUTTON_LAST_USER_TIMEOUT_MINUTES || 15
 
@@ -123,7 +130,59 @@ const getRecordings = function (meetingId) {
 	})
 }
 
+/**
+ * Get recording ready callback URL with enhanced tenant isolation.
+ * @method
+ * @name getRecordingReadyCallbackUrl
+ * @param {String} tenantCode - Tenant code for domain resolution and isolation.
+ * @param {String} meetingId - Meeting ID (also used as session ID for isolation).
+ * @returns {String} - Recording ready callback URL with isolation parameters.
+ * @description Includes meetingID, sessionId and tenantCode in callback URLs for enhanced isolation and DC benefits.
+ */
+const getRecordingReadyCallbackUrl = async function (tenantCode, meetingId) {
+	try {
+		if (tenantCode) {
+			try {
+				const domain = await userRequests.getTenantDomain(tenantCode)
+				// Enhanced isolation: Include both meetingID, sessionId and tenantCode for better DC routing and caching
+				const recordingCallbackUrl = `https://${domain}/mentoring/v1/recordings/ready?meetingID=${meetingId}&sessionId=${meetingId}&tenantCode=${tenantCode}`
+				return encodeURIComponent(recordingCallbackUrl)
+			} catch (error) {
+				// Error resolving tenant domain for recording callback, falling back to env var
+				// Enhanced fallback with isolation parameters
+				const baseUrl = process.env.RECORDING_READY_CALLBACK_URL || ''
+				if (baseUrl) {
+					const separator = baseUrl.includes('?') ? '&' : '?'
+					return (
+						baseUrl +
+						separator +
+						`meetingID=${meetingId}&sessionId=${meetingId}&tenantCode=${encodeURIComponent(tenantCode)}`
+					)
+				}
+				return baseUrl
+			}
+		} else {
+			// Fallback to environment variable with sessionId for basic isolation
+			const baseUrl = process.env.RECORDING_READY_CALLBACK_URL || ''
+			if (baseUrl && meetingId) {
+				const separator = baseUrl.includes('?') ? '&' : '?'
+				return baseUrl + separator + `meetingID=${meetingId}&sessionId=${meetingId}`
+			}
+			return baseUrl
+		}
+	} catch (error) {
+		// Error getting recording ready callback URL
+		const baseUrl = process.env.RECORDING_READY_CALLBACK_URL || ''
+		if (baseUrl && meetingId) {
+			const separator = baseUrl.includes('?') ? '&' : '?'
+			return baseUrl + separator + `meetingID=${meetingId}&sessionId=${meetingId}`
+		}
+		return baseUrl
+	}
+}
+
 module.exports = {
 	createMeeting,
 	getRecordings,
+	getRecordingReadyCallbackUrl,
 }

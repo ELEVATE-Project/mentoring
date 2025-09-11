@@ -352,7 +352,6 @@ exports.getAllUpcomingSessions = async (paranoid, tenantCode) => {
 			raw: true,
 		})
 	} catch (err) {
-		console.error('An error occurred:', err)
 		throw err
 	}
 }
@@ -370,7 +369,6 @@ exports.updateEnrollmentCount = async (sessionId, increment = true, tenantCode) 
 			},
 		})
 	} catch (error) {
-		console.error(error)
 		throw error
 	}
 }
@@ -474,8 +472,8 @@ exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate,
 
 		const sessionIds = foundSessionOwnerships.map((ownership) => ownership.session_id)
 		const currentEpochTime = moment().unix()
-		console.log(sessionIds)
-		console.log(currentEpochTime)
+
+
 		return await Session.findAll({
 			where: {
 				id: { [Op.in]: sessionIds },
@@ -571,7 +569,6 @@ exports.getUpcomingSessions = async (page, limit, search, userId, startDate, end
 			const endEpoch = endDate
 
 			// Log to debug
-			console.log('Filtering sessions between:', startEpoch, 'and', endEpoch)
 
 			whereCondition.start_date = {
 				[Op.gte]: startEpoch,
@@ -604,7 +601,6 @@ exports.getUpcomingSessions = async (page, limit, search, userId, startDate, end
 		})
 		return sessionData
 	} catch (error) {
-		console.error(error)
 		return error
 	}
 }
@@ -773,7 +769,6 @@ exports.getUpcomingSessionsFromView = async (
 			count: Number(count[0].count),
 		}
 	} catch (error) {
-		console.error(error)
 		throw error
 	}
 }
@@ -1155,7 +1150,7 @@ exports.addOwnership = async (sessionId, mentorId) => {
 // 			onlyCreatorSessionIds,
 // 		}
 // 	} catch (error) {
-// 		console.error('Error in removeAndReturnMentorSessions:', error)
+
 // 		return error
 // 	}
 // }
@@ -1192,7 +1187,7 @@ exports.addOwnership = async (sessionId, mentorId) => {
 // 					}
 // 				);
 // 			} catch (error) {
-// 				console.error('Error updating session ownerships:', error);
+
 // 				throw error;
 // 			}
 // 		};
@@ -1288,7 +1283,7 @@ exports.addOwnership = async (sessionId, mentorId) => {
 // 			onlyCreatorSessionIds,
 // 		};
 // 	} catch (error) {
-// 		console.error('Error in replaceSessionManagerAndReturn:', error)
+
 // 		return error
 // 	}
 // }

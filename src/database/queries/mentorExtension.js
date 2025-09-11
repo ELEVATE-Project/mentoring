@@ -45,7 +45,6 @@ module.exports = class MentorExtensionQueries {
 			})
 			return mentorExtension
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -90,7 +89,6 @@ module.exports = class MentorExtensionQueries {
 				  })
 			return result
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -175,7 +173,6 @@ module.exports = class MentorExtensionQueries {
 				},
 			})
 		} catch (error) {
-			console.error('An error occurred:', error)
 			throw error
 		}
 	}
@@ -197,7 +194,6 @@ module.exports = class MentorExtensionQueries {
 
 			return result
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -333,7 +329,6 @@ module.exports = class MentorExtensionQueries {
 				count: Number(count[0].count),
 			}
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}

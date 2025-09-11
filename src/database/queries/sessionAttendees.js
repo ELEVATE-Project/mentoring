@@ -53,7 +53,6 @@ exports.updateOne = async (filter, update, tenantCode, options = {}) => {
 			individualHooks: true,
 		})
 	} catch (error) {
-		console.error(error)
 		return error
 	}
 }
@@ -117,7 +116,6 @@ exports.unEnrollFromSessionWithValidation = async (sessionId, userId, tenantCode
 exports.findAll = async (filter, tenantCode, options = {}) => {
 	try {
 		if (!tenantCode) {
-			console.error('findAll: tenantCode is required but undefined')
 			throw new Error('tenantCode is required')
 		}
 		filter.tenant_code = tenantCode
@@ -148,7 +146,6 @@ exports.unEnrollAllAttendeesOfSessions = async (sessionIds, tenantCode) => {
 
 		return destroyedCount
 	} catch (error) {
-		console.error('An error occurred:', error)
 		throw error
 	}
 }
@@ -156,7 +153,6 @@ exports.unEnrollAllAttendeesOfSessions = async (sessionIds, tenantCode) => {
 exports.usersUpcomingSessions = async (userId, sessionIds, tenantCode) => {
 	try {
 		if (!tenantCode) {
-			console.error('usersUpcomingSessions: tenantCode is required but undefined')
 			throw new Error('tenantCode is required')
 		}
 		const filter = {
@@ -169,7 +165,6 @@ exports.usersUpcomingSessions = async (userId, sessionIds, tenantCode) => {
 			raw: true,
 		})
 	} catch (error) {
-		console.error('An error occurred:', error)
 		throw error
 	}
 }
@@ -192,7 +187,6 @@ exports.unenrollFromUpcomingSessions = async (userId, sessionIds, tenantCode) =>
 		})
 		return result
 	} catch (error) {
-		console.error('An error occurred:', error)
 		throw error
 	}
 }
@@ -290,7 +284,6 @@ exports.getAttendedSessionsCountInDateRange = async (startDate, endDate, mentee_
 		})
 		return count || 0
 	} catch (error) {
-		console.error(error)
 		return error
 	}
 }
@@ -312,7 +305,6 @@ exports.findAttendeeBySessionAndUserId = async (id, sessionId, tenantCode) => {
 exports.findPendingFeedbackSessions = async (menteeId, completedSessionIds, tenantCode) => {
 	try {
 		if (!tenantCode) {
-			console.error('findPendingFeedbackSessions: tenantCode is required but undefined')
 			throw new Error('tenantCode is required')
 		}
 

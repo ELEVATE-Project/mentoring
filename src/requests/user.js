@@ -35,8 +35,8 @@ const emailEncryption = require('@utils/emailEncryption')
  * @example
  * const organizationId = 'org123';
  * fetchOrgDetails({ organizationId })
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
@@ -52,7 +52,6 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
 
 		return orgDetails
 	} catch (error) {
-		console.error('Error fetching organization details:', error)
 		throw error
 	}
 }
@@ -70,8 +69,8 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
  * @example
  * const organizationId = 'org123';
  * getOrgDetails({ organizationId })
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const getOrgDetails = async function ({ organizationId, tenantCode }) {
@@ -87,7 +86,6 @@ const getOrgDetails = async function ({ organizationId, tenantCode }) {
 			},
 		}
 	} catch (error) {
-		console.error('Error fetching organization details:', error)
 		throw error
 	}
 }
@@ -125,8 +123,8 @@ const validRoles = new Set([
  * const token = 'user-auth-token';
  * const userId = '12345';
  * fetchUserDetails({ token, userId })
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const fetchUserDetails = async ({ token, userId }) => {
@@ -164,7 +162,6 @@ const fetchUserDetails = async ({ token, userId }) => {
 
 		return userDetails
 	} catch (error) {
-		console.error(error)
 		throw error
 	}
 }
@@ -183,8 +180,8 @@ const fetchUserDetails = async ({ token, userId }) => {
  * const token = 'user-auth-token';
  * const userId = '12345';
  * getUserDetails( userId)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const getUserDetails = async (userId, tenantCode) => {
@@ -227,7 +224,6 @@ const getUserDetails = async (userId, tenantCode) => {
 
 		return response
 	} catch (error) {
-		console.error(error)
 		throw error
 	}
 }
@@ -248,8 +244,8 @@ const getUserDetails = async (userId, tenantCode) => {
  * @example
  * const userIds = ['user1', 'user2'];
  * getListOfUserDetails(userIds)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const getListOfUserDetails = function (userIds, excludeDeletedRecords = false) {
@@ -298,8 +294,8 @@ const getListOfUserDetails = function (userIds, excludeDeletedRecords = false) {
  * @example
  * const emailIds = ['user1@example.com', 'user2@example.com'];
  * getListOfUserDetailsByEmail(emailIds, true)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const getListOfUserDetailsByEmail = function (emailIds, tenantCode) {
@@ -386,8 +382,8 @@ const share = function (profileId) {
  * const pageSize = 10;
  * const searchText = 'john';
  * list(userType, pageNo, pageSize, searchText)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const list = function (userType, pageNo, pageSize, searchText, tenantCode) {
@@ -600,8 +596,8 @@ const search = function (userType, pageNo, pageSize, searchText, userServiceQuer
  * @example
  * const organizationIds = ['org1', 'org2'];
  * listOrganization(organizationIds)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const listOrganization = function (organizationIds = []) {
@@ -649,8 +645,8 @@ const listOrganization = function (organizationIds = []) {
  * @example
  * const organizationIds = ['org1', 'org2'];
  * organizationList(organizationIds)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const organizationList = function (organizationCodes = [], tenantCodes = []) {
@@ -704,8 +700,8 @@ const organizationList = function (organizationCodes = [], tenantCodes = []) {
  * @example
  * const filePath = 'images/profile.png';
  * getDownloadableUrl(filePath)
- *   .then(url => console.log(url))
- *   .catch(error => console.error(error));
+
+
  */
 
 const getDownloadableUrl = function (path) {
@@ -755,8 +751,8 @@ const getDownloadableUrl = function (path) {
  * @example
  * const userIds = ['user1', 'user2'];
  * getUserDetailedList(userIds)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false, unscopped = false) {
@@ -846,7 +842,6 @@ const getProfileDetails = async ({ tenantCode, userId }) => {
 
 		return userDetails
 	} catch (error) {
-		console.error(error)
 		throw error
 	}
 }
@@ -874,7 +869,6 @@ const getTenantDomain = async (tenantCode) => {
 			throw new Error('TENANT_DOMAIN_NOT_FOUND')
 		}
 	} catch (error) {
-		console.error('Error fetching tenant domain:', error)
 		throw error
 	}
 }

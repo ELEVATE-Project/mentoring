@@ -270,7 +270,6 @@ module.exports = class MentorsHelper {
 				result,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -310,7 +309,7 @@ module.exports = class MentorsHelper {
 
 				for (let i = 0; i < session.length; i++) {
 					let mentorIndex = mentorDetails.findIndex((x) => x.user_id === session[i].mentor_id)
-					console.log(session[i].mentor_id, 'mentorIndex', mentorIndex)
+
 					session[i].mentor_name = mentorDetails[mentorIndex].name
 					session[i].organization = mentorDetails[mentorIndex].organization
 				}
@@ -333,7 +332,6 @@ module.exports = class MentorsHelper {
 				return session
 			}
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
@@ -847,9 +845,7 @@ module.exports = class MentorsHelper {
 				try {
 					const chat = await communicationHelper.login(id, tenantCode)
 					communications = chat
-				} catch (error) {
-					console.error('Failed to log in to communication service:', error)
-				}
+				} catch (error) {}
 			}
 			processDbResponse.meta = {
 				...processDbResponse.meta,
@@ -887,7 +883,6 @@ module.exports = class MentorsHelper {
 				},
 			})
 		} catch (error) {
-			console.error(error)
 			return error
 		}
 	}
@@ -1296,7 +1291,6 @@ module.exports = class MentorsHelper {
 				result: extensionDetails,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}

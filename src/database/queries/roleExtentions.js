@@ -50,7 +50,6 @@ module.exports = class RoleExtensionService {
 				where: { title, tenant_code: tenantCode },
 			})
 		} catch (err) {
-			console.error('Error finding RoleExtension by title:', err)
 			throw err
 		}
 	}

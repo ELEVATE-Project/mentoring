@@ -5,7 +5,6 @@ module.exports = class AvailabilityData {
 		try {
 			return await Availability.create(data, { returning: true })
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}
@@ -19,7 +18,6 @@ module.exports = class AvailabilityData {
 				order: [['start_time', 'ASC']],
 			})
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}

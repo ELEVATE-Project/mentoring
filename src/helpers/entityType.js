@@ -53,7 +53,6 @@ module.exports = class UserHelper {
 			)
 			return entities || null
 		} catch (err) {
-			console.error('Error in findAllEntityTypes:', err)
 			return null
 		}
 	}

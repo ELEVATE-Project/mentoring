@@ -27,7 +27,6 @@ module.exports = class DefaultRule {
 				tenantCode
 			)
 		} catch (error) {
-			console.error('Error creating Default Rule:', error)
 			return error
 		}
 	}
@@ -58,7 +57,6 @@ module.exports = class DefaultRule {
 				tenantCode
 			)
 		} catch (error) {
-			console.error('Error updating Default Rule:', error)
 			return error
 		}
 	}
@@ -83,7 +81,6 @@ module.exports = class DefaultRule {
 				return await defaultRuleService.readOne(req.params.id, req.decodedToken.organization_code, tenantCode)
 			return await defaultRuleService.readAll(req.decodedToken.organization_code, tenantCode)
 		} catch (error) {
-			console.error('Error reading Default Rule:', error)
 			return error
 		}
 	}
@@ -105,7 +102,6 @@ module.exports = class DefaultRule {
 			const tenantCode = req.decodedToken.tenant_code
 			return await defaultRuleService.delete(req.params.id, req.decodedToken.organization_code, tenantCode)
 		} catch (error) {
-			console.error('Error deleting Default Rule:', error)
 			return error
 		}
 	}

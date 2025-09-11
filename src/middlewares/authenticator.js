@@ -44,7 +44,6 @@ module.exports = async function (req, res, next) {
 
 		// Check if config.json exists
 		if (fs.existsSync(configFilePath)) {
-			console.log(' config exit')
 			// Read and parse the config.json file
 			const rawData = fs.readFileSync(configFilePath)
 			try {
@@ -123,8 +122,6 @@ module.exports = async function (req, res, next) {
 			}
 		}
 
-		console.log(' decoded tokenen ', req.decodedToken)
-
 		req.decodedToken.id =
 			typeof req.decodedToken?.id === 'number' ? req.decodedToken?.id?.toString() : req.decodedToken?.id
 		req.decodedToken.organization_id =
@@ -180,7 +177,6 @@ module.exports = async function (req, res, next) {
 			if (!isPermissionValid) throw createUnauthorizedResponse('PERMISSION_DENIED')
 		}
 
-		console.log('DECODED TOKEN:', req.decodedToken)
 		next()
 	} catch (err) {
 		if (err.message === 'USER_SERVICE_DOWN') {
@@ -282,7 +278,7 @@ async function verifyToken(token) {
 		return jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
 	} catch (err) {
 		if (err.name === 'TokenExpiredError') throw createUnauthorizedResponse('ACCESS_TOKEN_EXPIRED')
-		console.log(err)
+
 		throw createUnauthorizedResponse()
 	}
 }
@@ -431,7 +427,6 @@ async function keycloakPublicKeyAuthentication(token) {
 	} catch (err) {
 		if (err.message === 'USER_NOT_FOUND') throw createUnauthorizedResponse('USER_NOT_FOUND')
 		else {
-			console.error(err)
 			throw createUnauthorizedResponse()
 		}
 	}
@@ -442,7 +437,7 @@ async function verifyKeycloakToken(token, cert) {
 		return jwt.verify(token, cert, { algorithms: ['sha1', 'RS256', 'HS256'] })
 	} catch (err) {
 		if (err.name === 'TokenExpiredError') throw createUnauthorizedResponse('ACCESS_TOKEN_EXPIRED')
-		console.error(err)
+
 		throw createUnauthorizedResponse()
 	}
 }

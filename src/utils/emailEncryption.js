@@ -10,7 +10,6 @@ const encrypt = (plainTextEmail) => {
 		const cipher = crypto.createCipheriv(algorithm, secretKey, fixedIV)
 		return cipher.update(plainTextEmail, 'utf-8', 'hex') + cipher.final('hex')
 	} catch (err) {
-		console.log(err)
 		throw err
 	}
 }
@@ -20,7 +19,6 @@ const decrypt = async (encryptedEmail) => {
 		const decipher = crypto.createDecipheriv(algorithm, secretKey, fixedIV)
 		return decipher.update(encryptedEmail, 'hex', 'utf-8') + decipher.final('utf-8')
 	} catch (err) {
-		console.log(err)
 		throw err
 	}
 }
@@ -38,7 +36,7 @@ const decrypt = async (encryptedEmail) => {
  * @example
  * const encryptedData = '5d41402abc4b2a76b9719d911017c592';
  * const decryptedData = await decryptAndValidate(encryptedData);
- * console.log(decryptedData); // Outputs decrypted string or false if decryption fails.
+
  */
 async function decryptAndValidate(data) {
 	try {

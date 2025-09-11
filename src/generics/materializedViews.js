@@ -35,9 +35,7 @@ const filterConcreteAndMetaAttributes = async (modelAttributes, attributesList) 
 			else metaAttributes.push(attribute)
 		})
 		return { concreteAttributes, metaAttributes }
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 const rawAttributesTypeModifier = async (rawAttributes) => {
@@ -74,9 +72,7 @@ const rawAttributesTypeModifier = async (rawAttributes) => {
 			}
 		}
 		return outputArray
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 const metaAttributesTypeModifier = (data) => {
 	try {
@@ -110,9 +106,7 @@ const metaAttributesTypeModifier = (data) => {
 		})
 
 		return outputArray
-	} catch (err) {
-		console.error(err)
-	}
+	} catch (err) {}
 }
 
 const generateRandomCode = (length) => {
@@ -156,9 +150,7 @@ const materializedViewQueryBuilder = async (model, concreteFields, metaFields) =
 		  WHERE ${whereClause};`
 
 		return { materializedViewGenerationQuery, temporaryMaterializedViewName }
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 const createIndexesOnAllowFilteringFields = async (model, modelEntityTypes, fieldsWithDatatype) => {
@@ -186,9 +178,7 @@ const createIndexesOnAllowFilteringFields = async (model, modelEntityTypes, fiel
 				return await sequelize.query(query)
 			})
 		)
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 const createViewGINIndexOnSearch = async (model, config, fields) => {
 	try {
@@ -196,7 +186,6 @@ const createViewGINIndexOnSearch = async (model, config, fields) => {
 		const searchType = modelName === 'Session' ? 'session' : modelName === 'MentorExtension' ? 'mentor' : null
 
 		if (!searchType) {
-			console.warn('Unknown model name')
 			return
 		}
 
@@ -204,7 +193,6 @@ const createViewGINIndexOnSearch = async (model, config, fields) => {
 		const fieldsForIndex = fieldsConfig.filter((field) => !field.isAnEntityType).map((field) => field.name)
 
 		if (fieldsForIndex.length === 0) {
-			console.warn('No fields available for indexing')
 			return
 		}
 
@@ -215,13 +203,9 @@ const createViewGINIndexOnSearch = async (model, config, fields) => {
                     ON ${common.materializedViewsPrefix}${model.tableName}
                     USING gin(${field} gin_trgm_ops);
                 `)
-			} catch (err) {
-				console.warn(`An error occurred while creating the index for field ${field}:`, err)
-			}
+			} catch (err) {}
 		}
-	} catch (err) {
-		console.warn('An error occurred while creating the index:', err)
-	}
+	} catch (err) {}
 }
 // Function to execute index queries for a specific model
 const executeIndexQueries = async (modelName) => {
@@ -229,25 +213,18 @@ const executeIndexQueries = async (modelName) => {
 	const modelQueries = indexQueries.find((item) => item.modelName === modelName)
 
 	if (modelQueries) {
-		console.log(`Executing index queries for ${modelName}`)
 		for (const query of modelQueries.queries) {
 			try {
 				await sequelize.query(query)
-				console.log(`Successfully executed query for ${modelName}: ${query}`)
-			} catch (error) {
-				console.error(`Error executing query for ${modelName}: ${query}`, error)
-			}
+			} catch (error) {}
 		}
 	} else {
-		console.log(`No index queries found for model: ${modelName}`)
 	}
 }
 const deleteMaterializedView = async (viewName) => {
 	try {
 		await sequelize.query(`DROP MATERIALIZED VIEW ${viewName};`)
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 const renameMaterializedView = async (temporaryMaterializedViewName, tableName) => {
@@ -269,7 +246,6 @@ const renameMaterializedView = async (temporaryMaterializedViewName, tableName) 
 		return randomViewName
 	} catch (error) {
 		await t.rollback()
-		console.error('Error executing transaction:', error)
 	}
 }
 
@@ -282,9 +258,7 @@ const createViewUniqueIndexOnPK = async (model) => {
 			(key) => `_${key}`
 		)} 
             ON ${common.materializedViewsPrefix}${model.tableName} (${primaryKeys.map((key) => `${key}`).join(', ')});`)
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 const generateMaterializedView = async (modelEntityTypes) => {
@@ -321,9 +295,7 @@ const generateMaterializedView = async (modelEntityTypes) => {
 		await createViewUniqueIndexOnPK(model)
 		await createViewGINIndexOnSearch(model, searchConfig, allFields)
 		await executeIndexQueries(model.name)
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 const getAllowFilteringEntityTypes = async (tenantCode) => {
@@ -338,9 +310,7 @@ const getAllowFilteringEntityTypes = async (tenantCode) => {
 				allow_filtering: true,
 			}
 		)
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 const triggerViewBuild = async (tenantCode) => {
@@ -355,9 +325,7 @@ const triggerViewBuild = async (tenantCode) => {
 		)
 
 		return entityTypesGroupedByModel
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 //Refresh Flow
@@ -376,9 +344,7 @@ const modelNameCollector = async (entityTypes) => {
 			})
 		)
 		return [...modelSet.values()]
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 const refreshMaterializedView = async (modelName) => {
@@ -394,7 +360,6 @@ const refreshMaterializedView = async (modelName) => {
 
 		// If there are active refresh queries, skip refreshing the materialized view
 		if (activeQueries.length > 0) {
-			console.log('A materialized view refresh is already in progress. Skipping.')
 			return
 		}
 
@@ -403,9 +368,7 @@ const refreshMaterializedView = async (modelName) => {
 			`REFRESH MATERIALIZED VIEW CONCURRENTLY ${common.materializedViewsPrefix}${model.tableName}`
 		)
 		return metadata
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 const refreshNextView = (currentIndex, modelNames) => {
@@ -418,9 +381,7 @@ const refreshNextView = (currentIndex, modelNames) => {
 			clearInterval(refreshInterval) // Stop the setInterval loop
 		}
 		return currentIndex
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 const triggerPeriodicViewRefresh = async (tenantCode) => {
@@ -437,9 +398,7 @@ const triggerPeriodicViewRefresh = async (tenantCode) => {
 
 		// Immediately trigger the first refresh
 		currentIndex = refreshNextView(currentIndex, modelNames)
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 const checkAndCreateMaterializedViews = async (tenantCode) => {
 	const allowFilteringEntityTypes = await getAllowFilteringEntityTypes(tenantCode)

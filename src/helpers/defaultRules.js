@@ -71,7 +71,6 @@ async function getUserDetailsFromView(userId, isAMentor, tenantCode) {
 			return await menteeQueries.findOneFromView(userId, tenantCode)
 		}
 	} catch (error) {
-		console.log(error)
 		throw new Error(`Failed to get user details: ${error.message}`)
 	}
 }
@@ -91,7 +90,6 @@ async function getUserDetails(userId, isAMentor, tenantCode) {
 			return await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
 		}
 	} catch (error) {
-		console.log(error)
 		throw new Error(`Failed to get user details: ${error.message}`)
 	}
 }
@@ -189,7 +187,6 @@ exports.defaultRulesFilter = async function defaultRulesFilter({
 
 		return whereClauses.join(' AND ')
 	} catch (error) {
-		console.error('Error:', error.message)
 		throw error // Re-throw the error after logging it
 	}
 }
@@ -264,7 +261,6 @@ exports.validateDefaultRulesFilter = async function validateDefaultRulesFilter({
 
 		return true // Data meets all conditions
 	} catch (error) {
-		console.error('Error:', error.message)
 		throw error // Re-throw the error after logging it
 	}
 }

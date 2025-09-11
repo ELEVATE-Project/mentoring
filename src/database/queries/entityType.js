@@ -87,7 +87,6 @@ module.exports = class UserEntityData {
 
 			return result
 		} catch (error) {
-			console.error('Error fetching data:', error)
 			throw error
 		}
 	}
@@ -113,7 +112,7 @@ module.exports = class UserEntityData {
 			)
 			return result
 		} catch (error) {
-			console.error('Error fetching data:', error)
+
 			throw error
 		}
 	} */
@@ -233,7 +232,6 @@ module.exports = class UserEntityData {
 				})
 				return result
 			} else {
-				console.log('No matching entity types found')
 				return []
 			}
 		} catch (error) {
