@@ -987,6 +987,8 @@ module.exports = class AdminService {
 			return true
 		}
 
+		const sessionsCreated = await sessionQueries.getSessionsCreatedByMentor(mentorUserId)
+
 		// Delete the sessions
 		const sessionIds = [...new Set(sessionsToUpdate.map((s) => s.id))]
 		await sessionQueries.updateRecords(
@@ -996,8 +998,7 @@ module.exports = class AdminService {
 
 		console.log(`Update ${sessionIds.length} sessions with mentor name`)
 
-		// if the sessions created or managed by mentor
-		const sessionsCreated = await sessionQueries.getSessionsCreatedByMentor(mentorUserId)
+		// if thres so no sessions created by mentor
 		if (sessionsCreated.length == 0) {
 			return true
 		}
