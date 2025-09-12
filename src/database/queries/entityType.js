@@ -40,7 +40,7 @@ module.exports = class UserEntityData {
 			})
 			return entityData
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	static async findUserEntityTypesAndEntities(filter, tenantCodes) {
@@ -156,7 +156,7 @@ module.exports = class UserEntityData {
 				where: { id: id, tenant_code: tenantCode },
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -192,7 +192,7 @@ module.exports = class UserEntityData {
 			})
 			return result
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -238,7 +238,7 @@ module.exports = class UserEntityData {
 				return []
 			}
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 }
