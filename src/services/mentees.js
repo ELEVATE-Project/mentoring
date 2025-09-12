@@ -1561,7 +1561,7 @@ module.exports = class MenteesHelper {
 			// Throw access error
 			if (!isAccessible) {
 				return responses.failureResponse({
-					statusCode: httpStatusCode.not_found,
+					statusCode: httpStatusCode.forbidden,
 					message: 'PROFILE_RESTRICTED',
 				})
 			}
