@@ -512,6 +512,11 @@ const generateWhereClause = (tableName) => {
 function validateAndBuildFilters(input, validationData) {
 	const entityTypes = {}
 
+	// Ensure validationData is an array
+	if (!Array.isArray(validationData)) {
+		throw new Error('Validation data must be an array')
+	}
+
 	// Build the entityTypes dictionary
 	validationData.forEach((entityType) => {
 		entityTypes[entityType.value] = entityType.data_type

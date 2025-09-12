@@ -467,6 +467,9 @@ module.exports = class MenteesHelper {
 			{
 				status: 'ACTIVE',
 				allow_filtering: true,
+				organization_code: {
+					[Op.in]: [organizationCode, defaults.orgCode],
+				},
 				model_names: { [Op.contains]: [sessionModelName] },
 			},
 			{

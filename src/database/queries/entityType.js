@@ -54,10 +54,13 @@ module.exports = class UserEntityData {
 				finalTenantCodes = tenantCodes ? [tenantCodes, defaults.tenantCode] : [defaults.tenantCode]
 			}
 
-			filter.tenant_code = { [Op.in]: finalTenantCodes }
+			const whereClause = {
+				...filter,
+				tenant_code: { [Op.in]: finalTenantCodes },
+			}
 
 			const entityTypes = await EntityType.findAll({
-				where: filter,
+				where: whereClause,
 				raw: true,
 			})
 
@@ -159,9 +162,12 @@ module.exports = class UserEntityData {
 
 	static async findAllEntityTypesAndEntities(filter, tenantCodeFilter) {
 		try {
-			filter.tenant_code = tenantCodeFilter
+			const whereClause = {
+				...filter,
+				tenant_code: tenantCodeFilter,
+			}
 			const entityTypes = await EntityType.findAll({
-				where: filter,
+				where: whereClause,
 				raw: true,
 			})
 
