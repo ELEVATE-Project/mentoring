@@ -157,12 +157,9 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async findAllEntityTypesAndEntities(filter, tenantCode) {
+	static async findAllEntityTypesAndEntities(filter, tenantCodeFilter) {
 		try {
-			const defaults = await getDefaults()
-			const tenantCodes = [tenantCode, defaults.tenantCode]
-
-			filter.tenant_code = { [Op.in]: tenantCodes }
+			filter.tenant_code = tenantCodeFilter
 			const entityTypes = await EntityType.findAll({
 				where: filter,
 				raw: true,
@@ -175,7 +172,7 @@ module.exports = class UserEntityData {
 				where: {
 					entity_type_id: entityTypeIds,
 					status: 'ACTIVE',
-					tenant_code: { [Op.in]: tenantCodes },
+					tenant_code: tenantCodeFilter,
 				},
 				raw: true,
 			})
