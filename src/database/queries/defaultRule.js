@@ -11,7 +11,7 @@ exports.create = async (data, tenantCode) => {
 		data.tenant_code = tenantCode
 		return await DefaultRule.create(data)
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -30,7 +30,7 @@ exports.findOne = async (filter, options = {}) => {
 		})
 		return res
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -49,7 +49,7 @@ exports.updateOne = async (filter, update, options = {}) => {
 			individualHooks: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -65,7 +65,7 @@ exports.deleteOne = async (filter) => {
 		})
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -83,7 +83,7 @@ exports.findAndCountAll = async (filter, options = {}) => {
 			raw: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -105,6 +105,6 @@ exports.findAll = async (filter, tenantCode = null, options = {}) => {
 			raw: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }

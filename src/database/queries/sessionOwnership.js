@@ -14,7 +14,7 @@ exports.create = async (data) => {
 				responseCode: 'CLIENT_ERROR',
 			})
 		}
-		throw error
+		return error
 	}
 }
 
@@ -63,6 +63,6 @@ exports.updateRecords = async (data, options = {}) => {
 		const result = await SessionOwnership.update(data, options)
 		return Array.isArray(result) ? result[0] : result // Sequelize returns [number of affected rows]
 	} catch (error) {
-		throw error
+		return error
 	}
 }

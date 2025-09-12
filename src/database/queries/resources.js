@@ -30,9 +30,12 @@ module.exports = class ResourcessData {
 
 	static async findOneResources(filter, tenantCode, projection = {}) {
 		try {
-			filter.tenant_code = tenantCode
+			const whereClause = {
+				...filter,
+				tenant_code: tenantCode,
+			}
 			const ResourcesData = await Resources.findOne({
-				where: filter,
+				where: whereClause,
 				attributes: projection,
 				raw: true,
 			})
@@ -94,8 +97,13 @@ module.exports = class ResourcessData {
 
 	static async find(filter, tenantCode, projection = {}) {
 		try {
+			const whereClause = {
+				...filter,
+				deleted_at: null,
+				tenant_code: tenantCode,
+			}
 			const ResourcesData = await Resources.findAll({
-				where: { ...filter, deleted_at: null, tenant_code: tenantCode },
+				where: whereClause,
 				attributes: projection,
 				raw: true,
 			})

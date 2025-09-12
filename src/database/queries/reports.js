@@ -6,7 +6,7 @@ module.exports = class ReportQueries {
 			data.tenant_code = tenantCode
 			return await Report.create(data, { returning: true })
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -16,7 +16,7 @@ module.exports = class ReportQueries {
 				where: { id, tenant_code: tenantCode },
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -29,7 +29,7 @@ module.exports = class ReportQueries {
 			})
 			return updatedReport
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -40,7 +40,7 @@ module.exports = class ReportQueries {
 			})
 			return deletedRows
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -50,7 +50,7 @@ module.exports = class ReportQueries {
 				where: { code, tenant_code: tenantCode },
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -62,7 +62,7 @@ module.exports = class ReportQueries {
 				raw: true,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 }

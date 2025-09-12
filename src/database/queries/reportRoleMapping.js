@@ -7,7 +7,7 @@ module.exports = class ReportRoleMappingQueries {
 			data.tenant_code = tenantCode
 			return await ReportRoleMapping.create(data, { returning: true })
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -21,7 +21,7 @@ module.exports = class ReportRoleMappingQueries {
 			})
 			return reportRoleMappings
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -34,7 +34,7 @@ module.exports = class ReportRoleMappingQueries {
 			})
 			return updatedReportRoleMapping
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -45,7 +45,7 @@ module.exports = class ReportRoleMappingQueries {
 			})
 			return deletedRows
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -59,7 +59,7 @@ module.exports = class ReportRoleMappingQueries {
 				},
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 }

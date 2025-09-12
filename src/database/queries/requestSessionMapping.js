@@ -8,7 +8,7 @@ exports.addSessionRequest = async (requesteeId, requestId) => {
 		// Keeping for backward compatibility
 		return { success: true, message: 'Session request mapping no longer required' }
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -36,6 +36,6 @@ exports.getSessionsMapping = async (userId, status, tenantCode) => {
 			raw: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }

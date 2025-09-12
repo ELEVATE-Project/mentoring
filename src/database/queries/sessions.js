@@ -36,9 +36,12 @@ exports.create = async (data, tenantCode) => {
 
 exports.findOne = async (filter, tenantCode, options = {}) => {
 	try {
-		filter.tenant_code = tenantCode
+		const whereClause = {
+			...filter,
+			tenant_code: tenantCode,
+		}
 		const res = await Session.findOne({
-			where: filter,
+			where: whereClause,
 			...options,
 			raw: true,
 		})
@@ -105,7 +108,7 @@ exports.updateRecords = async (data, options = {}) => {
 		const result = await Session.update(data, options)
 		return Array.isArray(result) ? result[0] : result // Sequelize returns [number of affected rows]
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -369,7 +372,7 @@ exports.updateEnrollmentCount = async (sessionId, increment = true, tenantCode) 
 			},
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 exports.countHostedSessions = async (id, tenantCode) => {
@@ -408,7 +411,7 @@ exports.getCreatedSessionsCountInDateRange = async (mentorId, startDate, endDate
 		})
 		return count
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -435,7 +438,7 @@ exports.getAssignedSessionsCountInDateRange = async (mentorId, startDate, endDat
 		})
 		return count
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -456,7 +459,7 @@ exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate,
 		})
 		return count
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -488,7 +491,7 @@ exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate,
 			raw: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 } */
 
@@ -616,7 +619,7 @@ exports.findAndCountAll = async (filter, tenantCode, options = {}, attributes = 
 		})
 		return { rows, count }
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 exports.mentorsSessionWithPendingFeedback = async (mentorId, tenantCode, options = {}, completedSessionIds) => {
@@ -636,7 +639,7 @@ exports.mentorsSessionWithPendingFeedback = async (mentorId, tenantCode, options
 			raw: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -769,7 +772,7 @@ exports.getUpcomingSessionsFromView = async (
 			count: Number(count[0].count),
 		}
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -883,7 +886,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			count: Number(count[0].count),
 		}
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -948,7 +951,7 @@ exports.getUpcomingSessionsOfMentee = async (menteeUserId, sessionType) => {
 
 		return privateSessions || []
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -971,7 +974,7 @@ exports.getUpcomingSessionsForMentor = async (mentorUserId, tenantCode) => {
 
 		return upcomingSessions || []
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -999,7 +1002,7 @@ exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 
 		return sessionsToDelete
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -1188,7 +1191,7 @@ exports.addOwnership = async (sessionId, mentorId) => {
 // 				);
 // 			} catch (error) {
 
-// 				throw error;
+// 				return error;
 // 			}
 // 		};
 

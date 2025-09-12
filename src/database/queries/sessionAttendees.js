@@ -125,7 +125,7 @@ exports.findAll = async (filter, tenantCode, options = {}) => {
 			raw: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -146,7 +146,7 @@ exports.unEnrollAllAttendeesOfSessions = async (sessionIds, tenantCode) => {
 
 		return destroyedCount
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -165,7 +165,7 @@ exports.usersUpcomingSessions = async (userId, sessionIds, tenantCode) => {
 			raw: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -187,7 +187,7 @@ exports.unenrollFromUpcomingSessions = async (userId, sessionIds, tenantCode) =>
 		})
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -348,6 +348,6 @@ exports.getCount = async (filter = {}, options = {}) => {
 			...options,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }

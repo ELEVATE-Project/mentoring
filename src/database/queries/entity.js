@@ -8,7 +8,7 @@ module.exports = class UserEntityData {
 		try {
 			return await Entity.create(data, { returning: true })
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -32,7 +32,7 @@ module.exports = class UserEntityData {
 			data.tenant_code = tenantCode
 			return await Entity.create(data, { returning: true })
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -47,7 +47,7 @@ module.exports = class UserEntityData {
 				raw: true,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -62,7 +62,7 @@ module.exports = class UserEntityData {
 				...options,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -74,7 +74,7 @@ module.exports = class UserEntityData {
 				where: whereClause,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -111,7 +111,7 @@ module.exports = class UserEntityData {
 				],
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -147,7 +147,7 @@ module.exports = class UserEntityData {
 				],
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 }

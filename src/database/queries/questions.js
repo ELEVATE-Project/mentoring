@@ -45,7 +45,7 @@ module.exports = class QuestionsData {
 
 			return rowsAffected > 0 ? 'QUESTION_UPDATED' : 'QUESTION_NOT_FOUND'
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 	//To be updated later when the below function are called

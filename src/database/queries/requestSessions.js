@@ -46,7 +46,7 @@ exports.addSessionRequest = async (requestorId, requesteeId, Agenda, startDate, 
 
 		return requestResult
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -77,7 +77,7 @@ exports.getAllRequests = async (userId, status, tenantCode) => {
 
 		return sessionRequest
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -108,7 +108,7 @@ exports.getSessionMappingDetails = async (sessionRequestIds, status, tenantCode)
 
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -131,7 +131,7 @@ exports.getpendingRequests = async (userId, page, pageSize, tenantCode) => {
 
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -154,7 +154,7 @@ exports.approveRequest = async (userId, requestSessionId, sessionId, tenantCode)
 
 		return requests[1] // this typically refers to the number of affected rows
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -175,7 +175,7 @@ exports.rejectRequest = async (userId, requestSessionId, rejectReason, tenantCod
 			individualHooks: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -194,7 +194,7 @@ exports.expireRequest = async (requestSessionId, tenantCode) => {
 			individualHooks: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -211,7 +211,7 @@ exports.findOneRequest = async (requestSessionId, tenantCode) => {
 
 		return sessionRequest
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -227,7 +227,7 @@ exports.checkPendingRequest = async (requestorId, requesteeId, tenantCode) => {
 		})
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -242,7 +242,7 @@ exports.getRequestSessions = async (requestSessionId, tenantCode) => {
 			raw: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -271,7 +271,7 @@ exports.markRequestsAsDeleted = async (requestSessionIds = [], tenantCode) => {
 
 		return deletedIds.length > 0
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -298,7 +298,7 @@ exports.getPendingSessionRequests = async (userId, tenant_code) => {
 
 		return pendingRequests || []
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -327,6 +327,6 @@ exports.getCount = async (userId, status, tenantCode) => {
 
 		return sessionRequest
 	} catch (error) {
-		throw error
+		return error
 	}
 }

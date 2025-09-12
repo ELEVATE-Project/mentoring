@@ -28,7 +28,7 @@ module.exports = class MenteeExtensionQueries {
 			data.tenant_code = tenantCode
 			return await MenteeExtension.create(data, { returning: true })
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -64,7 +64,7 @@ module.exports = class MenteeExtensionQueries {
 				...options,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -191,7 +191,7 @@ module.exports = class MenteeExtensionQueries {
 
 			return mentee
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -204,7 +204,7 @@ module.exports = class MenteeExtensionQueries {
 			}
 			return await MenteeExtension.destroy(options)
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 	static async removeMenteeDetails(userId, tenantCode) {
@@ -247,7 +247,7 @@ module.exports = class MenteeExtensionQueries {
 				},
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -293,7 +293,7 @@ module.exports = class MenteeExtensionQueries {
 
 			return result
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -394,7 +394,7 @@ module.exports = class MenteeExtensionQueries {
 				count: Number(count[0].count),
 			}
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 	static async getMenteeExtensions(userIds, attributes = [], tenantCode) {
@@ -407,7 +407,7 @@ module.exports = class MenteeExtensionQueries {
 			const mentee = await MenteeExtension.findAll(queryOptions)
 			return mentee
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 	static async findOneFromView(userId, tenantCode) {
@@ -558,7 +558,7 @@ module.exports = class MenteeExtensionQueries {
 				count: Number(count[0].count),
 			}
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 	static async getAllUsersByIds(ids, tenantCode) {
@@ -591,7 +591,7 @@ module.exports = class MenteeExtensionQueries {
 			})
 			return results
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -640,7 +640,7 @@ module.exports = class MenteeExtensionQueries {
 			})
 			return results
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 }

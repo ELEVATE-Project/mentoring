@@ -30,7 +30,7 @@ module.exports = class AvailabilityData {
 				...options,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 

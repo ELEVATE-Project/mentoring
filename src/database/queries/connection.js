@@ -45,7 +45,7 @@ exports.addFriendRequest = async (userId, friendId, message, tenantCode) => {
 
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -66,7 +66,7 @@ exports.getPendingRequests = async (userId, page, pageSize, tenantCode) => {
 		})
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -86,7 +86,7 @@ exports.getRejectedRequest = async (userId, friendId, tenantCode) => {
 		})
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -140,7 +140,7 @@ exports.approveRequest = async (userId, friendId, meta, tenantCode) => {
 
 		return requests
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -165,7 +165,7 @@ exports.rejectRequest = async (userId, friendId, tenantCode) => {
 			individualHooks: true,
 		})
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 exports.findOneRequest = async (userId, friendId, tenantCode) => {
@@ -185,7 +185,7 @@ exports.findOneRequest = async (userId, friendId, tenantCode) => {
 
 		return connectionRequest
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -202,7 +202,7 @@ exports.checkPendingRequest = async (userId, friendId, tenantCode) => {
 		})
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -233,7 +233,7 @@ exports.deleteUserConnectionsAndRequests = async (userId, tenantCode) => {
 
 		return deleted
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -252,7 +252,7 @@ exports.getConnection = async (userId, friendId, tenantCode) => {
 		})
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -274,7 +274,7 @@ exports.getConnectionsByUserIds = async (userId, friendIds, tenantCode, projecti
 		})
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -392,7 +392,7 @@ exports.getConnectionsDetails = async (
 			count: Number(count[0].count),
 		}
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -418,7 +418,7 @@ exports.updateConnection = async (userId, friendId, updateBody, tenantCode) => {
 
 		return targetConnection
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -465,7 +465,7 @@ exports.getConnectionsCount = async (filter, userId, organizationCodes = [], ten
 
 		return Number(result[0].count)
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -490,7 +490,7 @@ exports.getConnectedUsers = async (userId, selectColumn = 'user_id', whereColumn
 
 		return userIds.length > 0 ? userIds : []
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -506,6 +506,6 @@ exports.getRequestsCount = async (userId, tenantCode) => {
 		})
 		return result
 	} catch (error) {
-		throw error
+		return error
 	}
 }

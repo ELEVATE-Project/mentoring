@@ -6,7 +6,7 @@ module.exports = class QuestionsData {
 			const feedback = await Feedback.create(data)
 			return feedback
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -34,7 +34,7 @@ module.exports = class QuestionsData {
 			})
 			return feedbackData
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -43,7 +43,7 @@ module.exports = class QuestionsData {
 			const feedbacks = await Feedback.bulkCreate(data)
 			return feedbacks
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 }

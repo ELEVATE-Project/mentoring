@@ -6,7 +6,7 @@ module.exports = class issueData {
 			data.tenant_code = tenantCode
 			return await Issue.create(data, { returning: true })
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -19,7 +19,7 @@ module.exports = class issueData {
 				raw: true,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -32,7 +32,7 @@ module.exports = class issueData {
 				raw: true,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -45,7 +45,7 @@ module.exports = class issueData {
 				individualHooks: true,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -56,7 +56,7 @@ module.exports = class issueData {
 				where: filter,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 }

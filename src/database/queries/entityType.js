@@ -10,7 +10,7 @@ module.exports = class UserEntityData {
 			data.tenant_code = tenantCode
 			return await EntityType.create(data, { returning: true })
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -23,7 +23,7 @@ module.exports = class UserEntityData {
 				raw: true,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -40,7 +40,7 @@ module.exports = class UserEntityData {
 			})
 			return entityData
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 	static async findUserEntityTypesAndEntities(filter, tenantCodes) {
@@ -90,7 +90,7 @@ module.exports = class UserEntityData {
 
 			return result
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -116,7 +116,7 @@ module.exports = class UserEntityData {
 			return result
 		} catch (error) {
 
-			throw error
+			return error
 		}
 	} */
 
@@ -131,7 +131,7 @@ module.exports = class UserEntityData {
 				...options,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -146,7 +146,7 @@ module.exports = class UserEntityData {
 				individualHooks: true,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -156,7 +156,7 @@ module.exports = class UserEntityData {
 				where: { id: id, tenant_code: tenantCode },
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -192,7 +192,7 @@ module.exports = class UserEntityData {
 			})
 			return result
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -238,7 +238,7 @@ module.exports = class UserEntityData {
 				return []
 			}
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 }

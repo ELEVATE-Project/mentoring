@@ -45,7 +45,7 @@ module.exports = class MentorExtensionQueries {
 			})
 			return mentorExtension
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -89,7 +89,7 @@ module.exports = class MentorExtensionQueries {
 				  })
 			return result
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -117,7 +117,7 @@ module.exports = class MentorExtensionQueries {
 			}
 			return mentor
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -131,7 +131,7 @@ module.exports = class MentorExtensionQueries {
 
 			return await MentorExtension.destroy(options)
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 	static async removeMentorDetails(userId) {
@@ -173,7 +173,7 @@ module.exports = class MentorExtensionQueries {
 				},
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 	static async getMentorsByUserIds(ids, options = {}, tenantCode, unscoped = false) {
@@ -194,7 +194,7 @@ module.exports = class MentorExtensionQueries {
 
 			return result
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -208,7 +208,7 @@ module.exports = class MentorExtensionQueries {
 
 			return result
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -432,7 +432,7 @@ module.exports = class MentorExtensionQueries {
 			const mentors = await MentorExtension.findAll(queryOptions)
 			return mentors
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 	static async getMentorsFromView(
