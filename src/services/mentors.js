@@ -414,16 +414,21 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [orgCode, defaults.orgCode],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [orgCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [mentorExtensionsModelName] },
 				},
-				tenant_code: {
+				{
 					[Op.in]: [tenantCode, defaults.tenantCode],
-				},
-				model_names: { [Op.contains]: [mentorExtensionsModelName] },
-			})
+				}
+			)
+			if (entityTypes instanceof Error) {
+				throw entityTypes
+			}
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
@@ -525,16 +530,21 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [orgCode, defaults.orgCode],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [orgCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [mentorExtensionsModelName] },
 				},
-				tenant_code: {
-					[Op.in]: [tenantCode, defaults.tenant_code],
-				},
-				model_names: { [Op.contains]: [mentorExtensionsModelName] },
-			})
+				{
+					[Op.in]: [tenantCode, defaults.tenantCode],
+				}
+			)
+			if (entityTypes instanceof Error) {
+				throw entityTypes
+			}
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			let mentorExtensionsModel = await mentorQueries.getColumns()
 
@@ -809,16 +819,21 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [orgCode, defaults.orgCode],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [orgCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [mentorExtensionsModelName] },
 				},
-				tenant_code: {
+				{
 					[Op.in]: [tenantCode, defaults.tenantCode],
-				},
-				model_names: { [Op.contains]: [mentorExtensionsModelName] },
-			})
+				}
+			)
+			if (entityTypes instanceof Error) {
+				throw entityTypes
+			}
 
 			if (mentorExtension.image) {
 				delete mentorExtension.image

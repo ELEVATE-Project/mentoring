@@ -45,18 +45,9 @@ module.exports = class UserEntityData {
 	}
 	static async findUserEntityTypesAndEntities(filter, tenantCodes) {
 		try {
-			const defaults = await getDefaults()
-
-			// Handle tenant codes properly - if array provided, use it; otherwise include default
-			let finalTenantCodes = tenantCodes
-			if (!Array.isArray(tenantCodes)) {
-				// If single tenant code provided, include default tenant as fallback
-				finalTenantCodes = tenantCodes ? [tenantCodes, defaults.tenantCode] : [defaults.tenantCode]
-			}
-
 			const whereClause = {
 				...filter,
-				tenant_code: { [Op.in]: finalTenantCodes },
+				tenant_code: tenantCodes,
 			}
 
 			const entityTypes = await EntityType.findAll({
@@ -71,7 +62,7 @@ module.exports = class UserEntityData {
 				const entityFilter = {
 					entity_type_id: entityTypeIds,
 					status: 'ACTIVE',
-					tenant_code: { [Op.in]: finalTenantCodes },
+					tenant_code: tenantCodes,
 				}
 
 				entities = await Entity.findAll({

@@ -149,13 +149,18 @@ module.exports = class ConnectionHelper {
 			userDetails.image &&= (await userRequests.getDownloadableUrl(userDetails.image))?.result
 
 			// Fetch entity types associated with the user
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [userDetails.organization_code, defaults.orgCode],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [userDetails.organization_code, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				model_names: { [Op.contains]: [userExtensionsModelName] },
-			})
+				{
+					[Op.in]: [tenantCode, defaults.tenantCode],
+				}
+			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_code)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
 

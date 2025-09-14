@@ -232,16 +232,18 @@ module.exports = class SessionsHelper {
 				})
 
 			const sessionModelName = await sessionQueries.getModelName()
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [orgCode, defaults.orgCode],
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [orgCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				tenant_code: {
+				{
 					[Op.in]: [tenantCode, defaults.tenantCode],
-				},
-				model_names: { [Op.contains]: [sessionModelName] },
-			})
+				}
+			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
@@ -659,13 +661,13 @@ module.exports = class SessionsHelper {
 					organization_code: {
 						[Op.in]: [orgCode, defaults.orgCode],
 					},
-					tenant_code: {
-						[Op.in]: [tenantCode, defaults.tenantCode],
-					},
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
 				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
+			if (entityTypes instanceof Error) {
+				throw entityTypes
+			}
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			if (bodyData.status == common.VALID_STATUS) {
@@ -1454,11 +1456,14 @@ module.exports = class SessionsHelper {
 			const sessionModelName = await sessionQueries.getModelName()
 			const modelNames = [mentorExtensionsModelName, sessionModelName].filter(Boolean)
 
-			let entityTypeData = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_id: { [Op.in]: orgIds },
-				model_names: { [Op.overlap]: modelNames },
-			})
+			let entityTypeData = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_id: { [Op.in]: orgIds },
+					model_names: { [Op.overlap]: modelNames },
+				},
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+			)
 
 			if (mentorExtension?.user_id) {
 				const validationData = removeDefaultOrgEntityTypes(entityTypeData, defaults.orgCode)
@@ -1484,6 +1489,9 @@ module.exports = class SessionsHelper {
 				},
 				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
+			if (entityTypes instanceof Error) {
+				throw entityTypes
+			}
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)

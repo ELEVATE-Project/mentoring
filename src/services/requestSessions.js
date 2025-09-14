@@ -135,16 +135,18 @@ module.exports = class requestSessionsHelper {
 				})
 
 			const requestSessionModelName = await sessionRequestQueries.getModelName()
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [organizationCode, defaults.orgCode],
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [organizationCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [requestSessionModelName] },
 				},
-				tenant_code: {
+				{
 					[Op.in]: [tenantCode, defaults.tenantCode],
-				},
-				model_names: { [Op.contains]: [requestSessionModelName] },
-			})
+				}
+			)
 
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			let res = utils.validateInput(bodyData, validationData, requestSessionModelName, SkipValidation)
@@ -695,13 +697,18 @@ module.exports = class requestSessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			// Fetch entity types associated with the user
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [userDetails.organization_code, defaults.orgCode],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [userDetails.organization_code, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				model_names: { [Op.contains]: [userExtensionsModelName] },
-			})
+				{
+					[Op.in]: [tenantCode, defaults.tenantCode],
+				}
+			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
 

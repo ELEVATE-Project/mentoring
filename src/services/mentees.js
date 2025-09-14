@@ -75,16 +75,21 @@ module.exports = class MenteesHelper {
 			})
 		const userExtensionsModelName = await menteeQueries.getModelName()
 
-		let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-			status: 'ACTIVE',
-			organization_code: {
-				[Op.in]: [organizationCode, defaults.orgCode],
+		let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			{
+				status: 'ACTIVE',
+				organization_code: {
+					[Op.in]: [organizationCode, defaults.orgCode],
+				},
+				model_names: { [Op.contains]: [userExtensionsModelName] },
 			},
-			tenant_code: {
+			{
 				[Op.in]: [tenantCode, defaults.tenantCode],
-			},
-			model_names: { [Op.contains]: [userExtensionsModelName] },
-		})
+			}
+		)
+		if (entityTypes instanceof Error) {
+			throw entityTypes
+		}
 		const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
 		//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
@@ -868,16 +873,21 @@ module.exports = class MenteesHelper {
 				})
 			const userExtensionsModelName = await menteeQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [organizationCode, defaults.orgCode],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [organizationCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				tenant_code: {
+				{
 					[Op.in]: [tenantCode, defaults.tenantCode],
-				},
-				model_names: { [Op.contains]: [userExtensionsModelName] },
-			})
+				}
+			)
+			if (entityTypes instanceof Error) {
+				throw entityTypes
+			}
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
@@ -986,10 +996,14 @@ module.exports = class MenteesHelper {
 			const filter = {
 				status: 'ACTIVE',
 				organization_code: { [Op.in]: [organizationCode, defaults.orgCode] },
-				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+				[Op.in]: [tenantCode, defaults.tenantCode],
+			})
+			if (entityTypes instanceof Error) {
+				throw entityTypes
+			}
 
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
 			let res = utils.validateInput(data, validationData, userExtensionsModelName, skipValidation)
@@ -1124,11 +1138,12 @@ module.exports = class MenteesHelper {
 			const filter = {
 				status: 'ACTIVE',
 				organization_code: { [Op.in]: [organizationCode, defaults.orgCode] },
-				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+				[Op.in]: [tenantCode, defaults.tenantCode],
+			})
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationId)
@@ -1867,16 +1882,18 @@ module.exports = class MenteesHelper {
 
 			const menteeExtensionsModelName = await menteeQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [organizationCode, defaults.orgCode],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [organizationCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [menteeExtensionsModelName] },
 				},
-				tenant_code: {
+				{
 					[Op.in]: [tenantCode, defaults.tenantCode],
-				},
-				model_names: { [Op.contains]: [menteeExtensionsModelName] },
-			})
+				}
+			)
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
