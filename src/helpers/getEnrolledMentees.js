@@ -47,6 +47,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 					'experience',
 					'mentee_visibility',
 				],
+				include: ['email'], // Explicitly include email since it's excluded by default scope
 			},
 			paranoid: false,
 		}
