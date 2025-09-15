@@ -1006,6 +1006,31 @@ exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 	}
 }
 
+exports.getSessionsAssignedToMentor = async (mentorUserId) => {
+	try {
+		const query = `
+				SELECT s.*, sa.mentee_id
+				FROM ${Session.tableName} s
+				INNER JOIN session_attendees sa ON s.id = sa.session_id
+				WHERE s.mentor_id = :mentorUserId 
+				AND s.start_date > :currentTime
+				AND s.deleted_at IS NULL
+			`
+
+		const sessionsToDelete = await Sequelize.query(query, {
+			type: QueryTypes.SELECT,
+			replacements: {
+				mentorUserId,
+				currentTime: Math.floor(Date.now() / 1000),
+			},
+		})
+
+		return sessionsToDelete
+	} catch (error) {
+		throw error
+	}
+}
+
 exports.addOwnership = async (sessionId, mentorId) => {
 	try {
 		// Update session to assign mentor directly

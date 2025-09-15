@@ -1164,8 +1164,8 @@ module.exports = class AdminService {
 	static async updateSessionsWithAssignedMentor(mentorUserId, orgCode, tenantCode) {
 		// Notify attendees about session deletion
 
-		const sessionsToUpdate = await sessionQueries.getSessionsAssignedToMentor(mentorUserId, tenantCode)
 
+		const sessionsToUpdate = await sessionQueries.getSessionsAssignedToMentor(mentorUserId, tenantCode)
 		if (sessionsToUpdate.length == 0) {
 			return true
 		}
@@ -1179,7 +1179,17 @@ module.exports = class AdminService {
 			{ where: { id: sessionIds } }
 		)
 
-		console.log(`Update ${sessionIds.length} sessions with assigned mentor`)
+		console.log(`Update ${sessionIds.length} sessions with mentor name`)
+
+		// if thres so no sessions created by mentor
+		if (sessionsCreated.length == 0) {
+			return true
+		}
+
+		// if the sessions created and managed by mentor
+		await this.notifyAttendeesAboutMentorDeletion(sessionsCreated, orgId)
+
+		console.log(`Total sessions : ${sessionsCreated.length} which assigned to mentor`)
 		return true
 	}
 

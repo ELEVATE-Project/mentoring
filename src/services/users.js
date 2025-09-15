@@ -126,6 +126,10 @@ module.exports = class UserHelper {
 		const isNewUser = await this.#checkUserExistence(bodyData.id, tenantCode)
 		if (isNewUser) {
 			result = await this.#createUserWithBody(bodyData, tenantCode)
+		} else {
+			bodyData.new_roles = bodyData.newValues?.organizations?.[0]?.roles ?? []
+			const targetHasMentorRole = bodyData.new_roles.some((role) => role.title === common.MENTOR_ROLE)
+			result = await this.#createOrUpdateUserAndOrg(bodyData.id, isNewUser, targetHasMentorRole)
 		}
 		return result
 	}
@@ -154,6 +158,7 @@ module.exports = class UserHelper {
 				result: createResult.result,
 			})
 	}
+
 	static async #createOrUpdateUserAndOrg(userId, isNewUser, decodedToken) {
 		const userDetails = await userRequests.fetchUserDetails({ userId })
 		if (!userDetails?.data?.result) {
@@ -187,7 +192,6 @@ module.exports = class UserHelper {
 			})
 		}
 		const userExtensionData = this.#getExtensionData(userDetails.data.result, orgExtension)
-
 		const createOrUpdateResult = isNewUser
 			? await this.#createUser(userExtensionData, decodedToken.tenant_code)
 			: await this.#updateUser(userExtensionData, decodedToken)
@@ -301,6 +305,10 @@ module.exports = class UserHelper {
 			roleChangePayload.new_roles = [common.MENTEE_ROLE]
 			isRoleChanged = true
 		} else if (!isAMentee && !menteeExtension.is_mentor) {
+			roleChangePayload.current_roles = [common.MENTEE_ROLE]
+			roleChangePayload.new_roles = [common.MENTOR_ROLE]
+			isRoleChanged = true
+		} else if (targetHasMentorRole) {
 			roleChangePayload.current_roles = [common.MENTEE_ROLE]
 			roleChangePayload.new_roles = [common.MENTOR_ROLE]
 			isRoleChanged = true
