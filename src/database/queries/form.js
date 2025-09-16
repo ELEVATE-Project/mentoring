@@ -1,5 +1,5 @@
 const Form = require('../models/index').Form
-const { getDefaults } = require('@helpers/getDefaultOrgId')
+const { Op } = require('sequelize')
 
 module.exports = class FormsData {
 	static async createForm(data, tenantCode) {
@@ -14,30 +14,30 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findOneForm(filter, tenantCode, orgCode) {
+	static async findOne(filter, tenantCode, options = {}) {
 		try {
-			if (orgCode) {
-				filter.organization_code = orgCode
-			}
 			filter.tenant_code = tenantCode
-
-			// First try to find form for specific tenant
-			let formData = await Form.findOne({
+			return await Form.findOne({
 				where: filter,
+				...options,
 				raw: true,
 			})
+		} catch (error) {
+			return error
+		}
+	}
 
-			// If no form found and not already using default tenant, try default tenant
-			if (!formData && tenantCode !== (await getDefaults()).tenantCode) {
-				const defaults = await getDefaults()
-				const defaultFilter = { ...filter, tenant_code: defaults.tenantCode }
-				formData = await Form.findOne({
-					where: defaultFilter,
-					raw: true,
-				})
+	static async findFormsByFilter(filter, tenantCodes, options = {}) {
+		try {
+			const whereClause = {
+				...filter,
+				tenant_code: { [Op.in]: tenantCodes },
 			}
-
-			return formData
+			return await Form.findAll({
+				where: whereClause,
+				...options,
+				raw: true,
+			})
 		} catch (error) {
 			return error
 		}

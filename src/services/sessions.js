@@ -11,7 +11,6 @@ const sessionQueries = require('@database/queries/sessions')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const menteeExtensionQueries = require('@database/queries/userExtension')
-const sessionEnrollmentQueries = require('@database/queries/sessionEnrollments')
 const postSessionQueries = require('@database/queries/postSessionDetail')
 const entityTypeQueries = require('@database/queries/entityType')
 const entitiesQueries = require('@database/queries/entity')
@@ -1840,7 +1839,6 @@ module.exports = class SessionsHelper {
 				// User was already enrolled - this shouldn't happen due to earlier check, but handle gracefully
 				sessionAttendee = enrollmentResult.attendee
 			}
-			//	await sessionEnrollmentQueries.create(_.omit(attendee, 'time_zone'))
 
 			if (session.created_by !== userId) {
 				await sessionQueries.updateEnrollmentCount(sessionId, false, tenantCode)
@@ -1947,8 +1945,6 @@ module.exports = class SessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-
-			//	await sessionEnrollmentQueries.unEnrollFromSession(sessionId, userId)
 
 			if (session.created_by !== userId) {
 				await sessionQueries.updateEnrollmentCount(sessionId, false, tenantCode)

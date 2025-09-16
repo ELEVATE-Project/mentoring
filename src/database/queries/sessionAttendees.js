@@ -137,12 +137,6 @@ exports.unEnrollAllAttendeesOfSessions = async (sessionIds, tenantCode) => {
 				tenant_code: tenantCode,
 			},
 		})
-		await SessionEnrollment.destroy({
-			where: {
-				session_id: { [Op.in]: sessionIds },
-				tenant_code: tenantCode,
-			},
-		})
 
 		return destroyedCount
 	} catch (error) {
@@ -178,13 +172,6 @@ exports.unenrollFromUpcomingSessions = async (userId, sessionIds, tenantCode) =>
 				tenant_code: tenantCode,
 			},
 		})
-		await SessionEnrollment.destroy({
-			where: {
-				session_id: sessionIds,
-				mentee_id: userId,
-				tenant_code: tenantCode,
-			},
-		})
 		return result
 	} catch (error) {
 		return error
@@ -201,15 +188,7 @@ exports.removeUserFromAllSessions = async (userId, tenantCode) => {
 			},
 		})
 
-		// Remove from session enrollments (all sessions)
-		const enrollmentResult = await SessionEnrollment.destroy({
-			where: {
-				mentee_id: userId,
-				tenant_code: tenantCode,
-			},
-		})
-
-		return { attendeeResult, enrollmentResult }
+		return { attendeeResult }
 	} catch (error) {
 		return error
 	}
@@ -237,24 +216,13 @@ exports.countEnrolledSessions = async (mentee_id, tenantCode) => {
 
 exports.getEnrolledSessionsCountInDateRange = async (startDate, endDate, mentee_id, tenantCode) => {
 	try {
-		// Optimized: Sequelize associations - handles large datasets without memory issues
-		// Single query with JOIN through associations instead of separate queries + in-memory processing
+		// Count session attendees created in date range
 		const count = await SessionAttendee.count({
 			where: {
 				created_at: { [Op.between]: [startDate, endDate] },
+				mentee_id: mentee_id,
 				tenant_code: tenantCode,
 			},
-			include: [
-				{
-					model: SessionEnrollment,
-					as: 'enrollment',
-					where: {
-						mentee_id: mentee_id,
-						tenant_code: tenantCode,
-					},
-					attributes: [], // Don't select enrollment data, just use for filtering
-				},
-			],
 		})
 		return count || 0
 	} catch (error) {
@@ -264,23 +232,13 @@ exports.getEnrolledSessionsCountInDateRange = async (startDate, endDate, mentee_
 
 exports.getAttendedSessionsCountInDateRange = async (startDate, endDate, mentee_id, tenantCode) => {
 	try {
-		// Optimized: Sequelize associations - same as enrolled count but filters by joined_at
+		// Count session attendees who joined in date range
 		const count = await SessionAttendee.count({
 			where: {
 				joined_at: { [Op.between]: [startDate, endDate] },
+				mentee_id: mentee_id,
 				tenant_code: tenantCode,
 			},
-			include: [
-				{
-					model: SessionEnrollment,
-					as: 'enrollment',
-					where: {
-						mentee_id: mentee_id,
-						tenant_code: tenantCode,
-					},
-					attributes: [], // Don't select enrollment data, just use for filtering
-				},
-			],
 		})
 		return count || 0
 	} catch (error) {

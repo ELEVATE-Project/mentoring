@@ -616,7 +616,7 @@ class TenantMigrationFinalizer {
 			{
 				table: 'notification_templates',
 				name: 'idx_notification_templates_code_org',
-				columns: 'code, organization_id',
+				columns: 'code, organization_code',
 				condition: '',
 			},
 			{
@@ -1066,7 +1066,7 @@ class TenantMigrationFinalizer {
 			{
 				table: 'notification_templates',
 				name: 'unique_notification_templates_code_org_tenant',
-				columns: 'tenant_code, code, organization_id',
+				columns: 'tenant_code, code, organization_code',
 				condition: 'WHERE deleted_at IS NULL',
 			},
 			{
@@ -1207,7 +1207,7 @@ class TenantMigrationFinalizer {
 			{ table: 'forms', constraint: 'forms_type_sub_type_organization_id_key' },
 			{ table: 'forms', constraint: 'unique_type_sub_type_org_id' }, // NEW - problematic forms constraint
 			{ table: 'modules', constraint: 'modules_code_key' },
-			{ table: 'notification_templates', constraint: 'notification_templates_code_organization_id_key' },
+			{ table: 'notification_templates', constraint: 'notification_templates_code_organization_code_key' },
 			{ table: 'organization_extension', constraint: 'organization_extension_organization_code_key' },
 			{ table: 'report_role_mapping', constraint: 'report_role_mapping_role_title_report_code_key' },
 			{ table: 'report_types', constraint: 'report_types_title_key' },

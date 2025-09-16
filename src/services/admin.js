@@ -9,19 +9,18 @@ const mentorQueries = require('@database/queries/mentorExtension')
 const menteeQueries = require('@database/queries/userExtension')
 const adminService = require('../generics/materializedViews')
 const responses = require('@helpers/responses')
-// Removed direct import to break circular dependency - using direct query instead
 const requestSessionQueries = require('@database/queries/requestSessions')
 const userRequests = require('@requests/user')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
-const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const communicationHelper = require('@helpers/communications')
 const moment = require('moment')
 const connectionQueries = require('@database/queries/connection')
 const userExtensionQueries = require('@database/queries/userExtension')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
-const { Op } = require('sequelize')
-const { sequelize } = require('@database/models/index')
+const { Op, QueryTypes } = require('sequelize')
+const { sequelize, Session, SessionAttendee, Connection, RequestSession } = require('@database/models/index')
 const { literal } = require('sequelize')
+const sessionRequestMappingQueries = require('@database/queries/requestSessionMapping')
 // sessionOwnership removed - functionality replaced by direct Session queries
 
 // Generic notification helper class
@@ -579,9 +578,6 @@ module.exports = class AdminService {
 
 	static async findAllRequestSessions(userId, tenantCode) {
 		try {
-			// Get session requests directly from database to avoid circular dependency
-			const sessionRequestMappingQueries = require('@database/queries/requestSessionMapping')
-
 			// Get requests where user is requestor (sent requests)
 			const sentRequests = await requestSessionQueries.getAllRequests(
 				userId,
@@ -877,11 +873,6 @@ module.exports = class AdminService {
 
 	static async getConnectedMentors(menteeUserId, tenantCode) {
 		try {
-			// Use raw query to get connected mentors
-			const Connection = require('@database/models/index').Connection
-			const { QueryTypes } = require('sequelize')
-			const sequelize = require('@database/models/index').sequelize
-
 			const query = `
 				SELECT DISTINCT user_id 
 				FROM ${Connection.tableName} 
@@ -944,11 +935,6 @@ module.exports = class AdminService {
 
 	static async getPrivateSessionsWithDeletedMentee(menteeUserId, tenantCode) {
 		try {
-			const Session = require('@database/models/index').Session
-			const SessionAttendee = require('@database/models/index').SessionAttendee
-			const { QueryTypes } = require('sequelize')
-			const sequelize = require('@database/models/index').sequelize
-
 			// Get private sessions where the deleted mentee was enrolled and session is in future
 			const query = `
 				SELECT DISTINCT s.id, s.title, s.mentor_id, s.start_date, s.end_date, s.type
@@ -1119,10 +1105,6 @@ module.exports = class AdminService {
 
 	static async getConnectedMentees(mentorUserId, tenantCode) {
 		try {
-			const Connection = require('@database/models/index').Connection
-			const { QueryTypes } = require('sequelize')
-			const sequelize = require('@database/models/index').sequelize
-
 			const query = `
 				SELECT DISTINCT friend_id as user_id
 				FROM ${Connection.tableName} 
@@ -1163,7 +1145,6 @@ module.exports = class AdminService {
 	}
 	static async updateSessionsWithAssignedMentor(mentorUserId, orgCode, tenantCode) {
 		// Notify attendees about session deletion
-
 
 		const sessionsToUpdate = await sessionQueries.getSessionsAssignedToMentor(mentorUserId, tenantCode)
 		if (sessionsToUpdate.length == 0) {
@@ -1206,10 +1187,6 @@ module.exports = class AdminService {
 
 	static async getPendingSessionRequestsForMentor(mentorUserId, tenantCode) {
 		try {
-			const { QueryTypes } = require('sequelize')
-			const sequelize = require('@database/models/index').sequelize
-			const RequestSession = require('@database/models/index').RequestSession
-
 			const query = `
 				SELECT rs.*, rm.requestee_id
 				FROM ${RequestSession.tableName} rs

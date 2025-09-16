@@ -2,11 +2,8 @@ const Session = require('@database/models/index').Session
 const { Op, literal, QueryTypes } = require('sequelize')
 const common = require('@constants/common')
 const sequelize = require('sequelize')
-
 const moment = require('moment')
-// SessionOwnership removed - functionality replaced by direct Session queries
 const Sequelize = require('@database/models/index').sequelize
-// sessionOwnership removed - functionality replaced by direct Session queries
 
 exports.getColumns = async () => {
 	try {
@@ -281,23 +278,6 @@ exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 		const currentDate = moment()
 		const currentDateTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
 
-		/* const foundSessionOwnerships = await SessionOwnerships.findAll({
-			attributes: ['session_id'],
-			where: {
-				mentor_id: userId,
-			},
-			include: [
-				{
-					model: Session,
-					where: {
-						deleted: false,
-						[Op.or]: [{ startDate: { [Op.gt]: currentEpochTime } }, { status: common.PUBLISHED_STATUS }],
-					},
-					attributes: ['id', 'title'],
-				},
-			],
-		}) */
-
 		const foundSessions = await Session.findAll({
 			where: {
 				[Op.or]: [{ mentor_id: userId }, { created_by: userId }],
@@ -321,18 +301,6 @@ exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 					mentor_id: userId,
 					created_by: userId,
 					id: { [Op.in]: upcomingSessionIds },
-					tenant_code: tenantCode,
-				},
-			}
-		)
-		await SessionOwnership.update(
-			{
-				deleted_at: currentDateTime,
-			},
-			{
-				where: {
-					user_id: userId,
-					session_id: { [Op.in]: upcomingSessionIds },
 					tenant_code: tenantCode,
 				},
 			}
@@ -505,38 +473,6 @@ exports.getHostedSessionsCountInDateRange = async (mentorId, startDate, endDate,
 		return error
 	}
 }
-
-/* exports.getMentorsUpcomingSessions = async (mentorId) => {
-	try {
-		const foundSessionOwnerships = await SessionOwnership.findAll({
-			attributes: ['session_id'],
-			where: {
-				mentor_id: mentorId,
-			},
-			raw: true,
-		})
-
-		const sessionIds = foundSessionOwnerships.map((ownership) => ownership.session_id)
-		const currentEpochTime = moment().unix()
-
-
-		return await Session.findAll({
-			where: {
-				id: { [Op.in]: sessionIds },
-				status: 'PUBLISHED',
-				start_date: {
-					[Op.gt]: currentEpochTime,
-				},
-				started_at: {
-					[Op.eq]: null,
-				},
-			},
-			raw: true,
-		})
-	} catch (error) {
-		return error
-	}
-} */
 
 exports.getMentorsUpcomingSessions = async (page, limit, search = '', mentorId, tenantCode) => {
 	try {
@@ -1084,301 +1020,23 @@ exports.addOwnership = async (sessionId, mentorId) => {
 	}
 }
 
-// Session Manager Deletion Flow Codes
-
-// exports.replaceSessionManagerAndReturn = async (userId, newUserId, orgAdminUserId) => {
-// 	try {
-// 		const currentEpochTime = moment().unix()
-// 		const currentDateTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
-
-// 		// Get session_ids where user is CREATOR
-// 		const creatorSessions = await sessionOwnership.findAll(
-// 			{ user_id: userId, type: common.SESSION_OWNERSHIP_TYPE.CREATOR },
-// 			{ attributes: ['session_id'] },
-// 			true
-// 		)
-// 		const creatorSessionIds = creatorSessions.map((s) => s.session_id)
-
-// 		// Get session_ids where user is MENTOR
-// 		const mentorSessions = await sessionOwnership.findAll(
-// 			{ user_id: userId, type: common.SESSION_OWNERSHIP_TYPE.MENTOR },
-// 			{ attributes: ['session_id'] },
-// 			true
-// 		)
-// 		const mentorSessionIds = mentorSessions.map((s) => s.session_id)
-
-// 		// Sessions where user is both MENTOR and CREATOR
-// 		const bothRolesSessionIds = creatorSessionIds.filter((id) => mentorSessionIds.includes(id))
-
-// 		// Sessions where user is only CREATOR
-// 		const onlyCreatorSessionIds = creatorSessionIds.filter((id) => !bothRolesSessionIds.includes(id))
-
-// 		// ----- Handle bothRolesSessionIds -----
-// 		let removedSessions = []
-
-// 		if (bothRolesSessionIds.length > 0) {
-// 			const foundSessions = await Session.findAll({
-// 				where: {
-// 					id: { [Op.in]: bothRolesSessionIds },
-// 					[Op.or]: [
-// 						{ start_date: { [Op.gt]: currentEpochTime } },
-// 						{ status: common.PUBLISHED_STATUS },
-// 					],
-// 				},
-// 				raw: true,
-// 			})
-
-// 			const sessionIdAndTitle = foundSessions.map((session) => ({
-// 				id: session.id,
-// 				title: session.title,
-// 			}))
-// 			const upcomingSessionIds = foundSessions.map((session) => session.id)
-
-// 			if (upcomingSessionIds.length > 0) {
-// 				await Session.update(
-// 					{ deleted_at: currentDateTime },
-// 					{ where: { id: { [Op.in]: upcomingSessionIds } } }
-// 				)
-// 				await SessionOwnership.update(
-// 					{ deleted_at: currentDateTime },
-// 					{ where: { session_id: { [Op.in]: upcomingSessionIds } } }
-// 				)
-// 			}
-
-// 			removedSessions = sessionIdAndTitle
-// 		}
-
-// 		// ----- Handle onlyCreatorSessionIds -----
-// 		if (onlyCreatorSessionIds.length > 0) {
-// 			const onlyCreatorSessions = await Session.findAll({
-// 				where: {
-// 					id: { [Op.in]: onlyCreatorSessionIds },
-// 				},
-// 				attributes: ['id', 'status'],
-// 				raw: true,
-// 			})
-
-// 			const publishedOrLiveSessionIds = onlyCreatorSessions
-// 				.filter((s) => [common.PUBLISHED_STATUS, common.LIVE_STATUS].includes(s.status))
-// 				.map((s) => s.id)
-
-// 			const completedSessionIds = onlyCreatorSessions
-// 				.filter((s) => s.status === common.COMPLETED_STATUS)
-// 				.map((s) => s.id)
-
-// 			// Update user_id to newUserId for PUBLISHED or LIVE sessions
-// 			if (publishedOrLiveSessionIds.length > 0) {
-// 				await SessionOwnership.update(
-// 					{ user_id: newUserId },
-// 					{
-// 						where: {
-// 							user_id: userId,
-// 							session_id: { [Op.in]: publishedOrLiveSessionIds },
-// 							type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
-// 						},
-// 					}
-// 				)
-
-// 				await Session.update(
-// 					{ created_by: newUserId ,
-// 					  updated_by: newUserId },
-// 					{
-// 						where: {
-// 							id: { [Op.in]: publishedOrLiveSessionIds }
-// 						},
-// 					}
-// 				)
-// 			}
-
-// 			// Update user_id to orgAdminUserId for COMPLETED sessions
-// 			if (completedSessionIds.length > 0) {
-// 				await SessionOwnership.update(
-// 					{ user_id: orgAdminUserId },
-// 					{
-// 						where: {
-// 							user_id: userId,
-// 							session_id: { [Op.in]: completedSessionIds },
-// 							type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
-// 						},
-// 					}
-// 				)
-// 				await Session.update(
-// 					{
-// 					  created_by: orgAdminUserId ,
-// 					  updated_by: orgAdminUserId
-// 					},
-// 					{
-// 						where: {
-// 							id: { [Op.in]: completedSessionIds }						},
-// 					}
-// 				)
-// 			}
-// 		}
-
-// 		return {
-// 			removedSessions,
-// 			bothRolesSessionIds,
-// 			onlyCreatorSessionIds,
-// 		}
-// 	} catch (error) {
-
-// 		return error
-// 	}
-// }
-
-// exports.replaceSessionManagerAndReturn = async (oldSMUserId, newSMUserId, orgUserId) => {
-// 	try {
-// 		const currentEpochTime = moment().unix()
-// 		const currentDateTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
-
-// 		const getSessionIds = async (type) => {
-// 			const filter = {
-// 			  user_id: oldSMUserId, // Ensure it's a string
-// 			  type: type,
-// 			}
-
-// 			const options = {
-// 			  attributes: ['session_id'],
-// 			}
-
-// 			const sessionIds = await sessionOwnership.findAll(filter, options, true) // third param = true to get only session_ids
-// 			return sessionIds
-// 		  }
-
-// 		const updateSessionOwnerships = async (ids, uid) => {
-// 			try {
-// 				return await SessionOwnership.update(
-// 					{ user_id: uid },
-// 					{
-// 						where: {
-// 							user_id: oldSMUserId,
-// 							session_id: { [Op.in]: ids },
-// 							type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
-// 						},
-// 					}
-// 				);
-// 			} catch (error) {
-
-// 				return error;
-// 			}
-// 		};
-
-// 		const updateSessions = (ids, uid) => {
-// 			return Session.update(
-// 				{ created_by: uid, updated_by: uid },
-// 				{ where: { id: { [Op.in]: ids } } }
-// 			)
-// 		}
-
-// 		const softDeleteSessions = (ids) => {
-// 			return Promise.all([
-// 				Session.update(
-// 					{ deleted_at: currentDateTime },
-// 					{ where: { id: { [Op.in]: ids } } }
-// 				),
-// 				SessionOwnership.update(
-// 					{ deleted_at: currentDateTime },
-// 					{ where: { session_id: { [Op.in]: ids } } }
-// 				)
-// 			])
-// 		}
-
-// 		// Fetch creator and mentor session IDs
-// 		const [creatorSessionIds, mentorSessionIds] = await Promise.all([
-// 			getSessionIds(common.SESSION_OWNERSHIP_TYPE.CREATOR),
-// 			getSessionIds(common.SESSION_OWNERSHIP_TYPE.MENTOR),
-// 		])
-
-// 		// Identify bothRoles and onlyCreator session IDs
-// 		const bothRolesSessionIds = creatorSessionIds.filter(id => mentorSessionIds.includes(id))
-// 		const onlyCreatorSessionIds = creatorSessionIds.filter(id => !mentorSessionIds.includes(id))
-
-// 		let removedSessions = []
-
-// 		// Handle sessions where user is both MENTOR and CREATOR
-// 		if (bothRolesSessionIds.length > 0) {
-// 			const foundSessions = await Session.findAll({
-// 				where: {
-// 					id: { [Op.in]: bothRolesSessionIds },
-// 					[Op.or]: [
-// 						{ start_date: { [Op.gt]: currentEpochTime } },
-// 						{ status: common.PUBLISHED_STATUS },
-// 					],
-// 				},
-// 				raw: true,
-// 			})
-
-// 			const upcomingSessionIds = foundSessions.map(s => s.id)
-// 			removedSessions = foundSessions.map(({ id, title }) => ({ id, title }))
-
-// 			if (upcomingSessionIds.length > 0) {
-// 				await softDeleteSessions(upcomingSessionIds);
-// 			}
-// 		}
-
-// 		// Handle sessions where user is only CREATOR
-// 		if (onlyCreatorSessionIds.length > 0) {
-// 			const onlyCreatorSessions = await Session.findAll({
-// 				where: { id: { [Op.in]: onlyCreatorSessionIds } },
-// 				attributes: ['id', 'status'],
-// 				raw: true,
-// 			})
-
-// 			const publishedOrLiveSessionIds = []
-// 			const completedSessionIds = []
-
-// 			for (const s of onlyCreatorSessions) {
-// 				if ([common.PUBLISHED_STATUS, common.LIVE_STATUS].includes(s.status)) {
-// 					publishedOrLiveSessionIds.push(s.id)
-// 				} else if (s.status === common.COMPLETED_STATUS) {
-// 					completedSessionIds.push(s.id)
-// 				}
-// 			}
-// 			if (publishedOrLiveSessionIds.length > 0) {
-// 				const result1 = await updateSessionOwnerships(publishedOrLiveSessionIds, newSMUserId);
-
-// 				const result2 = await updateSessions(publishedOrLiveSessionIds, newSMUserId);
-// 			}
-
-// 			if (completedSessionIds.length > 0) {
-// 				const result3 = await updateSessionOwnerships(completedSessionIds, orgUserId);
-
-// 				const result4 = await updateSessions(completedSessionIds, orgUserId);
-// 			}
-
-// 		}
-
-// 		return {
-// 			removedSessions,
-// 			bothRolesSessionIds,
-// 			onlyCreatorSessionIds,
-// 		};
-// 	} catch (error) {
-
-// 		return error
-// 	}
-// }
-
 /**
- * Find all sessions with mentor details integrated
- * Optimized version that fetches sessions and enriches with mentor details
+ * Find all sessions with pagination and search filtering
+ * Simple database query without business logic enrichment
  * @method
- * @name findAllSessionsWithMentorDetails
+ * @name findAllSessions
  * @param {Number} page - pagination page number
  * @param {Number} limit - pagination limit
  * @param {String} search - search term
  * @param {Object} filters - filter conditions
  * @param {String} tenantCode - tenant code for isolation
- * @returns {Object} - sessions with mentor details included
+ * @returns {Object} - sessions data without enrichment
  */
-exports.findAllSessionsWithMentorDetails = async (page, limit, search, filters, tenantCode) => {
+exports.findAllSessions = async (page, limit, search, filters, tenantCode) => {
 	try {
-		const userRequests = require('../../requests/user')
-		const utils = require('../../generics/utils')
-		const _ = require('lodash')
-
-		// First get sessions using existing logic
+		// Apply tenant isolation
 		filters.tenant_code = tenantCode
+
 		let filterQuery = {
 			where: filters,
 			raw: true,
@@ -1400,6 +1058,7 @@ exports.findAllSessionsWithMentorDetails = async (page, limit, search, filters, 
 			order: [['created_at', 'DESC']],
 		}
 
+		// Add search conditions if provided
 		if (search) {
 			filterQuery.where[Op.or] = [
 				{ title: { [Op.iLike]: `%${search}%` } },
@@ -1407,45 +1066,7 @@ exports.findAllSessionsWithMentorDetails = async (page, limit, search, filters, 
 			]
 		}
 
-		const sessionData = await Session.findAndCountAll(filterQuery)
-
-		// If no sessions found, return early
-		if (!sessionData.rows || sessionData.rows.length === 0) {
-			return sessionData
-		}
-
-		// Get unique mentor IDs
-		const userIds = _.uniqBy(sessionData.rows, 'mentor_id').map((item) => item.mentor_id)
-
-		// Fetch mentor details from User Service
-		let mentorDetails = await userRequests.getUserDetailedList(userIds, tenantCode)
-		mentorDetails = mentorDetails.result
-
-		// Enrich sessions with mentor details
-		for (let i = 0; i < sessionData.rows.length; i++) {
-			let mentorIndex = mentorDetails.findIndex((x) => x.user_id === sessionData.rows[i].mentor_id)
-
-			if (mentorIndex !== -1) {
-				sessionData.rows[i].mentor_name = mentorDetails[mentorIndex].name
-				sessionData.rows[i].organization = mentorDetails[mentorIndex].organization
-			}
-		}
-
-		// Process session images
-		await Promise.all(
-			sessionData.rows.map(async (session) => {
-				if (session.image && session.image.length > 0) {
-					session.image = session.image.map(async (imgPath) => {
-						if (imgPath && imgPath != '') {
-							return await utils.getDownloadableUrl(imgPath)
-						}
-					})
-					session.image = await Promise.all(session.image)
-				}
-			})
-		)
-
-		return sessionData
+		return await Session.findAndCountAll(filterQuery)
 	} catch (err) {
 		throw err
 	}

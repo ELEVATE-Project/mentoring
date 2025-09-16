@@ -133,15 +133,16 @@ module.exports = class FormsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			const form = await formQueries.findOneForm(filter, tenantCode, orgCode)
-			let defaultOrgForm
-			if (!form) {
-				filter = id
-					? { id: id, tenant_code: defaults.tenantCode }
-					: { ...bodyData, tenant_code: defaults.tenantCode }
-				defaultOrgForm = await formQueries.findOneForm(filter, defaults.tenantCode, defaults.orgCode)
+			// Add organization code to filter if provided
+			if (orgCode) {
+				filter.organization_code = orgCode
 			}
-			if (!form && !defaultOrgForm) {
+
+			// Business logic: Try both current tenant and default tenant
+			const tenantCodes = [tenantCode, defaults.tenantCode]
+			const forms = await formQueries.findFormsByFilter(filter, tenantCodes)
+
+			if (!forms || forms.length === 0) {
 				return responses.failureResponse({
 					message: 'FORM_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
@@ -149,10 +150,13 @@ module.exports = class FormsHelper {
 				})
 			}
 
+			// Business logic: Prefer current tenant over default tenant
+			const form = forms.find((f) => f.tenant_code === tenantCode) || forms[0]
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'FORM_FETCHED_SUCCESSFULLY',
-				result: form ? form : defaultOrgForm,
+				result: form,
 			})
 		} catch (error) {
 			throw error

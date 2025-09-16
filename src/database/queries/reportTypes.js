@@ -1,5 +1,4 @@
 const ReportType = require('@database/models/index').ReportType
-const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 
 module.exports = class ReportTypeQueries {
@@ -12,30 +11,33 @@ module.exports = class ReportTypeQueries {
 		}
 	}
 
-	static async findReportTypeByTitle(title, tenantCode, options = {}) {
+	static async findOne(filter, tenantCode, options = {}) {
+		try {
+			filter.tenant_code = tenantCode
+			return await ReportType.findOne({
+				where: filter,
+				...options,
+				raw: true,
+			})
+		} catch (error) {
+			return error
+		}
+	}
+
+	static async findReportTypesByTitle(title, tenantCodes, options = {}) {
 		try {
 			const { where: optionsWhere = {}, ...rest } = options || {}
-			const where = { ...optionsWhere, title: title, tenant_code: tenantCode }
+			const where = {
+				...optionsWhere,
+				title: title,
+				tenant_code: { [Op.in]: tenantCodes },
+			}
 
-			// First try to find report type for specific tenant
-			let reportType = await ReportType.findOne({
+			return await ReportType.findAll({
 				...rest,
 				where,
 				raw: true,
 			})
-
-			// If no report type found and not already using default tenant, try default tenant
-			if (!reportType && tenantCode !== (await getDefaults()).tenantCode) {
-				const defaults = await getDefaults()
-				const defaultWhere = { ...optionsWhere, title: title, tenant_code: defaults.tenantCode }
-				reportType = await ReportType.findOne({
-					...rest,
-					where: defaultWhere,
-					raw: true,
-				})
-			}
-
-			return reportType
 		} catch (error) {
 			return error
 		}

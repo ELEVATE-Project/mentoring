@@ -5,7 +5,6 @@ const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const mentorQueries = require('@database/queries/mentorExtension')
 const menteeQueries = require('@database/queries/userExtension')
-const rolePermissionMappingQueries = require('@database/queries/role-permission-mapping')
 const { UniqueConstraintError } = require('sequelize')
 const _ = require('lodash')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
@@ -27,7 +26,6 @@ const emailEncryption = require('@utils/emailEncryption')
 const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/defaultRules')
 const connectionQueries = require('@database/queries/connection')
 const communicationHelper = require('@helpers/communications')
-const userExtensionQueries = require('@database/queries/userExtension')
 module.exports = class MentorsHelper {
 	/**
 	 * upcomingSessions.
@@ -1448,13 +1446,8 @@ module.exports = class MentorsHelper {
 				filters['start_date'] = { [Op.gte]: startDate }
 				filters['end_date'] = { ...(filters['end_date'] || {}), [Op.lte]: endDate }
 			}
-			const sessionDetails = await sessionQueries.findAllSessionsWithMentorDetails(
-				page,
-				limit,
-				search,
-				filters,
-				tenantCode
-			)
+			// Get sessions without mentor details (simple database query)
+			const sessionDetails = await sessionQueries.findAllSessions(page, limit, search, filters, tenantCode)
 
 			if (
 				!sessionDetails ||
@@ -1469,6 +1462,9 @@ module.exports = class MentorsHelper {
 				})
 			}
 
+			// Business logic: Enrich sessions with mentor details
+			await this._enrichSessionsWithMentorDetails(sessionDetails.rows, tenantCode)
+
 			//remove meeting_info details except value and platform and add is_assigned flag
 			sessionDetails.rows.forEach((item) => {
 				if (item.meeting_info) {
@@ -1479,8 +1475,11 @@ module.exports = class MentorsHelper {
 				}
 				item.is_assigned = item.mentor_id !== item.created_by
 			})
-			// const uniqueOrgIds = [...new Set(sessionDetails.rows.map((obj) => obj.mentor_organization_id))]
-			const uniqueOrgIds = [...new Set(sessionDetails.rows.map((obj) => obj.organization.organization_code))]
+
+			// Extract organization codes for entity processing
+			const uniqueOrgIds = [
+				...new Set(sessionDetails.rows.map((obj) => obj.organization?.organization_code).filter(Boolean)),
+			]
 
 			sessionDetails.rows = await entityTypeService.processEntityTypesToAddValueLabels(
 				sessionDetails.rows,
@@ -1498,6 +1497,54 @@ module.exports = class MentorsHelper {
 			})
 		} catch (error) {
 			throw error
+		}
+	}
+
+	/**
+	 * Private method: Enrich sessions with mentor details and process images
+	 * Business logic for adding mentor information to session data
+	 * @param {Array} sessions - Array of session objects
+	 * @param {String} tenantCode - Tenant code for user service calls
+	 */
+	static async _enrichSessionsWithMentorDetails(sessions, tenantCode) {
+		try {
+			if (!sessions || sessions.length === 0) {
+				return
+			}
+
+			// Get unique mentor IDs
+			const userIds = _.uniqBy(sessions, 'mentor_id').map((item) => item.mentor_id)
+
+			// Fetch mentor details from User Service
+			let mentorDetails = await userRequests.getUserDetailedList(userIds, tenantCode)
+			mentorDetails = mentorDetails.result
+
+			// Enrich sessions with mentor details
+			for (let i = 0; i < sessions.length; i++) {
+				let mentorIndex = mentorDetails.findIndex((x) => x.user_id === sessions[i].mentor_id)
+
+				if (mentorIndex !== -1) {
+					sessions[i].mentor_name = mentorDetails[mentorIndex].name
+					sessions[i].organization = mentorDetails[mentorIndex].organization
+				}
+			}
+
+			// Process session images
+			await Promise.all(
+				sessions.map(async (session) => {
+					if (session.image && session.image.length > 0) {
+						session.image = session.image.map(async (imgPath) => {
+							if (imgPath && imgPath != '') {
+								return await utils.getDownloadableUrl(imgPath)
+							}
+						})
+						session.image = await Promise.all(session.image)
+					}
+				})
+			)
+		} catch (error) {
+			console.error('Error enriching sessions with mentor details:', error)
+			// Don't throw error to avoid breaking the main flow
 		}
 	}
 }
