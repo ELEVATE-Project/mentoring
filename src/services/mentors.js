@@ -22,12 +22,13 @@ const entityTypeService = require('@services/entity-type')
 const responses = require('@helpers/responses')
 const permissions = require('@helpers/getPermissions')
 const { buildSearchFilter } = require('@helpers/search')
-const searchConfig = require('@configs/search.json')
+const defaultSearchConfig = require('@configs/search.json')
 const emailEncryption = require('@utils/emailEncryption')
 const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/defaultRules')
 const connectionQueries = require('@database/queries/connection')
 const communicationHelper = require('@helpers/communications')
 const userExtensionQueries = require('@database/queries/userExtension')
+const searchConfig = require('@root/config.json')
 module.exports = class MentorsHelper {
 	/**
 	 * upcomingSessions.
@@ -923,11 +924,16 @@ module.exports = class MentorsHelper {
 
 			const saasFilter = await this.filterMentorListBasedOnSaasPolicy(userId, isAMentor, organization_ids)
 
+			let search_config = defaultSearchConfig
+			if (searchConfig.search) {
+				search_config = { search: searchConfig.search }
+			}
+
 			let searchFilter
 			if (!hasValidEmails) {
 				searchFilter = await buildSearchFilter({
 					searchOn: searchOn ? searchOn.split(',') : false,
-					searchConfig: searchConfig.search.mentor,
+					searchConfig: search_config.search.mentor,
 					search: searchText,
 					modelName: mentorExtensionsModelName,
 				})
