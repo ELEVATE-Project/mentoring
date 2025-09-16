@@ -249,7 +249,7 @@ module.exports = class Sessions {
 
 			// For scheduled jobs or BBB callbacks without tokens, get tenant_code from session
 			if (!tenantCode) {
-				const sessionData = await sessionService.getSessionTenantCode(req.params.id)
+				const sessionData = await sessionService.getSessionTenantCode(req.params.id, tenantCode)
 				tenantCode = sessionData?.tenant_code
 			}
 
@@ -326,8 +326,6 @@ module.exports = class Sessions {
 			const sessionUpdated = await sessionService.updateRecordingUrl(
 				internalMeetingId,
 				recordingUrl,
-				req.decodedToken.id,
-				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
 			return sessionUpdated
@@ -514,18 +512,14 @@ module.exports = class Sessions {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const removedSessionsResponse = await sessionService.removeAllSessions(
 				{
 					mentorIds: req.body.mentorIds,
 					orgCode: req.body.orgCode,
 				},
-				userId,
-				organizationCode,
-				tenantCode
+				req.body.user_id,
+				req.body.organization_code,
+				req.body.tenant_code
 			)
 			return removedSessionsResponse
 		} catch (error) {

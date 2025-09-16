@@ -1448,7 +1448,13 @@ module.exports = class MentorsHelper {
 				filters['start_date'] = { [Op.gte]: startDate }
 				filters['end_date'] = { ...(filters['end_date'] || {}), [Op.lte]: endDate }
 			}
-			const sessionDetails = await sessionQueries.findAllSessions(page, limit, search, filters, tenantCode)
+			const sessionDetails = await sessionQueries.findAllSessionsWithMentorDetails(
+				page,
+				limit,
+				search,
+				filters,
+				tenantCode
+			)
 
 			if (
 				!sessionDetails ||
@@ -1462,8 +1468,6 @@ module.exports = class MentorsHelper {
 					result: [],
 				})
 			}
-
-			sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows, tenantCode)
 
 			//remove meeting_info details except value and platform and add is_assigned flag
 			sessionDetails.rows.forEach((item) => {

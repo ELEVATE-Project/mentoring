@@ -14,7 +14,7 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findOneForm(filter, tenantCode, orgCode = null) {
+	static async findOneForm(filter, tenantCode, orgCode) {
 		try {
 			if (orgCode) {
 				filter.organization_code = orgCode
@@ -43,7 +43,7 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async updateOneForm(filter, update, tenantCode, orgCode = null, options = {}) {
+	static async updateOneForm(filter, update, tenantCode, orgCode, options = {}) {
 		try {
 			filter.tenant_code = tenantCode
 			if (orgCode) {
@@ -65,7 +65,7 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findAllTypeFormVersion(tenantCode, orgCode = null) {
+	static async findAllTypeFormVersion(tenantCode, orgCode) {
 		try {
 			const whereClause = { tenant_code: tenantCode }
 			if (orgCode) {

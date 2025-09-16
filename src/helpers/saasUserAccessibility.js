@@ -24,11 +24,7 @@ async function checkIfUserIsAccessible(userId, userData, tenantCode) {
 			tenantCode
 		)
 		if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
-			return responses.failureResponse({
-				statusCode: httpStatusCode.NOT_FOUND,
-				message: 'USER_EXTENSION_NOT_FOUND',
-				responseCode: 'CLIENT_ERROR',
-			})
+			return false // If no user policy details found, return false for accessibility
 		}
 
 		const { organization_id, external_mentor_visibility, external_mentee_visibility } = userPolicyDetails

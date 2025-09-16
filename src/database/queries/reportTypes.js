@@ -1,5 +1,6 @@
 const ReportType = require('@database/models/index').ReportType
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const { Op } = require('sequelize')
 
 module.exports = class ReportTypeQueries {
 	static async createReportType(data, tenantCode) {

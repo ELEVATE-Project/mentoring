@@ -21,11 +21,10 @@ module.exports = class availabilityHelper {
 	 */
 	static async create(bodyData, decodedToken) {
 		try {
-			const tenantCode = decodedToken.tenant_code
 			bodyData['created_by'] = decodedToken.id
 			bodyData['updated_by'] = decodedToken.id
 			bodyData['user_id'] = decodedToken.id
-			bodyData['tenant_code'] = tenantCode
+			bodyData['tenant_code'] = decodedToken.tenant_code
 
 			const minimumDurationForAvailability = parseInt(process.env.MINIMUM_DURATION_FOR_AVAILABILITY, 10)
 			if (minimumDurationForAvailability !== 0) {
@@ -40,7 +39,7 @@ module.exports = class availabilityHelper {
 				}
 			}
 
-			let availability = await availabilityQueries.createAvailability(bodyData, tenantCode)
+			let availability = await availabilityQueries.createAvailability(bodyData, decodedToken.tenant_code)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'AVAILABILITY_CREATED_SUCCESSFULLY',
@@ -61,9 +60,12 @@ module.exports = class availabilityHelper {
 	 */
 	static async update(id, bodyData, decodedToken) {
 		try {
-			const tenantCode = decodedToken.tenant_code
-			const filter = { id, created_by: decodedToken.id, tenant_code: tenantCode }
-			const [rowsAffected] = await availabilityQueries.updateAvailability(filter, bodyData, tenantCode)
+			const filter = { id, created_by: decodedToken.id, tenant_code: decodedToken.tenant_code }
+			const [rowsAffected] = await availabilityQueries.updateAvailability(
+				filter,
+				bodyData,
+				decodedToken.tenant_code
+			)
 
 			if (rowsAffected === 0) {
 				return responses.failureResponse({
@@ -90,9 +92,8 @@ module.exports = class availabilityHelper {
 	 */
 	static async delete(id, decodedToken) {
 		try {
-			const tenantCode = decodedToken.tenant_code
-			const filter = { id, created_by: decodedToken.id, tenant_code: tenantCode }
-			const rowsAffected = await availabilityQueries.deleteAvailability(filter, tenantCode)
+			const filter = { id, created_by: decodedToken.id, tenant_code: decodedToken.tenant_code }
+			const rowsAffected = await availabilityQueries.deleteAvailability(filter, decodedToken.tenant_code)
 			if (rowsAffected === 0) {
 				return responses.failureResponse({
 					message: 'AVAILABILITY_NOT_FOUND',

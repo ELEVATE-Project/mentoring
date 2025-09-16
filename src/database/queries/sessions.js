@@ -59,6 +59,33 @@ exports.findById = async (id, tenantCode) => {
 	}
 }
 
+exports.findSessionWithAttendee = async (sessionId, userId, tenantCode) => {
+	try {
+		// Optimized: Single query with JOIN to get session and attendee data together
+		const query = `
+			SELECT 
+				s.*,
+				sa.id as attendee_id,
+				sa.type as enrolled_type,
+				sa.meeting_info as attendee_meeting_info,
+				sa.joined_at,
+				sa.mentee_id
+			FROM sessions s
+			LEFT JOIN session_attendees sa ON s.id = sa.session_id AND sa.mentee_id = :userId AND sa.tenant_code = :tenantCode
+			WHERE s.id = :sessionId AND s.tenant_code = :tenantCode
+		`
+
+		const result = await Sequelize.query(query, {
+			replacements: { sessionId, userId, tenantCode },
+			type: QueryTypes.SELECT,
+		})
+
+		return result.length > 0 ? result[0] : null
+	} catch (error) {
+		return error
+	}
+}
+
 exports.findByIdWithMentorDetails = async (id, tenantCode) => {
 	try {
 		// Optimized: Get session with mentor details in single query for un-enrollment flow
@@ -209,11 +236,27 @@ exports.deleteSession = async (filter, tenantCode) => {
 	}
 }
 
-exports.findSessionForPublicEndpoint = async (sessionId) => {
+exports.findSessionForPublicEndpoint = async (sessionId, tenantCode) => {
+	try {
+		return await Session.findOne({
+			where: {
+				id: sessionId,
+				tenant_code: tenantCode,
+			},
+			attributes: ['id', 'tenant_code', 'title', 'status'],
+			raw: true,
+		})
+	} catch (error) {
+		return error
+	}
+}
+
+// Special method for BBB callbacks to get tenant_code safely
+exports.getSessionTenantCode = async (sessionId) => {
 	try {
 		return await Session.findOne({
 			where: { id: sessionId },
-			attributes: ['id', 'tenant_code', 'title', 'status'],
+			attributes: ['id', 'tenant_code'],
 			raw: true,
 		})
 	} catch (error) {
@@ -1315,3 +1358,95 @@ exports.addOwnership = async (sessionId, mentorId) => {
 // 		return error
 // 	}
 // }
+
+/**
+ * Find all sessions with mentor details integrated
+ * Optimized version that fetches sessions and enriches with mentor details
+ * @method
+ * @name findAllSessionsWithMentorDetails
+ * @param {Number} page - pagination page number
+ * @param {Number} limit - pagination limit
+ * @param {String} search - search term
+ * @param {Object} filters - filter conditions
+ * @param {String} tenantCode - tenant code for isolation
+ * @returns {Object} - sessions with mentor details included
+ */
+exports.findAllSessionsWithMentorDetails = async (page, limit, search, filters, tenantCode) => {
+	try {
+		const userRequests = require('../../requests/user')
+		const utils = require('../../generics/utils')
+		const _ = require('lodash')
+
+		// First get sessions using existing logic
+		filters.tenant_code = tenantCode
+		let filterQuery = {
+			where: filters,
+			raw: true,
+			attributes: [
+				'id',
+				'title',
+				'mentor_id',
+				'description',
+				'status',
+				'start_date',
+				'end_date',
+				'image',
+				'created_at',
+				'meeting_info',
+				'created_by',
+			],
+			offset: parseInt((page - 1) * limit, 10),
+			limit: parseInt(limit, 10),
+			order: [['created_at', 'DESC']],
+		}
+
+		if (search) {
+			filterQuery.where[Op.or] = [
+				{ title: { [Op.iLike]: `%${search}%` } },
+				{ description: { [Op.iLike]: `%${search}%` } },
+			]
+		}
+
+		const sessionData = await Session.findAndCountAll(filterQuery)
+
+		// If no sessions found, return early
+		if (!sessionData.rows || sessionData.rows.length === 0) {
+			return sessionData
+		}
+
+		// Get unique mentor IDs
+		const userIds = _.uniqBy(sessionData.rows, 'mentor_id').map((item) => item.mentor_id)
+
+		// Fetch mentor details from User Service
+		let mentorDetails = await userRequests.getUserDetailedList(userIds, tenantCode)
+		mentorDetails = mentorDetails.result
+
+		// Enrich sessions with mentor details
+		for (let i = 0; i < sessionData.rows.length; i++) {
+			let mentorIndex = mentorDetails.findIndex((x) => x.user_id === sessionData.rows[i].mentor_id)
+
+			if (mentorIndex !== -1) {
+				sessionData.rows[i].mentor_name = mentorDetails[mentorIndex].name
+				sessionData.rows[i].organization = mentorDetails[mentorIndex].organization
+			}
+		}
+
+		// Process session images
+		await Promise.all(
+			sessionData.rows.map(async (session) => {
+				if (session.image && session.image.length > 0) {
+					session.image = session.image.map(async (imgPath) => {
+						if (imgPath && imgPath != '') {
+							return await utils.getDownloadableUrl(imgPath)
+						}
+					})
+					session.image = await Promise.all(session.image)
+				}
+			})
+		)
+
+		return sessionData
+	} catch (err) {
+		throw err
+	}
+}

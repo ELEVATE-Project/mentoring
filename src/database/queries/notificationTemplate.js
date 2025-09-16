@@ -43,14 +43,14 @@ module.exports = class NotificationTemplateData {
 			templateData = templateData.find((template) => template.organization_code === orgCode) || templateData[0]
 
 			if (templateData && templateData.email_header) {
-				const header = await this.getEmailHeader(templateData.email_header, tenantCode)
+				const header = await this.getEmailHeader(templateData.email_header, tenantCode, orgCode)
 				if (header && header.body) {
 					templateData.body = header.body + templateData.body
 				}
 			}
 
 			if (templateData && templateData.email_footer) {
-				const footer = await this.getEmailFooter(templateData.email_footer, tenantCode)
+				const footer = await this.getEmailFooter(templateData.email_footer, tenantCode, orgCode)
 				if (footer && footer.body) {
 					templateData.body += footer.body
 				}
@@ -61,9 +61,16 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async getEmailHeader(header, tenantCode) {
+	static async getEmailHeader(header, tenantCode, orgCode) {
 		try {
 			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			if (!defaults.tenantCode) {
 				return responses.failureResponse({
 					message: 'DEFAULT_TENANT_CODE_NOT_SET',
@@ -76,6 +83,7 @@ module.exports = class NotificationTemplateData {
 					code: header,
 					type: 'emailHeader',
 					status: 'active',
+					organization_code: orgCode ? { [Op.or]: [orgCode, defaults.orgCode] } : defaults.orgCode,
 					tenant_code: { [Op.or]: [tenantCode, defaults.tenantCode] },
 				},
 				raw: true,
@@ -87,9 +95,16 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async getEmailFooter(footer, tenantCode) {
+	static async getEmailFooter(footer, tenantCode, orgCode) {
 		try {
 			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			if (!defaults.tenantCode) {
 				return responses.failureResponse({
 					message: 'DEFAULT_TENANT_CODE_NOT_SET',
@@ -102,6 +117,7 @@ module.exports = class NotificationTemplateData {
 					code: footer,
 					type: 'emailFooter',
 					status: 'active',
+					organization_code: orgCode ? { [Op.or]: [orgCode, defaults.orgCode] } : defaults.orgCode,
 					tenant_code: { [Op.or]: [tenantCode, defaults.tenantCode] },
 				},
 				raw: true,
@@ -149,7 +165,7 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async findAllNotificationTemplates(filter, tenantCode, options = {}) {
+	static async findAllNotificationTemplates(filter, tenantCode, orgCode, options = {}) {
 		try {
 			const defaults = await getDefaults()
 			if (!defaults.orgCode) {
@@ -169,7 +185,7 @@ module.exports = class NotificationTemplateData {
 			filter.tenant_code = { [Op.or]: [tenantCode, defaults.tenantCode] }
 			if (filter.organization_code) {
 				filter.organization_code = filter.organization_code
-					? { [Op.or]: [orgCode, defaults.orgCode] }
+					? { [Op.or]: [filter.organization_code, defaults.orgCode] }
 					: defaults.orgCode
 			}
 

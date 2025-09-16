@@ -116,9 +116,9 @@ module.exports = class FormsHelper {
 		try {
 			let filter = {}
 			if (id) {
-				filter = { id: id }
+				filter = { id: id, tenant_code: tenantCode }
 			} else {
-				filter = { ...bodyData }
+				filter = { ...bodyData, tenant_code: tenantCode }
 			}
 			const defaults = await getDefaults()
 			if (!defaults.orgCode)
@@ -136,7 +136,9 @@ module.exports = class FormsHelper {
 			const form = await formQueries.findOneForm(filter, tenantCode, orgCode)
 			let defaultOrgForm
 			if (!form) {
-				filter = id ? { id: id } : { ...bodyData }
+				filter = id
+					? { id: id, tenant_code: defaults.tenantCode }
+					: { ...bodyData, tenant_code: defaults.tenantCode }
 				defaultOrgForm = await formQueries.findOneForm(filter, defaults.tenantCode, defaults.orgCode)
 			}
 			if (!form && !defaultOrgForm) {

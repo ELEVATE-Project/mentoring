@@ -14,11 +14,14 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async findOneEntityType(filter, tenantCode, options = {}) {
+	static async findOneEntityType(filter, tenantCodes, options = {}) {
 		try {
-			filter.tenant_code = tenantCode
+			const whereClause = {
+				...filter,
+				tenant_code: tenantCodes,
+			}
 			return await EntityType.findOne({
-				where: filter,
+				where: whereClause,
 				...options,
 				raw: true,
 			})

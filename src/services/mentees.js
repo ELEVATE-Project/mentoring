@@ -45,7 +45,7 @@ module.exports = class MenteesHelper {
 	 */
 	static async read(id, organizationId, organizationCode, roles, tenantCode) {
 		const menteeDetails = await userRequests.getUserDetails(id, tenantCode)
-		const mentee = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
+		const mentee = menteeDetails.data.result
 
 		if (!mentee) {
 			return responses.failureResponse({
@@ -327,15 +327,32 @@ module.exports = class MenteesHelper {
 			)
 			if (!mentee) throw createUnauthorizedResponse('USER_NOT_FOUND')
 
-			const session = await sessionQueries.findById(sessionId, tenantCode)
+			// Optimized: Single query with JOIN to get session and attendee data together
+			const sessionWithAttendee = await sessionQueries.findSessionWithAttendee(
+				sessionId,
+				mentee.user_id,
+				tenantCode
+			)
 
-			if (!session) {
+			if (!sessionWithAttendee) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			const session = sessionWithAttendee
+			const sessionAttendee = sessionWithAttendee.attendee_id
+				? {
+						id: sessionWithAttendee.attendee_id,
+						type: sessionWithAttendee.enrolled_type,
+						meeting_info: sessionWithAttendee.attendee_meeting_info,
+						joined_at: sessionWithAttendee.joined_at,
+						mentee_id: sessionWithAttendee.mentee_id,
+				  }
+				: null
+
 			if (session.status == 'COMPLETED') {
 				return responses.failureResponse({
 					message: 'SESSION_ENDED',
@@ -352,11 +369,6 @@ module.exports = class MenteesHelper {
 				})
 			}
 
-			const sessionAttendee = await sessionAttendeesQueries.findAttendeeBySessionAndUserId(
-				mentee.user_id,
-				sessionId,
-				tenantCode
-			)
 			if (!sessionAttendee) {
 				return responses.failureResponse({
 					message: 'USER_NOT_ENROLLED',

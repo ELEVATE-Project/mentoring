@@ -96,9 +96,7 @@ module.exports = class OrgAdmin {
 	 */
 	async updateOrganization(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
-			const updateOrg = await orgAdminService.updateOrganization(req.body, tenantCode)
+			const updateOrg = await orgAdminService.updateOrganization(req.body, req.body.tenant_code)
 			return updateOrg
 		} catch (error) {
 			return error
@@ -116,12 +114,10 @@ module.exports = class OrgAdmin {
 	 */
 	async deactivateUpcomingSession(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
 			const response = await orgAdminService.deactivateUpcomingSession(
 				req.body.user_ids,
 				req.decodedToken,
-				tenantCode
+				req.body.tenant_code
 			)
 			return response
 		} catch (error) {
@@ -140,13 +136,11 @@ module.exports = class OrgAdmin {
 	 */
 	async updateRelatedOrgs(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
 			return await orgAdminService.updateRelatedOrgs(
 				req.body.delta_organization_ids,
 				req.body.organization_id,
 				req.body.action,
-				tenantCode
+				req.body.tenant_code
 			)
 		} catch (error) {
 			return error
@@ -155,9 +149,11 @@ module.exports = class OrgAdmin {
 
 	async setDefaultQuestionSets(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
-			return await orgAdminService.setDefaultQuestionSets(req.body, req.decodedToken, tenantCode)
+			return await orgAdminService.setDefaultQuestionSets(
+				req.body,
+				req.decodedToken,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
 			return error
 		}

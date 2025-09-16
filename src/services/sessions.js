@@ -2148,12 +2148,12 @@ module.exports = class SessionsHelper {
 				await sessionQueries.updateOne(
 					{
 						id: sessionId,
+						tenant_code: tenantCode,
 					},
 					{
 						status: common.LIVE_STATUS,
 						started_at: utils.utcFormat(),
-					},
-					tenantCode
+					}
 				)
 			}
 			if (session?.meeting_info?.link) {
@@ -2296,9 +2296,9 @@ module.exports = class SessionsHelper {
 	 * @param {String} sessionId - session id.
 	 * @returns {Object} - session data with tenant_code.
 	 */
-	static async getSessionTenantCode(sessionId) {
+	static async getSessionTenantCode(sessionId, tenantCode) {
 		try {
-			return await sessionQueries.findSessionForPublicEndpoint(sessionId)
+			return await sessionQueries.findSessionForPublicEndpoint(sessionId, tenantCode)
 		} catch (error) {
 			throw error
 		}
@@ -2319,7 +2319,7 @@ module.exports = class SessionsHelper {
 			// If tenantCode is provided (authenticated request), use it directly
 			if (tenantCode && isBBB) {
 				// For public endpoints (BBB callback), get session first to extract tenant_code
-				const sessionData = await sessionQueries.findSessionForPublicEndpoint(sessionId)
+				const sessionData = await sessionQueries.findSessionForPublicEndpoint(sessionId, tenantCode)
 
 				if (sessionData && sessionData.tenant_code) {
 					tenantCode = sessionData.tenant_code
@@ -2508,7 +2508,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - Recording link updated.
 	 */
 
-	static async updateRecordingUrl(internalMeetingId, recordingUrl, userId, organizationId, tenantCode) {
+	static async updateRecordingUrl(internalMeetingId, recordingUrl, tenantCode) {
 		try {
 			const sessionDetails = await sessionQueries.findOne(
 				{

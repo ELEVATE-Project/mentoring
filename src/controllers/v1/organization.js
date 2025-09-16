@@ -14,9 +14,8 @@ module.exports = class Organization {
 	async eventListener(req) {
 		try {
 			console.log('CONTROLLER REQUEST BODY: ', req.body)
-			// Note: eventListener is a webhook handler - may not have JWT token/tenant context
-			const tenantCode = req.decodedToken?.tenant_code
-			return await organizationService.createOrgExtension(req.body, tenantCode)
+			// Note: eventListener is an internal service call - tenant context comes from body
+			return await organizationService.createOrgExtension(req.body, req.body.tenant_code)
 		} catch (error) {
 			throw error
 		}
