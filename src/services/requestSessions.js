@@ -181,6 +181,7 @@ module.exports = class requestSessionsHelper {
 			const reqBody = {
 				job_id: jobId,
 				request_session_id: SessionRequestResult.id,
+				tenant_code: tenantCode,
 			}
 
 			const expire = await schedulerRequest.createSchedulerJob(

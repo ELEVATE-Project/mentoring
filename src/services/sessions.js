@@ -416,6 +416,7 @@ module.exports = class SessionsHelper {
 					job_id: jobsToCreate[jobIndex].jobId,
 					email_template_code: jobsToCreate[jobIndex].emailTemplate,
 					job_creator_org_id: orgId,
+					tenant_code: tenantCode,
 				}
 				// Create the scheduler job with the calculated delay and other parameters
 				await schedulerRequest.createSchedulerJob(

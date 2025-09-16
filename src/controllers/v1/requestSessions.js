@@ -1,6 +1,8 @@
 const requestSessionsService = require('@services/requestSessions')
 const { isAMentor } = require('@generics/utils')
 const common = require('@constants/common')
+const httpStatusCode = require('@generics/http-status')
+const responses = require('@helpers/responses')
 
 module.exports = class requestsSessions {
 	/**
@@ -170,7 +172,17 @@ module.exports = class requestsSessions {
 
 	async expire(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
+			// For scheduler jobs, tenant_code comes from request body since there's no decoded token
+			// For regular API calls, it comes from decoded token
+			const tenantCode = req.body.tenant_code || (req.decodedToken && req.decodedToken.tenant_code)
+
+			if (!tenantCode) {
+				return responses.failureResponse({
+					message: 'TENANT_CODE_REQUIRED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 
 			const sessionsExpire = await requestSessionsService.expire(req.params.id, tenantCode)
 			return sessionsExpire
