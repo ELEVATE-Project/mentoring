@@ -778,6 +778,7 @@ const getUserDetailedList = function (userIds, deletedUsers = false, unscopped =
 			// Enrich user details with roles and organization info
 			await Promise.all(
 				userDetails.map(async function (user) {
+					if (user.deleted_at) return user
 					if (user.email) {
 						let decryptedEmail = await emailEncryption.decryptAndValidate(user.email)
 						if (decryptedEmail) {

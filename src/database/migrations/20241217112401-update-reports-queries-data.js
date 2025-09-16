@@ -43,6 +43,7 @@ module.exports = {
                         ELSE TRUE
                     END
                 )
+                AND Session.deleted_at IS NULL
                 DYNAMIC_AND_CLAUSE;`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
@@ -97,6 +98,7 @@ module.exports = {
                                     ELSE TRUE
                                 END
                             )
+                            AND Session.deleted_at IS NULL
                             DYNAMIC_AND_CLAUSE
             ) AS session_durations
             `,
@@ -156,6 +158,7 @@ module.exports = {
             (CASE WHEN :userId IS NOT NULL THEN sa.mentee_id = :userId ELSE TRUE END)
             AND (CASE WHEN :start_date IS NOT NULL THEN Session.start_date > :start_date ELSE TRUE END)
             AND (CASE WHEN :end_date IS NOT NULL THEN Session.end_date < :end_date ELSE TRUE END)
+            AND Session.deleted_at IS NULL
             DYNAMIC_AND_CLAUSE;`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
@@ -174,7 +177,8 @@ module.exports = {
                         end_date,
                         type,
                         categories,
-                        recommended_for
+                        recommended_for,
+                        deleted_at
                     FROM
                         public.sessions
                 ),
@@ -218,6 +222,7 @@ module.exports = {
                         OR :session_type = 'PUBLIC' AND Session.type = 'PUBLIC'
                         OR :session_type = 'PRIVATE' AND Session.type = 'PRIVATE'
                     )
+                    AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
@@ -253,6 +258,7 @@ module.exports = {
             WHERE
                 so.user_id = :userId
                 AND ('MENTOR' IS NULL OR so.type = 'MENTOR')
+                AND Session.deleted_at IS NULL
                 DYNAMIC_AND_CLAUSE;`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
@@ -370,6 +376,7 @@ module.exports = {
                                             ELSE TRUE  -- Default condition
                                         END
                                     )
+                AND Session.deleted_at IS NULL
                 DYNAMIC_AND_CLAUSE;`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
@@ -476,6 +483,7 @@ module.exports = {
                 public.session_ownerships AS so ON so.session_id = session.id
             WHERE
                 (:userId IS NOT NULL AND so.user_id = :userId OR :userId IS NULL)
+                AND session.deleted_at IS NULL
                  DYNAMIC_AND_CLAUSE;`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
@@ -506,6 +514,7 @@ module.exports = {
                         ELSE TRUE
                     END
                 )
+                AND session.deleted_at IS NULL
                 DYNAMIC_AND_CLAUSE`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
@@ -551,6 +560,7 @@ module.exports = {
                         ELSE TRUE
                     END
                 )
+                AND Session.deleted_at IS NULL
                 DYNAMIC_AND_CLAUSE;`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
@@ -596,6 +606,7 @@ module.exports = {
                         ELSE TRUE
                     END
                 )
+                AND Session.deleted_at IS NULL
                 DYNAMIC_AND_CLAUSE;`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
@@ -675,6 +686,7 @@ module.exports = {
                     OR :session_type = 'Public'
                     OR :session_type = 'Private'
                 )
+                AND session.deleted_at IS NULL
                 DYNAMIC_AND_CLAUSE;`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
@@ -689,7 +701,7 @@ module.exports = {
                 TO_CHAR( INTERVAL '1 second' * ROUND(SUM(EXTRACT(EPOCH FROM (session.completed_at - session.started_at)))),
                                 'HH24:MI:SS'
                                 ) AS "hours_of_mentoring_sessions"
-                FROM public.sessions AS session WHERE session.created_by = :userId AND session.started_at IS NOT NULL AND session.completed_at IS NOT NULL AND session.start_date > :start_date AND session.end_date < :end_date AND (CASE
+                FROM public.sessions AS session WHERE deleted_at IS NULL AND session.created_by = :userId AND session.started_at IS NOT NULL AND session.completed_at IS NOT NULL AND session.start_date > :start_date AND session.end_date < :end_date AND (CASE
                                         WHEN :session_type = 'All' THEN session.type IN ('PUBLIC', 'PRIVATE')
                                         WHEN :session_type = 'Public' THEN session.type = 'PUBLIC'
                                         WHEN :session_type = 'Private' THEN session.type = 'PRIVATE'
