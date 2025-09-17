@@ -641,7 +641,7 @@ exports.getUpcomingSessionsFromView = async (
 
 		const saasFilterClause = saasFilter != '' ? saasFilter : ''
 		const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
-		const tenantFilterClause = 'AND tenant_code = :tenantCode'
+		// No longer need tenant filtering since we use tenant-specific views
 		let publicSessionFilter = " AND type = '" + common.SESSION_TYPE.PUBLIC + "'"
 
 		// Create selection clause
@@ -686,11 +686,10 @@ exports.getUpcomingSessionsFromView = async (
 		SELECT 
 			${projectionClause}
 		FROM
-			${common.materializedViewsPrefix + Session.tableName}
+			${common.getTenantViewName(tenantCode, Session.tableName)}
 		WHERE
 			mentor_id != :userId
-			${tenantFilterClause}
-			${saasFilterClause}
+				${saasFilterClause}
 			${filterClause}
 			AND status IN ('${common.PUBLISHED_STATUS}', '${common.LIVE_STATUS}')
 			${publicSessionFilter}
@@ -729,11 +728,10 @@ exports.getUpcomingSessionsFromView = async (
 		const countQuery = `
 		SELECT count(*) AS "count"
 		FROM
-			${common.materializedViewsPrefix + Session.tableName}
+			${common.getTenantViewName(tenantCode, Session.tableName)}
 		WHERE
 			mentor_id != :userId
-			${tenantFilterClause}
-			${saasFilterClause}
+				${saasFilterClause}
 			${filterClause}
 			AND status IN ('${common.PUBLISHED_STATUS}', '${common.LIVE_STATUS}')
 			${publicSessionFilter}
@@ -786,7 +784,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 		const filterClause = filter?.query.length > 0 ? `AND ${filter.query}` : ''
 
 		const saasFilterClause = saasFilter != '' ? saasFilter : ''
-		const tenantFilterClause = 'AND tenant_code = :tenantCode'
+		// No longer need tenant filtering since we use tenant-specific views
 
 		const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
 
@@ -804,11 +802,10 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			visibility,
 			mentor_organization_id
 		FROM
-				${common.materializedViewsPrefix + Session.tableName}
+				${common.getTenantViewName(tenantCode, Session.tableName)}
 		WHERE
 			mentor_id = :mentorId
-			${tenantFilterClause}
-			AND status = 'PUBLISHED'
+				AND status = 'PUBLISHED'
 			AND start_date > :currentEpochTime
 			AND started_at IS NULL
 			AND (
@@ -842,11 +839,10 @@ exports.getMentorsUpcomingSessionsFromView = async (
 		const countQuery = `
 		SELECT count(*) AS "count"
 		FROM
-		${common.materializedViewsPrefix + Session.tableName}
+		${common.getTenantViewName(tenantCode, Session.tableName)}
 		WHERE
 			mentor_id = :mentorId
-			${tenantFilterClause}
-			AND status = 'PUBLISHED'
+				AND status = 'PUBLISHED'
 			AND start_date > :currentEpochTime
 			AND started_at IS NULL
 			AND (

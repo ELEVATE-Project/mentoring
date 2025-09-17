@@ -40,9 +40,10 @@ module.exports = class admin {
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
-			const tenantCode = req.decodedToken.tenant_code
-			const userDelete = await adminService.triggerViewRebuild(req.decodedToken, tenantCode)
-			return userDelete
+			// Use tenant_code from query param if provided, otherwise use token tenant_code, otherwise null (all tenants)
+			const tenantCode = req.query.tenant_code || req.decodedToken.tenant_code || null
+			const result = await adminService.triggerViewRebuild(req.decodedToken, tenantCode)
+			return result
 		} catch (error) {
 			return error
 		}
@@ -56,7 +57,8 @@ module.exports = class admin {
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
-			const tenantCode = req.decodedToken.tenant_code
+			// Use tenant_code from query param if provided, otherwise use token tenant_code, otherwise null (all tenants)
+			const tenantCode = req.query.tenant_code || req.decodedToken.tenant_code || null
 			return await adminService.triggerPeriodicViewRefresh(req.decodedToken, tenantCode)
 		} catch (err) {
 			console.log(err)
@@ -64,8 +66,15 @@ module.exports = class admin {
 	}
 	async triggerViewRebuildInternal(req) {
 		try {
-			// Internal method - use default tenant or extract from query if needed
-			const tenantCode = req.query.tenant_code || null
+			// Internal method - tenant_code is now required for tenant-specific views
+			const tenantCode = req.query.tenant_code
+			if (!tenantCode) {
+				return responses.failureResponse({
+					message: 'TENANT_CODE_REQUIRED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			return await adminService.triggerViewRebuild(null, tenantCode)
 		} catch (error) {
 			return error
@@ -73,9 +82,19 @@ module.exports = class admin {
 	}
 	async triggerPeriodicViewRefreshInternal(req) {
 		try {
-			// Internal method - use default tenant or extract from query if needed
-			const tenantCode = req.query.tenant_code || null
-			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name, tenantCode)
+			// Internal method - tenant_code is now required for tenant-specific views
+			const tenantCode = req.query.tenant_code
+			const modelName = req.query.model_name
+
+			if (!tenantCode) {
+				return responses.failureResponse({
+					message: 'TENANT_CODE_REQUIRED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			return await adminService.triggerPeriodicViewRefreshInternal(modelName, tenantCode)
 		} catch (err) {
 			console.log(err)
 		}

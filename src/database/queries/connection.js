@@ -335,13 +335,13 @@ exports.getConnectionsDetails = async (
 		c.deleted_at AS connections_deleted_at
 		`
 
+		const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
 		let query = `
             SELECT ${projectionClause}
-            FROM ${common.materializedViewsPrefix + MenteeExtension.tableName} mv
+            FROM ${viewName} mv
             LEFT JOIN ${Connection.tableName} c 
-            ON c.friend_id = mv.user_id AND c.user_id = :userId AND c.tenant_code = :tenantCode AND mv.tenant_code = :tenantCode
+            ON c.friend_id = mv.user_id AND c.user_id = :userId AND c.tenant_code = :tenantCode
             WHERE ${userFilterClause}
-            AND mv.tenant_code = :tenantCode
             ${orgFilter}
             ${filterClause}
             ${rolesFilter}
@@ -372,11 +372,10 @@ exports.getConnectionsDetails = async (
 
 		const countQuery = `
 		    SELECT count(*) AS "count"
-		    FROM ${common.materializedViewsPrefix + MenteeExtension.tableName} mv
+		    FROM ${viewName} mv
 		    LEFT JOIN ${Connection.tableName} c 
-		    ON c.friend_id = mv.user_id AND c.user_id = :userId AND c.tenant_code = :tenantCode AND mv.tenant_code = :tenantCode
+		    ON c.friend_id = mv.user_id AND c.user_id = :userId AND c.tenant_code = :tenantCode
 		    WHERE ${userFilterClause}
-		    AND mv.tenant_code = :tenantCode
 		    ${filterClause}
 		    ${rolesFilter}
 		    ${orgFilter}

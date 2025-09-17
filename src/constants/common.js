@@ -132,6 +132,10 @@ module.exports = {
 	POST_METHOD: 'POST',
 	excludedQueryParams: ['enrolled'],
 	materializedViewsPrefix: 'm_',
+	// Utility function to generate tenant-specific view names
+	getTenantViewName: (tenantCode, tableName) => {
+		return `${tenantCode}_m_${tableName}`
+	},
 	mentorExtensionModelName: 'MentorExtension',
 	sessionModelName: 'Session',
 	notificationEndPoint: '/mentoring/v1/notifications/emailCronJob',

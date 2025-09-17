@@ -1,5 +1,8 @@
 'use strict'
 const OrganizationExtension = require('@database/models/index').OrganizationExtension
+const MenteeExtension = require('@database/models/index').UserExtension
+const { QueryTypes } = require('sequelize')
+const Sequelize = require('@database/models/index').sequelize
 const common = require('@constants/common')
 
 module.exports = class OrganizationExtensionQueries {
@@ -128,13 +131,14 @@ module.exports = class OrganizationExtensionQueries {
 		}
 	}
 
-	static async getAllByIds(codes) {
+	static async getAllByIds(codes, tenantCode) {
 		try {
 			const filterClause = `organization_code IN (${codes.map((code) => `'${code}'`).join(',')})`
 
+			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			const query = `
 				SELECT *
-				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
+				FROM ${viewName}
 				WHERE
 					${filterClause}
 				`

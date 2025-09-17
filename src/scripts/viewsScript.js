@@ -1,7 +1,9 @@
 // Dependencies
+require('module-alias/register')
 const request = require('request')
 require('dotenv').config({ path: '../.env' })
 const entityTypeQueries = require('../database/queries/entityType')
+const { getTenantList } = require('../requests/user')
 
 // Data
 const schedulerServiceUrl = process.env.SCHEDULER_SERVICE_HOST // Port address on which the scheduler service is running
@@ -66,7 +68,7 @@ const createSchedulerJob = function (jobId, interval, jobName, repeat, url, offs
 
 const getAllowFilteringEntityTypes = async () => {
 	try {
-		return await entityTypeQueries.findAllEntityTypes(
+		const entityTypes = await entityTypeQueries.findAllEntityTypes(
 			defaultOrgCode,
 			defaultTenantCode,
 			['id', 'value', 'label', 'data_type', 'organization_id', 'has_entities', 'model_names'],
@@ -74,8 +76,10 @@ const getAllowFilteringEntityTypes = async () => {
 				allow_filtering: true,
 			}
 		)
+
+		return entityTypes
 	} catch (err) {
-		console.log(err)
+		return []
 	}
 }
 
@@ -84,7 +88,7 @@ const modelNameCollector = async (entityTypes) => {
 		const modelSet = new Set()
 		await Promise.all(
 			entityTypes.map(async ({ model_names }) => {
-				console.log(model_names)
+				console.log('Processing model_names:', model_names)
 				if (model_names && Array.isArray(model_names))
 					await Promise.all(
 						model_names.map((model) => {
@@ -93,55 +97,122 @@ const modelNameCollector = async (entityTypes) => {
 					)
 			})
 		)
-		console.log(modelSet)
 		return [...modelSet.values()]
 	} catch (err) {
-		console.log(err)
+		return []
 	}
 }
 
 /**
- * Trigger periodic view refresh for allowed entity types.
+ * Trigger periodic view refresh for allowed entity types across all tenants.
  */
 const triggerPeriodicViewRefresh = async () => {
 	try {
 		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes()
 		const modelNames = await modelNameCollector(allowFilteringEntityTypes)
+		console.log('Model names collected:', modelNames)
 
-		let offset = process.env.REFRESH_VIEW_INTERVAL / modelNames.length
-		modelNames.map((model, index) => {
-			let refreshInterval = process.env.REFRESH_VIEW_INTERVAL
-			if (model == 'UserExtension') {
-				refreshInterval = process.env.USER_EXTENSION_REFRESH_VIEW_INTERVAL
-				offset = refreshInterval / modelNames.length
-			} else if (model == 'Session') {
-				refreshInterval = process.env.SESSION_REFRESH_VIEW_INTERVAL
-				offset = refreshInterval / modelNames.length
+		const tenants = await getTenantList()
+		console.log('Tenants fetched:', tenants)
+		console.log('Number of tenants:', tenants.length)
+
+		// Create unique timestamp for this batch of jobs
+		const timestamp = Date.now()
+		console.log('Refresh job batch timestamp:', timestamp)
+
+		let globalOffset = 0
+		const baseInterval = process.env.REFRESH_VIEW_INTERVAL
+		console.log('Base refresh interval:', baseInterval)
+
+		// Create scheduler jobs for each tenant and model combination
+		for (const tenant of tenants) {
+			const tenantCode = tenant.code
+
+			// Skip tenants with undefined or empty tenant codes
+			if (!tenantCode || tenantCode === 'undefined') {
+				console.log(`⚠️  Skipping tenant with invalid code in refresh:`, tenant)
+				continue
 			}
-			createSchedulerJob(
-				'repeatable_view_job' + model,
-				refreshInterval,
-				'repeatable_view_job' + model,
-				true,
-				mentoringBaseurl + '/mentoring/v1/admin/triggerPeriodicViewRefreshInternal?model_name=' + model,
-				offset * index
-			)
-		})
+
+			console.log(`Creating jobs for tenant: ${tenantCode}`)
+
+			let offset = baseInterval / (modelNames.length * tenants.length)
+			modelNames.map((model, index) => {
+				let refreshInterval = baseInterval
+				if (model == 'UserExtension') {
+					refreshInterval = process.env.USER_EXTENSION_REFRESH_VIEW_INTERVAL
+				} else if (model == 'Session') {
+					refreshInterval = process.env.SESSION_REFRESH_VIEW_INTERVAL
+				}
+
+				const uniqueJobId = `repeatable_view_job_${tenantCode}_${model}_${timestamp}`
+				const jobName = `repeatable_view_job_${tenantCode}_${model}`
+
+				console.log(`Creating job: ${jobName} with ID: ${uniqueJobId}`)
+
+				createSchedulerJob(
+					uniqueJobId,
+					refreshInterval,
+					jobName,
+					true,
+					mentoringBaseurl +
+						`/mentoring/v1/admin/triggerPeriodicViewRefreshInternal?model_name=${model}&tenant_code=${tenantCode}`,
+					globalOffset
+				)
+
+				globalOffset += offset
+			})
+		}
+
+		console.log('=== triggerPeriodicViewRefresh completed ===')
 	} catch (err) {
-		console.log(err)
+		console.log('Error in triggerPeriodicViewRefresh:', err)
 	}
 }
 const buildMaterializedViews = async () => {
 	try {
-		createSchedulerJob(
-			'BuildMaterializedViews',
-			10000,
-			'BuildMaterializedViews',
-			false,
-			mentoringBaseurl + '/mentoring/v1/admin/triggerViewRebuildInternal'
-		)
+		console.log('=== Starting buildMaterializedViews ===')
+
+		const tenants = await getTenantList()
+		console.log('Tenants for view building:', tenants)
+		console.log('Number of tenants for building:', tenants.length)
+
+		// Create unique timestamp for this batch of jobs
+		const timestamp = Date.now()
+		console.log('Job batch timestamp:', timestamp)
+
+		// Create separate build jobs for each tenant with staggered execution
+		let offset = 0
+		const jobInterval = 10000 // 10 seconds between tenant builds
+
+		for (const tenant of tenants) {
+			const tenantCode = tenant.code
+
+			// Skip tenants with undefined or empty tenant codes
+			if (!tenantCode || tenantCode === 'undefined') {
+				console.log(`⚠️  Skipping tenant with invalid code:`, tenant)
+				continue
+			}
+
+			const uniqueJobId = `BuildMaterializedViews_${tenantCode}_${timestamp}`
+			const jobName = `BuildMaterializedViews_${tenantCode}`
+
+			console.log(`Creating build job for tenant: ${tenantCode} with ID: ${uniqueJobId}`)
+
+			createSchedulerJob(
+				uniqueJobId,
+				jobInterval + offset,
+				jobName,
+				false,
+				mentoringBaseurl + `/mentoring/v1/admin/triggerViewRebuildInternal?tenant_code=${tenantCode}`
+			)
+
+			offset += 5000 // 5 second stagger between tenants
+		}
+
+		console.log('=== buildMaterializedViews completed ===')
 	} catch (err) {
-		console.log(err)
+		console.log('Error in buildMaterializedViews:', err)
 	}
 }
 // Triggering the starting function

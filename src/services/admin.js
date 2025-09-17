@@ -642,32 +642,61 @@ module.exports = class AdminService {
 
 	static async triggerViewRebuild(decodedToken, tenantCode) {
 		try {
-			const result = await adminService.triggerViewBuild(tenantCode)
+			let result
+			let message
+
+			if (!tenantCode) {
+				// No tenantCode provided - build views for all tenants
+				result = await adminService.triggerViewBuildForAllTenants()
+				message = result.success ? result.message : 'MATERIALIZED_VIEW_GENERATION_FAILED'
+			} else {
+				// Specific tenantCode provided - build views for that tenant only
+				result = await adminService.triggerViewBuild(tenantCode)
+				message = 'MATERIALIZED_VIEW_GENERATED_SUCCESSFULLY'
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
-				message: 'MATERIALIZED_VIEW_GENERATED_SUCCESSFULLY',
+				message: message,
+				result: result,
 			})
 		} catch (error) {
-			console.error('An error occurred in userDelete:', error)
+			console.error('An error occurred in triggerViewRebuild:', error)
 			return error
 		}
 	}
 	static async triggerPeriodicViewRefresh(decodedToken, tenantCode) {
 		try {
-			const result = await adminService.triggerPeriodicViewRefresh(tenantCode)
+			let result
+			let message
+
+			if (!tenantCode) {
+				// No tenantCode provided - start refresh for all tenants
+				result = await adminService.triggerPeriodicViewRefreshForAllTenants()
+				message = result.success ? result.message : 'MATERIALIZED_VIEW_REFRESH_FAILED'
+			} else {
+				// Specific tenantCode provided - start refresh for that tenant only
+				result = await adminService.triggerPeriodicViewRefresh(tenantCode)
+				message = 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY'
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
-				message: 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY',
+				message: message,
+				result: result,
 			})
 		} catch (error) {
-			console.error('An error occurred in userDelete:', error)
+			console.error('An error occurred in triggerPeriodicViewRefresh:', error)
 			return error
 		}
 	}
 	static async triggerPeriodicViewRefreshInternal(modelName, tenantCode) {
 		try {
-			const result = await adminService.refreshMaterializedView(modelName)
-			console.log(result)
+			const result = await adminService.refreshMaterializedView(modelName, tenantCode)
+			// Only log if there's an actual refresh or error
+			if (result && result.rowCount) {
+				console.log(`Materialized view refreshed for ${modelName}, tenant: ${tenantCode}`)
+			}
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY',

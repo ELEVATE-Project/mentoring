@@ -340,10 +340,11 @@ module.exports = class MenteeExtensionQueries {
 				filterClause = filterClause.startsWith('AND') ? filterClause : 'AND' + filterClause
 			}
 
+			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			let query = `
 				SELECT ${projectionClause}
 				FROM
-					${common.materializedViewsPrefix + MenteeExtension.tableName}
+					${viewName}
 				WHERE
 					${userFilterClause}
 					${filterClause}
@@ -376,7 +377,7 @@ module.exports = class MenteeExtensionQueries {
 			const countQuery = `
 			SELECT count(*) AS "count"
 			FROM
-				${common.materializedViewsPrefix + MenteeExtension.tableName}
+				${viewName}
 			WHERE
 				${userFilterClause}
 				${filterClause}
@@ -412,14 +413,15 @@ module.exports = class MenteeExtensionQueries {
 	}
 	static async findOneFromView(userId, tenantCode) {
 		try {
+			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			let query = `
 				SELECT *
-				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
-				WHERE user_id = :userId AND tenant_code = :tenantCode
+				FROM ${viewName}
+				WHERE user_id = :userId
 				LIMIT 1
 			`
 			const user = await Sequelize.query(query, {
-				replacements: { userId, tenantCode },
+				replacements: { userId },
 				type: QueryTypes.SELECT,
 			})
 
@@ -509,9 +511,10 @@ module.exports = class MenteeExtensionQueries {
 				whereClause = `WHERE ${cleanedConditions.join(' ')}`
 			}
 
+			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			const query = `
 				SELECT ${projectionClause}
-				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
+				FROM ${viewName}
 				${whereClause}
 				OFFSET :offset
 				LIMIT :limit
@@ -539,7 +542,7 @@ module.exports = class MenteeExtensionQueries {
 
 			const countQuery = `
 				SELECT COUNT(*) AS count
-				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
+				FROM ${viewName}
 				WHERE
 					${userFilterClause}
 					${filterClause}
@@ -565,23 +568,15 @@ module.exports = class MenteeExtensionQueries {
 		try {
 			const excludeUserIds = ids.length === 0
 			const userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.map((id) => `'${id}'`).join(',')})`
-			const tenantFilterClause = tenantCode ? `tenant_code = '${tenantCode}'` : ''
+			// No longer need tenant filtering since we use tenant-specific views
 
-			// Combine filters with proper AND logic
-			let whereClause = ''
-			if (userFilterClause && tenantFilterClause) {
-				whereClause = `${userFilterClause} AND ${tenantFilterClause}`
-			} else if (userFilterClause) {
-				whereClause = userFilterClause
-			} else if (tenantFilterClause) {
-				whereClause = tenantFilterClause
-			} else {
-				whereClause = '1=1' // Default to all records if no filters
-			}
+			// Since we're using tenant-specific views, no tenant filtering needed
+			const whereClause = userFilterClause || '1=1' // Default to all records if no user filter
 
+			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			const query = `
 				SELECT *
-				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
+				FROM ${viewName}
 				WHERE
 					${whereClause}
 				`
@@ -614,23 +609,14 @@ module.exports = class MenteeExtensionQueries {
 		try {
 			const emailFilterClause =
 				emailIds.length === 0 ? '' : `email IN (${emailIds.map((id) => `'${id}'`).join(',')})`
-			const tenantFilterClause = tenantCode ? `tenant_code = '${tenantCode}'` : ''
 
-			// Combine filters with proper AND logic
-			let whereClause = ''
-			if (emailFilterClause && tenantFilterClause) {
-				whereClause = `${emailFilterClause} AND ${tenantFilterClause}`
-			} else if (emailFilterClause) {
-				whereClause = emailFilterClause
-			} else if (tenantFilterClause) {
-				whereClause = tenantFilterClause
-			} else {
-				whereClause = '1=1' // Default to all records if no filters
-			}
+			// Since we're using tenant-specific views, no tenant filtering needed
+			const whereClause = emailFilterClause || '1=1' // Default to all records if no email filter
 
+			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			const query = `
 				SELECT *
-				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
+				FROM ${viewName}
 				WHERE
 					${whereClause}
 				`

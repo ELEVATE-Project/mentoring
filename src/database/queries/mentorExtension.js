@@ -259,10 +259,11 @@ module.exports = class MentorExtensionQueries {
 				filterClause = filterClause.startsWith('AND') ? filterClause : 'AND ' + filterClause
 			}
 
+			const viewName = common.getTenantViewName(tenantCode, MentorExtension.tableName)
 			let query = `
 				SELECT ${projectionClause}
 				FROM
-					${common.materializedViewsPrefix + MentorExtension.tableName}
+					${viewName}
 				WHERE
 					${userFilterClause}
 					${filterClause}
@@ -270,13 +271,11 @@ module.exports = class MentorExtensionQueries {
 					${additionalFilter}
 					${defaultFilterClause}
 					AND is_mentor = true
-					AND tenant_code = :tenantCode
 			`
 
 			const replacements = {
 				...filter.replacements, // Add filter parameters to replacements
 				search: `%${searchText}%`,
-				tenantCode: tenantCode,
 			}
 
 			if (searchFilter && searchFilter?.sortQuery !== '') {
@@ -308,7 +307,7 @@ module.exports = class MentorExtensionQueries {
 			const countQuery = `
 			SELECT count(*) AS "count"
 			FROM
-				${common.materializedViewsPrefix + MentorExtension.tableName}
+				${viewName}
 			WHERE
 				${userFilterClause}
 				${filterClause}
@@ -316,7 +315,6 @@ module.exports = class MentorExtensionQueries {
 				${additionalFilter}
 				${defaultFilterClause}
 				AND is_mentor = true
-				AND tenant_code = :tenantCode
 			;
 		`
 			const count = await Sequelize.query(countQuery, {
@@ -452,7 +450,7 @@ module.exports = class MentorExtensionQueries {
 			// Construct the query with the provided whereClause, projection, and saasFilterClause
 			let query = `
 				SELECT ${projection}
-				FROM ${common.materializedViewsPrefix + MentorExtension.tableName}
+				FROM ${common.getTenantViewName(tenantCode, MentorExtension.tableName)}
 				WHERE ${whereClause}
 				${saasFilterClause}
 			`
@@ -465,7 +463,7 @@ module.exports = class MentorExtensionQueries {
 			// Count query
 			const countQuery = `
 				SELECT count(*) AS "count"
-				FROM ${common.materializedViewsPrefix + MentorExtension.tableName}
+				FROM ${common.getTenantViewName(tenantCode, MentorExtension.tableName)}
 				WHERE ${whereClause}
 				${saasFilterClause}
 			`
@@ -488,13 +486,13 @@ module.exports = class MentorExtensionQueries {
 		try {
 			let query = `
 				SELECT *
-				FROM ${common.materializedViewsPrefix + MentorExtension.tableName}
-				WHERE user_id = :userId AND tenant_code = :tenantCode
+				FROM ${common.getTenantViewName(tenantCode, MentorExtension.tableName)}
+				WHERE user_id = :userId
 				LIMIT 1
 			`
 
 			const user = await Sequelize.query(query, {
-				replacements: { userId, tenantCode },
+				replacements: { userId },
 				type: QueryTypes.SELECT,
 			})
 

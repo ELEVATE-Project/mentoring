@@ -873,6 +873,26 @@ const getTenantDomain = async (tenantCode) => {
 	}
 }
 
+const getTenantList = async () => {
+	try {
+		// Fix: Ensure correct URL construction for internal API call
+		// USER_SERVICE_BASE_URL might be undefined, so construct the correct path
+		const baseUrl = process.env.USER_SERVICE_HOST
+		const basePath = process.env.USER_SERVICE_BASE_URL
+		const apiUrl = `${baseUrl}${basePath}/${endpoints.GET_TENANT_LIST}`
+		const internalToken = true
+		const listResponse = await requests.get(apiUrl, '', internalToken)
+
+		if (listResponse && listResponse.success && listResponse.data?.result) {
+			return listResponse.data.result
+		} else {
+			throw new Error('TENANT_LIST_NOT_FOUND')
+		}
+	} catch (error) {
+		throw error
+	}
+}
+
 module.exports = {
 	fetchOrgDetails, // dependent on releated orgs  And query on code
 	fetchUserDetails, // dependendt on languages and prefered lang etc
@@ -891,4 +911,5 @@ module.exports = {
 	getOrgDetails,
 	getProfileDetails,
 	getTenantDomain,
+	getTenantList,
 }
