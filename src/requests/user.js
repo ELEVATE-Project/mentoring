@@ -799,6 +799,7 @@ const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false,
 			// Enrich user details with roles and organization info
 			await Promise.all(
 				userDetails.map(async function (user) {
+					if (user.deleted_at) return user
 					if (user.email) {
 						let decryptedEmail = await emailEncryption.decryptAndValidate(user.email)
 						if (decryptedEmail) {
@@ -893,6 +894,21 @@ const getTenantList = async () => {
 	}
 }
 
+const getTenantDetails = async (tenantCode) => {
+	try {
+		let profileUrl = `${userBaseUrl}${endpoints.GET_TENANT_DETAILS}`
+
+		profileUrl += `/${tenantCode}`
+
+		const tenantDeatils = await requests.get(profileUrl, '', true)
+
+		return tenantDeatils
+	} catch (error) {
+		console.error(error)
+		throw error
+	}
+}
+
 module.exports = {
 	fetchOrgDetails, // dependent on releated orgs  And query on code
 	fetchUserDetails, // dependendt on languages and prefered lang etc
@@ -912,4 +928,5 @@ module.exports = {
 	getProfileDetails,
 	getTenantDomain,
 	getTenantList,
+	getTenantDetails,
 }

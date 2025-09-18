@@ -328,7 +328,7 @@ module.exports = class SessionsHelper {
 				)
 			}
 
-			if (bodyData?.resources) {
+			if (Array.isArray(bodyData?.resources) && bodyData.resources.length > 0) {
 				await this.addResources(bodyData.resources, loggedInUserId, data.id, tenantCode)
 				if (notifyUser) {
 					const sessionAttendees = await sessionAttendeesQueries.findAll(
@@ -2171,7 +2171,21 @@ module.exports = class SessionsHelper {
 						responseCode: 'CLIENT_ERROR',
 					})
 				}
+				const tenantInfo = await userRequests.getTenantDetails(tenantCode)
 				let sessionDuration = moment(formattedEndDate).diff(formattedStartDate, 'minutes')
+
+				const domains = tenantInfo?.data?.result?.domains
+				const tenantDomain =
+					Array.isArray(domains) && domains.length > 0
+						? domains.find((d) => d.is_primary)?.domain || domains[0].domain
+						: null
+				if (!tenantDomain) {
+					return responses.failureResponse({
+						message: 'TENANT_DOMAIN_NOT_FOUND',
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
 
 				const meetingDetails = await bigBlueButtonRequests.createMeeting(
 					session.id,

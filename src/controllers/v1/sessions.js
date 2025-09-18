@@ -220,9 +220,7 @@ module.exports = class Sessions {
 
 	async start(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
-			const sessionsStarted = await sessionService.start(req.params.id, req.decodedToken, tenantCode)
+			const sessionsStarted = await sessionService.start(req.params.id, req.decodedToken, req.decodedToken.tenant_code)
 			return sessionsStarted
 		} catch (error) {
 			return error

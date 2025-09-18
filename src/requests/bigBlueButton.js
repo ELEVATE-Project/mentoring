@@ -73,6 +73,13 @@ const createMeeting = function (meetingId, meetingName, attendeePW, moderatorPW,
 			}
 			let lastUserTimeout = process.env.BIG_BLUE_BUTTON_LAST_USER_TIMEOUT_MINUTES || 15
 
+			const hostname = String(tenantUrl || '')
+				.replace(/^https?:\/\//i, '')
+				.replace(/\/+$/, '')
+			if (!hostname) return reject(new Error('TENANT_URL_REQUIRED'))
+			let sessionEndUrl = encodeURIComponent(`https://${hostname}/`)
+
+			let lastUserTimeout = process.env.BIG_BLUE_BUTTON_LAST_USER_TIMEOUT_MINUTES || 15
 			meetingName = encodeURIComponent(meetingName)
 			let query =
 				'name=' +
