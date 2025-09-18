@@ -5,9 +5,16 @@ module.exports = class NotificationTemplateData {
 	static async findOne(filter, tenantCode, options = {}) {
 		try {
 			filter.tenant_code = tenantCode
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			return await NotificationTemplate.findOne({
-				where: filter,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But tenant filtering takes priority
+				},
+				...otherOptions,
 				raw: true,
 			})
 		} catch (error) {
@@ -29,9 +36,15 @@ module.exports = class NotificationTemplateData {
 				whereClause.tenant_code = { [Op.in]: filter.tenant_code }
 			}
 
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			return await NotificationTemplate.findAll({
-				where: whereClause,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...whereClause, // But tenant filtering takes priority
+				},
+				...otherOptions,
 				raw: true,
 			})
 		} catch (error) {
@@ -42,9 +55,16 @@ module.exports = class NotificationTemplateData {
 	static async updateTemplate(filter, update, tenantCode, options = {}) {
 		try {
 			filter.tenant_code = tenantCode
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			const template = await NotificationTemplate.update(update, {
-				where: filter,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But tenant filtering takes priority
+				},
+				...otherOptions,
 				individualHooks: true,
 			})
 

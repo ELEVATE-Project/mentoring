@@ -19,9 +19,16 @@ module.exports = class UserEntityData {
 				...filter,
 				tenant_code: tenantCodes,
 			}
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			return await EntityType.findOne({
-				where: whereClause,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...whereClause, // But tenant filtering takes priority
+				},
+				...otherOptions,
 				raw: true,
 			})
 		} catch (error) {
@@ -115,13 +122,21 @@ module.exports = class UserEntityData {
 
 	static async updateOneEntityType(id, orgCode, tenantCode, update, options = {}) {
 		try {
+			const whereClause = {
+				id: id,
+				organization_code: orgCode,
+				tenant_code: tenantCode,
+			}
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			return await EntityType.update(update, {
 				where: {
-					id: id,
-					organization_code: orgCode,
-					tenant_code: tenantCode,
+					...optionsWhere, // Allow additional where conditions
+					...whereClause, // But tenant filtering takes priority
 				},
-				...options,
+				...otherOptions,
 			})
 		} catch (error) {
 			return error

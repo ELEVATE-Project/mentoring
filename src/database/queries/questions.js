@@ -38,9 +38,15 @@ module.exports = class QuestionsData {
 
 	static async updateOneQuestion(filter, update, options = {}) {
 		try {
+			// Safe merge: options.where cannot override the main filter
+			const { where: optionsWhere, ...otherOptions } = options
+
 			const [rowsAffected] = await Question.update(update, {
-				where: filter,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But main filter takes priority
+				},
+				...otherOptions,
 			})
 
 			return rowsAffected > 0 ? 'QUESTION_UPDATED' : 'QUESTION_NOT_FOUND'

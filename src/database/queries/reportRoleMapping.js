@@ -14,10 +14,17 @@ module.exports = class ReportRoleMappingQueries {
 	static async findAllReportRoleMappings(filter, tenantCode, attributes, options = {}) {
 		try {
 			filter.tenant_code = tenantCode
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			const reportRoleMappings = await ReportRoleMapping.findAndCountAll({
-				where: filter,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But tenant filtering takes priority
+				},
 				attributes,
-				...options,
+				...otherOptions,
 			})
 			return reportRoleMappings
 		} catch (error) {

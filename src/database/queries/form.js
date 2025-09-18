@@ -17,9 +17,16 @@ module.exports = class FormsData {
 	static async findOne(filter, tenantCode, options = {}) {
 		try {
 			filter.tenant_code = tenantCode
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			return await Form.findOne({
-				where: filter,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But tenant filtering takes priority
+				},
+				...otherOptions,
 				raw: true,
 			})
 		} catch (error) {
@@ -33,9 +40,16 @@ module.exports = class FormsData {
 				...filter,
 				tenant_code: { [Op.in]: tenantCodes },
 			}
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			return await Form.findAll({
-				where: whereClause,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...whereClause, // But tenant filtering takes priority
+				},
+				...otherOptions,
 				raw: true,
 			})
 		} catch (error) {
@@ -49,9 +63,16 @@ module.exports = class FormsData {
 			if (orgCode) {
 				filter.organization_code = orgCode
 			}
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			const [rowsAffected] = await Form.update(update, {
-				where: filter,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But tenant filtering takes priority
+				},
+				...otherOptions,
 				individualHooks: true, // Pass 'individualHooks: true' option to ensure proper triggering of 'beforeUpdate' hook.
 			})
 

@@ -14,9 +14,16 @@ module.exports = class ReportTypeQueries {
 	static async findOne(filter, tenantCode, options = {}) {
 		try {
 			filter.tenant_code = tenantCode
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			return await ReportType.findOne({
-				where: filter,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But tenant filtering takes priority
+				},
+				...otherOptions,
 				raw: true,
 			})
 		} catch (error) {

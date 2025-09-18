@@ -23,9 +23,15 @@ exports.create = async (data, tenantCode) => {
  */
 exports.findOne = async (filter, options = {}) => {
 	try {
+		// Safe merge: options.where cannot override the main filter
+		const { where: optionsWhere, ...otherOptions } = options
+
 		const res = await DefaultRule.findOne({
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But main filter takes priority
+			},
+			...otherOptions,
 			raw: true,
 		})
 		return res
@@ -43,9 +49,15 @@ exports.findOne = async (filter, options = {}) => {
  */
 exports.updateOne = async (filter, update, options = {}) => {
 	try {
+		// Safe merge: options.where cannot override the main filter
+		const { where: optionsWhere, ...otherOptions } = options
+
 		return await DefaultRule.update(update, {
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But main filter takes priority
+			},
+			...otherOptions,
 			individualHooks: true,
 		})
 	} catch (error) {
@@ -99,9 +111,16 @@ exports.findAll = async (filter, tenantCode, options = {}) => {
 		if (tenantCode) {
 			filter.tenant_code = tenantCode
 		}
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		return await DefaultRule.findAll({
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But tenant filtering takes priority
+			},
+			...otherOptions,
 			raw: true,
 		})
 	} catch (error) {

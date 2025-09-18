@@ -23,10 +23,17 @@ module.exports = class ReportQueryServiceQueries {
 	static async findAllReportQueries(filter, tenantCode, attributes, options = {}) {
 		try {
 			filter.tenant_code = tenantCode
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			const reportQueries = await ReportQuery.findAndCountAll({
-				where: filter,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But tenant filtering takes priority
+				},
 				attributes,
-				...options,
+				...otherOptions,
 			})
 			return reportQueries
 		} catch (error) {
