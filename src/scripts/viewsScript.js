@@ -3,7 +3,7 @@ require('module-alias/register')
 const request = require('request')
 require('dotenv').config({ path: '../.env' })
 const entityTypeQueries = require('../database/queries/entityType')
-const { getTenantList } = require('../requests/user')
+const userExtensionQueries = require('../database/queries/userExtension')
 
 // Data
 const schedulerServiceUrl = process.env.SCHEDULER_SERVICE_HOST // Port address on which the scheduler service is running
@@ -88,7 +88,6 @@ const modelNameCollector = async (entityTypes) => {
 		const modelSet = new Set()
 		await Promise.all(
 			entityTypes.map(async ({ model_names }) => {
-				console.log('Processing model_names:', model_names)
 				if (model_names && Array.isArray(model_names))
 					await Promise.all(
 						model_names.map((model) => {
@@ -112,17 +111,14 @@ const triggerPeriodicViewRefresh = async () => {
 		const modelNames = await modelNameCollector(allowFilteringEntityTypes)
 		console.log('Model names collected:', modelNames)
 
-		const tenants = await getTenantList()
-		console.log('Tenants fetched:', tenants)
-		console.log('Number of tenants:', tenants.length)
+		const tenants = await userExtensionQueries.getDistinctTenantCodes()
+		console.log(`Starting periodic refresh for ${tenants.length} tenants`)
 
 		// Create unique timestamp for this batch of jobs
 		const timestamp = Date.now()
-		console.log('Refresh job batch timestamp:', timestamp)
 
 		let globalOffset = 0
 		const baseInterval = process.env.REFRESH_VIEW_INTERVAL
-		console.log('Base refresh interval:', baseInterval)
 
 		// Create scheduler jobs for each tenant and model combination
 		for (const tenant of tenants) {
@@ -133,8 +129,6 @@ const triggerPeriodicViewRefresh = async () => {
 				console.log(`⚠️  Skipping tenant with invalid code in refresh:`, tenant)
 				continue
 			}
-
-			console.log(`Creating jobs for tenant: ${tenantCode}`)
 
 			let offset = baseInterval / (modelNames.length * tenants.length)
 			modelNames.map((model, index) => {
@@ -147,8 +141,6 @@ const triggerPeriodicViewRefresh = async () => {
 
 				const uniqueJobId = `repeatable_view_job_${tenantCode}_${model}_${timestamp}`
 				const jobName = `repeatable_view_job_${tenantCode}_${model}`
-
-				console.log(`Creating job: ${jobName} with ID: ${uniqueJobId}`)
 
 				createSchedulerJob(
 					uniqueJobId,
@@ -173,13 +165,11 @@ const buildMaterializedViews = async () => {
 	try {
 		console.log('=== Starting buildMaterializedViews ===')
 
-		const tenants = await getTenantList()
-		console.log('Tenants for view building:', tenants)
-		console.log('Number of tenants for building:', tenants.length)
+		const tenants = await userExtensionQueries.getDistinctTenantCodes()
+		console.log(`Starting materialized view build for ${tenants.length} tenants`)
 
 		// Create unique timestamp for this batch of jobs
 		const timestamp = Date.now()
-		console.log('Job batch timestamp:', timestamp)
 
 		// Create separate build jobs for each tenant with staggered execution
 		let offset = 0
@@ -196,8 +186,6 @@ const buildMaterializedViews = async () => {
 
 			const uniqueJobId = `BuildMaterializedViews_${tenantCode}_${timestamp}`
 			const jobName = `BuildMaterializedViews_${tenantCode}`
-
-			console.log(`Creating build job for tenant: ${tenantCode} with ID: ${uniqueJobId}`)
 
 			createSchedulerJob(
 				uniqueJobId,

@@ -195,18 +195,6 @@ module.exports = class MenteeExtensionQueries {
 		}
 	}
 
-	static async deleteMenteeExtension(userId, force = false, tenantCode) {
-		try {
-			const options = { where: { user_id: userId, tenant_code: tenantCode } }
-
-			if (force) {
-				options.force = true
-			}
-			return await MenteeExtension.destroy(options)
-		} catch (error) {
-			return error
-		}
-	}
 	static async removeMenteeDetails(userId, tenantCode) {
 		try {
 			const modelAttributes = MenteeExtension.rawAttributes
@@ -627,6 +615,51 @@ module.exports = class MenteeExtensionQueries {
 			return results
 		} catch (error) {
 			return error
+		}
+	}
+
+	/**
+	 * Get distinct tenant codes from UserExtension table
+	 * @method
+	 * @name getDistinctTenantCodes
+	 * @description Fetches all distinct tenant codes from the UserExtension table.
+	 * This method replaces external API calls to User Service for getting tenant list.
+	 * @returns {Promise<Array>} - Array of objects with 'code' property containing tenant codes
+	 *
+	 * @example
+	 * const tenants = await getDistinctTenantCodes();
+	 * // Returns: [{ code: 'tenant1' }, { code: 'tenant2' }]
+	 */
+	static async getDistinctTenantCodes() {
+		try {
+			// Validate database connection
+			if (!Sequelize) {
+				throw new Error('Database connection not available')
+			}
+
+			const query = `
+				SELECT DISTINCT tenant_code as code 
+				FROM ${MenteeExtension.tableName} 
+				WHERE tenant_code IS NOT NULL 
+				AND tenant_code != '' 
+				AND tenant_code != 'undefined'
+				ORDER BY tenant_code ASC
+			`
+
+			const tenants = await Sequelize.query(query, {
+				type: QueryTypes.SELECT,
+			})
+
+			// Validate results
+			if (!Array.isArray(tenants)) {
+				console.warn('getDistinctTenantCodes returned non-array result')
+				return []
+			}
+
+			return tenants
+		} catch (error) {
+			console.error('Error fetching distinct tenant codes:', error)
+			return []
 		}
 	}
 }

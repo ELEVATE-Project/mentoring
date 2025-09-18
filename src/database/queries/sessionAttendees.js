@@ -190,7 +190,8 @@ exports.removeUserFromAllSessions = async (userId, tenantCode) => {
 
 		return { attendeeResult }
 	} catch (error) {
-		return error
+		console.error('Error in removeUserFromAllSessions:', error)
+		return { attendeeResult: -1 }
 	}
 }
 exports.countEnrolledSessions = async (mentee_id, tenantCode) => {

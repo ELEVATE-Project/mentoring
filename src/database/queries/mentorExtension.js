@@ -134,7 +134,7 @@ module.exports = class MentorExtensionQueries {
 			return error
 		}
 	}
-	static async removeMentorDetails(userId) {
+	static async removeMentorDetails(userId, tenantCode) {
 		try {
 			const modelAttributes = MentorExtension.rawAttributes
 
@@ -170,6 +170,7 @@ module.exports = class MentorExtensionQueries {
 			return await MentorExtension.update(fieldsToNullify, {
 				where: {
 					user_id: userId,
+					tenant_code: tenantCode,
 				},
 			})
 		} catch (error) {

@@ -10,9 +10,10 @@ const indexQueries = require('@generics/mViewsIndexQueries')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const responses = require('@helpers/responses')
 const httpStatusCode = require('@generics/http-status')
-const { getTenantList } = require('@requests/user')
+const userExtensionQueries = require('@database/queries/userExtension')
 
 let refreshInterval
+
 const groupByModelNames = async (entityTypes) => {
 	const groupedData = new Map()
 	entityTypes.forEach((item) => {
@@ -408,14 +409,14 @@ const refreshMaterializedView = async (modelName, tenantCode) => {
 
 		// If no active refresh queries, proceed with refreshing the materialized view
 		const [result, metadata] = await sequelize.query(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${viewName}`)
-		return metadata
+		return { message: 'Materialized view refreshed successfully', result, metadata }
 	} catch (err) {}
 }
 
-const refreshNextView = (currentIndex, modelNames) => {
+const refreshNextView = (currentIndex, modelNames, tenantCode) => {
 	try {
 		if (currentIndex < modelNames.length) {
-			refreshMaterializedView(modelNames[currentIndex])
+			refreshMaterializedView(modelNames[currentIndex], tenantCode)
 			currentIndex++
 		} else {
 			console.info('All views refreshed. Stopping further refreshes.')
@@ -434,11 +435,11 @@ const triggerPeriodicViewRefresh = async (tenantCode) => {
 
 		// Using the mockSetInterval function to simulate setInterval
 		refreshInterval = setInterval(() => {
-			currentIndex = refreshNextView(currentIndex, modelNames)
+			currentIndex = refreshNextView(currentIndex, modelNames, tenantCode)
 		}, interval / modelNames.length)
 
 		// Immediately trigger the first refresh
-		currentIndex = refreshNextView(currentIndex, modelNames)
+		currentIndex = refreshNextView(currentIndex, modelNames, tenantCode)
 	} catch (err) {}
 }
 const checkAndCreateMaterializedViews = async (tenantCode) => {
@@ -470,7 +471,7 @@ const checkAndCreateMaterializedViews = async (tenantCode) => {
 
 const triggerViewBuildForAllTenants = async () => {
 	try {
-		const tenants = await getTenantList()
+		const tenants = await userExtensionQueries.getDistinctTenantCodes()
 		const results = []
 
 		for (const tenant of tenants) {
@@ -507,7 +508,7 @@ const triggerViewBuildForAllTenants = async () => {
 
 const triggerPeriodicViewRefreshForAllTenants = async () => {
 	try {
-		const tenants = await getTenantList()
+		const tenants = await userExtensionQueries.getDistinctTenantCodes()
 		const results = []
 
 		for (const tenant of tenants) {

@@ -23,11 +23,20 @@ module.exports = class admin {
 
 	async userDelete(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const userDelete = await adminService.userDelete(req.query.userId, tenantCode)
+			const userDelete = await adminService.userDelete(
+				req.query.userId,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 			return userDelete
 		} catch (error) {
-			return error
+			console.error('Controller error in userDelete:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'USER_DELETION_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
 		}
 	}
 
