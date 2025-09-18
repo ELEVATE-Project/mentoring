@@ -61,7 +61,7 @@ module.exports = class MentorExtensionQueries {
 			if (_.isEmpty(customFilter)) {
 				whereClause = { user_id: userId, tenant_code: tenantCode }
 			} else {
-				whereClause = customFilter
+				whereClause = { ...customFilter, tenant_code: tenantCode } // Ensure tenant_code is always included
 			}
 			// If `meta` is included in `data`, use `jsonb_set` to merge changes safely
 			if (data.meta) {
@@ -78,14 +78,23 @@ module.exports = class MentorExtensionQueries {
 				delete data.meta
 			}
 
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			const result = unscoped
 				? await MentorExtension.unscoped().update(data, {
-						where: whereClause,
-						...options,
+						where: {
+							...optionsWhere, // Allow additional where conditions
+							...whereClause, // But tenant filtering takes priority
+						},
+						...otherOptions,
 				  })
 				: await MentorExtension.update(data, {
-						where: whereClause,
-						...options,
+						where: {
+							...optionsWhere, // Allow additional where conditions
+							...whereClause, // But tenant filtering takes priority
+						},
+						...otherOptions,
 				  })
 			return result
 		} catch (error) {
@@ -179,12 +188,16 @@ module.exports = class MentorExtensionQueries {
 	}
 	static async getMentorsByUserIds(ids, options = {}, tenantCode, unscoped = false) {
 		try {
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			const query = {
 				where: {
+					...optionsWhere, // Allow additional where conditions
 					user_id: ids,
-					tenant_code: tenantCode,
+					tenant_code: tenantCode, // Tenant filtering takes priority
 				},
-				...options,
+				...otherOptions,
 				returning: true,
 				raw: true,
 			}

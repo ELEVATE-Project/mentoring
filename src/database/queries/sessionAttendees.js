@@ -33,9 +33,16 @@ exports.findOrCreateAttendee = async (data, tenantCode) => {
 exports.findOne = async (filter, tenantCode, options = {}) => {
 	try {
 		filter.tenant_code = tenantCode
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		const res = await SessionAttendee.findOne({
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But tenant filtering takes priority
+			},
+			...otherOptions,
 			raw: true,
 		})
 		return res
@@ -47,9 +54,16 @@ exports.findOne = async (filter, tenantCode, options = {}) => {
 exports.updateOne = async (filter, update, tenantCode, options = {}) => {
 	try {
 		filter.tenant_code = tenantCode
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		return await SessionAttendee.update(update, {
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But tenant filtering takes priority
+			},
+			...otherOptions,
 			individualHooks: true,
 		})
 	} catch (error) {
@@ -119,9 +133,16 @@ exports.findAll = async (filter, tenantCode, options = {}) => {
 			throw new Error('tenantCode is required')
 		}
 		filter.tenant_code = tenantCode
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		return await SessionAttendee.findAll({
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But tenant filtering takes priority
+			},
+			...otherOptions,
 			raw: true,
 		})
 	} catch (error) {

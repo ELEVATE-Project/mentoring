@@ -59,9 +59,15 @@ module.exports = class MenteeExtensionQueries {
 				delete data.meta
 			}
 
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			return await MenteeExtension.update(data, {
-				where: whereClause,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...whereClause, // But tenant filtering takes priority
+				},
+				...otherOptions,
 			})
 		} catch (error) {
 			return error
@@ -69,6 +75,28 @@ module.exports = class MenteeExtensionQueries {
 	}
 
 	static async addVisibleToOrg(organizationId, newRelatedOrgs, options = {}, tenantCode) {
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
+		const whereClause1 = {
+			organization_id: organizationId,
+			[Op.or]: [
+				{
+					[Op.not]: {
+						visible_to_organizations: {
+							[Op.contains]: newRelatedOrgs,
+						},
+					},
+				},
+				{
+					visible_to_organizations: {
+						[Op.is]: null,
+					},
+				},
+			],
+			tenant_code: tenantCode,
+		}
+
 		// Update user extension and concat related org to the org id
 		await MenteeExtension.update(
 			{
@@ -78,28 +106,35 @@ module.exports = class MenteeExtensionQueries {
 			},
 			{
 				where: {
-					organization_id: organizationId,
-					[Op.or]: [
-						{
-							[Op.not]: {
-								visible_to_organizations: {
-									[Op.contains]: newRelatedOrgs,
-								},
-							},
-						},
-						{
-							visible_to_organizations: {
-								[Op.is]: null,
-							},
-						},
-					],
-					tenant_code: tenantCode,
+					...optionsWhere, // Allow additional where conditions
+					...whereClause1, // But tenant filtering takes priority
 				},
-				...options,
+				...otherOptions,
 				individualHooks: true,
 			}
 		)
 		// Update user extension and append org id to all the related orgs
+		const whereClause2 = {
+			organization_id: {
+				[Op.in]: [...newRelatedOrgs],
+			},
+			[Op.or]: [
+				{
+					[Op.not]: {
+						visible_to_organizations: {
+							[Op.contains]: [organizationId],
+						},
+					},
+				},
+				{
+					visible_to_organizations: {
+						[Op.is]: null,
+					},
+				},
+			],
+			tenant_code: tenantCode,
+		}
+
 		return await MenteeExtension.update(
 			{
 				visible_to_organizations: sequelize.literal(
@@ -108,27 +143,11 @@ module.exports = class MenteeExtensionQueries {
 			},
 			{
 				where: {
-					organization_id: {
-						[Op.in]: [...newRelatedOrgs],
-					},
-					[Op.or]: [
-						{
-							[Op.not]: {
-								visible_to_organizations: {
-									[Op.contains]: [organizationId],
-								},
-							},
-						},
-						{
-							visible_to_organizations: {
-								[Op.is]: null,
-							},
-						},
-					],
-					tenant_code: tenantCode,
+					...optionsWhere, // Allow additional where conditions
+					...whereClause2, // But tenant filtering takes priority
 				},
 				individualHooks: true,
-				...options,
+				...otherOptions,
 			}
 		)
 	}
@@ -257,12 +276,16 @@ module.exports = class MenteeExtensionQueries {
 
 	static async getUsersByUserIds(ids, options = {}, tenantCode, unscoped = false) {
 		try {
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			const query = {
 				where: {
+					...optionsWhere, // Allow additional where conditions
 					user_id: ids,
-					tenant_code: tenantCode,
+					tenant_code: tenantCode, // Tenant filtering takes priority
 				},
-				...options,
+				...otherOptions,
 				returning: true,
 				raw: true,
 			}
@@ -451,7 +474,7 @@ module.exports = class MenteeExtensionQueries {
 			}
 
 			// Tenant filtering enabled - materialized view now includes tenant_code column
-			const tenantFilterClause = tenantCode ? `AND tenant_code = '${tenantCode}'` : ''
+			const tenantFilterClause = tenantCode ? `AND tenant_code = :tenantCode` : ''
 
 			let projectionClause = `
 				user_id,

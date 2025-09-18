@@ -37,9 +37,16 @@ exports.findOne = async (filter, tenantCode, options = {}) => {
 			...filter,
 			tenant_code: tenantCode,
 		}
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		const res = await Session.findOne({
-			where: whereClause,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions (or undefined if empty)
+				...whereClause, // But tenant filtering takes priority
+			},
+			...otherOptions, // Other options like attributes, order, etc.
 			raw: true,
 		})
 		return res
@@ -105,9 +112,16 @@ exports.findByIdWithMentorDetails = async (id, tenantCode) => {
 exports.updateOne = async (filter, update, tenantCode, options = {}) => {
 	try {
 		filter.tenant_code = tenantCode
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		const result = await Session.update(update, {
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But tenant filtering takes priority
+			},
+			...otherOptions,
 			individualHooks: true,
 		})
 		const [rowsAffected, updatedRows] = result
@@ -139,9 +153,16 @@ exports.updateRecords = async (data, options = {}) => {
 exports.findAll = async (filter, tenantCode, options = {}) => {
 	try {
 		filter.tenant_code = tenantCode
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		return await Session.findAll({
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But tenant filtering takes priority
+			},
+			...otherOptions,
 			raw: true,
 		})
 	} catch (error) {
@@ -264,9 +285,16 @@ exports.getSessionTenantCode = async (sessionId) => {
 exports.updateSession = async (filter, update, tenantCode, options = {}) => {
 	try {
 		filter.tenant_code = tenantCode
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		return await Session.update(update, {
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But tenant filtering takes priority
+			},
+			...otherOptions,
 		})
 	} catch (error) {
 		return error
@@ -590,9 +618,16 @@ exports.getUpcomingSessions = async (page, limit, search, userId, startDate, end
 exports.findAndCountAll = async (filter, tenantCode, options = {}, attributes = {}) => {
 	try {
 		filter.tenant_code = tenantCode
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		const { rows, count } = await Session.findAndCountAll({
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But tenant filtering takes priority
+			},
+			...otherOptions,
 			...attributes,
 			raw: true,
 		})
@@ -603,18 +638,26 @@ exports.findAndCountAll = async (filter, tenantCode, options = {}, attributes = 
 }
 exports.mentorsSessionWithPendingFeedback = async (mentorId, tenantCode, options = {}, completedSessionIds) => {
 	try {
+		const whereClause = {
+			id: { [Op.notIn]: completedSessionIds },
+			status: common.COMPLETED_STATUS,
+			started_at: {
+				[Op.not]: null,
+			},
+			is_feedback_skipped: false,
+			mentor_id: mentorId,
+			tenant_code: tenantCode,
+		}
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		return await Session.findAll({
 			where: {
-				id: { [Op.notIn]: completedSessionIds },
-				status: common.COMPLETED_STATUS,
-				started_at: {
-					[Op.not]: null,
-				},
-				is_feedback_skipped: false,
-				mentor_id: mentorId,
-				tenant_code: tenantCode,
+				...optionsWhere, // Allow additional where conditions
+				...whereClause, // But tenant filtering takes priority
 			},
-			...options,
+			...otherOptions,
 			raw: true,
 		})
 	} catch (error) {

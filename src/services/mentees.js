@@ -1583,10 +1583,9 @@ module.exports = class MenteesHelper {
 					 */
 					filter =
 						additionalFilter +
-						`AND ( ('${userPolicyDetails.organization_id}' = ANY("visible_to_organizations") AND "mentee_visibility" != 'CURRENT')`
+						`AND ( (:userOrgId = ANY("visible_to_organizations") AND "mentee_visibility" != 'CURRENT')`
 
-					if (additionalFilter.length === 0)
-						filter += ` OR organization_id = '${userPolicyDetails.organization_id}' )`
+					if (additionalFilter.length === 0) filter += ` OR organization_id = :userOrgId )`
 					else filter += `)`
 				} else if (visibilityPolicy === common.ALL) {
 					/**

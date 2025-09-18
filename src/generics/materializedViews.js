@@ -151,8 +151,11 @@ const materializedViewQueryBuilder = async (model, concreteFields, metaFields, t
 				: '' // Empty string if there are no meta fields
 
 		const whereClause = utils.generateWhereClause(tableName)
-		// Add tenant-specific filtering to the WHERE clause
-		const tenantWhereClause = `${whereClause} AND tenant_code = '${tenantCode}'`
+		// Add tenant-specific filtering to the WHERE clause - validate tenantCode for safety
+		if (!tenantCode || typeof tenantCode !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(tenantCode)) {
+			throw new Error('Invalid tenant code for materialized view creation')
+		}
+		const tenantWhereClause = `${whereClause} AND tenant_code = '${tenantCode.replace(/'/g, "''")}'`
 
 		const materializedViewGenerationQuery = `CREATE MATERIALIZED VIEW ${temporaryMaterializedViewName} AS
 		  SELECT 
