@@ -4,6 +4,7 @@ const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const feedbackHelper = require('./feedback')
 const utils = require('@generics/utils')
+const { elevateLog } = require('elevate-logger')
 
 const { UniqueConstraintError } = require('sequelize')
 const menteeQueries = require('@database/queries/userExtension')
@@ -1474,11 +1475,6 @@ module.exports = class MenteesHelper {
 						[],
 						[tenantCode] // Pass tenantCode to the entity processing service
 					)
-					console.log(
-						`Entity processing result:`,
-						typeof processedData,
-						Array.isArray(processedData) ? processedData.length : 'Not an array'
-					)
 					if (Array.isArray(processedData)) {
 						extensionDetails.data = processedData
 					} else {
@@ -1509,13 +1505,6 @@ module.exports = class MenteesHelper {
 					return sortOrder * a[sortBy].localeCompare(b[sortBy])
 				})
 			}
-
-			// Return enriched response
-			console.log(
-				`Final response data:`,
-				typeof extensionDetails.data,
-				Array.isArray(extensionDetails.data) ? extensionDetails.data.length : 'Not an array'
-			)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,

@@ -630,7 +630,9 @@ module.exports = class OrgAdminService {
 					updated_by: orgExtension.updated_by,
 				},
 			})
-		} catch (error) {}
+		} catch (error) {
+			return error
+		}
 	}
 
 	static async uploadSampleCSV(filepath, orgCode, tenantCode) {

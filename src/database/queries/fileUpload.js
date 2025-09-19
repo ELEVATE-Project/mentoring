@@ -14,9 +14,17 @@ exports.create = async (data, tenantCode) => {
 
 exports.findOne = async (filter, tenantCode, options = {}) => {
 	try {
+		filter.tenant_code = tenantCode
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		return await FileUpload.findOne({
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But tenant filtering takes priority
+			},
+			...otherOptions,
 			raw: true,
 		})
 	} catch (error) {
@@ -27,9 +35,16 @@ exports.findOne = async (filter, tenantCode, options = {}) => {
 exports.update = async (filter, tenantCode, update, options = {}) => {
 	try {
 		filter.tenant_code = tenantCode
+
+		// Safe merge: tenant filtering cannot be overridden by options.where
+		const { where: optionsWhere, ...otherOptions } = options
+
 		const [res] = await FileUpload.update(update, {
-			where: filter,
-			...options,
+			where: {
+				...optionsWhere, // Allow additional where conditions
+				...filter, // But tenant filtering takes priority
+			},
+			...otherOptions,
 			individualHooks: true,
 		})
 

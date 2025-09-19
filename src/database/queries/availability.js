@@ -3,14 +3,16 @@ const Availability = require('../models/index').Availability
 module.exports = class AvailabilityData {
 	static async createAvailability(data, tenantCode) {
 		try {
+			data.tenant_code = tenantCode
 			return await Availability.create(data, { returning: true })
 		} catch (error) {
 			return error
 		}
 	}
 
-	static async findAvailability(filter, projection = {}) {
+	static async findAvailability(filter, tenantCode, projection = {}) {
 		try {
+			filter.tenant_code = tenantCode
 			return await Availability.findAll({
 				where: filter,
 				attributes: projection,
