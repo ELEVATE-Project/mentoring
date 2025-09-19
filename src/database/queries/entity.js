@@ -2,66 +2,98 @@ const { Op } = require('sequelize')
 
 const Entity = require('../models/index').Entity
 module.exports = class UserEntityData {
-	static async createEntity(data) {
+	static async createEntity(data, tenantCode) {
+		// Ensure tenant_code is set in data
+		data.tenant_code = tenantCode
 		try {
 			return await Entity.create(data, { returning: true })
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
-	static async findAllEntities(filter, options = {}) {
+	static async createEntityWithValidation(data, tenantCode) {
 		try {
+			// Sequelize approach: Validate entity_type exists first
+			const EntityType = Entity.sequelize.models.EntityType
+			const entityType = await EntityType.findOne({
+				where: {
+					id: data.entity_type_id,
+					tenant_code: tenantCode,
+				},
+				attributes: ['id'], // Only verify existence
+			})
+
+			if (!entityType) {
+				throw new Error('ENTITY_TYPE_NOT_FOUND')
+			}
+
+			// Create entity with validated entity_type_id
+			data.tenant_code = tenantCode
+			return await Entity.create(data, { returning: true })
+		} catch (error) {
+			return error
+		}
+	}
+
+	static async findAllEntities(filter, tenantCode, options = {}) {
+		try {
+			if (tenantCode) {
+				filter.tenant_code = tenantCode
+			}
 			return await Entity.findAll({
 				where: filter,
 				...options,
 				raw: true,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
-	static async updateOneEntity(id, update, userId, options = {}) {
+	static async updateOneEntity(whereClause, tenantCode, update, options = {}) {
 		try {
-			return await Entity.update(update, {
-				where: {
-					id: id,
-					created_by: userId,
-				},
+			// MANDATORY: Include tenant_code in whereClause
+			const where = { ...(whereClause || {}), tenant_code: tenantCode }
+			const sanitized = { ...update }
+			delete sanitized.tenant_code
+			return await Entity.update(sanitized, {
+				where,
 				...options,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
-	static async deleteOneEntityType(id, userId) {
+	static async deleteOneEntityType(whereClause, tenantCode) {
 		try {
+			// MANDATORY: Include tenant_code in whereClause
+			whereClause.tenant_code = tenantCode
 			return await Entity.destroy({
-				where: {
-					id: id,
-					created_by: userId,
-				},
+				where: whereClause,
 			})
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
-	static async findEntityTypeById(filter) {
+	static async findEntityTypeById(filter, tenantCode) {
 		try {
-			const entityData = await Entity.findByPk(filter)
+			const whereClause = { id: filter, tenant_code: tenantCode }
+			const entityData = await Entity.findOne({ where: whereClause })
 			return entityData
 		} catch (error) {
 			return error
 		}
 	}
 
-	static async getAllEntities(filters, attributes, page, limit, search) {
+	static async getAllEntities(filters, tenantCode, attributes, page, limit, search) {
 		try {
 			let whereClause = {
 				...filters,
+				// MANDATORY: Include tenant_code filtering
+				tenant_code: tenantCode,
 			}
 
 			if (search) {
@@ -79,7 +111,43 @@ module.exports = class UserEntityData {
 				],
 			})
 		} catch (error) {
-			throw error
+			return error
+		}
+	}
+
+	static async getAllEntitiesWithEntityTypeDetails(filters, tenantCode, page, limit, search) {
+		try {
+			let whereClause = {
+				...filters,
+				// MANDATORY: Include tenant_code filtering
+				tenant_code: tenantCode,
+			}
+
+			if (search) {
+				whereClause[Op.or] = [{ label: { [Op.iLike]: `%${search}%` } }]
+			}
+
+			// Optimized: Include entity_type details via association instead of forcing N+1 queries
+			return await Entity.findAndCountAll({
+				where: whereClause,
+				attributes: ['id', 'entity_type_id', 'value', 'label', 'status', 'type', 'created_by', 'created_at'],
+				include: [
+					{
+						model: Entity.sequelize.models.EntityType,
+						as: 'entity_type',
+						attributes: ['id', 'value', 'label'], // Include entity_type details
+						where: { tenant_code: tenantCode },
+					},
+				],
+				offset: limit * (page - 1),
+				limit: limit,
+				order: [
+					['created_at', 'DESC'],
+					['id', 'ASC'],
+				],
+			})
+		} catch (error) {
+			return error
 		}
 	}
 }

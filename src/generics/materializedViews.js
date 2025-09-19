@@ -1,13 +1,20 @@
 'use strict'
 const entityTypeQueries = require('@database/queries/entityType')
 const { sequelize } = require('@database/models/index')
+const models = require('@database/models/index')
+const { Op } = require('sequelize')
 const utils = require('@generics/utils')
 const common = require('@constants/common')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
 const searchConfig = require('@configs/search.json')
 const indexQueries = require('@generics/mViewsIndexQueries')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
+const { elevateLog } = require('elevate-logger')
+const responses = require('@helpers/responses')
+const httpStatusCode = require('@generics/http-status')
+const userExtensionQueries = require('@database/queries/userExtension')
 
 let refreshInterval
+
 const groupByModelNames = async (entityTypes) => {
 	const groupedData = new Map()
 	entityTypes.forEach((item) => {
@@ -37,7 +44,7 @@ const filterConcreteAndMetaAttributes = async (modelAttributes, attributesList) 
 		})
 		return { concreteAttributes, metaAttributes }
 	} catch (err) {
-		console.log(err)
+		return err
 	}
 }
 
@@ -75,9 +82,7 @@ const rawAttributesTypeModifier = async (rawAttributes) => {
 			}
 		}
 		return outputArray
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 const metaAttributesTypeModifier = (data) => {
 	try {
@@ -111,9 +116,7 @@ const metaAttributesTypeModifier = (data) => {
 		})
 
 		return outputArray
-	} catch (err) {
-		console.error(err)
-	}
+	} catch (err) {}
 }
 
 const generateRandomCode = (length) => {
@@ -126,10 +129,12 @@ const generateRandomCode = (length) => {
 	return result
 }
 
-const materializedViewQueryBuilder = async (model, concreteFields, metaFields) => {
+const materializedViewQueryBuilder = async (model, concreteFields, metaFields, tenantCode) => {
 	try {
 		const tableName = model.tableName
-		const temporaryMaterializedViewName = `${common.materializedViewsPrefix}${tableName}_${generateRandomCode(8)}`
+		const temporaryMaterializedViewName = `${common.getTenantViewName(tenantCode, tableName)}_${generateRandomCode(
+			8
+		)}`
 		const concreteFieldsQuery = await concreteFields
 			.map((data) => {
 				return `${data.key}::${data.type} as ${data.key}`
@@ -149,22 +154,26 @@ const materializedViewQueryBuilder = async (model, concreteFields, metaFields) =
 				: '' // Empty string if there are no meta fields
 
 		const whereClause = utils.generateWhereClause(tableName)
+		// Add tenant-specific filtering to the WHERE clause - validate tenantCode for safety
+		if (!tenantCode || typeof tenantCode !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(tenantCode)) {
+			throw new Error('Invalid tenant code for materialized view creation')
+		}
+		const tenantWhereClause = `${whereClause} AND tenant_code = '${tenantCode.replace(/'/g, "''")}'`
 
 		const materializedViewGenerationQuery = `CREATE MATERIALIZED VIEW ${temporaryMaterializedViewName} AS
 		  SELECT 
 			  ${concreteFieldsQuery}${metaFieldsQuery && `,`}${metaFieldsQuery}
 		  FROM public."${tableName}"
-		  WHERE ${whereClause};`
+		  WHERE ${tenantWhereClause};`
 
 		return { materializedViewGenerationQuery, temporaryMaterializedViewName }
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
-const createIndexesOnAllowFilteringFields = async (model, modelEntityTypes, fieldsWithDatatype) => {
+const createIndexesOnAllowFilteringFields = async (model, modelEntityTypes, fieldsWithDatatype, tenantCode) => {
 	try {
 		const uniqueEntityTypeValueList = [...new Set(modelEntityTypes.entityTypeValueList)]
+		const viewName = common.getTenantViewName(tenantCode, model.tableName)
 
 		await Promise.all(
 			uniqueEntityTypeValueList.map(async (attribute) => {
@@ -179,25 +188,22 @@ const createIndexesOnAllowFilteringFields = async (model, modelEntityTypes, fiel
 				// Determine the query based on the type
 				let query
 				if (type === 'character varying' || type === 'character text') {
-					query = `CREATE INDEX ${common.materializedViewsPrefix}idx_${model.tableName}_${attribute} ON ${common.materializedViewsPrefix}${model.tableName} USING gin (${attribute} gin_trgm_ops);`
+					query = `CREATE INDEX ${tenantCode}_idx_${model.tableName}_${attribute} ON ${viewName} USING gin (${attribute} gin_trgm_ops);`
 				} else {
-					query = `CREATE INDEX ${common.materializedViewsPrefix}idx_${model.tableName}_${attribute} ON ${common.materializedViewsPrefix}${model.tableName} USING gin (${attribute});`
+					query = `CREATE INDEX ${tenantCode}_idx_${model.tableName}_${attribute} ON ${viewName} USING gin (${attribute});`
 				}
 
 				return await sequelize.query(query)
 			})
 		)
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
-const createViewGINIndexOnSearch = async (model, config, fields) => {
+const createViewGINIndexOnSearch = async (model, config, fields, tenantCode) => {
 	try {
 		const modelName = model.name
 		const searchType = modelName === 'Session' ? 'session' : modelName === 'MentorExtension' ? 'mentor' : null
 
 		if (!searchType) {
-			console.warn('Unknown model name')
 			return
 		}
 
@@ -205,24 +211,21 @@ const createViewGINIndexOnSearch = async (model, config, fields) => {
 		const fieldsForIndex = fieldsConfig.filter((field) => !field.isAnEntityType).map((field) => field.name)
 
 		if (fieldsForIndex.length === 0) {
-			console.warn('No fields available for indexing')
 			return
 		}
+
+		const viewName = common.getTenantViewName(tenantCode, model.tableName)
 
 		for (const field of fieldsForIndex) {
 			try {
 				await sequelize.query(`
-                    CREATE INDEX ${common.materializedViewsPrefix}gin_index_${model.tableName}_${field}
-                    ON ${common.materializedViewsPrefix}${model.tableName}
+                    CREATE INDEX ${tenantCode}_gin_index_${model.tableName}_${field}
+                    ON ${viewName}
                     USING gin(${field} gin_trgm_ops);
                 `)
-			} catch (err) {
-				console.warn(`An error occurred while creating the index for field ${field}:`, err)
-			}
+			} catch (err) {}
 		}
-	} catch (err) {
-		console.warn('An error occurred while creating the index:', err)
-	}
+	} catch (err) {}
 }
 // Function to execute index queries for a specific model
 const executeIndexQueries = async (modelName) => {
@@ -230,35 +233,29 @@ const executeIndexQueries = async (modelName) => {
 	const modelQueries = indexQueries.find((item) => item.modelName === modelName)
 
 	if (modelQueries) {
-		console.log(`Executing index queries for ${modelName}`)
 		for (const query of modelQueries.queries) {
 			try {
 				await sequelize.query(query)
-				console.log(`Successfully executed query for ${modelName}: ${query}`)
-			} catch (error) {
-				console.error(`Error executing query for ${modelName}: ${query}`, error)
-			}
+			} catch (error) {}
 		}
 	} else {
-		console.log(`No index queries found for model: ${modelName}`)
 	}
 }
 const deleteMaterializedView = async (viewName) => {
 	try {
 		await sequelize.query(`DROP MATERIALIZED VIEW ${viewName};`)
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
-const renameMaterializedView = async (temporaryMaterializedViewName, tableName) => {
+const renameMaterializedView = async (temporaryMaterializedViewName, tableName, tenantCode) => {
 	const t = await sequelize.transaction()
 	try {
-		let randomViewName = `${common.materializedViewsPrefix}${tableName}_${generateRandomCode(8)}`
+		const finalViewName = common.getTenantViewName(tenantCode, tableName)
+		let randomViewName = `${finalViewName}_${generateRandomCode(8)}`
 
-		const checkOriginalViewQuery = `SELECT COUNT(*) from pg_matviews where matviewname = '${common.materializedViewsPrefix}${tableName}';`
-		const renameOriginalViewQuery = `ALTER MATERIALIZED VIEW ${common.materializedViewsPrefix}${tableName} RENAME TO ${randomViewName};`
-		const renameNewViewQuery = `ALTER MATERIALIZED VIEW ${temporaryMaterializedViewName} RENAME TO ${common.materializedViewsPrefix}${tableName};`
+		const checkOriginalViewQuery = `SELECT COUNT(*) from pg_matviews where matviewname = '${finalViewName}';`
+		const renameOriginalViewQuery = `ALTER MATERIALIZED VIEW ${finalViewName} RENAME TO ${randomViewName};`
+		const renameNewViewQuery = `ALTER MATERIALIZED VIEW ${temporaryMaterializedViewName} RENAME TO ${finalViewName};`
 
 		const temp = await sequelize.query(checkOriginalViewQuery)
 
@@ -270,27 +267,23 @@ const renameMaterializedView = async (temporaryMaterializedViewName, tableName) 
 		return randomViewName
 	} catch (error) {
 		await t.rollback()
-		console.error('Error executing transaction:', error)
 	}
 }
 
-const createViewUniqueIndexOnPK = async (model) => {
+const createViewUniqueIndexOnPK = async (model, tenantCode) => {
 	try {
 		const primaryKeys = model.primaryKeyAttributes
+		const viewName = common.getTenantViewName(tenantCode, model.tableName)
 
 		const result = await sequelize.query(`
-            CREATE UNIQUE INDEX ${common.materializedViewsPrefix}unique_index_${model.tableName}_${primaryKeys.map(
-			(key) => `_${key}`
-		)} 
-            ON ${common.materializedViewsPrefix}${model.tableName} (${primaryKeys.map((key) => `${key}`).join(', ')});`)
-	} catch (err) {
-		console.log(err)
-	}
+            CREATE UNIQUE INDEX ${tenantCode}_unique_index_${model.tableName}_${primaryKeys.map((key) => `_${key}`)} 
+            ON ${viewName} (${primaryKeys.map((key) => `${key}`).join(', ')});`)
+	} catch (err) {}
 }
 
-const generateMaterializedView = async (modelEntityTypes) => {
+const generateMaterializedView = async (modelEntityTypes, tenantCode) => {
 	try {
-		const model = require('@database/models/index')[modelEntityTypes.modelName]
+		const model = models[modelEntityTypes.modelName]
 
 		const { concreteAttributes, metaAttributes } = await filterConcreteAndMetaAttributes(
 			Object.keys(model.rawAttributes),
@@ -311,53 +304,77 @@ const generateMaterializedView = async (modelEntityTypes) => {
 		const { materializedViewGenerationQuery, temporaryMaterializedViewName } = await materializedViewQueryBuilder(
 			model,
 			concreteFields,
-			modifiedMetaFields
+			modifiedMetaFields,
+			tenantCode
 		)
 
 		await sequelize.query(materializedViewGenerationQuery)
 		const allFields = [...modifiedMetaFields, ...concreteFields]
-		const randomViewName = await renameMaterializedView(temporaryMaterializedViewName, model.tableName)
+		const randomViewName = await renameMaterializedView(temporaryMaterializedViewName, model.tableName, tenantCode)
 		if (randomViewName) await deleteMaterializedView(randomViewName)
-		await createIndexesOnAllowFilteringFields(model, modelEntityTypes, allFields)
-		await createViewUniqueIndexOnPK(model)
-		await createViewGINIndexOnSearch(model, searchConfig, allFields)
+		await createIndexesOnAllowFilteringFields(model, modelEntityTypes, allFields, tenantCode)
+		await createViewUniqueIndexOnPK(model, tenantCode)
+		await createViewGINIndexOnSearch(model, searchConfig, allFields, tenantCode)
 		await executeIndexQueries(model.name)
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
-const getAllowFilteringEntityTypes = async () => {
+const getAllowFilteringEntityTypes = async (tenantCode) => {
 	try {
-		const defaultOrgId = await getDefaultOrgId()
+		// Validate tenantCode parameter
+		if (!tenantCode || tenantCode === 'undefined') {
+			elevateLog.error(`Invalid tenantCode provided: ${tenantCode}`)
+			return []
+		}
 
-		return await entityTypeQueries.findAllEntityTypes(
-			defaultOrgId,
+		const defaults = await getDefaults()
+		if (!defaults.orgCode) {
+			return responses.failureResponse({
+				message: 'DEFAULT_ORG_CODE_NOT_SET',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		}
+		if (!defaults.tenantCode) {
+			return responses.failureResponse({
+				message: 'DEFAULT_TENANT_CODE_NOT_SET',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		}
+
+		// Use combination of given tenant + default tenant with default org code
+		// Entity types with allow_filtering=true are global configurations from default org
+		// but support tenant-specific customizations through tenant code combination
+		const entities = await entityTypeQueries.findAllEntityTypes(
+			defaults.orgCode, // Use default org code (global configurations)
+			{ [Op.in]: [tenantCode, defaults.tenantCode] }, // Combination of tenant codes
 			['id', 'value', 'label', 'data_type', 'organization_id', 'has_entities', 'model_names'],
 			{
 				allow_filtering: true,
 			}
 		)
+
+		return entities
 	} catch (err) {
-		console.log(err)
+		elevateLog.error(`Error in getAllowFilteringEntityTypes: ${err.message}`)
+		return []
 	}
 }
 
-const triggerViewBuild = async () => {
+const triggerViewBuild = async (tenantCode) => {
 	try {
-		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes()
+		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes(tenantCode)
 		const entityTypesGroupedByModel = await groupByModelNames(allowFilteringEntityTypes)
 
 		await Promise.all(
 			entityTypesGroupedByModel.map(async (modelEntityTypes) => {
-				return generateMaterializedView(modelEntityTypes)
+				return generateMaterializedView(modelEntityTypes, tenantCode)
 			})
 		)
 
 		return entityTypesGroupedByModel
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
 //Refresh Flow
@@ -376,73 +393,63 @@ const modelNameCollector = async (entityTypes) => {
 			})
 		)
 		return [...modelSet.values()]
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
-const refreshMaterializedView = async (modelName) => {
+const refreshMaterializedView = async (modelName, tenantCode) => {
 	try {
-		const model = require('@database/models/index')[modelName]
+		const model = models[modelName]
+		const viewName = common.getTenantViewName(tenantCode, model.tableName)
 
 		// Check if a REFRESH MATERIALIZED VIEW query is already running
 		const [activeQueries] = await sequelize.query(`
 		SELECT * FROM pg_stat_activity
-		WHERE query LIKE 'REFRESH MATERIALIZED VIEW CONCURRENTLY ${common.materializedViewsPrefix}${model.tableName}%'
+		WHERE query LIKE 'REFRESH MATERIALIZED VIEW CONCURRENTLY ${viewName}%'
 		  AND state = 'active';
 	  `)
 
 		// If there are active refresh queries, skip refreshing the materialized view
 		if (activeQueries.length > 0) {
-			console.log('A materialized view refresh is already in progress. Skipping.')
 			return
 		}
 
 		// If no active refresh queries, proceed with refreshing the materialized view
-		const [result, metadata] = await sequelize.query(
-			`REFRESH MATERIALIZED VIEW CONCURRENTLY ${common.materializedViewsPrefix}${model.tableName}`
-		)
-		return metadata
-	} catch (err) {
-		console.log(err)
-	}
+		const [result, metadata] = await sequelize.query(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${viewName}`)
+		return { message: 'Materialized view refreshed successfully', result, metadata }
+	} catch (err) {}
 }
 
-const refreshNextView = (currentIndex, modelNames) => {
+const refreshNextView = (currentIndex, modelNames, tenantCode) => {
 	try {
 		if (currentIndex < modelNames.length) {
-			refreshMaterializedView(modelNames[currentIndex])
+			refreshMaterializedView(modelNames[currentIndex], tenantCode)
 			currentIndex++
 		} else {
 			console.info('All views refreshed. Stopping further refreshes.')
 			clearInterval(refreshInterval) // Stop the setInterval loop
 		}
 		return currentIndex
-	} catch (err) {
-		console.log(err)
-	}
+	} catch (err) {}
 }
 
-const triggerPeriodicViewRefresh = async () => {
+const triggerPeriodicViewRefresh = async (tenantCode) => {
 	try {
-		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes()
+		const allowFilteringEntityTypes = await getAllowFilteringEntityTypes(tenantCode)
 		const modelNames = await modelNameCollector(allowFilteringEntityTypes)
 		const interval = process.env.REFRESH_VIEW_INTERVAL
 		let currentIndex = 0
 
 		// Using the mockSetInterval function to simulate setInterval
 		refreshInterval = setInterval(() => {
-			currentIndex = refreshNextView(currentIndex, modelNames)
+			currentIndex = refreshNextView(currentIndex, modelNames, tenantCode)
 		}, interval / modelNames.length)
 
 		// Immediately trigger the first refresh
-		currentIndex = refreshNextView(currentIndex, modelNames)
-	} catch (err) {
-		console.log(err)
-	}
+		currentIndex = refreshNextView(currentIndex, modelNames, tenantCode)
+	} catch (err) {}
 }
-const checkAndCreateMaterializedViews = async () => {
-	const allowFilteringEntityTypes = await getAllowFilteringEntityTypes()
+const checkAndCreateMaterializedViews = async (tenantCode) => {
+	const allowFilteringEntityTypes = await getAllowFilteringEntityTypes(tenantCode)
 	const entityTypesGroupedByModel = await groupByModelNames(allowFilteringEntityTypes)
 
 	await sequelize.query('CREATE EXTENSION IF NOT EXISTS pg_trgm;', {
@@ -454,13 +461,12 @@ const checkAndCreateMaterializedViews = async () => {
 
 	await Promise.all(
 		entityTypesGroupedByModel.map(async (modelEntityTypes) => {
-			const model = require('@database/models/index')[modelEntityTypes.modelName]
+			const model = models[modelEntityTypes.modelName]
+			const expectedViewName = common.getTenantViewName(tenantCode, model.tableName)
 
-			const mViewExits = result.some(
-				({ matviewname }) => matviewname === common.materializedViewsPrefix + model.tableName
-			)
+			const mViewExits = result.some(({ matviewname }) => matviewname === expectedViewName)
 			if (!mViewExits) {
-				return generateMaterializedView(modelEntityTypes)
+				return generateMaterializedView(modelEntityTypes, tenantCode)
 			}
 			return true
 		})
@@ -469,11 +475,87 @@ const checkAndCreateMaterializedViews = async () => {
 	return entityTypesGroupedByModel
 }
 
+const triggerViewBuildForAllTenants = async () => {
+	try {
+		const tenants = await userExtensionQueries.getDistinctTenantCodes()
+		const results = []
+
+		for (const tenant of tenants) {
+			const tenantCode = tenant.code
+
+			// Skip tenants with undefined or empty tenant codes
+			if (!tenantCode || tenantCode === 'undefined') {
+				elevateLog.warn(`Skipping tenant with invalid code: ${tenant}`)
+				continue
+			}
+
+			elevateLog.info(`Building materialized views for tenant: ${tenantCode}`)
+			const result = await triggerViewBuild(tenantCode)
+			results.push({
+				tenantCode,
+				result: result || 'Success',
+			})
+		}
+
+		return {
+			success: true,
+			message: `Built materialized views for ${results.length} tenants`,
+			results,
+		}
+	} catch (err) {
+		elevateLog.error(`Error in triggerViewBuildForAllTenants: ${err.message}`)
+		return {
+			success: false,
+			message: 'Failed to build views for all tenants',
+			error: err.message,
+		}
+	}
+}
+
+const triggerPeriodicViewRefreshForAllTenants = async () => {
+	try {
+		const tenants = await userExtensionQueries.getDistinctTenantCodes()
+		const results = []
+
+		for (const tenant of tenants) {
+			const tenantCode = tenant.code
+
+			// Skip tenants with undefined or empty tenant codes
+			if (!tenantCode || tenantCode === 'undefined') {
+				elevateLog.warn(`Skipping tenant with invalid code: ${tenant}`)
+				continue
+			}
+
+			elevateLog.info(`Starting periodic refresh for tenant: ${tenantCode}`)
+			const result = await triggerPeriodicViewRefresh(tenantCode)
+			results.push({
+				tenantCode,
+				result: result || 'Success',
+			})
+		}
+
+		return {
+			success: true,
+			message: `Started periodic refresh for ${results.length} tenants`,
+			results,
+		}
+	} catch (err) {
+		elevateLog.error(`Error in triggerPeriodicViewRefreshForAllTenants: ${err.message}`)
+		return {
+			success: false,
+			message: 'Failed to start refresh for all tenants',
+			error: err.message,
+		}
+	}
+}
+
 const adminService = {
 	triggerViewBuild,
 	triggerPeriodicViewRefresh,
 	refreshMaterializedView,
 	checkAndCreateMaterializedViews,
+	triggerViewBuildForAllTenants,
+	triggerPeriodicViewRefreshForAllTenants,
 }
 
 module.exports = adminService

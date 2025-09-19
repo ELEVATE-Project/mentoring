@@ -26,7 +26,9 @@ module.exports = class Users {
 		try {
 			const pendingFeedBacks = await feedbackService.pending(
 				req.decodedToken.id,
-				isAMentor(req.decodedToken.roles)
+				isAMentor(req.decodedToken.roles),
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return pendingFeedBacks
 		} catch (error) {
@@ -48,7 +50,15 @@ module.exports = class Users {
 
 	async list(req) {
 		try {
-			const listUser = await userService.list(req.query.type, req.pageNo, req.pageSize, req.searchText)
+			const listUser = await userService.list(
+				req.query.type,
+				req.pageNo,
+				req.pageSize,
+				req.searchText,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 			return listUser
 		} catch (error) {
 			return error
@@ -66,9 +76,13 @@ module.exports = class Users {
 	 */
 	async create(req) {
 		try {
-			return await userService.create(req.decodedToken)
+			return await userService.create(
+				req.decodedToken,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}
@@ -84,9 +98,8 @@ module.exports = class Users {
 	 */
 	async add(req) {
 		try {
-			return await userService.add(req.body)
+			return await userService.add(req.body, req.body.id, req.body.organization_code, req.body.tenant_code)
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}
@@ -101,9 +114,14 @@ module.exports = class Users {
 	 */
 	async update(req) {
 		try {
-			return await userService.update(req.body)
+			return await userService.update(
+				req.body,
+				req.decodedToken,
+				req.body.id,
+				req.body.organization_code,
+				req.body.tenant_code
+			)
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}
@@ -119,9 +137,8 @@ module.exports = class Users {
 	 */
 	async delete(req) {
 		try {
-			return await adminService.userDelete(req.body.id.toString())
+			return await adminService.userDelete(req.body.id.toString(), req.body.tenant_code)
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}
@@ -135,9 +152,8 @@ module.exports = class Users {
 	 */
 	async requestCount(req) {
 		try {
-			return await userService.requestCount(req.decodedToken.id)
+			return await userService.requestCount(req.decodedToken.id, req.body.tenant_code)
 		} catch (error) {
-			console.log(error)
 			return error
 		}
 	}

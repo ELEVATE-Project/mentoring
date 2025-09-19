@@ -2,11 +2,33 @@ const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const userRequests = require('@requests/user')
 const entityTypeService = require('@services/entity-type')
+const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const { Parser } = require('@json2csv/plainjs')
+const { Op } = require('sequelize')
 
-exports.getEnrolledMentees = async (sessionId, queryParams, userID) => {
+exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) => {
 	try {
-		const mentees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, { paranoid: false })
+		const mentees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, tenantCode)
+
+		// Early return if no mentees found
+		if (!mentees || mentees.length === 0) {
+			return queryParams?.csv === 'true'
+				? new Parser({
+						fields: [
+							{ label: 'No.', value: 'index_number' },
+							{ label: 'Name', value: 'name' },
+							{ label: 'Designation', value: 'designation' },
+							{ label: 'Organization', value: 'organization' },
+							{ label: 'E-mail ID', value: 'email' },
+							{ label: 'Enrollment Type', value: 'type' },
+						],
+						header: true,
+						includeEmptyRows: true,
+						defaultValue: null,
+				  }).parse()
+				: []
+		}
+
 		const menteeIds = mentees.map((mentee) => mentee.mentee_id)
 		let menteeTypeMap = {}
 		mentees.forEach((mentee) => {
@@ -25,12 +47,13 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID) => {
 					'experience',
 					'mentee_visibility',
 				],
+				include: ['email'], // Explicitly include email since it's excluded by default scope
 			},
 			paranoid: false,
 		}
 		let [enrolledUsers, attendeesAccounts] = await Promise.all([
-			menteeExtensionQueries.getUsersByUserIds(menteeIds, options, true),
-			userRequests.getUserDetailedList(menteeIds, true, true).then((result) => result.result),
+			menteeExtensionQueries.getUsersByUserIds(menteeIds, options, tenantCode),
+			userRequests.getUserDetailedList(menteeIds, tenantCode).then((result) => result.result),
 		])
 
 		enrolledUsers.forEach((user) => {
@@ -66,8 +89,37 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID) => {
 			enrolledUsers,
 			uniqueOrgIds,
 			[await menteeExtensionQueries.getModelName()],
-			'organization_id'
+			'organization_id',
+			[],
+			[tenantCode]
 		)
+
+		// Fetch organization details for each unique organization ID
+		const validOrgIds = uniqueOrgIds.filter((id) => id != null)
+		let organizationDetails = []
+		if (validOrgIds.length > 0) {
+			organizationDetails = await organisationExtensionQueries.findAll(
+				{
+					organization_id: {
+						[Op.in]: validOrgIds,
+					},
+				},
+				tenantCode,
+				{
+					attributes: ['name', 'organization_id'],
+					raw: true,
+				}
+			)
+		}
+
+		// Map organization details to users
+		enrolledUsers = enrolledUsers.map((user) => {
+			const org = organizationDetails.find((org) => org.organization_id == user.organization_id)
+			return {
+				...user,
+				organization: org ? { name: org.name } : null,
+			}
+		})
 
 		// Merge arrays based on user_id and id
 		const mergedUserArray = enrolledUsers.map((user) => {

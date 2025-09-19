@@ -23,10 +23,20 @@ module.exports = class admin {
 
 	async userDelete(req) {
 		try {
-			const userDelete = await adminService.userDelete(req.query.userId)
+			const userDelete = await adminService.userDelete(
+				req.query.userId,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 			return userDelete
 		} catch (error) {
-			return error
+			console.error('Controller error in userDelete:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'USER_DELETION_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
 		}
 	}
 
@@ -39,8 +49,10 @@ module.exports = class admin {
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
-			const userDelete = await adminService.triggerViewRebuild(req.decodedToken)
-			return userDelete
+			// Use tenant_code from query param if provided, otherwise use token tenant_code, otherwise null (all tenants)
+			const tenantCode = req.query.tenant_code || req.decodedToken.tenant_code || null
+			const result = await adminService.triggerViewRebuild(req.decodedToken, tenantCode)
+			return result
 		} catch (error) {
 			return error
 		}
@@ -54,21 +66,44 @@ module.exports = class admin {
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
-			return await adminService.triggerPeriodicViewRefresh(req.decodedToken)
+			// Use tenant_code from query param if provided, otherwise use token tenant_code, otherwise null (all tenants)
+			const tenantCode = req.query.tenant_code || req.decodedToken.tenant_code || null
+			return await adminService.triggerPeriodicViewRefresh(req.decodedToken, tenantCode)
 		} catch (err) {
 			console.log(err)
 		}
 	}
 	async triggerViewRebuildInternal(req) {
 		try {
-			return await adminService.triggerViewRebuild()
+			// Internal method - tenant_code is now required for tenant-specific views
+			const tenantCode = req.query.tenant_code
+			if (!tenantCode) {
+				return responses.failureResponse({
+					message: 'TENANT_CODE_REQUIRED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			return await adminService.triggerViewRebuild(null, tenantCode)
 		} catch (error) {
 			return error
 		}
 	}
 	async triggerPeriodicViewRefreshInternal(req) {
 		try {
-			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name)
+			// Internal method - tenant_code is now required for tenant-specific views
+			const tenantCode = req.query.tenant_code
+			const modelName = req.query.model_name
+
+			if (!tenantCode) {
+				return responses.failureResponse({
+					message: 'TENANT_CODE_REQUIRED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			return await adminService.triggerPeriodicViewRefreshInternal(modelName, tenantCode)
 		} catch (err) {
 			console.log(err)
 		}

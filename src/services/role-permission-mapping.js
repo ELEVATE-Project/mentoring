@@ -18,6 +18,7 @@ module.exports = class modulesHelper {
 
 	static async create(roleTitle, permissionId, id) {
 		try {
+			// Business Logic: Validate permission exists
 			const permission = await permissionsQueries.findPermissionId(permissionId)
 			if (!permission) {
 				return responses.failureResponse({
@@ -26,6 +27,8 @@ module.exports = class modulesHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Business Logic: Prepare data for creation
 			const data = {
 				role_title: roleTitle,
 				permission_id: permissionId,
@@ -34,7 +37,10 @@ module.exports = class modulesHelper {
 				api_path: permission.api_path,
 				created_by: id,
 			}
+
+			// Database Operation: Create role permission mapping
 			const rolePermissionMapping = await rolePermissionMappingQueries.create(data)
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ROLE_PERMISSION_CREATED_SUCCESSFULLY',

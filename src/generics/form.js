@@ -1,9 +1,9 @@
 const formQueries = require('../database/queries/form')
-async function getAllFormsVersion() {
+async function getAllFormsVersion(tenantCode) {
 	try {
-		return await formQueries.findAllTypeFormVersion()
+		return await formQueries.findAllTypeFormVersion(tenantCode)
 	} catch (error) {
-		console.error(error)
+		return error
 	}
 }
 module.exports = { getAllFormsVersion }

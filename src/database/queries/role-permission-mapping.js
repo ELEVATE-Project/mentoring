@@ -4,7 +4,7 @@ exports.create = async (data) => {
 	try {
 		return RolePermissionMapping.create(data, { returning: true })
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
@@ -15,18 +15,19 @@ exports.delete = async (filter) => {
 		})
 		return deletedRows
 	} catch (error) {
-		throw error
+		return error
 	}
 }
 
 exports.findAll = async (filter, attributes) => {
 	try {
-		return RolePermissionMapping.findAll({
+		const findRolePermisdions = await RolePermissionMapping.findAll({
 			where: filter,
 			attributes,
 			raw: true,
 		})
+		return findRolePermisdions
 	} catch (error) {
-		throw error
+		return error
 	}
 }

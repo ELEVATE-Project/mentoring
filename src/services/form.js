@@ -5,9 +5,8 @@ const KafkaProducer = require('@generics/kafka-communication')
 
 const formQueries = require('../database/queries/form')
 const { UniqueConstraintError } = require('sequelize')
-
-const entityTypeQueries = require('../database/queries/entityType')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
+const { Op } = require('sequelize')
 
 const responses = require('@helpers/responses')
 
@@ -16,14 +15,18 @@ module.exports = class FormsHelper {
 	 * Create Form.
 	 * @method
 	 * @name create
-	 * @param {Object} bodyData
+	 * @param {Object} bodyData - Form data
+	 * @param {String} orgId - Organization ID
+	 * @param {String} orgCode - Organization code
+	 * @param {String} tenantCode - Tenant code
 	 * @returns {JSON} - Form creation data.
 	 */
 
-	static async create(bodyData, orgId) {
+	static async create(bodyData, orgId, orgCode, tenantCode) {
 		try {
 			bodyData['organization_id'] = orgId
-			const form = await formQueries.createForm(bodyData)
+			bodyData['organization_code'] = orgCode
+			const form = await formQueries.createForm(bodyData, tenantCode)
 
 			await utils.internalDel('formVersion')
 
@@ -54,23 +57,21 @@ module.exports = class FormsHelper {
 	 * @returns {JSON} - Update form data.
 	 */
 
-	static async update(id, bodyData, orgId) {
+	static async update(id, bodyData, orgCode, tenantCode) {
 		try {
 			let filter = {}
 			if (id) {
 				filter = {
 					id: id,
-					organization_id: orgId,
 				}
 			} else {
 				filter = {
 					type: bodyData.type,
 					sub_type: bodyData.sub_type,
-					organization_id: orgId,
 				}
 			}
 
-			const result = await formQueries.updateOneForm(filter, bodyData)
+			const result = await formQueries.updateOneForm(filter, bodyData, tenantCode, orgCode)
 
 			if (result === 'ENTITY_ALREADY_EXISTS') {
 				return responses.failureResponse({
@@ -111,28 +112,37 @@ module.exports = class FormsHelper {
 	 * @returns {JSON} - Read form data.
 	 */
 
-	static async read(id, bodyData, orgId) {
+	static async read(id, bodyData, orgCode, tenantCode) {
 		try {
 			let filter = {}
 			if (id) {
-				filter = { id: id, organization_id: orgId }
+				filter = { id: id, tenant_code: tenantCode }
 			} else {
-				filter = { ...bodyData, organization_id: orgId }
+				filter = { ...bodyData, tenant_code: tenantCode }
 			}
-			const form = await formQueries.findOneForm(filter)
-			let defaultOrgForm
-			if (!form) {
-				const defaultOrgId = await getDefaultOrgId()
-				if (!defaultOrgId)
-					return responses.failureResponse({
-						message: 'DEFAULT_ORG_ID_NOT_SET',
-						statusCode: httpStatusCode.bad_request,
-						responseCode: 'CLIENT_ERROR',
-					})
-				filter = id ? { id: id, organization_id: defaultOrgId } : { ...bodyData, organization_id: defaultOrgId }
-				defaultOrgForm = await formQueries.findOneForm(filter)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			// Add organization code to filter if provided
+			if (orgCode) {
+				filter.organization_code = orgCode
 			}
-			if (!form && !defaultOrgForm) {
+
+			// Business logic: Try both current tenant and default tenant
+			const tenantCodes = [tenantCode, defaults.tenantCode]
+			const forms = await formQueries.findFormsByFilter(filter, tenantCodes)
+
+			if (!forms || forms.length === 0) {
 				return responses.failureResponse({
 					message: 'FORM_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
@@ -140,22 +150,38 @@ module.exports = class FormsHelper {
 				})
 			}
 
+			// Business logic: Prefer current tenant over default tenant
+			const form = forms.find((f) => f.tenant_code === tenantCode) || forms[0]
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'FORM_FETCHED_SUCCESSFULLY',
-				result: form ? form : defaultOrgForm,
+				result: form,
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}
-	static async readAllFormsVersion() {
+	static async readAllFormsVersion(tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'FORM_VERSION_FETCHED_SUCCESSFULLY',
-				result: (await form.getAllFormsVersion()) || {},
+				result: (await form.getAllFormsVersion({ [Op.in]: [defaults.tenantCode, tenantCode] })) || {},
 			})
 		} catch (error) {
 			return error

@@ -13,16 +13,15 @@ const userRequests = require('@requests/user')
  * @returns {Promise<Object>} An object containing auth_token and user_id if login is successful.
  * @throws Will throw an error if the login request fails for reasons other than unauthorized access.
  */
-exports.login = async (userId) => {
+exports.login = async (userId, tenantCode) => {
 	try {
-		const login = await communicationRequests.login({ userId })
+		const login = await communicationRequests.login({ userId, tenantCode })
 		return {
 			auth_token: login.result.auth_token,
 			user_id: login.result.user_id,
 		}
 	} catch (error) {
 		if (error.message === common.COMMUNICATION.UNAUTHORIZED) {
-			console.error('Error: Unauthorized access during login. Please check your tokens.')
 		}
 		throw error
 	}
@@ -35,13 +34,12 @@ exports.login = async (userId) => {
  * @returns {Promise<Object>} The status of the logout operation.
  * @throws Will throw an error if the logout request fails for reasons other than unauthorized access.
  */
-exports.logout = async (userId) => {
+exports.logout = async (userId, tenantCode) => {
 	try {
-		const logout = await communicationRequests.logout({ userId })
+		const logout = await communicationRequests.logout({ userId, tenantCode })
 		return logout.result.status
 	} catch (error) {
 		if (error.message === common.COMMUNICATION.UNAUTHORIZED) {
-			console.error('Error: Unauthorized access during logout. Please check your tokens.')
 		}
 		throw error
 	}
@@ -55,11 +53,10 @@ exports.logout = async (userId) => {
  * @returns {Promise<void>} Resolves if the update is successful.
  * @throws Will throw an error if the updateAvatar request fails.
  */
-exports.updateAvatar = async (userId, imageUrl) => {
+exports.updateAvatar = async (userId, imageUrl, tenantCode) => {
 	try {
-		await communicationRequests.updateAvatar(userId, imageUrl)
+		await communicationRequests.updateAvatar(userId, imageUrl, tenantCode)
 	} catch (error) {
-		console.error(`Error updating avatar for user ${userId}:`, error.message)
 		throw error
 	}
 }
@@ -72,11 +69,10 @@ exports.updateAvatar = async (userId, imageUrl) => {
  * @returns {Promise<void>} Resolves if the update is successful.
  * @throws Will throw an error if the updateUser request fails.
  */
-exports.updateUser = async (userId, name) => {
+exports.updateUser = async (userId, name, tenantCode) => {
 	try {
-		await communicationRequests.updateUser(userId, name)
+		await communicationRequests.updateUser(userId, name, tenantCode)
 	} catch (error) {
-		console.error(`Error updating user ${userId}:`, error.message)
 		throw error
 	}
 }
@@ -93,24 +89,21 @@ exports.updateUser = async (userId, name) => {
  * @returns {Promise<void>} Resolves if creation or updates are successful.
  * @throws Will throw an error if any request fails.
  */
-exports.createOrUpdateUser = async ({ userId, name, email, image }) => {
+exports.createOrUpdateUser = async ({ userId, name, email, image, tenantCode }) => {
 	try {
-		const user = await userExtensionQueries.getUserById(userId, {
-			attributes: ['meta'],
-		})
+		const user = await userExtensionQueries.getMenteeExtension(userId, ['meta'], false, tenantCode)
 
 		if (user && user.meta?.communications_user_id) {
 			// Update user information if already exists in the communication service
 			await Promise.all([
-				image ? this.updateAvatar(userId, image) : Promise.resolve(),
-				name ? this.updateUser(userId, name) : Promise.resolve(),
+				image ? this.updateAvatar(userId, image, tenantCode) : Promise.resolve(),
+				name ? this.updateUser(userId, name, tenantCode) : Promise.resolve(),
 			])
 		} else {
 			// Create new user in the communication service
-			await this.create(userId, name, email, image)
+			await this.create(userId, name, email, image, tenantCode)
 		}
 	} catch (error) {
-		console.error('Error in createOrUpdateUser:', error.message)
 		throw error
 	}
 }
@@ -125,9 +118,9 @@ exports.createOrUpdateUser = async ({ userId, name, email, image }) => {
  * @returns {Promise<Object>} An object containing the user_id from the communication service.
  * @throws Will throw an error if the signup request fails for reasons other than unauthorized access.
  */
-exports.create = async (userId, name, email, image) => {
+exports.create = async (userId, name, email, image, tenantCode) => {
 	try {
-		const signup = await communicationRequests.signup({ userId, name, email, image })
+		const signup = await communicationRequests.signup({ userId, name, email, image, tenantCode })
 
 		if (signup.result.user_id) {
 			// Update the user's metadata with the communication service user ID
@@ -137,7 +130,9 @@ exports.create = async (userId, name, email, image) => {
 				{
 					returning: true,
 					raw: true,
-				}
+				},
+				{},
+				tenantCode
 			)
 		}
 		return {
@@ -145,7 +140,6 @@ exports.create = async (userId, name, email, image) => {
 		}
 	} catch (error) {
 		if (error.message === common.COMMUNICATION.UNAUTHORIZED) {
-			console.error('Error: Unauthorized access during signup. Please check your tokens.')
 		}
 		throw error
 	}
@@ -160,7 +154,7 @@ exports.create = async (userId, name, email, image) => {
  * @returns {Promise<Object>} The response from the communication service upon creating the chat room.
  * @throws Will throw an error if the request to create a chat room fails.
  */
-exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage) => {
+exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage, tenantCode) => {
 	try {
 		// Retrieve user details, ensuring each has a `communications_user_id`
 		let userDetails = await userExtensionQueries.getUsersByUserIds(
@@ -168,6 +162,7 @@ exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage
 			{
 				attributes: ['name', 'user_id', 'email', 'meta', 'image'],
 			},
+			tenantCode,
 			true
 		)
 
@@ -178,7 +173,7 @@ exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage
 				if (user?.image) {
 					userImage = (await userRequests.getDownloadableUrl(user.image))?.result
 				}
-				await this.create(user.user_id, user.name, user.email, userImage)
+				await this.create(user.user_id, user.name, user.email, userImage, tenantCode)
 			}
 		}
 
@@ -186,10 +181,10 @@ exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage
 		const chatRoom = await communicationRequests.createChatRoom({
 			userIds: [initiatorUserId, recipientUserId],
 			initialMessage: initialMessage,
+			tenantCode: tenantCode,
 		})
 		return chatRoom
 	} catch (error) {
-		console.error('Create Room Failed:', error)
 		throw error
 	}
 }
@@ -208,16 +203,15 @@ exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage
  * const result = await resolve('external-user-123');
  * // result => { user_id: 'internal-user-456' }
  */
-exports.resolve = async (userId) => {
+exports.resolve = async (userId, tenantCode) => {
 	try {
-		const userIdResponse = await communicationRequests.getUserId(userId)
+		const userIdResponse = await communicationRequests.getUserId(userId, tenantCode)
 
 		return {
 			user_id: userIdResponse.result.user_id,
 		}
 	} catch (error) {
 		if (error.message === common.COMMUNICATION.UNAUTHORIZED) {
-			console.error('Error: Unauthorized access during resolve. Please check your tokens.')
 		}
 		throw error
 	}
@@ -241,12 +235,16 @@ exports.resolve = async (userId) => {
  * const wasUpdated = await setActiveStatus('abc123', false, true);
  * // wasUpdated => true if successful
  */
-exports.setActiveStatus = async (userId, activeStatus, confirmRelinquish) => {
+exports.setActiveStatus = async (userId, activeStatus, confirmRelinquish, tenantCode) => {
 	try {
-		const setUserActiveStatus = await communicationRequests.setActiveStatus(userId, activeStatus, confirmRelinquish)
+		const setUserActiveStatus = await communicationRequests.setActiveStatus(
+			userId,
+			activeStatus,
+			confirmRelinquish,
+			tenantCode
+		)
 		return setUserActiveStatus
 	} catch (error) {
-		console.error(`Error updating user ${userId}:`, error.message)
 		throw error
 	}
 }
@@ -267,12 +265,11 @@ exports.setActiveStatus = async (userId, activeStatus, confirmRelinquish) => {
  * const result = await removeAvatar('abc123');
  * // result => { result: { success: true }, statusCode: 200, message: 'AVATAR_REMOVED' }
  */
-exports.removeAvatar = async (userId) => {
+exports.removeAvatar = async (userId, tenantCode) => {
 	try {
-		const removeAvatarStatus = await communicationRequests.removeAvatar(userId)
+		const removeAvatarStatus = await communicationRequests.removeAvatar(userId, tenantCode)
 		return removeAvatarStatus
 	} catch (error) {
-		console.error(`Error remove avatar of the user ${userId}:`, error.message)
 		throw error
 	}
 }
