@@ -535,7 +535,7 @@ module.exports = class MenteesHelper {
 			return defaultRuleFilter
 		}
 
-		const sessions = await sessionQueries.getUpcomingSessionsFromView(
+		let sessions = await sessionQueries.getUpcomingSessionsFromView(
 			page,
 			limit,
 			searchFilter,
