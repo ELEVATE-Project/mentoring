@@ -91,18 +91,16 @@ module.exports = class admin {
 	}
 	async triggerPeriodicViewRefreshInternal(req) {
 		try {
-			// Internal method - tenant_code is now required for tenant-specific views
+			// Internal method - can refresh for specific tenant or all tenants
 			const tenantCode = req.query.tenant_code
 			const modelName = req.query.model_name
 
 			if (!tenantCode) {
-				return responses.failureResponse({
-					message: 'TENANT_CODE_REQUIRED',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
+				// No tenantCode provided - refresh for all tenants using existing logic
+				return await adminService.triggerPeriodicViewRefresh(null, null)
 			}
 
+			// Specific tenantCode provided - refresh for that tenant only
 			return await adminService.triggerPeriodicViewRefreshInternal(modelName, tenantCode)
 		} catch (err) {
 			console.log(err)
