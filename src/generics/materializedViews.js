@@ -9,6 +9,7 @@ const searchConfig = require('@configs/search.json')
 const indexQueries = require('@generics/mViewsIndexQueries')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { elevateLog } = require('elevate-logger')
+const logger = elevateLog.init()
 const responses = require('@helpers/responses')
 const httpStatusCode = require('@generics/http-status')
 const userExtensionQueries = require('@database/queries/userExtension')
@@ -323,7 +324,7 @@ const getAllowFilteringEntityTypes = async (tenantCode) => {
 	try {
 		// Validate tenantCode parameter
 		if (!tenantCode || tenantCode === 'undefined') {
-			elevateLog.error(`Invalid tenantCode provided: ${tenantCode}`)
+			logger.error(`Invalid tenantCode provided: ${tenantCode}`)
 			return []
 		}
 
@@ -357,7 +358,7 @@ const getAllowFilteringEntityTypes = async (tenantCode) => {
 
 		return entities
 	} catch (err) {
-		elevateLog.error(`Error in getAllowFilteringEntityTypes: ${err.message}`)
+		logger.error(`Error in getAllowFilteringEntityTypes: ${err.message}`)
 		return []
 	}
 }
@@ -485,11 +486,11 @@ const triggerViewBuildForAllTenants = async () => {
 
 			// Skip tenants with undefined or empty tenant codes
 			if (!tenantCode || tenantCode === 'undefined') {
-				elevateLog.warn(`Skipping tenant with invalid code: ${tenant}`)
+				logger.warn(`Skipping tenant with invalid code: ${tenant}`)
 				continue
 			}
 
-			elevateLog.info(`Building materialized views for tenant: ${tenantCode}`)
+			logger.info(`Building materialized views for tenant: ${tenantCode}`)
 			const result = await triggerViewBuild(tenantCode)
 			results.push({
 				tenantCode,
@@ -503,7 +504,7 @@ const triggerViewBuildForAllTenants = async () => {
 			results,
 		}
 	} catch (err) {
-		elevateLog.error(`Error in triggerViewBuildForAllTenants: ${err.message}`)
+		logger.error(`Error in triggerViewBuildForAllTenants: ${err.message}`)
 		return {
 			success: false,
 			message: 'Failed to build views for all tenants',
@@ -522,11 +523,11 @@ const triggerPeriodicViewRefreshForAllTenants = async () => {
 
 			// Skip tenants with undefined or empty tenant codes
 			if (!tenantCode || tenantCode === 'undefined') {
-				elevateLog.warn(`Skipping tenant with invalid code: ${tenant}`)
+				logger.warn(`Skipping tenant with invalid code: ${tenant}`)
 				continue
 			}
 
-			elevateLog.info(`Starting periodic refresh for tenant: ${tenantCode}`)
+			logger.info(`Starting periodic refresh for tenant: ${tenantCode}`)
 			const result = await triggerPeriodicViewRefresh(tenantCode)
 			results.push({
 				tenantCode,
@@ -540,7 +541,7 @@ const triggerPeriodicViewRefreshForAllTenants = async () => {
 			results,
 		}
 	} catch (err) {
-		elevateLog.error(`Error in triggerPeriodicViewRefreshForAllTenants: ${err.message}`)
+		logger.error(`Error in triggerPeriodicViewRefreshForAllTenants: ${err.message}`)
 		return {
 			success: false,
 			message: 'Failed to start refresh for all tenants',
