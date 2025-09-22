@@ -1180,7 +1180,13 @@ module.exports = class MentorsHelper {
 				tenantCode
 			)
 			// Early return for empty results
-			if (extensionDetails.count === 0 || extensionDetails.data.length === 0) {
+			if (
+				!extensionDetails ||
+				!extensionDetails.data ||
+				!Array.isArray(extensionDetails.data) ||
+				extensionDetails.count === 0 ||
+				extensionDetails.data.length === 0
+			) {
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'MENTOR_LIST',
@@ -1233,7 +1239,7 @@ module.exports = class MentorsHelper {
 			const connectedUsers = await connectionQueries.getConnectionsByUserIds(userId, mentorIds, tenantCode)
 			const connectedMentorIds = new Set(connectedUsers.map((connectedUser) => connectedUser.friend_id))
 
-			if (extensionDetails.data.length > 0) {
+			if (extensionDetails.data && Array.isArray(extensionDetails.data) && extensionDetails.data.length > 0) {
 				extensionDetails.data = await entityTypeService.processEntityTypesToAddValueLabels(
 					extensionDetails.data,
 					organizationCodes,
