@@ -547,7 +547,7 @@ module.exports = class MenteesHelper {
 			search,
 			defaultRuleFilter
 		)
-		if (sessions && sessions.rows && sessions.rows.length > 0) {
+		if (sessions && sessions.rows && Array.isArray(sessions.rows) && sessions.rows.length > 0) {
 			const uniqueOrgIds = [...new Set(sessions.rows.map((obj) => obj?.mentor_organization_id).filter(Boolean))]
 			sessions.rows = await entityTypeService.processEntityTypesToAddValueLabels(
 				sessions.rows,
@@ -667,7 +667,10 @@ module.exports = class MenteesHelper {
 				endDate,
 				tenantCode
 			)
-			const upcomingSessionIds = upcomingSessions.rows.map((session) => session.id).filter((id) => id != null)
+			const upcomingSessionIds =
+				upcomingSessions && upcomingSessions.rows && Array.isArray(upcomingSessions.rows)
+					? upcomingSessions.rows.map((session) => session.id).filter((id) => id != null)
+					: []
 
 			if (upcomingSessionIds.length === 0) {
 				return { rows: [], count: 0 }
@@ -695,7 +698,12 @@ module.exports = class MenteesHelper {
 				{ order: [['start_date', 'ASC']] },
 				{ attributes: attributes }
 			)
-			if (sessionDetails && sessionDetails.rows && sessionDetails.rows.length > 0) {
+			if (
+				sessionDetails &&
+				sessionDetails.rows &&
+				Array.isArray(sessionDetails.rows) &&
+				sessionDetails.rows.length > 0
+			) {
 				sessionDetails.rows.forEach((session) => {
 					if (sessionAndMenteeMap.hasOwnProperty(session.id)) {
 						session.enrolled_type = sessionAndMenteeMap[session.id]
@@ -725,6 +733,11 @@ module.exports = class MenteesHelper {
 
 	static async menteeSessionDetails(sessions, userId, tenantCode) {
 		try {
+			// Handle error objects or non-array data
+			if (!Array.isArray(sessions)) {
+				return sessions || []
+			}
+
 			if (sessions.length > 0) {
 				const sessionIds = sessions.map((session) => session.id).filter((id) => id != null)
 
@@ -760,6 +773,11 @@ module.exports = class MenteesHelper {
 	static async sessionMentorDetails(sessions, tenantCode) {
 		try {
 			if (!sessions || sessions.length === 0) {
+				return sessions || []
+			}
+
+			// Handle error objects or non-array data
+			if (!Array.isArray(sessions)) {
 				return sessions || []
 			}
 

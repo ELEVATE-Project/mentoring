@@ -596,7 +596,9 @@ module.exports = class AdminService {
 		try {
 			const upcomingSessions = await sessionQueries.getAllUpcomingSessions(false, tenantCode)
 
-			const upcomingSessionsId = upcomingSessions.map((session) => session.id)
+			const upcomingSessionsId = Array.isArray(upcomingSessions)
+				? upcomingSessions.map((session) => session.id)
+				: []
 			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
 				userId,
 				upcomingSessionsId,

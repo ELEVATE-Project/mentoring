@@ -139,7 +139,10 @@ module.exports = class MentorsHelper {
 			}
 
 			// Process entity types to add value labels.
-			const uniqueOrgIds = [...new Set(upcomingSessions.data.map((obj) => obj.mentor_organization_id))]
+			const uniqueOrgIds =
+				upcomingSessions && upcomingSessions.data && Array.isArray(upcomingSessions.data)
+					? [...new Set(upcomingSessions.data.map((obj) => obj.mentor_organization_id))]
+					: []
 			upcomingSessions.data = await entityTypeService.processEntityTypesToAddValueLabels(
 				upcomingSessions.data,
 				uniqueOrgIds,
