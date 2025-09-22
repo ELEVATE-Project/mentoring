@@ -10,6 +10,7 @@ const adminService = require('@services/admin')
 const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
+const userExtensionQueries = require('@database/queries/userExtension')
 
 module.exports = class admin {
 	/**
@@ -96,8 +97,16 @@ module.exports = class admin {
 			const modelName = req.query.model_name
 
 			if (!tenantCode) {
-				// No tenantCode provided - refresh for all tenants using existing logic
-				return await adminService.triggerPeriodicViewRefresh(null, null)
+				const tenants = await userExtensionQueries.getDistinctTenantCodes()
+
+				if (tenants.length > 0) {
+					return await adminService.triggerPeriodicViewRefreshInternal(modelName, tenants[0].code)
+				}
+
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'NO_TENANTS_FOUND',
+				})
 			}
 
 			// Specific tenantCode provided - refresh for that tenant only

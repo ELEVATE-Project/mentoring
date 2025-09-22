@@ -749,6 +749,7 @@ module.exports = class AdminService {
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY',
+				tenantCode: tenantCode,
 			})
 		} catch (error) {
 			console.error('An error occurred in userDelete:', error)

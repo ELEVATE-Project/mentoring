@@ -1,7 +1,14 @@
 const formQueries = require('../database/queries/form')
-async function getAllFormsVersion(tenantCode) {
+const { getDefaults } = require('@helpers/getDefaultOrgId')
+
+async function getAllFormsVersion(tenantCode, orgCode) {
 	try {
-		return await formQueries.findAllTypeFormVersion(tenantCode)
+		if (!tenantCode || !orgCode) {
+			const defaults = await getDefaults()
+			tenantCode = tenantCode || defaults?.tenantCode
+			orgCode = orgCode || defaults?.orgCode
+		}
+		return await formQueries.findAllTypeFormVersion(tenantCode, orgCode)
 	} catch (error) {
 		return error
 	}
