@@ -426,8 +426,7 @@ const refreshNextView = (currentIndex, modelNames, tenantCode) => {
 			refreshMaterializedView(modelNames[currentIndex], tenantCode)
 			currentIndex++
 		} else {
-			console.info('All views refreshed. Stopping further refreshes.')
-			clearInterval(refreshInterval) // Stop the setInterval loop
+			currentIndex = 0 // Reset to start over for next cycle
 		}
 		return currentIndex
 	} catch (err) {}
