@@ -559,9 +559,15 @@ module.exports = class MenteesHelper {
 			)
 		}
 
-		sessions.rows = await this.menteeSessionDetails(sessions.rows, userId, tenantCode)
+		const sessionRows = sessions.rows || sessions
+		const processedMenteeDetails = await this.menteeSessionDetails(sessionRows, userId, tenantCode)
+		const processedMentorDetails = await this.sessionMentorDetails(processedMenteeDetails, tenantCode)
 
-		sessions.rows = await this.sessionMentorDetails(sessions.rows, tenantCode)
+		if (sessions.rows !== undefined) {
+			sessions.rows = processedMentorDetails
+		} else {
+			sessions = { rows: processedMentorDetails, count: processedMentorDetails.length }
+		}
 
 		return sessions
 	}
