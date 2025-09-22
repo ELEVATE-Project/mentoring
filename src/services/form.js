@@ -135,7 +135,7 @@ module.exports = class FormsHelper {
 				})
 			// Add organization code to filter if provided
 			if (orgCode) {
-				filter.organization_code = orgCode
+				filter.organization_code = { [Op.in]: [orgCode, defaults.orgCode] }
 			}
 
 			// Business logic: Try both current tenant and default tenant
