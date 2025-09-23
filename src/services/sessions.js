@@ -291,7 +291,7 @@ module.exports = class SessionsHelper {
 				await this.addMentees(data.id, menteeIdsToEnroll, bodyData.time_zone)
 			}
 
-			if (bodyData?.resources && bodyData.resources.length > 0) {
+			if (Array.isArray(bodyData?.resources) && bodyData.resources.length > 0) {
 				await this.addResources(bodyData.resources, loggedInUserId, data.id)
 				if (notifyUser) {
 					const sessionAttendees = await sessionAttendeesQueries.findAll({
@@ -679,12 +679,21 @@ module.exports = class SessionsHelper {
 
 					// Enroll newly added mentees by manager t the session
 					if (menteesToAdd.length > 0) {
-						await this.addMentees(sessionId, menteesToAdd, bodyData.time_zone)
+						await this.addMentees(
+							sessionId,
+							menteesToAdd,
+							bodyData.time_zone,
+							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id
+						)
 					}
 
 					// unenroll mentees
 					if (menteesToRemove.length > 0) {
-						await this.removeMentees(sessionId, menteesToRemove, bodyData.time_zone)
+						await this.removeMentees(
+							sessionId,
+							menteesToRemove,
+							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id
+						)
 					}
 				}
 				if (bodyData?.resources) {
@@ -1508,6 +1517,7 @@ module.exports = class SessionsHelper {
 		isAMentor,
 		isSelfEnrolled = true,
 		session = {},
+		mentorId = null,
 		roles,
 		orgId
 	) {
@@ -1599,9 +1609,15 @@ module.exports = class SessionsHelper {
 				creatorName = sessionCreatorName.name
 			}
 
+			const mentorDetails = await mentorExtensionQueries.getMentorExtension(
+				mentorId ? mentorId : session.mentor_id,
+				['name'],
+				true
+			)
+			session.mentor_name = mentorDetails.name
+
 			// check if the session is accessible to the user
 			let isAccessible = await this.checkIfSessionIsAccessible(session, userId, isAMentor)
-
 			if (!isAccessible) {
 				return responses.failureResponse({
 					message: 'INVALID_PERMISSION',
@@ -1695,7 +1711,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- UnEnroll session.
 	 */
 
-	static async unEnroll(sessionId, userTokenData, isSelfUnenrollment = true, session = {}) {
+	static async unEnroll(sessionId, userTokenData, isSelfUnenrollment = true, session = {}, mentorId = null) {
 		try {
 			let email
 			let name
@@ -1731,7 +1747,11 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(session.mentor_id, ['name'], true)
+			const mentorDetails = await mentorExtensionQueries.getMentorExtension(
+				mentorId ? mentorId : session.mentor_id,
+				['name'],
+				true
+			)
 
 			session.mentor_name = mentorDetails.name
 
@@ -1898,7 +1918,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - start session link
 	 */
 
-	static async start(sessionId, userTokenData) {
+	static async start(sessionId, userTokenData, tenantCode) {
 		const loggedInUserId = userTokenData.id
 		const mentorName = userTokenData.name
 		try {
@@ -1967,14 +1987,29 @@ module.exports = class SessionsHelper {
 						responseCode: 'CLIENT_ERROR',
 					})
 				}
+				const tenantInfo = await userRequests.getTenantDetails(tenantCode)
 				let sessionDuration = moment(formattedEndDate).diff(formattedStartDate, 'minutes')
+
+				const domains = tenantInfo?.data?.result?.domains
+				const tenantDomain =
+					Array.isArray(domains) && domains.length > 0
+						? domains.find((d) => d.is_primary)?.domain || domains[0].domain
+						: null
+				if (!tenantDomain) {
+					return responses.failureResponse({
+						message: 'TENANT_DOMAIN_NOT_FOUND',
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
 
 				const meetingDetails = await bigBlueButtonRequests.createMeeting(
 					session.id,
 					session.title,
 					session.mentee_password,
 					session.mentor_password,
-					sessionDuration
+					sessionDuration,
+					tenantDomain
 				)
 				if (!meetingDetails.success) {
 					return responses.failureResponse({
@@ -2661,7 +2696,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- Session details
 	 */
 
-	static async addMentees(sessionId, menteeIds, timeZone) {
+	static async addMentees(sessionId, menteeIds, timeZone, mentorId = null) {
 		try {
 			// Check if session exists
 			const sessionDetails = await sessionQueries.findOne({ id: sessionId })
@@ -2677,7 +2712,7 @@ module.exports = class SessionsHelper {
 			const mentees = await menteeExtensionQueries.getUsersByUserIds(menteeIds, {
 				attributes: ['user_id', 'email', 'name', 'is_mentor'],
 			})
-			if (!mentees) {
+			if (!mentees && mentees.length > 0) {
 				return responses.failureResponse({
 					message: 'USER_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
@@ -2687,8 +2722,17 @@ module.exports = class SessionsHelper {
 			// Enroll mentees
 			const successIds = []
 			const failedIds = []
+			const effectiveMentorId = mentorId ?? sessionDetails.mentor_id
 			const enrollPromises = mentees.map((menteeData) =>
-				this.enroll(sessionId, menteeData, timeZone, menteeData.is_mentor, false, sessionDetails)
+				this.enroll(
+					sessionId,
+					menteeData,
+					timeZone,
+					menteeData.is_mentor,
+					false,
+					sessionDetails,
+					effectiveMentorId
+				)
 					.then((response) => ({
 						id: menteeData.user_id,
 						status: response.statusCode === httpStatusCode.created ? 'fulfilled' : 'rejected',
@@ -2832,7 +2876,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- unenroll status
 	 */
 
-	static async removeMentees(sessionId, menteeIds) {
+	static async removeMentees(sessionId, menteeIds, mentorId = null) {
 		try {
 			// check if session exists or not
 			const sessionDetails = await sessionQueries.findOne({ id: sessionId })
@@ -2866,7 +2910,13 @@ module.exports = class SessionsHelper {
 			const successIds = []
 
 			const enrollPromises = menteeDetails.map((menteeData) => {
-				return this.unEnroll(sessionId, menteeData, false, sessionDetails)
+				return this.unEnroll(
+					sessionId,
+					menteeData,
+					false,
+					sessionDetails,
+					mentorId ? mentorId : sessionDetails.mentor_id
+				)
 					.then((response) => {
 						if (response.statusCode == httpStatusCode.accepted) {
 							// Unerolled successfully

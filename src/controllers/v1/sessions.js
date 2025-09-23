@@ -160,6 +160,7 @@ module.exports = class Sessions {
 				isAMentor(req.decodedToken.roles),
 				isSelfEnrolled,
 				session,
+				null,
 				req.decodedToken.roles,
 				req.decodedToken.organization_id
 			)
@@ -200,7 +201,11 @@ module.exports = class Sessions {
 
 	async start(req) {
 		try {
-			const sessionsStarted = await sessionService.start(req.params.id, req.decodedToken)
+			const sessionsStarted = await sessionService.start(
+				req.params.id,
+				req.decodedToken,
+				req.decodedToken.tenant_code
+			)
 			return sessionsStarted
 		} catch (error) {
 			return error

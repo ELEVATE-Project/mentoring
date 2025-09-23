@@ -1,0 +1,52 @@
+{
+	"search": {
+		"session": {
+			"fields": [
+				{
+					"name": "title",
+					"label": "Title",
+					"sortPriority": 1
+				},
+				{
+					"name": "description",
+					"label": "Description",
+					"sortPriority": 2
+				},
+				{
+					"name": "mentor_name",
+					"label": "Mentor name",
+					"sortPriority": 3
+				},
+				{
+					"name": "categories",
+					"label": "Categories",
+					"sortPriority": 4,
+					"isAnEntityType": true
+				}
+			]
+		},
+		"mentor": {
+			"fields": [
+				{
+					"name": "name",
+					"label": "Mentor name",
+					"sortPriority": 1
+				},
+				{
+					"name": "area_of_expertise",
+					"label": "Area Of Expertise",
+					"sortPriority": 2,
+					"isAnEntityType": true
+				}
+			]
+		}
+	},
+	"authTokenUserInformation": {
+		"id": "data.id",
+		"name": "data.name",
+		"roles": "data.organizations[?organization_id={{organization_id}}].roles",
+		"organization_id": "data.organization_ids[0]",
+		"organizations": "data.organizations",
+		"tenant_code": "data.tenant_code"
+	}
+}

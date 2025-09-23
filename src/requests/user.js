@@ -827,6 +827,21 @@ const getProfileDetails = async ({ tenantCode, userId }) => {
 	}
 }
 
+const getTenantDetails = async (tenantCode) => {
+	try {
+		let profileUrl = `${userBaseUrl}${endpoints.GET_TENANT_DETAILS}`
+
+		profileUrl += `/${tenantCode}`
+
+		const tenantDeatils = await requests.get(profileUrl, '', true)
+
+		return tenantDeatils
+	} catch (error) {
+		console.error(error)
+		throw error
+	}
+}
+
 module.exports = {
 	fetchOrgDetails, // dependent on releated orgs  And query on code
 	fetchUserDetails, // dependendt on languages and prefered lang etc
@@ -844,4 +859,5 @@ module.exports = {
 	organizationList,
 	getOrgDetails,
 	getProfileDetails,
+	getTenantDetails,
 }

@@ -1092,7 +1092,7 @@ module.exports = class AdminService {
 					const sessionList = managerSessions
 						.map((session) => {
 							const sessionDateTime = moment.unix(session.start_date)
-							return `${session.title} – ${sessionDateTime.format('DD-MM-YYYY, hh:mm A')}`
+							return `<p>${session.title} – ${sessionDateTime.format('DD-MM-YYYY, hh:mm A')}</p>`
 						})
 						.join('\n')
 
@@ -1148,7 +1148,7 @@ module.exports = class AdminService {
 					const sessionList = managerSessions
 						.map((session) => {
 							const sessionDateTime = moment.unix(session.start_date)
-							return `${session.title} – ${sessionDateTime.format('DD-MM-YYYY, hh:mm A')}`
+							return `<p>${session.title} – ${sessionDateTime.format('DD-MM-YYYY, hh:mm A')}</p>`
 						})
 						.join('\n')
 

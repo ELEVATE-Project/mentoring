@@ -4,8 +4,9 @@ const { sequelize } = require('@database/models/index')
 const utils = require('@generics/utils')
 const common = require('@constants/common')
 const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
-const searchConfig = require('@configs/search.json')
+const defaultSearchConfig = require('@configs/search.json')
 const indexQueries = require('@generics/mViewsIndexQueries')
+const searchConfig = require('@root/config.json')
 
 let refreshInterval
 const groupByModelNames = async (entityTypes) => {
@@ -320,7 +321,12 @@ const generateMaterializedView = async (modelEntityTypes) => {
 		if (randomViewName) await deleteMaterializedView(randomViewName)
 		await createIndexesOnAllowFilteringFields(model, modelEntityTypes, allFields)
 		await createViewUniqueIndexOnPK(model)
-		await createViewGINIndexOnSearch(model, searchConfig, allFields)
+
+		let search_config = defaultSearchConfig
+		if (searchConfig.search) {
+			search_config = { search: searchConfig.search }
+		}
+		await createViewGINIndexOnSearch(model, search_config, allFields)
 		await executeIndexQueries(model.name)
 	} catch (err) {
 		console.log(err)

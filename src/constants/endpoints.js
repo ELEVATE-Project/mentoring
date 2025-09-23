@@ -14,7 +14,7 @@ module.exports = {
 	USERS_ROLE_LIST: 'v1/user-role/default',
 	VALIDATE_EMAIL: 'v1/account/validatingEmailIds',
 	USER_DELETE: 'v1/admin/deleteUser',
-	GET_TENANT_DETAILS: 'v1/tenant/read',
+	GET_TENANT_DETAILS: 'v1/tenant/readInternal',
 	// Endpoints of the scheduler service
 	CREATE_SCHEDULER_JOB: 'jobs/create', // Create scheduler job endpoint
 	UPDATE_DELAY: 'jobs/updateDelay', // Update delay of scheduled job endpoint
