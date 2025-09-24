@@ -3,6 +3,7 @@ const { QueryTypes } = require('sequelize')
 const sequelize = require('sequelize')
 const Sequelize = require('@database/models/index').sequelize
 const common = require('@constants/common')
+const utils = require('@generics/utils')
 const _ = require('lodash')
 const { Op } = require('sequelize')
 const emailEncryption = require('@utils/emailEncryption')
@@ -351,7 +352,7 @@ module.exports = class MenteeExtensionQueries {
 				filterClause = filterClause.startsWith('AND') ? filterClause : 'AND' + filterClause
 			}
 
-			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
+			const viewName = utils.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			let query = `
 				SELECT ${projectionClause}
 				FROM
@@ -424,7 +425,7 @@ module.exports = class MenteeExtensionQueries {
 	}
 	static async findOneFromView(userId, tenantCode) {
 		try {
-			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
+			const viewName = utils.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			let query = `
 				SELECT *
 				FROM ${viewName}
@@ -522,7 +523,7 @@ module.exports = class MenteeExtensionQueries {
 				whereClause = `WHERE ${cleanedConditions.join(' ')}`
 			}
 
-			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
+			const viewName = utils.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			const query = `
 				SELECT ${projectionClause}
 				FROM ${viewName}
@@ -584,7 +585,7 @@ module.exports = class MenteeExtensionQueries {
 			// Since we're using tenant-specific views, no tenant filtering needed
 			const whereClause = userFilterClause || '1=1' // Default to all records if no user filter
 
-			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
+			const viewName = utils.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			const query = `
 				SELECT *
 				FROM ${viewName}
@@ -624,7 +625,7 @@ module.exports = class MenteeExtensionQueries {
 			// Since we're using tenant-specific views, no tenant filtering needed
 			const whereClause = emailFilterClause || '1=1' // Default to all records if no email filter
 
-			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
+			const viewName = utils.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			const query = `
 				SELECT *
 				FROM ${viewName}

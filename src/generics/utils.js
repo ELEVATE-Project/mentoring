@@ -1224,6 +1224,18 @@ function transformEntityTypes(input) {
 	return { entityTypes }
 }
 
+/**
+ * Generate tenant-specific materialized view name
+ * @function
+ * @name getTenantViewName
+ * @param {String} tenantCode - Tenant code
+ * @param {String} tableName - Table name
+ * @returns {String} returns tenant-specific view name.
+ */
+const getTenantViewName = (tenantCode, tableName) => {
+	return `${tenantCode}_m_${tableName}`
+}
+
 module.exports = {
 	hash: hash,
 	getCurrentMonthRange,
@@ -1285,4 +1297,5 @@ module.exports = {
 	mapEntityTypeToData,
 	getDynamicEntityCondition,
 	transformEntityTypes,
+	getTenantViewName,
 }

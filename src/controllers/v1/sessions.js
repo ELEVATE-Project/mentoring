@@ -220,7 +220,11 @@ module.exports = class Sessions {
 
 	async start(req) {
 		try {
-			const sessionsStarted = await sessionService.start(req.params.id, req.decodedToken, req.decodedToken.tenant_code)
+			const sessionsStarted = await sessionService.start(
+				req.params.id,
+				req.decodedToken,
+				req.decodedToken.tenant_code
+			)
 			return sessionsStarted
 		} catch (error) {
 			return error
@@ -344,9 +348,10 @@ module.exports = class Sessions {
 	 */
 	async bulkUpdateMentorNames(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
+			// For internal calls, extract from req.body instead of req.decodedToken
+			const tenantCode = req.body.tenant_code
+			const organizationCode = req.body.organization_code
+			const userId = req.body.user_id
 
 			const sessionUpdated = await sessionService.bulkUpdateMentorNames(
 				req.body.mentor_id,

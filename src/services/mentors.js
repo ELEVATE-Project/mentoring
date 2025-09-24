@@ -565,7 +565,7 @@ module.exports = class MentorsHelper {
 				//Do a org policy update for the user only if the data object explicitly includes an
 				//organization.id. This is added for the users/update workflow where
 				//both both user data and organisation can change at the same time.
-				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: orgCode })
+				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: orgCode, tenantCode })
 				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
 					data.organization.id,
 					orgCode,

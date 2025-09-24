@@ -870,7 +870,7 @@ module.exports = class MenteesHelper {
 				data.email = emailEncryption.encrypt(data.email.toLowerCase())
 			}
 			// Call user service to fetch organisation details --SAAS related changes
-			let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode })
+			let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode, tenantCode })
 
 			// Return error if user org does not exists
 			if (!userOrgDetails.success || !userOrgDetails.data || !userOrgDetails.data.result) {
@@ -1062,7 +1062,10 @@ module.exports = class MenteesHelper {
 				//Do a org policy update for the user only if the data object explicitly includes an
 				//organization.id. This is added for the users/update workflow where
 				//both both user data and organisation can change at the same time.
-				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: organizationCode })
+				let userOrgDetails = await userRequests.fetchOrgDetails({
+					organizationCode: organizationCode,
+					tenantCode,
+				})
 				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
 					data.organization_id,
 					organizationCode,

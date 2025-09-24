@@ -487,18 +487,14 @@ module.exports = class OrgAdminService {
 						userId,
 						tenantCode
 					)
-					await adminService.unenrollAndNotifySessionAttendees(
-						removedSessionsDetail,
-						'',
-						decodedToken.tenant_code
-					)
+					await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail, '', tenantCode)
 					deactivatedIdsList.push(userId)
 				}
 
 				//unenroll from upcoming session
 				const menteeDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
 				if (menteeDetails?.user_id) {
-					await adminService.unenrollFromUpcomingSessions(userId, decodedToken.tenant_code)
+					await adminService.unenrollFromUpcomingSessions(userId, tenantCode)
 					deactivatedIdsList.push(userId)
 				}
 

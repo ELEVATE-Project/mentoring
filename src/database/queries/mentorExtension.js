@@ -5,6 +5,7 @@ const { QueryTypes } = require('sequelize')
 const sequelize = require('sequelize')
 const Sequelize = require('@database/models/index').sequelize
 const common = require('@constants/common')
+const utils = require('@generics/utils')
 const _ = require('lodash')
 const { Op } = require('sequelize')
 const emailEncryption = require('@utils/emailEncryption')
@@ -273,7 +274,7 @@ module.exports = class MentorExtensionQueries {
 				filterClause = filterClause.startsWith('AND') ? filterClause : 'AND ' + filterClause
 			}
 
-			const viewName = common.getTenantViewName(tenantCode, MentorExtension.tableName)
+			const viewName = utils.getTenantViewName(tenantCode, MentorExtension.tableName)
 			let query = `
 				SELECT ${projectionClause}
 				FROM
@@ -464,7 +465,7 @@ module.exports = class MentorExtensionQueries {
 			// Construct the query with the provided whereClause, projection, and saasFilterClause
 			let query = `
 				SELECT ${projection}
-				FROM ${common.getTenantViewName(tenantCode, MentorExtension.tableName)}
+				FROM ${utils.getTenantViewName(tenantCode, MentorExtension.tableName)}
 				WHERE ${whereClause}
 				${saasFilterClause}
 			`
@@ -477,7 +478,7 @@ module.exports = class MentorExtensionQueries {
 			// Count query
 			const countQuery = `
 				SELECT count(*) AS "count"
-				FROM ${common.getTenantViewName(tenantCode, MentorExtension.tableName)}
+				FROM ${utils.getTenantViewName(tenantCode, MentorExtension.tableName)}
 				WHERE ${whereClause}
 				${saasFilterClause}
 			`
@@ -500,7 +501,7 @@ module.exports = class MentorExtensionQueries {
 		try {
 			let query = `
 				SELECT *
-				FROM ${common.getTenantViewName(tenantCode, MentorExtension.tableName)}
+				FROM ${utils.getTenantViewName(tenantCode, MentorExtension.tableName)}
 				WHERE user_id = :userId
 				LIMIT 1
 			`

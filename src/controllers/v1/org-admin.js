@@ -114,9 +114,10 @@ module.exports = class OrgAdmin {
 	 */
 	async deactivateUpcomingSession(req) {
 		try {
+			// For internal calls, decodedToken is not available, pass null since service doesn't use it
 			const response = await orgAdminService.deactivateUpcomingSession(
 				req.body.user_ids,
-				req.decodedToken,
+				null, // decodedToken not needed for this internal call
 				req.body.tenant_code
 			)
 			return response

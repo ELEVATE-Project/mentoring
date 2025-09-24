@@ -114,9 +114,17 @@ module.exports = class Users {
 	 */
 	async update(req) {
 		try {
+			// For internal calls, construct minimal decodedToken object with required properties
+			const decodedToken = req.decodedToken || {
+				id: req.body.id,
+				tenant_code: req.body.tenant_code,
+				organization_id: req.body.organization_id || req.body.organization_code,
+				organization_code: req.body.organization_code,
+			}
+
 			return await userService.update(
 				req.body,
-				req.decodedToken,
+				decodedToken,
 				req.body.id,
 				req.body.organization_code,
 				req.body.tenant_code
@@ -137,7 +145,15 @@ module.exports = class Users {
 	 */
 	async delete(req) {
 		try {
-			return await adminService.userDelete(req.body.id.toString(), req.body.tenant_code)
+			// For internal calls, only req.body.id and req.body.tenant_code are available
+			// Other parameters (currentUserId, organizationCode, token) will use defaults
+			return await adminService.userDelete(
+				req.body.id.toString(),
+				null, // currentUserId - not available for internal calls
+				null, // organizationCode - not available for internal calls
+				req.body.tenant_code
+				// token defaults to '' in service method
+			)
 		} catch (error) {
 			return error
 		}
@@ -152,7 +168,7 @@ module.exports = class Users {
 	 */
 	async requestCount(req) {
 		try {
-			return await userService.requestCount(req.decodedToken.id, req.body.tenant_code)
+			return await userService.requestCount(req.decodedToken.id, req.decodedToken.tenant_code)
 		} catch (error) {
 			return error
 		}

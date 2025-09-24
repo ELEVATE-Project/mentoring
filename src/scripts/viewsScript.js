@@ -26,7 +26,7 @@ const createSchedulerJob = function (jobId, interval, jobName, repeat, url, offs
 		email: [process.env.SCHEDULER_SERVICE_ERROR_REPORTING_EMAIL_ID],
 		request: {
 			url,
-			method: 'post',
+			method: 'get',
 			header: { internal_access_token: process.env.INTERNAL_ACCESS_TOKEN },
 		},
 		jobOptions: {
@@ -168,35 +168,20 @@ const buildMaterializedViews = async () => {
 		const tenants = await userExtensionQueries.getDistinctTenantCodes()
 		console.log(`Starting materialized view build for ${tenants.length} tenants`)
 
-		// Create unique timestamp for this batch of jobs
+		// Create unique timestamp for this job
 		const timestamp = Date.now()
 
-		// Create separate build jobs for each tenant with staggered execution
-		let offset = 0
-		const jobInterval = 10000 // 10 seconds between tenant builds
+		// Create single job to build ALL materialized views for ALL tenants
+		const uniqueJobId = `BuildMaterializedViews_All_Tenants_${timestamp}`
+		const jobName = `BuildMaterializedViews_Complete`
 
-		for (const tenant of tenants) {
-			const tenantCode = tenant.code
-
-			// Skip tenants with undefined or empty tenant codes
-			if (!tenantCode || tenantCode === 'undefined') {
-				console.log(`⚠️  Skipping tenant with invalid code:`, tenant)
-				continue
-			}
-
-			const uniqueJobId = `BuildMaterializedViews_${tenantCode}_${timestamp}`
-			const jobName = `BuildMaterializedViews_${tenantCode}`
-
-			createSchedulerJob(
-				uniqueJobId,
-				jobInterval + offset,
-				jobName,
-				false,
-				mentoringBaseurl + `/mentoring/v1/admin/triggerViewRebuildInternal?tenant_code=${tenantCode}`
-			)
-
-			offset += 5000 // 5 second stagger between tenants
-		}
+		createSchedulerJob(
+			uniqueJobId,
+			10000, // 10 seconds delay
+			jobName,
+			false,
+			mentoringBaseurl + `/mentoring/v1/admin/triggerViewRebuildInternal` // No parameters - builds all
+		)
 
 		console.log('=== buildMaterializedViews completed ===')
 	} catch (err) {

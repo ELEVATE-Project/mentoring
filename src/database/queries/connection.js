@@ -6,6 +6,7 @@ const { Op } = require('sequelize')
 const sequelize = require('@database/models/index').sequelize
 
 const common = require('@constants/common')
+const utils = require('@generics/utils')
 const MenteeExtension = require('@database/models/index').UserExtension
 const { QueryTypes } = require('sequelize')
 const { fn, col } = require('sequelize')
@@ -335,7 +336,7 @@ exports.getConnectionsDetails = async (
 		c.deleted_at AS connections_deleted_at
 		`
 
-		const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
+		const viewName = utils.getTenantViewName(tenantCode, MenteeExtension.tableName)
 		let query = `
             SELECT ${projectionClause}
             FROM ${viewName} mv

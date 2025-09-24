@@ -1,6 +1,7 @@
 const Session = require('@database/models/index').Session
 const { Op, literal, QueryTypes } = require('sequelize')
 const common = require('@constants/common')
+const utils = require('@generics/utils')
 const sequelize = require('sequelize')
 const moment = require('moment')
 const Sequelize = require('@database/models/index').sequelize
@@ -729,7 +730,7 @@ exports.getUpcomingSessionsFromView = async (
 		SELECT 
 			${projectionClause}
 		FROM
-			${common.getTenantViewName(tenantCode, Session.tableName)}
+			${utils.getTenantViewName(tenantCode, Session.tableName)}
 		WHERE
 			mentor_id != :userId
 				${saasFilterClause}
@@ -771,7 +772,7 @@ exports.getUpcomingSessionsFromView = async (
 		const countQuery = `
 		SELECT count(*) AS "count"
 		FROM
-			${common.getTenantViewName(tenantCode, Session.tableName)}
+			${utils.getTenantViewName(tenantCode, Session.tableName)}
 		WHERE
 			mentor_id != :userId
 				${saasFilterClause}
@@ -845,7 +846,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			visibility,
 			mentor_organization_id
 		FROM
-				${common.getTenantViewName(tenantCode, Session.tableName)}
+				${utils.getTenantViewName(tenantCode, Session.tableName)}
 		WHERE
 			mentor_id = :mentorId
 				AND status = 'PUBLISHED'
@@ -882,7 +883,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 		const countQuery = `
 		SELECT count(*) AS "count"
 		FROM
-		${common.getTenantViewName(tenantCode, Session.tableName)}
+		${utils.getTenantViewName(tenantCode, Session.tableName)}
 		WHERE
 			mentor_id = :mentorId
 				AND status = 'PUBLISHED'

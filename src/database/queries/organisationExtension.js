@@ -4,6 +4,7 @@ const MenteeExtension = require('@database/models/index').UserExtension
 const { QueryTypes } = require('sequelize')
 const Sequelize = require('@database/models/index').sequelize
 const common = require('@constants/common')
+const utils = require('@generics/utils')
 
 module.exports = class OrganizationExtensionQueries {
 	static async upsert(data, tenantCode) {
@@ -147,7 +148,7 @@ module.exports = class OrganizationExtensionQueries {
 		try {
 			const filterClause = `organization_code IN (${codes.map((code) => `'${code}'`).join(',')})`
 
-			const viewName = common.getTenantViewName(tenantCode, MenteeExtension.tableName)
+			const viewName = utils.getTenantViewName(tenantCode, MenteeExtension.tableName)
 			const query = `
 				SELECT *
 				FROM ${viewName}

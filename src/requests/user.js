@@ -39,13 +39,17 @@ const emailEncryption = require('@utils/emailEncryption')
 
  */
 
-const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
+const fetchOrgDetails = async function ({ organizationCode, organizationId, tenantCode }) {
 	try {
 		let orgReadUrl
 		if (organizationId)
 			orgReadUrl = `${userBaseUrl}${endpoints.ORGANIZATION_READ}?organisation_id=${organizationId}`
 		else if (organizationCode)
 			orgReadUrl = `${userBaseUrl}${endpoints.ORGANIZATION_READ}?organisation_code=${organizationCode}`
+
+		if (tenantCode) {
+			orgReadUrl += `&tenant_code=${tenantCode}`
+		}
 
 		const internalToken = true
 		const orgDetails = await requests.get(orgReadUrl, '', internalToken)
@@ -127,11 +131,15 @@ const validRoles = new Set([
 
  */
 
-const fetchUserDetails = async ({ token, userId }) => {
+const fetchUserDetails = async ({ token, userId, tenantCode }) => {
 	try {
 		let profileUrl = `${userBaseUrl}${endpoints.USER_PROFILE_DETAILS}`
 
 		if (userId) profileUrl += `/${userId}`
+
+		if (tenantCode) {
+			profileUrl += `?tenant_code=${tenantCode}`
+		}
 
 		const isInternalTokenRequired = true
 		const userDetails = await requests.get(profileUrl, token, isInternalTokenRequired)
@@ -248,7 +256,7 @@ const getUserDetails = async (userId, tenantCode) => {
 
  */
 
-const getListOfUserDetails = function (userIds, excludeDeletedRecords = false) {
+const getListOfUserDetails = function (userIds, excludeDeletedRecords = false, tenantCode = null) {
 	return new Promise(async (resolve, reject) => {
 		const options = {
 			headers: {
@@ -262,6 +270,10 @@ const getListOfUserDetails = function (userIds, excludeDeletedRecords = false) {
 
 		let apiUrl = userBaseUrl + endpoints.LIST_ACCOUNTS
 		if (excludeDeletedRecords) apiUrl = userBaseUrl + endpoints.LIST_ACCOUNTS + '?exclude_deleted_records=true'
+		if (tenantCode) {
+			apiUrl += excludeDeletedRecords ? '&' : '?'
+			apiUrl += `tenant_code=${tenantCode}`
+		}
 		try {
 			request.get(apiUrl, options, callback)
 			function callback(err, data) {

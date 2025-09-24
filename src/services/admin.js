@@ -144,7 +144,7 @@ module.exports = class AdminService {
 	 * @returns {JSON} - List of users
 	 */
 
-	static async userDelete(userId, currentUserId, organizationCode, tenantCode) {
+	static async userDelete(userId, currentUserId, organizationCode, tenantCode, token = '') {
 		try {
 			let result = {}
 
@@ -163,7 +163,7 @@ module.exports = class AdminService {
 			const isMentor = userInfo.is_mentor === true
 
 			// Step 2: Check if user is a session manager
-			const getUserDetailById = await userRequests.fetchUserDetails({ userId }) // userId = "1"
+			const getUserDetailById = await userRequests.fetchUserDetails({ token, userId }) // userId = "1"
 			const roleTitles = getUserDetailById?.data?.result?.user_roles?.map((r) => r.title) || []
 			const isSessionManager = roleTitles.includes(common.SESSION_MANAGER_ROLE)
 
@@ -388,7 +388,7 @@ module.exports = class AdminService {
 				for (const session of allUpcomingSessions) {
 					await sessionQueries.updateRecords(
 						{ seats_remaining: literal('seats_remaining + 1') },
-						{ where: { id: session.id } }
+						{ where: { id: session.id, tenant_code: tenantCode } }
 					)
 				}
 				result.isSeatsUpdate = true
@@ -691,20 +691,14 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async triggerViewRebuild(decodedToken, tenantCode) {
+	static async triggerViewRebuild() {
 		try {
 			let result
 			let message
 
-			if (!tenantCode) {
-				// No tenantCode provided - build views for all tenants
-				result = await adminService.triggerViewBuildForAllTenants()
-				message = result.success ? result.message : 'MATERIALIZED_VIEW_GENERATION_FAILED'
-			} else {
-				// Specific tenantCode provided - build views for that tenant only
-				result = await adminService.triggerViewBuild(tenantCode)
-				message = 'MATERIALIZED_VIEW_GENERATED_SUCCESSFULLY'
-			}
+			// Build operation: ALWAYS build views for ALL tenants - no parameters needed
+			result = await adminService.triggerViewBuildForAllTenants()
+			message = result.success ? result.message : 'MATERIALIZED_VIEW_GENERATION_FAILED'
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -716,14 +710,18 @@ module.exports = class AdminService {
 			return error
 		}
 	}
-	static async triggerPeriodicViewRefresh(decodedToken, tenantCode) {
+	static async triggerPeriodicViewRefresh(decodedToken, tenantCode, modelName) {
 		try {
 			let result
 			let message
 
-			if (!tenantCode) {
-				// No tenantCode provided - start refresh for all tenants
-				result = await adminService.triggerPeriodicViewRefreshForAllTenants()
+			if (modelName && tenantCode) {
+				// Specific model and tenant provided - refresh specific view for specific tenant
+				result = await adminService.refreshMaterializedView(modelName, tenantCode)
+				message = 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY'
+			} else if (!tenantCode) {
+				// No tenantCode provided - start refresh for all tenants (with specific model if provided)
+				result = await adminService.triggerPeriodicViewRefreshForAllTenants(modelName)
 				message = result.success ? result.message : 'MATERIALIZED_VIEW_REFRESH_FAILED'
 			} else {
 				// Specific tenantCode provided - start refresh for that tenant only
@@ -1087,7 +1085,8 @@ module.exports = class AdminService {
 			// 1. Notify session managers about sessions with deleted mentor
 			const upcomingSessions = await sessionQueries.getUpcomingSessionsOfMentee(
 				userId,
-				common.SESSION_TYPE.PRIVATE
+				common.SESSION_TYPE.PRIVATE,
+				tenantCode
 			)
 
 			if (upcomingSessions.length > 0) {
@@ -1118,9 +1117,13 @@ module.exports = class AdminService {
 				'user_id',
 				tenantCode
 			)
-			const connectedMentees = await userExtensionQueries.getUsersByUserIds(menteeIds, {
-				attributes: ['user_id', 'name', 'email'],
-			})
+			const connectedMentees = await userExtensionQueries.getUsersByUserIds(
+				menteeIds,
+				{
+					attributes: ['user_id', 'name', 'email'],
+				},
+				tenantCode
+			)
 
 			if (connectedMentees.length > 0) {
 				result.isMenteeNotifiedAboutMentorDeletion = await this.notifyMenteesAboutMentorDeletion(
@@ -1166,7 +1169,7 @@ module.exports = class AdminService {
 				const sessionIds = [...new Set(upcomingSessions.map((s) => s.id))]
 				await sessionQueries.updateRecords(
 					{ deleted_at: new Date() },
-					{ where: { id: sessionIds, created_by: mentorUserId } }
+					{ where: { id: sessionIds, created_by: mentorUserId, tenant_code: tenantCode } }
 				)
 			} else {
 				result.isSessionManagerNotifiedForMentorDelete = true
@@ -1238,7 +1241,7 @@ module.exports = class AdminService {
 		const sessionIds = [...new Set(sessionsToUpdate.map((s) => s.id))]
 		await sessionQueries.updateRecords(
 			{ mentor_name: common.USER_NOT_FOUND, mentor_id: null },
-			{ where: { id: sessionIds } }
+			{ where: { id: sessionIds, tenant_code: tenantCode } }
 		)
 
 		console.log(`Update ${sessionIds.length} sessions with mentor name`)

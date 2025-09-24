@@ -88,45 +88,6 @@ exports.unEnrollFromSession = async (sessionId, userId, tenantCode) => {
 	}
 }
 
-exports.unEnrollFromSessionWithValidation = async (sessionId, userId, tenantCode) => {
-	try {
-		const { sequelize } = SessionAttendee
-
-		// Use Sequelize transaction for atomic operation
-		const result = await sequelize.transaction(async (transaction) => {
-			// First validate that session exists with matching tenant_code
-			const session = await Session.findOne({
-				where: {
-					id: sessionId,
-					tenant_code: tenantCode,
-				},
-				attributes: ['id'],
-				transaction,
-			})
-
-			if (!session) {
-				return 0 // Session doesn't exist or tenant mismatch
-			}
-
-			// Session exists and tenant matches, safe to delete attendee
-			const deletedRows = await SessionAttendee.destroy({
-				where: {
-					session_id: sessionId,
-					mentee_id: userId,
-					tenant_code: tenantCode,
-				},
-				transaction,
-			})
-
-			return deletedRows
-		})
-
-		return result || 0
-	} catch (error) {
-		return error
-	}
-}
-
 exports.findAll = async (filter, tenantCode, options = {}) => {
 	try {
 		if (!tenantCode) {

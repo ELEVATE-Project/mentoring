@@ -133,7 +133,7 @@ const generateRandomCode = (length) => {
 const materializedViewQueryBuilder = async (model, concreteFields, metaFields, tenantCode) => {
 	try {
 		const tableName = model.tableName
-		const temporaryMaterializedViewName = `${common.getTenantViewName(tenantCode, tableName)}_${generateRandomCode(
+		const temporaryMaterializedViewName = `${utils.getTenantViewName(tenantCode, tableName)}_${generateRandomCode(
 			8
 		)}`
 		const concreteFieldsQuery = await concreteFields
@@ -174,7 +174,7 @@ const materializedViewQueryBuilder = async (model, concreteFields, metaFields, t
 const createIndexesOnAllowFilteringFields = async (model, modelEntityTypes, fieldsWithDatatype, tenantCode) => {
 	try {
 		const uniqueEntityTypeValueList = [...new Set(modelEntityTypes.entityTypeValueList)]
-		const viewName = common.getTenantViewName(tenantCode, model.tableName)
+		const viewName = utils.getTenantViewName(tenantCode, model.tableName)
 
 		await Promise.all(
 			uniqueEntityTypeValueList.map(async (attribute) => {
@@ -215,7 +215,7 @@ const createViewGINIndexOnSearch = async (model, config, fields, tenantCode) => 
 			return
 		}
 
-		const viewName = common.getTenantViewName(tenantCode, model.tableName)
+		const viewName = utils.getTenantViewName(tenantCode, model.tableName)
 
 		for (const field of fieldsForIndex) {
 			try {
@@ -251,7 +251,7 @@ const deleteMaterializedView = async (viewName) => {
 const renameMaterializedView = async (temporaryMaterializedViewName, tableName, tenantCode) => {
 	const t = await sequelize.transaction()
 	try {
-		const finalViewName = common.getTenantViewName(tenantCode, tableName)
+		const finalViewName = utils.getTenantViewName(tenantCode, tableName)
 		let randomViewName = `${finalViewName}_${generateRandomCode(8)}`
 
 		const checkOriginalViewQuery = `SELECT COUNT(*) from pg_matviews where matviewname = '${finalViewName}';`
@@ -274,7 +274,7 @@ const renameMaterializedView = async (temporaryMaterializedViewName, tableName, 
 const createViewUniqueIndexOnPK = async (model, tenantCode) => {
 	try {
 		const primaryKeys = model.primaryKeyAttributes
-		const viewName = common.getTenantViewName(tenantCode, model.tableName)
+		const viewName = utils.getTenantViewName(tenantCode, model.tableName)
 
 		const result = await sequelize.query(`
             CREATE UNIQUE INDEX ${tenantCode}_unique_index_${model.tableName}_${primaryKeys.map((key) => `_${key}`)} 
@@ -400,7 +400,7 @@ const modelNameCollector = async (entityTypes) => {
 const refreshMaterializedView = async (modelName, tenantCode) => {
 	try {
 		const model = models[modelName]
-		const viewName = common.getTenantViewName(tenantCode, model.tableName)
+		const viewName = utils.getTenantViewName(tenantCode, model.tableName)
 
 		// Check if a REFRESH MATERIALIZED VIEW query is already running
 		const [activeQueries] = await sequelize.query(`
@@ -448,31 +448,89 @@ const triggerPeriodicViewRefresh = async (tenantCode) => {
 		currentIndex = refreshNextView(currentIndex, modelNames, tenantCode)
 	} catch (err) {}
 }
-const checkAndCreateMaterializedViews = async (tenantCode) => {
-	const allowFilteringEntityTypes = await getAllowFilteringEntityTypes(tenantCode)
-	const entityTypesGroupedByModel = await groupByModelNames(allowFilteringEntityTypes)
 
-	await sequelize.query('CREATE EXTENSION IF NOT EXISTS pg_trgm;', {
-		type: sequelize.QueryTypes.SELECT,
-	})
-
-	const query = 'select matviewname from pg_matviews;'
-	const [result, metadata] = await sequelize.query(query)
-
-	await Promise.all(
-		entityTypesGroupedByModel.map(async (modelEntityTypes) => {
-			const model = models[modelEntityTypes.modelName]
-			const expectedViewName = common.getTenantViewName(tenantCode, model.tableName)
-
-			const mViewExits = result.some(({ matviewname }) => matviewname === expectedViewName)
-			if (!mViewExits) {
-				return generateMaterializedView(modelEntityTypes, tenantCode)
-			}
-			return true
+const checkAndCreateMaterializedViews = async () => {
+	try {
+		await sequelize.query('CREATE EXTENSION IF NOT EXISTS pg_trgm;', {
+			type: sequelize.QueryTypes.SELECT,
 		})
-	)
 
-	return entityTypesGroupedByModel
+		// Get all existing materialized views
+		const query = 'select matviewname from pg_matviews;'
+		const [result, metadata] = await sequelize.query(query)
+
+		// Convert existing view names for comparison (normalize naming)
+		const existingViewNames = result.map(({ matviewname }) => matviewname.toLowerCase().trim())
+
+		// Get distinct tenant codes from org_extension table
+		const orgExtensionQuery =
+			"SELECT DISTINCT tenant_code FROM organization_extension WHERE tenant_code IS NOT NULL AND tenant_code != '' AND tenant_code != 'undefined' ORDER BY tenant_code ASC"
+		const [orgTenants] = await sequelize.query(orgExtensionQuery)
+
+		const tenantsNeedingViews = []
+
+		// Check each tenant from org_extension
+		for (const tenant of orgTenants) {
+			const tenantCode = tenant.tenant_code
+
+			if (!tenantCode || tenantCode === 'undefined') {
+				continue
+			}
+
+			// Use the original logic: get entity types and group by models
+			const allowFilteringEntityTypes = await getAllowFilteringEntityTypes(tenantCode)
+			const entityTypesGroupedByModel = await groupByModelNames(allowFilteringEntityTypes)
+
+			// Check if views exist for this tenant
+			let tenantViewsMissing = false
+			for (const modelEntityTypes of entityTypesGroupedByModel) {
+				const model = models[modelEntityTypes.modelName]
+				const expectedViewName = utils.getTenantViewName(tenantCode, model.tableName)
+
+				// Convert expected view name for comparison (normalize naming)
+				const normalizedExpectedName = expectedViewName.toLowerCase().trim()
+
+				const mViewExists = existingViewNames.includes(normalizedExpectedName)
+				if (!mViewExists) {
+					tenantViewsMissing = true
+					break
+				}
+			}
+
+			// If this tenant is missing views, add to list
+			if (tenantViewsMissing) {
+				tenantsNeedingViews.push(tenantCode)
+			}
+		}
+
+		// Create views only for tenants that need them
+		if (tenantsNeedingViews.length > 0) {
+			logger.info(`Materialized views missing for tenants: ${tenantsNeedingViews.join(', ')}. Building views...`)
+
+			const results = []
+			for (const tenantCode of tenantsNeedingViews) {
+				logger.info(`Building materialized views for tenant: ${tenantCode}`)
+				const result = await triggerViewBuild(tenantCode)
+				results.push({
+					tenantCode,
+					result: result || 'Success',
+				})
+			}
+
+			return {
+				success: true,
+				message: `Built materialized views for ${results.length} tenants`,
+				results,
+			}
+		} else {
+			logger.info('All materialized views already exist for all org_extension tenants')
+			return { success: true, message: 'All materialized views already exist' }
+		}
+	} catch (error) {
+		logger.error(`Error in checkAndCreateMaterializedViews: ${error.message}`)
+		// If there's an error checking, fall back to building all views
+		return await triggerViewBuildForAllTenants()
+	}
 }
 
 const triggerViewBuildForAllTenants = async () => {
@@ -512,7 +570,7 @@ const triggerViewBuildForAllTenants = async () => {
 	}
 }
 
-const triggerPeriodicViewRefreshForAllTenants = async () => {
+const triggerPeriodicViewRefreshForAllTenants = async (modelName = null) => {
 	try {
 		const tenants = await userExtensionQueries.getDistinctTenantCodes()
 		const results = []
@@ -526,12 +584,24 @@ const triggerPeriodicViewRefreshForAllTenants = async () => {
 				continue
 			}
 
-			logger.info(`Starting periodic refresh for tenant: ${tenantCode}`)
-			const result = await triggerPeriodicViewRefresh(tenantCode)
-			results.push({
-				tenantCode,
-				result: result || 'Success',
-			})
+			if (modelName) {
+				// Refresh specific model for this tenant
+				logger.info(`Refreshing model ${modelName} for tenant: ${tenantCode}`)
+				const result = await refreshMaterializedView(modelName, tenantCode)
+				results.push({
+					tenantCode,
+					model: modelName,
+					result: result || 'Success',
+				})
+			} else {
+				// Refresh all models for this tenant
+				logger.info(`Starting periodic refresh for tenant: ${tenantCode}`)
+				const result = await triggerPeriodicViewRefresh(tenantCode)
+				results.push({
+					tenantCode,
+					result: result || 'Success',
+				})
+			}
 		}
 
 		return {
