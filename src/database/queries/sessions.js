@@ -341,41 +341,7 @@ exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 	}
 }
 
-exports.findAllSessions = async (page, limit, search, filters, tenantCode) => {
-	try {
-		filters.tenant_code = tenantCode
-		let filterQuery = {
-			where: filters,
-			raw: true,
-			attributes: [
-				'id',
-				'title',
-				'mentor_id',
-				'description',
-				'status',
-				'start_date',
-				'end_date',
-				'image',
-				'created_at',
-				'meeting_info',
-				'created_by',
-			],
-			offset: parseInt((page - 1) * limit, 10),
-			limit: parseInt(limit, 10),
-			order: [['created_at', 'DESC']],
-		}
-
-		if (search) {
-			filterQuery.where.title = {
-				[Op.iLike]: search + '%',
-			}
-		}
-
-		return await Session.findAndCountAll(filterQuery)
-	} catch (error) {
-		return error
-	}
-}
+// Duplicate findAllSessions function removed - improved version exists at end of file
 exports.getAllUpcomingSessions = async (paranoid, tenantCode) => {
 	const currentEpochTime = moment().unix()
 	//const currentEpochTime = moment().format('YYYY-MM-DD HH:mm:ssZ')

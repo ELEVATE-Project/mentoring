@@ -51,9 +51,7 @@ module.exports = class OrgAdmin {
 
 	async roleChange(req) {
 		try {
-			const tenantCode = req.body.tenant_code
-
-			let changedRoleDetails = await orgAdminService.roleChange(req.body, {}, req.decodedToken, tenantCode)
+			let changedRoleDetails = await orgAdminService.roleChange(req.body, {}, req.body.tenant_code)
 			return changedRoleDetails
 		} catch (error) {
 			return error
@@ -117,8 +115,8 @@ module.exports = class OrgAdmin {
 			// For internal calls, decodedToken is not available, pass null since service doesn't use it
 			const response = await orgAdminService.deactivateUpcomingSession(
 				req.body.user_ids,
-				null, // decodedToken not needed for this internal call
-				req.body.tenant_code
+				req.body.tenant_code,
+				req.body.organization_code
 			)
 			return response
 		} catch (error) {

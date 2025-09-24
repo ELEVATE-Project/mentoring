@@ -278,7 +278,7 @@ module.exports = class SessionsHelper {
 			bodyData['mentor_organization_id'] = orgId
 			// SAAS changes; Include visibility and visible organisation
 			// Call user service to fetch organisation details --SAAS related changes
-			let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: orgCode })
+			let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: orgCode, tenantCode })
 
 			// Return error if user org does not exists
 			if (!userOrgDetails.success || !userOrgDetails.data || !userOrgDetails.data.result) {
@@ -3644,13 +3644,33 @@ module.exports = class SessionsHelper {
 	}
 
 	static async #removeSessionsByMentorIds(mentorIds, tenantCode) {
+		const defaults = await getDefaults()
+		if (!defaults.orgCode)
+			return responses.failureResponse({
+				message: 'DEFAULT_ORG_CODE_NOT_SET',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		if (!defaults.tenantCode)
+			return responses.failureResponse({
+				message: 'DEFAULT_TENANT_CODE_NOT_SET',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+
 		return Promise.allSettled(
 			mentorIds.map(async (mentorId) => {
 				const mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
 				if (!mentor) throw new MentorError('Invalid Mentor Id', { mentorId })
 
 				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentorId, tenantCode)
-				await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail, mentor.organization_code)
+				await adminService.unenrollAndNotifySessionAttendees(
+					removedSessionsDetail,
+					{ [Op.in]: [mentor.organization_code, defaults.orgCode] },
+					{ [Op.in]: [tenantCode, defaults.tenantCode] },
+					tenantCode,
+					mentor.organization_code
+				)
 				return mentorId
 			})
 		)
@@ -3671,7 +3691,13 @@ module.exports = class SessionsHelper {
 					mentor.user_id,
 					tenantCode
 				)
-				await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail, mentor.organization_code)
+				await adminService.unenrollAndNotifySessionAttendees(
+					removedSessionsDetail,
+					{ [Op.in]: [mentor.organization_code, defaults.orgCode] },
+					{ [Op.in]: [tenantCode, defaults.tenantCode] },
+					tenantCode,
+					mentor.organization_code
+				)
 				return mentor.user_id
 			})
 		)

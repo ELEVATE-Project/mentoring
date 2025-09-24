@@ -160,7 +160,7 @@ module.exports = class UserHelper {
 	}
 
 	static async #createOrUpdateUserAndOrg(userId, isNewUser, decodedToken) {
-		const userDetails = await userRequests.fetchUserDetails({ userId })
+		const userDetails = await userRequests.fetchUserDetails({ userId, tenantCode: decodedToken.tenant_code })
 		if (!userDetails?.data?.result) {
 			return responses.failureResponse({
 				message: 'SOMETHING_WENT_WRONG',
@@ -317,12 +317,7 @@ module.exports = class UserHelper {
 		if (isRoleChanged) {
 			//If role is changed, the role change, org policy changes for that user
 			//and additional data update of the user is done by orgAdmin's roleChange workflow
-			const roleChangeResult = await orgAdminService.roleChange(
-				roleChangePayload,
-				userExtensionData,
-				decodedToken,
-				decodedToken.tenant_code
-			)
+			const roleChangeResult = await orgAdminService.roleChange(roleChangePayload, userExtensionData, tenantCode)
 			return roleChangeResult
 		} else {
 			if (userExtensionData.email) delete userExtensionData.email

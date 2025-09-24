@@ -25,7 +25,7 @@ module.exports = class OrgAdminService {
 	 * @returns {Promise<Object>} 		- A Promise that resolves to a response object.
 	 */
 
-	static async roleChange(bodyData, updateData = {}, decodedToken, tenantCode) {
+	static async roleChange(bodyData, updateData = {}, tenantCode) {
 		try {
 			bodyData.user_id = bodyData.user_id.toString()
 			if (
@@ -70,6 +70,7 @@ module.exports = class OrgAdminService {
 				mentorDetails.organization_id = bodyData.organization_id
 				const organizationDetails = await userRequests.fetchOrgDetails({
 					organizationId: bodyData.organization_id,
+					tenantCode,
 				})
 				if (!(organizationDetails.success && organizationDetails.data && organizationDetails.data.result)) {
 					return responses.failureResponse({
@@ -81,7 +82,9 @@ module.exports = class OrgAdminService {
 
 				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
 					bodyData.organization_id,
-					organizationDetails.data.result.name
+					bodyData.organization_code,
+					organizationDetails.data.result.name,
+					tenantCode
 				)
 				if (!orgPolicies?.organization_id) {
 					return responses.failureResponse({
@@ -115,12 +118,28 @@ module.exports = class OrgAdminService {
 				})
 			}
 
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			// Delete upcoming sessions of user as mentor
 			const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(bodyData.user_id)
 			const isAttendeesNotified = await adminService.unenrollAndNotifySessionAttendees(
 				removedSessionsDetail,
 				mentorDetails.organization_id ? mentorDetails.organization_id : '',
-				decodedToken.tenant_code
+				{ [Op.in]: [bodyData.organization_code, defaults.orgCode] },
+				{ [Op.in]: [tenantCode, defaults.tenantCode] },
+				tenantCode,
+				orgCode
 			)
 
 			return responses.successResponse({
@@ -161,6 +180,7 @@ module.exports = class OrgAdminService {
 				bodyData.organization_code = bodyData.organization_code.toString()
 				let organizationDetails = await userRequests.fetchOrgDetails({
 					organizationCode: bodyData.organization_code,
+					tenantCode,
 				})
 				if (!(organizationDetails.success && organizationDetails.data && organizationDetails.data.result)) {
 					return responses.failureResponse({
@@ -248,6 +268,7 @@ module.exports = class OrgAdminService {
 				) {
 					const organizationDetails = await userRequests.fetchOrgDetails({
 						organizationId: decodedToken.organization_id,
+						tenantCode,
 					})
 					policyData.visible_to_organizations = organizationDetails.data.result.related_orgs
 				}
@@ -407,7 +428,7 @@ module.exports = class OrgAdminService {
 			bodyData.organization_id = bodyData.organization_id.toString()
 			const orgId = bodyData.organization_id
 			// Get organization details
-			let organizationDetails = await userRequests.fetchOrgDetails({ organizationId: orgId })
+			let organizationDetails = await userRequests.fetchOrgDetails({ organizationId: orgId, tenantCode })
 			if (!(organizationDetails.success && organizationDetails.data && organizationDetails.data.result)) {
 				return responses.failureResponse({
 					message: 'ORGANIZATION_NOT_FOUND',
@@ -434,7 +455,8 @@ module.exports = class OrgAdminService {
 			const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
 				orgId,
 				organizationDetails.data.result.name,
-				defaults.tenantCode
+				bodyData.organization_code,
+				tenantCode
 			)
 			if (!orgPolicies?.organization_id) {
 				return responses.failureResponse({
@@ -473,11 +495,24 @@ module.exports = class OrgAdminService {
 	 * @param {Object} bodyData
 	 * @returns {JSON} - User data.
 	 */
-	static async deactivateUpcomingSession(userIds, decodedToken, tenantCode) {
+	static async deactivateUpcomingSession(userIds, tenantCode, orgCode) {
 		try {
 			userIds = userIds.map(String)
 			let deactivatedIdsList = []
 			let failedUserIds = []
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			for (let key in userIds) {
 				const userId = userIds[key]
 				const mentorDetails = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
@@ -487,7 +522,13 @@ module.exports = class OrgAdminService {
 						userId,
 						tenantCode
 					)
-					await adminService.unenrollAndNotifySessionAttendees(removedSessionsDetail, '', tenantCode)
+					await adminService.unenrollAndNotifySessionAttendees(
+						removedSessionsDetail,
+						{ [Op.in]: [orgCode, defaults.orgCode] },
+						{ [Op.in]: [tenantCode, defaults.tenantCode] },
+						tenantCode,
+						orgCode
+					)
 					deactivatedIdsList.push(userId)
 				}
 
@@ -563,7 +604,7 @@ module.exports = class OrgAdminService {
 			if (action === common.PUSH) {
 				await menteeQueries.addVisibleToOrg(orgId, deltaOrganizationIds, tenantCode)
 			} else if (action === common.POP) {
-				await menteeQueries.removeVisibleToOrg(orgId, deltaOrganizationIds)
+				await menteeQueries.removeVisibleToOrg(orgId, deltaOrganizationIds, tenantCode)
 			}
 
 			return responses.successResponse({
@@ -678,7 +719,7 @@ module.exports = class OrgAdminService {
 	 * @returns {Object} - The result of the theme update, either success or error details.
 	 */
 	static async updateTheme(data, orgCode, tenantCode) {
-		let organizationDetails = await userRequests.fetchOrgDetails({ organizationCode: orgCode })
+		let organizationDetails = await userRequests.fetchOrgDetails({ organizationCode: orgCode, tenantCode })
 		if (!(organizationDetails.success && organizationDetails.data && organizationDetails.data.result)) {
 			return responses.failureResponse({
 				message: 'ORGANIZATION_NOT_FOUND',

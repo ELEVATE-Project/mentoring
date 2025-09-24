@@ -75,7 +75,7 @@ module.exports = class MenteeExtensionQueries {
 		}
 	}
 
-	static async addVisibleToOrg(organizationId, newRelatedOrgs, options = {}, tenantCode) {
+	static async addVisibleToOrg(organizationId, newRelatedOrgs, tenantCode, options = {}) {
 		// Safe merge: tenant filtering cannot be overridden by options.where
 		const { where: optionsWhere, ...otherOptions } = options
 
@@ -153,7 +153,7 @@ module.exports = class MenteeExtensionQueries {
 		)
 	}
 
-	static async removeVisibleToOrg(orgId, elementsToRemove) {
+	static async removeVisibleToOrg(orgId, elementsToRemove, tenantCode) {
 		const organizationUpdateQuery = `
 		  UPDATE "user_extensions"
 		  SET "visible_to_organizations" = (
@@ -161,11 +161,11 @@ module.exports = class MenteeExtensionQueries {
 			FROM unnest("visible_to_organizations") AS elem
 			WHERE elem NOT IN (${elementsToRemove.join(',')})
 		  )
-		  WHERE organization_id = :orgId
+		  WHERE organization_id = :orgId AND tenant_code = :tenantCode
 		`
 
 		await Sequelize.query(organizationUpdateQuery, {
-			replacements: { orgId },
+			replacements: { orgId, tenantCode },
 			type: Sequelize.QueryTypes.UPDATE,
 		})
 		const relatedOrganizationUpdateQuery = `
@@ -175,11 +175,11 @@ module.exports = class MenteeExtensionQueries {
 			FROM unnest("visible_to_organizations") AS elem
 			WHERE elem NOT IN (${orgId})
 		  )
-		  WHERE organization_id IN (:elementsToRemove)
+		  WHERE organization_id IN (:elementsToRemove) AND tenant_code = :tenantCode
 		`
 
 		await Sequelize.query(relatedOrganizationUpdateQuery, {
-			replacements: { elementsToRemove },
+			replacements: { elementsToRemove, tenantCode },
 			type: Sequelize.QueryTypes.UPDATE,
 		})
 	}

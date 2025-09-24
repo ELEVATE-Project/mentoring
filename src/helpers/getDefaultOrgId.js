@@ -18,6 +18,7 @@ exports.getDefaults = async () => {
 
 		const { success, data } = await userRequests.fetchOrgDetails({
 			organizationCode: DEFAULT_ORGANISATION_CODE,
+			tenantCode: DEFAULT_TENANT_CODE,
 		})
 
 		return {

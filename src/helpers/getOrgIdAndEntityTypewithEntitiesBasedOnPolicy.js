@@ -62,6 +62,7 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 					let relatedOrgs = []
 					let userOrgDetails = await userRequests.fetchOrgDetails({
 						organizationCode: orgExtension.organization_code,
+						tenantCode: orgExtension.tenant_code,
 					})
 					if (userOrgDetails.success && userOrgDetails.data?.result?.related_orgs?.length > 0) {
 						relatedOrgs = userOrgDetails.data.result.related_orgs
