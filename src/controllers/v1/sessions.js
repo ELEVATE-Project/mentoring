@@ -172,6 +172,7 @@ module.exports = class Sessions {
 				isAMentor(req.decodedToken.roles),
 				isSelfEnrolled,
 				session,
+				null,
 				req.decodedToken.roles,
 				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,

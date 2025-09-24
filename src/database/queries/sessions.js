@@ -565,7 +565,9 @@ exports.getUpcomingSessions = async (page, limit, search, userId, startDate, end
 		const currentEpochTime = moment().unix()
 		let whereCondition = {
 			[Op.or]: [{ title: { [Op.iLike]: `%${search}%` } }],
-			mentor_id: { [Op.ne]: userId },
+			mentor_id: {
+				[Op.or]: [{ [Op.ne]: userId }, { [Op.is]: null }],
+			},
 			end_date: {
 				[Op.gt]: currentEpochTime,
 			},

@@ -32,7 +32,8 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 		const menteeIds = mentees.map((mentee) => mentee.mentee_id)
 		let menteeTypeMap = {}
 		mentees.forEach((mentee) => {
-			menteeTypeMap[mentee.mentee_id] = mentee.type
+			const isDeleted = Boolean(mentee.deleted_at ?? mentee.deletedAt)
+			menteeTypeMap[mentee.mentee_id] = isDeleted ? '' : mentee.type
 		})
 		const options = {
 			attributes: {
@@ -131,7 +132,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 
 		if (queryParams?.csv === 'true') {
 			const csv = parser.parse(
-				mergedUserArray.map((user, index) => ({
+				enrolledUsers.map((user, index) => ({
 					index_number: index + 1,
 					name: user.name,
 					designation: user.designation
@@ -163,7 +164,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 			'custom_entity_text',
 		]
 
-		const cleanedAttendeesAccounts = mergedUserArray.map((user, index) => {
+		const cleanedAttendeesAccounts = enrolledUsers.map((user, index) => {
 			user.id = user.user_id
 			propertiesToDelete.forEach((property) => {
 				delete user[property]

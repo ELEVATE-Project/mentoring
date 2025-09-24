@@ -780,7 +780,7 @@ module.exports = class SessionsHelper {
 							sessionId,
 							menteesToAdd,
 							bodyData.time_zone,
-							userId,
+							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id,
 							orgId,
 							orgCode,
 							tenantCode
@@ -789,7 +789,11 @@ module.exports = class SessionsHelper {
 
 					// unenroll mentees
 					if (menteesToRemove.length > 0) {
-						await this.removeMentees(sessionId, menteesToRemove, bodyData.time_zone)
+						await this.removeMentees(
+							sessionId,
+							menteesToRemove,
+							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id
+						)
 					}
 				}
 				if (bodyData?.resources) {
@@ -1689,10 +1693,12 @@ module.exports = class SessionsHelper {
 		isAMentor,
 		isSelfEnrolled = true,
 		session = {},
+		mentorId = null,
 		roles,
 		orgId,
 		orgCode,
-		tenantCode
+		tenantCode,
+		effectiveMentorId
 	) {
 		try {
 			let email
@@ -1791,6 +1797,14 @@ module.exports = class SessionsHelper {
 				)
 				creatorName = sessionCreatorName.name
 			}
+
+			const mentorDetails = await mentorExtensionQueries.getMentorExtension(
+				mentorId ? mentorId : session.mentor_id,
+				['name'],
+				true,
+				tenantCode
+			)
+			session.mentor_name = mentorDetails.name
 
 			// check if the session is accessible to the user
 			let isAccessible = await this.checkIfSessionIsAccessible(session, userId, isAMentor, tenantCode)
@@ -1897,7 +1911,14 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- UnEnroll session.
 	 */
 
-	static async unEnroll(sessionId, userTokenData, isSelfUnenrollment = true, session = {}, tenantCode) {
+	static async unEnroll(
+		sessionId,
+		userTokenData,
+		isSelfUnenrollment = true,
+		session = {},
+		tenantCode,
+		mentorId = null
+	) {
 		try {
 			let email
 			let name
@@ -2993,7 +3014,15 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- Session details
 	 */
 
-	static async addMentees(sessionId, menteeIds, timeZone, userId, organizationId, organizationCode, tenantCode) {
+	static async addMentees(
+		sessionId,
+		menteeIds,
+		timeZone,
+		mentorId = null,
+		organizationId,
+		organizationCode,
+		tenantCode
+	) {
 		try {
 			// Check if session exists
 			const sessionDetails = await sessionQueries.findOne({ id: sessionId }, tenantCode)
@@ -3013,7 +3042,7 @@ module.exports = class SessionsHelper {
 				},
 				tenantCode
 			)
-			if (!mentees) {
+			if (!mentees && mentees.length > 0) {
 				return responses.failureResponse({
 					message: 'USER_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
@@ -3023,6 +3052,7 @@ module.exports = class SessionsHelper {
 			// Enroll mentees
 			const successIds = []
 			const failedIds = []
+			const effectiveMentorId = mentorId ?? sessionDetails.mentor_id
 			const enrollPromises = mentees.map((menteeData) =>
 				this.enroll(
 					sessionId,
@@ -3034,7 +3064,8 @@ module.exports = class SessionsHelper {
 					[],
 					organizationId,
 					organizationCode,
-					tenantCode
+					tenantCode,
+					effectiveMentorId
 				)
 					.then((response) => ({
 						id: menteeData.user_id,
@@ -3189,7 +3220,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- unenroll status
 	 */
 
-	static async removeMentees(sessionId, menteeIds, userId, organizationId, tenantCode) {
+	static async removeMentees(sessionId, menteeIds, mentorId = null, organizationId, tenantCode) {
 		try {
 			// check if session exists or not
 			const sessionDetails = await sessionQueries.findOne({ id: sessionId }, tenantCode)
@@ -3223,7 +3254,14 @@ module.exports = class SessionsHelper {
 			const successIds = []
 
 			const enrollPromises = menteeDetails.map((menteeData) => {
-				return this.unEnroll(sessionId, menteeData, false, sessionDetails, tenantCode)
+				return this.unEnroll(
+					sessionId,
+					menteeData,
+					false,
+					sessionDetails,
+					tenantCode,
+					mentorId ? mentorId : sessionDetails.mentor_id
+				)
 					.then((response) => {
 						if (response.statusCode == httpStatusCode.accepted) {
 							// Unerolled successfully
