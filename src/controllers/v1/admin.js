@@ -10,6 +10,7 @@ const adminService = require('@services/admin')
 const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
+const userExtensionQueries = require('@database/queries/userExtension')
 
 module.exports = class admin {
 	/**
@@ -23,10 +24,21 @@ module.exports = class admin {
 
 	async userDelete(req) {
 		try {
-			const userDelete = await adminService.userDelete(req.query.userId)
+			const userDelete = await adminService.userDelete(
+				req.query.userId,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code,
+				req.decodedToken.token
+			)
 			return userDelete
 		} catch (error) {
-			return error
+			console.error('Controller error in userDelete:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'USER_DELETION_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
 		}
 	}
 
@@ -39,8 +51,9 @@ module.exports = class admin {
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
-			const userDelete = await adminService.triggerViewRebuild(req.decodedToken)
-			return userDelete
+			// Build operation: ALWAYS build for ALL tenants - no parameters needed
+			const result = await adminService.triggerViewRebuild()
+			return result
 		} catch (error) {
 			return error
 		}
@@ -54,13 +67,18 @@ module.exports = class admin {
 					responseCode: 'UNAUTHORIZED',
 				})
 			}
-			return await adminService.triggerPeriodicViewRefresh(req.decodedToken)
+			// Extract model_name and tenant_code from query parameters
+			const tenantCode = req.query.tenant_code || null
+			return await adminService.triggerPeriodicViewRefresh(req.decodedToken, tenantCode, req.query.model_name)
 		} catch (err) {
 			console.log(err)
 		}
 	}
 	async triggerViewRebuildInternal(req) {
 		try {
+			// Internal method - builds ALL materialized views for ALL tenants
+			// No parameters needed - always builds everything
+			// Ignore any query parameters - build is always for all tenants
 			return await adminService.triggerViewRebuild()
 		} catch (error) {
 			return error
@@ -68,7 +86,24 @@ module.exports = class admin {
 	}
 	async triggerPeriodicViewRefreshInternal(req) {
 		try {
-			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name)
+			// Internal method - can refresh for specific tenant or all tenants
+			const tenantCode = req.query.tenant_code
+
+			if (!tenantCode) {
+				const tenants = await userExtensionQueries.getDistinctTenantCodes()
+
+				if (tenants.length > 0) {
+					return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name, tenants[0].code)
+				}
+
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'NO_TENANTS_FOUND',
+				})
+			}
+
+			// Specific tenantCode provided - refresh for that tenant only
+			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name, tenantCode)
 		} catch (err) {
 			console.log(err)
 		}

@@ -1,32 +1,78 @@
 const Form = require('../models/index').Form
+const { Op } = require('sequelize')
 
 module.exports = class FormsData {
-	static async createForm(data) {
+	static async createForm(data, tenantCode) {
 		try {
+			if (tenantCode) {
+				data.tenant_code = tenantCode
+			}
 			let form = await Form.create(data, { returning: true })
 			return form
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
-	static async findOneForm(filter) {
+	static async findOne(filter, tenantCode, options = {}) {
 		try {
-			const formData = await Form.findOne({
-				where: filter,
+			filter.tenant_code = tenantCode
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
+			return await Form.findOne({
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But tenant filtering takes priority
+				},
+				...otherOptions,
 				raw: true,
 			})
-			return formData
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
-	static async updateOneForm(filter, update, options = {}) {
+	static async findFormsByFilter(filter, tenantCodes, options = {}) {
 		try {
+			const whereClause = {
+				...filter,
+				tenant_code: { [Op.in]: tenantCodes },
+			}
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
+			return await Form.findAll({
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...whereClause, // But tenant filtering takes priority
+				},
+				...otherOptions,
+				raw: true,
+			})
+		} catch (error) {
+			return error
+		}
+	}
+
+	static async updateOneForm(filter, update, tenantCode, orgCode, options = {}) {
+		try {
+			filter.tenant_code = tenantCode
+			if (orgCode) {
+				filter.organization_code = orgCode
+			}
+
+			// Safe merge: tenant filtering cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			const [rowsAffected] = await Form.update(update, {
-				where: filter,
-				...options,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But tenant filtering takes priority
+				},
+				...otherOptions,
 				individualHooks: true, // Pass 'individualHooks: true' option to ensure proper triggering of 'beforeUpdate' hook.
 			})
 
@@ -36,18 +82,23 @@ module.exports = class FormsData {
 				return 'ENTITY_NOT_FOUND'
 			}
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
-	static async findAllTypeFormVersion() {
+	static async findAllTypeFormVersion(tenantCode, orgCode) {
 		try {
+			const whereClause = { tenant_code: tenantCode }
+			if (orgCode) {
+				whereClause.organization_code = orgCode
+			}
 			const formData = await Form.findAll({
+				where: whereClause,
 				attributes: ['id', 'type', 'version'],
 			})
 			return formData
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 }

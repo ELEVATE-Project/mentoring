@@ -17,9 +17,12 @@ module.exports = class modulesHelper {
 	 * @returns {JSON} - modules created response.
 	 */
 
-	static async create(bodyData) {
+	static async create(bodyData, userId, organizationId, tenantCode) {
 		try {
-			const modules = await modulesQueries.createModules(bodyData)
+			// Add tenant context to bodyData
+			bodyData.tenant_code = tenantCode
+
+			const modules = await modulesQueries.createModules(bodyData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'MODULES_CREATED_SUCCESSFULLY',
@@ -51,16 +54,24 @@ module.exports = class modulesHelper {
 	 * @returns {JSON} - modules updated response.
 	 */
 
-	static async update(id, bodyData) {
+	static async update(id, bodyData, userId, organizationId, tenantCode) {
 		try {
-			const modules = await modulesQueries.findModulesById(id)
+			const modules = await modulesQueries.findModulesById(id, tenantCode)
 			if (!modules) {
-				throw new Error('MODULES_NOT_FOUND')
+				return responses.failureResponse({
+					message: 'MODULES_NOT_FOUND',
+					statusCode: httpStatusCode.not_found,
+					responseCode: 'CLIENT_ERROR',
+				})
 			}
 
-			const updatedModules = await modulesQueries.updateModules({ id }, bodyData)
+			const updatedModules = await modulesQueries.updateModules(
+				{ id, tenant_code: tenantCode },
+				bodyData,
+				tenantCode
+			)
 			const updatePermissions = permissionsQueries.updatePermissions(
-				{ module: modules.code },
+				{ module: modules.code, tenant_code: tenantCode },
 				{ module: updatedModules.code }
 			)
 
@@ -94,9 +105,9 @@ module.exports = class modulesHelper {
 	 * @returns {JSON} - modules deleted response.
 	 */
 
-	static async delete(id) {
+	static async delete(id, userId, organizationId, tenantCode) {
 		try {
-			const modules = await modulesQueries.findModulesById(id)
+			const modules = await modulesQueries.findModulesById(id, tenantCode)
 
 			if (!modules) {
 				return responses.failureResponse({
@@ -105,7 +116,7 @@ module.exports = class modulesHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			} else {
-				const deletemodules = await modulesQueries.deleteModulesById(id)
+				const deletemodules = await modulesQueries.deleteModulesById(id, tenantCode)
 
 				if (!deletemodules) {
 					return responses.failureResponse({
@@ -133,19 +144,20 @@ module.exports = class modulesHelper {
 	 * @returns {JSON} - modules list response.
 	 */
 
-	static async list(page, limit, search) {
+	static async list(page, limit, search, userId, organizationId, tenantCode) {
 		try {
 			const offset = common.getPaginationOffset(page, limit)
 
 			const filter = {
 				code: { [Op.iLike]: `%${search}%` },
+				tenant_code: tenantCode,
 			}
 			const options = {
 				offset,
 				limit,
 			}
 			const attributes = ['id', 'code', 'status']
-			const modules = await modulesQueries.findAllModules(filter, attributes, options)
+			const modules = await modulesQueries.findAllModules(filter, attributes, options, tenantCode)
 
 			if (modules.rows == 0 || modules.count == 0) {
 				return responses.failureResponse({

@@ -6,7 +6,7 @@ module.exports = class permissionData {
 		try {
 			return await Permissions.create(data, { returning: true })
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -14,20 +14,26 @@ module.exports = class permissionData {
 		try {
 			return await Permissions.findByPk(id)
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
 	static async findAllPermissions(filter, attributes, options = {}) {
 		try {
+			// Safe merge: filter cannot be overridden by options.where
+			const { where: optionsWhere, ...otherOptions } = options
+
 			const permissions = await Permissions.findAndCountAll({
-				where: filter,
+				where: {
+					...optionsWhere, // Allow additional where conditions
+					...filter, // But main filter takes priority
+				},
 				attributes,
-				...options,
+				...otherOptions,
 			})
 			return permissions
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -39,7 +45,7 @@ module.exports = class permissionData {
 			})
 			return updatedPermission
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -52,7 +58,7 @@ module.exports = class permissionData {
 
 			return deletedRows
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 

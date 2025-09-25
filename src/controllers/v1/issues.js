@@ -13,8 +13,9 @@ module.exports = class Help {
 
 	async create(req) {
 		const params = req.body
+		const tenantCode = req.decodedToken.tenant_code
 		try {
-			const createdIssue = await issuesService.create(params, req.decodedToken)
+			const createdIssue = await issuesService.create(params, req.decodedToken, tenantCode)
 			return createdIssue
 		} catch (error) {
 			return error

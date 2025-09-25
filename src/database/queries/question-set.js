@@ -6,7 +6,7 @@ module.exports = class QuestionsData {
 			const questionSet = await QuestionSet.create(data)
 			return questionSet
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 

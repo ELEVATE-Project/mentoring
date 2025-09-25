@@ -31,7 +31,6 @@ var get = function (url, token = '', internal_access_token = false) {
 				return resolve(result)
 			})
 		} catch (error) {
-			console.log(error)
 			return resolve({ success: false })
 		}
 	})

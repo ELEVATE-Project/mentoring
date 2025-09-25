@@ -9,30 +9,36 @@ const mentorQueries = require('@database/queries/mentorExtension')
 const menteeQueries = require('@database/queries/userExtension')
 const adminService = require('../generics/materializedViews')
 const responses = require('@helpers/responses')
-// Removed direct import to break circular dependency - using direct query instead
 const requestSessionQueries = require('@database/queries/requestSessions')
 const userRequests = require('@requests/user')
-const mentorExtensionQueries = require('@database/queries/mentorExtension')
-const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const communicationHelper = require('@helpers/communications')
 const moment = require('moment')
 const connectionQueries = require('@database/queries/connection')
 const userExtensionQueries = require('@database/queries/userExtension')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
-const { sequelize } = require('@database/models/index')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
+const { Op, QueryTypes } = require('sequelize')
+const { sequelize, Session, SessionAttendee, Connection, RequestSession } = require('@database/models/index')
 const { literal } = require('sequelize')
-const sessionOwnerships = require('@database/queries/sessionOwnership')
+const sessionRequestMappingQueries = require('@database/queries/requestSessionMapping')
+// sessionOwnership removed - functionality replaced by direct Session queries
 
 // Generic notification helper class
 class NotificationHelper {
-	static async sendGenericNotification({ recipients, templateCode, orgId, templateData = {}, subjectData = {} }) {
+	static async sendGenericNotification({
+		recipients,
+		templateCode,
+		orgCode,
+		templateData = {},
+		subjectData = {},
+		tenantCodes,
+	}) {
 		try {
 			if (!templateCode || !recipients?.length) {
 				console.log('Missing template code or recipients for notification')
 				return true
 			}
 
-			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgId)
+			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCode, tenantCodes)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -65,14 +71,17 @@ class NotificationHelper {
 	static async sendSessionNotification({
 		sessions,
 		templateCode,
-		orgId,
+		orgCode,
 		recipientField = 'mentee_id',
 		addionalData = {},
+		tenantCode,
+		orgCodes,
+		tenantCodes,
 	}) {
 		try {
 			if (!sessions?.length || !templateCode) return true
 
-			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgId)
+			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCodes, tenantCodes)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -81,10 +90,10 @@ class NotificationHelper {
 			for (const session of sessions) {
 				const recipientIds =
 					recipientField === 'attendees'
-						? await this.getSessionAttendeeIds(session.id)
+						? await this.getSessionAttendeeIds(session.id, tenantCode)
 						: [session[recipientField]]
 
-				const recipients = await menteeQueries.getUsersByUserIds(recipientIds, {}, true)
+				const recipients = await menteeQueries.getUsersByUserIds(recipientIds, {}, tenantCode, true)
 
 				const emailPromises = recipients.map(async (recipient) => {
 					const templateData = {
@@ -117,9 +126,9 @@ class NotificationHelper {
 		}
 	}
 
-	static async getSessionAttendeeIds(sessionId) {
+	static async getSessionAttendeeIds(sessionId, tenantCode) {
 		try {
-			const attendees = await sessionAttendeesQueries.findAll({ session_id: sessionId })
+			const attendees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, tenantCode)
 			return attendees.map((attendee) => attendee.mentee_id)
 		} catch (error) {
 			console.error('Error getting session attendee IDs:', error)
@@ -137,12 +146,13 @@ module.exports = class AdminService {
 	 * @returns {JSON} - List of users
 	 */
 
-	static async userDelete(userId) {
+	static async userDelete(userId, currentUserId, organizationCode, tenantCode, token = '') {
 		try {
 			let result = {}
 
 			// Step 1: Fetch user details
-			const getUserDetails = await menteeQueries.getUsersByUserIds([userId]) // userId = "1"
+			const getUserDetails = await menteeQueries.getUsersByUserIds([userId], {}, tenantCode, false) // userId = "1"
+
 			if (!getUserDetails || getUserDetails.length === 0) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.bad_request,
@@ -155,7 +165,7 @@ module.exports = class AdminService {
 			const isMentor = userInfo.is_mentor === true
 
 			// Step 2: Check if user is a session manager
-			const getUserDetailById = await userRequests.fetchUserDetails({ userId }) // userId = "1"
+			const getUserDetailById = await userRequests.fetchUserDetails({ token, userId, tenantCode }) // userId = "1"
 			const roleTitles = getUserDetailById?.data?.result?.user_roles?.map((r) => r.title) || []
 			const isSessionManager = roleTitles.includes(common.SESSION_MANAGER_ROLE)
 
@@ -195,30 +205,44 @@ module.exports = class AdminService {
 			}
 
 			// Step 4: Check for user connections
-			const connectionCount = await connectionQueries.getConnectionsCount('', userId) // filter, userId = "1", organizationIds = ["1", "2"]
+			const connectionCount = await connectionQueries.getConnectionsCount('', userId, [], tenantCode) // filter, userId = "1", organizationIds = ["1", "2"]
 
 			if (connectionCount > 0) {
-				// Get connected mentors before deleting connections (for notifications)
-
-				let mentorIds = await connectionQueries.getConnectedUsers(userId, 'user_id', 'friend_id')
+				let mentorIds = await connectionQueries.getConnectedUsers(userId, 'user_id', 'friend_id', tenantCode)
 				if (mentorIds.length === 0) {
-					return []
+					// Continue with deletion process even if no mentors are connected
+					mentorIds = []
 				}
 				// Get mentor details for notification
-				const connectedMentors = await userExtensionQueries.getUsersByUserIds(
-					mentorIds,
-					{
-						attributes: ['user_id', 'name', 'email'],
-					},
-					true
-				)
+				const connectedMentors = await userExtensionQueries.getUsersByUserIds(mentorIds, {
+					attributes: ['user_id', 'name', 'email'],
+					tenantCode,
+				})
 
-				// Soft delete in communication service
-				const removeChatUser = await communicationHelper.setActiveStatus(userId, false) // ( userId = "1", activeStatus = "true" or "false")
-				const removeChatAvatar = await communicationHelper.removeAvatar(userId)
+				// Soft delete in communication service - handle invalid-users gracefully
+				let removeChatUser, removeChatAvatar, updateChatUserName
+
+				try {
+					removeChatUser = await communicationHelper.setActiveStatus(userId, false, false, tenantCode) // ( userId = "1", activeStatus = "true" or "false")
+				} catch (error) {
+					console.log(`Communication setActiveStatus failed:`, error.response?.data?.message || error.message)
+					removeChatUser = { result: { success: false }, error: error.message }
+				}
+
+				try {
+					removeChatAvatar = await communicationHelper.removeAvatar(userId, tenantCode)
+				} catch (error) {
+					console.log(`Communication removeAvatar failed:`, error.response?.data?.message || error.message)
+					removeChatAvatar = { result: { success: false }, error: error.message }
+				}
 
 				// Update user name to 'User Not Found'
-				const updateChatUserName = await communicationHelper.updateUser(userId, common.USER_NOT_FOUND) // userId: "1", name: "User Name"
+				try {
+					updateChatUserName = await communicationHelper.updateUser(userId, common.USER_NOT_FOUND, tenantCode) // userId: "1", name: "User Name"
+				} catch (error) {
+					console.log(`Communication updateUser failed:`, error.response?.data?.message || error.message)
+					updateChatUserName = { result: { success: false }, error: error.message }
+				}
 
 				result.isChatUserRemoved = removeChatUser?.result?.success === true
 				result.isRemoveChatAvatar = removeChatAvatar?.result?.success === true
@@ -226,15 +250,20 @@ module.exports = class AdminService {
 
 				// Delete user connections and requests from DB
 				result.isConnectionsAndRequestsRemoved = await connectionQueries.deleteUserConnectionsAndRequests(
-					userId
+					userId,
+					tenantCode
 				) // userId = "1"
 
 				// Notify connected mentors about mentee deletion
 				if (connectedMentors.length > 0) {
+					const orgCodes = [userInfo.organization_code, defaults.orgCode].filter(Boolean)
+					const tenantCodes = [tenantCode, defaults.tenantCode].filter(Boolean)
+
 					result.isMentorNotifiedAboutMenteeDeletion = await this.notifyMentorsAboutMenteeDeletion(
 						connectedMentors,
 						userInfo.name || 'User',
-						userInfo.organization_id || ''
+						orgCodes,
+						tenantCodes
 					)
 				} else {
 					result.isMentorNotifiedAboutMenteeDeletion = true
@@ -248,13 +277,60 @@ module.exports = class AdminService {
 				result.isMentorNotifiedAboutMenteeDeletion = true
 			}
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
+			// Step 5: Session Request Deletion & Notifications
+			const requestSessions = await this.findAllRequestSessions(userId, tenantCode) // userId = "1"
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
+			if (requestSessions.allSessionRequestIds.length > 0) {
+				const { allSessionRequestIds = [], requestedSessions = [], receivedSessions = [] } = requestSessions
+
+				// Collect all session request IDs for deletion
+				result.isRequestedSessionRemoved = await requestSessionQueries.markRequestsAsDeleted(
+					allSessionRequestIds,
+					tenantCode
+				) // allSessionRequestIds = ["1", "2"]
+
+				// Use both user's codes and defaults for notification templates
+				const orgCodes = [organizationCode, defaults.orgCode].filter(Boolean)
+				const tenantCodes = [tenantCode, defaults.tenantCode].filter(Boolean)
+
+				if (requestedSessions.length > 0) {
+					result.isRequestedSessionMentorNotified = await this.NotifySessionRequestedUsers(
+						requestedSessions,
+						false,
+						true,
+						orgCodes,
+						tenantCodes,
+						organizationCode,
+						tenantCode
+					) // (sessionsDetails, received, sent, orgCodes, tenantCodes)
+				}
+
+				if (isMentor && receivedSessions.length > 0) {
+					result.isRequestedSessionMenteeNotified = await this.NotifySessionRequestedUsers(
+						receivedSessions,
+						true,
+						false,
+						orgCodes,
+						tenantCodes,
+						organizationCode,
+						tenantCode
+					) // (sessionsDetails, received, sent, orgCodes, tenantCodes)
+				}
+			}
 
 			// Step 6: Remove user and sessions
 			let removedUserDetails = 0
@@ -264,55 +340,33 @@ module.exports = class AdminService {
 
 			if (isMentor) {
 				// Handle mentor-specific deletion tasks
-				await this.handleMentorDeletion(userId, userInfo, result)
+				await this.handleMentorDeletion(userId, userInfo, result, tenantCode)
 
 				// Remove mentor from DB
-				mentorDetailsRemoved = await mentorQueries.removeMentorDetails(userId) // userId = "1"
+				mentorDetailsRemoved = await mentorQueries.removeMentorDetails(userId, tenantCode) // userId = "1"
 
 				// Unenroll and notify attendees of sessions created by mentor
-				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(userId) // userId = "1"
+				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(userId, tenantCode) // userId = "1"
+				const orgCodes = [userInfo.organization_code, defaults.orgCode].filter(Boolean)
+				const tenantCodes = [tenantCode, defaults.tenantCode].filter(Boolean)
+
 				result.isAttendeesNotified = await this.unenrollAndNotifySessionAttendees(
 					removedSessionsDetail,
-					userInfo.organization_id || ''
-				) //removedSessionsDetail , orgId : "1")
-			}
-
-			// Step 5: Session Request Deletion & Notifications
-			const requestSessions = await this.findAllRequestSessions(userId) // userId = "1"
-
-			if (requestSessions.allSessionRequestIds.length > 0) {
-				const { allSessionRequestIds = [], requestedSessions = [], receivedSessions = [] } = requestSessions
-
-				// Collect all session request IDs for deletion
-				result.isRequestedSessionRemoved = await requestSessionQueries.markRequestsAsDeleted(
-					allSessionRequestIds
-				) // allSessionRequestIds = ["1", "2"]
-
-				if (requestedSessions.length > 0) {
-					result.isRequestedSessionMentorNotified = await this.NotifySessionRequestedUsers(
-						requestedSessions,
-						false,
-						true,
-						defaultOrgId
-					) // (sessionsDetails, received = true or false, sent = true or false , orgId = "1")
-				}
-
-				if (isMentor && receivedSessions.length > 0) {
-					result.isRequestedSessionMenteeNotified = await this.NotifySessionRequestedUsers(
-						receivedSessions,
-						true,
-						false,
-						defaultOrgId
-					) // (sessionsDetails, received = true or false, sent = true or false , orgId = "1")
-				}
+					orgCodes,
+					tenantCodes,
+					tenantCode,
+					organizationCode
+				) //removedSessionsDetail, orgCodes, tenantCodes
 			}
 
 			// send email to SM when mentee is deleted from the private sessions if it is upcoming
-			await this.notifySessionManagerIfMenteeDeleted(userId, userInfo, result)
+			// TODO: Implement notifySessionManagerIfMenteeDeleted method
+			// await this.notifySessionManagerIfMenteeDeleted(userId, userInfo, result)
+			console.log('Skipping session manager notification for mentee deletion - method not implemented')
 
 			// Always check and remove mentee extension (user can be both mentor and mentee)
 			try {
-				menteeDetailsRemoved = await menteeQueries.removeMenteeDetails(userId) // userId = "1"
+				menteeDetailsRemoved = await menteeQueries.deleteMenteeExtension(userId, tenantCode) // userId = "1"
 			} catch (error) {
 				console.log('No mentee extension found or already removed:', error.message)
 			}
@@ -324,20 +378,25 @@ module.exports = class AdminService {
 			// Get private sessions where deleted mentee was the only attendee
 			const privateSessions = await sessionQueries.getUpcomingSessionsOfMentee(
 				userId,
-				common.SESSION_TYPE.PRIVATE
+				common.SESSION_TYPE.PRIVATE,
+				tenantCode
 			)
 
 			// increment seats_remaining
 			try {
 				const upcomingPublicSessions = await sessionQueries.getUpcomingSessionsOfMentee(
 					userId,
-					common.SESSION_TYPE.PUBLIC
+					common.SESSION_TYPE.PUBLIC,
+					tenantCode
 				)
-				const allUpcomingSessions = [...privateSessions, ...upcomingPublicSessions]
+				// Ensure both are arrays before spreading
+				const privateSessArray = Array.isArray(privateSessions) ? privateSessions : []
+				const publicSessArray = Array.isArray(upcomingPublicSessions) ? upcomingPublicSessions : []
+				const allUpcomingSessions = [...privateSessArray, ...publicSessArray]
 				for (const session of allUpcomingSessions) {
 					await sessionQueries.updateRecords(
 						{ seats_remaining: literal('seats_remaining + 1') },
-						{ where: { id: session.id } }
+						{ where: { id: session.id, tenant_code: tenantCode } }
 					)
 				}
 				result.isSeatsUpdate = true
@@ -349,9 +408,13 @@ module.exports = class AdminService {
 			// Step 7: Handle private session cancellations and notifications
 			try {
 				if (privateSessions.length > 0) {
+					const orgCodes = [userInfo.organization_code, defaults.orgCode].filter(Boolean)
+					const tenantCodes = [tenantCode, defaults.tenantCode].filter(Boolean)
+
 					result.isPrivateSessionsCancelled = await this.notifyAndCancelPrivateSessions(
 						privateSessions,
-						userInfo.organization_id || ''
+						orgCodes,
+						tenantCodes
 					)
 				} else {
 					result.isPrivateSessionsCancelled = true
@@ -363,9 +426,8 @@ module.exports = class AdminService {
 
 			// Step 8: Remove user from ALL sessions (attendees and enrollments) - not just upcoming
 			try {
-				const sessionCleanup = await sessionAttendeesQueries.removeUserFromAllSessions(userId)
-				result.isUnenrolledFromSessions =
-					sessionCleanup.attendeeResult >= 0 && sessionCleanup.enrollmentResult >= 0
+				const sessionCleanup = await sessionAttendeesQueries.removeUserFromAllSessions(userId, tenantCode)
+				result.isUnenrolledFromSessions = sessionCleanup.attendeeResult >= 0
 			} catch (error) {
 				console.error('Error removing user from all sessions:', error)
 				result.isUnenrolledFromSessions = false
@@ -387,6 +449,8 @@ module.exports = class AdminService {
 					statusCode: httpStatusCode.ok,
 					message: 'USER_REMOVED_SUCCESSFULLY',
 					result,
+					tenantCode,
+					orgCode: organizationCode,
 				})
 			}
 			return responses.failureResponse({
@@ -396,7 +460,11 @@ module.exports = class AdminService {
 			})
 		} catch (error) {
 			console.error('An error occurred in userDelete:', error)
-			return error
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'USER_DELETION_FAILED',
+				result: { error: error.message },
+			})
 		}
 	}
 
@@ -481,7 +549,15 @@ module.exports = class AdminService {
 	// 	})
 	// }
 
-	static async NotifySessionRequestedUsers(sessionsDetails, received = false, sent = false, orgId = '') {
+	static async NotifySessionRequestedUsers(
+		sessionsDetails,
+		received = false,
+		sent = false,
+		orgCodes,
+		tenantCodes,
+		orgCode,
+		tenantCode
+	) {
 		try {
 			const templateCode = received
 				? process.env.MENTEE_SESSION_REQUEST_DELETION_EMAIL_CODE
@@ -495,9 +571,12 @@ module.exports = class AdminService {
 			return await NotificationHelper.sendSessionNotification({
 				sessions: sessionsWithRecipients,
 				templateCode,
-				orgId,
+				orgCode,
 				recipientField: 'recipient_id',
 				addionalData: { nameOfTheSession: '{sessionName}' },
+				tenantCode,
+				orgCodes,
+				tenantCodes,
 			})
 		} catch (error) {
 			console.error('An error occurred in NotifySessionRequestedUsers:', error)
@@ -505,15 +584,28 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async unenrollAndNotifySessionAttendees(removedSessionsDetail, orgId = '') {
+	static async unenrollAndNotifySessionAttendees(
+		removedSessionsDetail,
+		orgCodes = [],
+		tenantCodes = [],
+		tenantCode,
+		orgCode
+	) {
 		try {
+			// Use first organization and tenant codes for notification
+			const orgsCode = Array.isArray(orgCodes) ? orgCodes[0] : orgCodes
+			const tenantsCode = Array.isArray(tenantCodes) ? tenantCodes[0] : tenantCodes
+
 			// Send notifications using generic helper
 			const notificationResult = await NotificationHelper.sendSessionNotification({
 				sessions: removedSessionsDetail,
 				templateCode: process.env.MENTOR_SESSION_DELETION_EMAIL_CODE,
-				orgId,
+				orgCode,
 				recipientField: 'attendees',
 				addionalData: { nameOfTheSession: '{sessionName}' },
+				tenantCode,
+				orgsCode,
+				tenantsCode,
 			})
 
 			// Unenroll attendees from sessions
@@ -526,27 +618,31 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async unenrollFromUpcomingSessions(userId) {
+	static async unenrollFromUpcomingSessions(userId, tenantCode) {
 		try {
-			const upcomingSessions = await sessionQueries.getAllUpcomingSessions(false)
+			const upcomingSessions = await sessionQueries.getAllUpcomingSessions(false, tenantCode)
 
-			const upcomingSessionsId = upcomingSessions.map((session) => session.id)
+			const upcomingSessionsId = Array.isArray(upcomingSessions)
+				? upcomingSessions.map((session) => session.id)
+				: []
 			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
 				userId,
-				upcomingSessionsId
+				upcomingSessionsId,
+				tenantCode
 			)
 			if (usersUpcomingSessions.length === 0) {
 				return true
 			}
 			await Promise.all(
 				usersUpcomingSessions.map(async (session) => {
-					await sessionQueries.updateEnrollmentCount(session.session_id, true)
+					await sessionQueries.updateEnrollmentCount(session.session_id, true, tenantCode)
 				})
 			)
 
 			const unenrollFromUpcomingSessions = await sessionAttendeesQueries.unenrollFromUpcomingSessions(
 				userId,
-				upcomingSessionsId
+				upcomingSessionsId,
+				tenantCode
 			)
 			return true
 		} catch (error) {
@@ -555,22 +651,26 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async findAllRequestSessions(userId) {
+	static async findAllRequestSessions(userId, tenantCode) {
 		try {
-			// Get session requests directly from database to avoid circular dependency
-			const sessionRequestMappingQueries = require('@database/queries/requestSessionMapping')
-
 			// Get requests where user is requestor (sent requests)
-			const sentRequests = await requestSessionQueries.getAllRequests(userId, common.CONNECTIONS_STATUS.REQUESTED)
+			const sentRequests = await requestSessionQueries.getAllRequests(
+				userId,
+				common.CONNECTIONS_STATUS.REQUESTED,
+				tenantCode
+			)
 			const sentRequestsData = sentRequests.rows || []
 
 			// Get requests where user is requestee (received requests)
-			const sessionRequestMapping = await sessionRequestMappingQueries.getSessionsMapping(userId)
-			const sessionRequestIds = sessionRequestMapping.map((s) => s.request_session_id)
+			const sessionRequestMapping = await sessionRequestMappingQueries.getSessionsMapping(userId, tenantCode)
+			const sessionRequestIds = Array.isArray(sessionRequestMapping)
+				? sessionRequestMapping.map((s) => s.request_session_id)
+				: []
 
 			const receivedRequests = await requestSessionQueries.getSessionMappingDetails(
 				sessionRequestIds,
-				common.CONNECTIONS_STATUS.REQUESTED
+				common.CONNECTIONS_STATUS.REQUESTED,
+				tenantCode
 			)
 			const receivedRequestsData = receivedRequests || []
 
@@ -617,37 +717,65 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async triggerViewRebuild(decodedToken) {
+	static async triggerViewRebuild() {
 		try {
-			const result = await adminService.triggerViewBuild()
+			let result
+			let message
+
+			// Build operation: ALWAYS build views for ALL tenants - no parameters needed
+			result = await adminService.triggerViewBuildForAllTenants()
+			message = result.success ? result.message : 'MATERIALIZED_VIEW_GENERATION_FAILED'
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
-				message: 'MATERIALIZED_VIEW_GENERATED_SUCCESSFULLY',
+				message: message,
+				result: result,
 			})
 		} catch (error) {
-			console.error('An error occurred in userDelete:', error)
+			console.error('An error occurred in triggerViewRebuild:', error)
 			return error
 		}
 	}
-	static async triggerPeriodicViewRefresh(decodedToken) {
+	static async triggerPeriodicViewRefresh(decodedToken, tenantCode, modelName) {
 		try {
-			const result = await adminService.triggerPeriodicViewRefresh()
+			let result
+			let message
+
+			if (modelName && tenantCode) {
+				// Specific model and tenant provided - refresh specific view for specific tenant
+				result = await adminService.refreshMaterializedView(modelName, tenantCode)
+				message = 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY'
+			} else if (!tenantCode) {
+				// No tenantCode provided - start refresh for all tenants (with specific model if provided)
+				result = await adminService.triggerPeriodicViewRefreshForAllTenants(modelName)
+				message = result.success ? result.message : 'MATERIALIZED_VIEW_REFRESH_FAILED'
+			} else {
+				// Specific tenantCode provided - start refresh for that tenant only
+				result = await adminService.triggerPeriodicViewRefresh(tenantCode)
+				message = 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY'
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
-				message: 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY',
+				message: message,
+				result: result,
 			})
 		} catch (error) {
-			console.error('An error occurred in userDelete:', error)
+			console.error('An error occurred in triggerPeriodicViewRefresh:', error)
 			return error
 		}
 	}
-	static async triggerPeriodicViewRefreshInternal(modelName) {
+	static async triggerPeriodicViewRefreshInternal(modelName, tenantCode) {
 		try {
-			const result = await adminService.refreshMaterializedView(modelName)
-			console.log(result)
+			const result = await adminService.refreshMaterializedView(modelName, tenantCode)
+			// Only log if there's an actual refresh or error
+			if (result && result.rowCount) {
+				console.log(`Materialized view refreshed for ${modelName}, tenant: ${tenantCode}`)
+			}
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY',
+				tenantCode: tenantCode,
 			})
 		} catch (error) {
 			console.error('An error occurred in userDelete:', error)
@@ -655,21 +783,25 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async notifyAndCancelPrivateSessions(privateSessions, orgId) {
+	static async notifyAndCancelPrivateSessions(privateSessions, orgCodes, tenantCodes) {
 		const transaction = await sequelize.transaction()
 		try {
 			let allNotificationsSent = true
 
 			for (const session of privateSessions) {
 				// Check if this is a one-on-one session (only one attendee)
-				const attendeeCount = await sessionAttendeesQueries.getCount({ session_id: session.id })
+				const attendeeCount = await sessionAttendeesQueries.getCount({
+					session_id: session.id,
+					tenant_code: tenantCodes[0], // Use primary tenant for database query
+				})
 
 				if (attendeeCount === 1 && session.mentor_id == session.created_by) {
 					// This is a one-on-one private session, cancel it and notify mentor
 					const notificationSent = await this.notifyMentorAboutPrivateSessionCancellation(
 						session.mentor_id,
 						session,
-						orgId
+						orgCodes,
+						tenantCodes
 					)
 
 					if (!notificationSent) {
@@ -679,14 +811,10 @@ module.exports = class AdminService {
 					// Mark session as cancelled/deleted
 					await sessionQueries.updateRecords(
 						{ deleted_at: new Date() },
-						{ where: { id: session.id } },
+						{ where: { id: session.id, tenant_code: tenantCodes[0] } }, // Use primary tenant for database query
 						transaction
 					)
-					await sessionOwnerships.updateRecords(
-						{ deleted_at: new Date() },
-						{ where: { id: session.id, user_id: session.mentor_id } },
-						transaction
-					)
+					// sessionOwnership deletion removed - no longer needed with direct Session mentor_id management
 
 					console.log(`Cancelled private session ${session.id} due to mentee deletion`)
 				}
@@ -848,20 +976,109 @@ module.exports = class AdminService {
 	// 	}
 	// }
 
-	static async notifyMentorsAboutMenteeDeletion(mentors, menteeName, orgId) {
+	static async getConnectedMentors(menteeUserId, tenantCode) {
+		try {
+			const query = `
+				SELECT DISTINCT user_id 
+				FROM ${Connection.tableName} 
+				WHERE friend_id = :menteeUserId 
+				AND status = :acceptedStatus
+				AND tenant_code = :tenantCode
+			`
+
+			const connections = await sequelize.query(query, {
+				type: QueryTypes.SELECT,
+				replacements: {
+					menteeUserId,
+					acceptedStatus: common.CONNECTIONS_STATUS.ACCEPTED,
+					tenantCode,
+				},
+			})
+
+			const mentorIds = connections.map((conn) => conn.user_id)
+
+			if (mentorIds.length === 0) {
+				return []
+			}
+
+			// Get mentor details for notification
+			const mentors = (await mentorExtensionQueries.getMentorsByUserIds)
+				? await mentorExtensionQueries.getMentorsByUserIds(
+						mentorIds,
+						{
+							attributes: ['user_id', 'name', 'email'],
+						},
+						false,
+						tenantCode
+				  )
+				: await userExtensionQueries.getUsersByUserIds(
+						mentorIds,
+						{
+							attributes: ['user_id', 'name', 'email'],
+						},
+						false,
+						tenantCode
+				  )
+
+			return mentors || []
+		} catch (error) {
+			console.error('Error getting connected mentors:', error)
+			return []
+		}
+	}
+
+	static async notifyMentorsAboutMenteeDeletion(mentors, menteeName, orgCodes, tenantCodes) {
 		return await NotificationHelper.sendGenericNotification({
 			recipients: mentors,
 			templateCode: process.env.MENTEE_DELETION_NOTIFICATION_EMAIL_TEMPLATE,
-			orgId,
+			orgCode: orgCodes,
 			templateData: { menteeName },
 			subjectData: { menteeName },
+			tenantCodes,
 		})
 	}
 
-	static async notifyMentorAboutPrivateSessionCancellation(mentorId, sessionDetails, orgId) {
+	static async getPrivateSessionsWithDeletedMentee(menteeUserId, tenantCode) {
+		try {
+			// Get private sessions where the deleted mentee was enrolled and session is in future
+			const query = `
+				SELECT DISTINCT s.id, s.title, s.mentor_id, s.start_date, s.end_date, s.type
+				FROM ${Session.tableName} s
+				INNER JOIN ${SessionAttendee.tableName} sa ON s.id = sa.session_id
+				WHERE sa.mentee_id = :menteeUserId
+				AND s.type = :privateType
+				AND s.start_date > :currentTime
+				AND s.deleted_at IS NULL
+				AND s.tenant_code = :tenantCode
+				AND sa.tenant_code = :tenantCode
+			`
+
+			const privateSessions = await sequelize.query(query, {
+				type: QueryTypes.SELECT,
+				replacements: {
+					menteeUserId,
+					privateType: common.SESSION_TYPE.PRIVATE,
+					currentTime: Math.floor(Date.now() / 1000),
+					tenantCode,
+				},
+			})
+
+			return privateSessions || []
+		} catch (error) {
+			console.error('Error getting private sessions with deleted mentee:', error)
+			return []
+		}
+	}
+
+	static async notifyMentorAboutPrivateSessionCancellation(mentorId, sessionDetails, orgCodes, tenantCodes) {
 		try {
 			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name', 'email'], true)
+			const mentorDetails = await mentorExtensionQueries.getMentorExtension(
+				mentorId,
+				['name', 'email'],
+				true,
+				tenantCodes[0] // Use primary tenant for database query
+			)
 			if (!mentorDetails) {
 				console.log('Mentor details not found for notification')
 				return false
@@ -872,13 +1089,14 @@ module.exports = class AdminService {
 			return await NotificationHelper.sendGenericNotification({
 				recipients: [mentorDetails],
 				templateCode: process.env.PRIVATE_SESSION_CANCELLED_EMAIL_TEMPLATE,
-				orgId,
+				orgCode: orgCodes,
 				templateData: {
 					sessionName: sessionDetails.title,
 					sessionDate: sessionDateTime.format('DD-MM-YYYY'),
 					sessionTime: sessionDateTime.format('hh:mm A'),
 				},
 				subjectData: { sessionName: sessionDetails.title },
+				tenantCodes,
 			})
 		} catch (error) {
 			console.error('Error notifying mentor about private session cancellation:', error)
@@ -886,90 +1104,77 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async notifySessionManagerIfMenteeDeleted(userId, userInfo, result) {
+	static async handleMentorDeletion(mentorUserId, mentorInfo, result, tenantCode) {
 		try {
-			const orgId = userInfo.organization_id || ''
-
-			// 1. Notify session managers about sessions with deleted mentor
-			const upcomingSessions = await sessionQueries.getUpcomingSessionsOfMentee(
-				userId,
-				common.SESSION_TYPE.PRIVATE
-			)
-
-			if (upcomingSessions.length > 0) {
-				result.isSessionManagerNotified = await this.notifySessionManagersAboutMenteeDeletion(
-					upcomingSessions,
-					userInfo.name,
-					orgId
-				)
-			} else {
-				result.isSessionManagerNotified = true
-			}
-			return result
-		} catch (error) {
-			console.error('Error in notifySessionManagerIfMenteeDeleted:', error)
-			result.isSessionManagerNotified = false
-		}
-	}
-
-	static async handleMentorDeletion(mentorUserId, mentorInfo, result) {
-		try {
-			const orgId = mentorInfo.organization_id || ''
+			const orgCode = mentorInfo.organization_code || ''
 
 			// 1. Notify connected mentees about mentor deletion
-			const menteeIds = await connectionQueries.getConnectedUsers(mentorUserId, 'friend_id', 'user_id')
+			const menteeIds = await connectionQueries.getConnectedUsers(
+				mentorUserId,
+				'friend_id',
+				'user_id',
+				tenantCode
+			)
 			const connectedMentees = await userExtensionQueries.getUsersByUserIds(
 				menteeIds,
 				{
 					attributes: ['user_id', 'name', 'email'],
 				},
-				true
+				tenantCode
 			)
 
 			if (connectedMentees.length > 0) {
 				result.isMenteeNotifiedAboutMentorDeletion = await this.notifyMenteesAboutMentorDeletion(
 					connectedMentees,
 					mentorInfo.name || 'Mentor',
-					orgId
+					orgCode,
+					tenantCode
 				)
 			} else {
 				result.isMenteeNotifiedAboutMentorDeletion = true
 			}
 
 			// 2. Handle session requests - auto-reject pending requests
-			const pendingSessionRequests = await requestSessionQueries.getPendingSessionRequests(mentorUserId)
+			const pendingSessionRequests = await this.getPendingSessionRequestsForMentor(mentorUserId, tenantCode)
 
 			if (pendingSessionRequests.length > 0) {
 				result.isSessionRequestsRejected = await this.rejectSessionRequestsDueToMentorDeletion(
 					pendingSessionRequests,
-					orgId
+					orgCode,
+					tenantCode
 				)
 			} else {
 				result.isSessionRequestsRejected = true
 			}
 
 			// 3. Notify session managers about sessions with deleted mentor
-			const upcomingSessions = await sessionQueries.getUpcomingSessionsForMentor(mentorUserId)
+
+			const upcomingSessions = await sessionQueries.getUpcomingSessionsForMentor(mentorUserId, tenantCode)
 
 			if (upcomingSessions.length > 0) {
 				result.isSessionManagerNotifiedForMentorDelete = await this.notifySessionManagersAboutMentorDeletion(
 					upcomingSessions,
 					mentorInfo.name || 'Mentor',
-					orgId
+					orgCode,
+					tenantCode
 				)
 
 				// update upcoming sessions of mentor to set as deleted if he created only
 				const sessionIds = [...new Set(upcomingSessions.map((s) => s.id))]
 				await sessionQueries.updateRecords(
 					{ deleted_at: new Date() },
-					{ where: { id: sessionIds, created_by: mentorUserId } }
+					{ where: { id: sessionIds, created_by: mentorUserId, tenant_code: tenantCode } }
 				)
 			} else {
 				result.isSessionManagerNotifiedForMentorDelete = true
 			}
 
 			// 4. Delete sessions where mentor was assigned (not created by mentor)
-			result.isAssignedSessionsUpdated = await this.updateSessionsWithAssignedMentor(mentorUserId, orgId)
+			result.isAssignedSessionsUpdated = await this.updateSessionsWithAssignedMentor(
+				mentorUserId,
+				orgCode,
+				tenantCode
+			)
 		} catch (error) {
 			console.error('Error in handleMentorDeletion:', error)
 			result.isMenteeNotifiedAboutMentorDeletion = false
@@ -979,55 +1184,115 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async updateSessionsWithAssignedMentor(mentorUserId, orgId) {
-		// Notify attendees about session deletion
+	static async getConnectedMentees(mentorUserId, tenantCode) {
+		try {
+			const query = `
+				SELECT DISTINCT friend_id as user_id
+				FROM ${Connection.tableName} 
+				WHERE user_id = :mentorUserId 
+				AND status = :acceptedStatus
+				AND tenant_code = :tenantCode
+			`
 
-		const sessionsToUpdate = await sessionQueries.getSessionsAssignedToMentor(mentorUserId)
+			const connections = await sequelize.query(query, {
+				type: QueryTypes.SELECT,
+				replacements: {
+					mentorUserId,
+					acceptedStatus: common.CONNECTIONS_STATUS.ACCEPTED,
+					tenantCode,
+				},
+			})
+
+			const menteeIds = connections.map((conn) => conn.user_id)
+
+			if (menteeIds.length === 0) {
+				return []
+			}
+
+			const mentees = await userExtensionQueries.getUsersByUserIds(
+				menteeIds,
+				{
+					attributes: ['user_id', 'name', 'email'],
+				},
+				false,
+				tenantCode
+			)
+
+			return mentees || []
+		} catch (error) {
+			console.error('Error getting connected mentees:', error)
+			return []
+		}
+	}
+	static async updateSessionsWithAssignedMentor(mentorUserId, orgCode, tenantCode) {
+		// Notify attendees about session deletion
+		const sessionsToUpdate = await sessionQueries.getSessionsAssignedToMentor(mentorUserId, tenantCode)
 		if (sessionsToUpdate.length == 0) {
 			return true
 		}
 
-		const sessionsCreated = await sessionQueries.getSessionsCreatedByMentor(mentorUserId)
+		await this.notifyAttendeesAboutSessionDeletion(sessionsToUpdate, orgCode, tenantCode)
 
-		// Delete the sessions
+		// Update the sessions to remove mentor reference
 		const sessionIds = [...new Set(sessionsToUpdate.map((s) => s.id))]
 		await sessionQueries.updateRecords(
 			{ mentor_name: common.USER_NOT_FOUND, mentor_id: null },
-			{ where: { id: sessionIds } }
+			{ where: { id: sessionIds, tenant_code: tenantCode } }
 		)
 
-		console.log(`Update ${sessionIds.length} sessions with mentor name`)
-
-		// if thres so no sessions created by mentor
-		if (sessionsCreated.length == 0) {
-			return true
-		}
-
-		// if the sessions created and managed by mentor
-		await this.notifyAttendeesAboutMentorDeletion(sessionsCreated, orgId)
-
-		console.log(`Total sessions : ${sessionsCreated.length} which assigned to mentor`)
+		console.log(`Updated ${sessionIds.length} sessions with mentor removal`)
 		return true
 	}
 
-	static async notifyMenteesAboutMentorDeletion(mentees, mentorName, orgId) {
+	static async notifyMenteesAboutMentorDeletion(mentees, mentorName, orgCode, tenantCode) {
 		return await NotificationHelper.sendGenericNotification({
 			recipients: mentees,
 			templateCode: process.env.MENTOR_DELETION_NOTIFICATION_EMAIL_TEMPLATE,
-			orgId,
+			orgCode,
 			templateData: { mentorName },
 			subjectData: { mentorName },
+			tenantCode,
 		})
 	}
 
-	static async rejectSessionRequestsDueToMentorDeletion(sessionRequests, orgId) {
+	static async getPendingSessionRequestsForMentor(mentorUserId, tenantCode) {
+		try {
+			const query = `
+				SELECT rs.*, rm.requestee_id
+				FROM ${RequestSession.tableName} rs
+				INNER JOIN request_session_mapping rm ON rs.id = rm.request_session_id
+				WHERE rm.requestee_id = :mentorUserId 
+				AND rs.status = :requestedStatus
+				AND rs.deleted_at IS NULL
+				AND rs.tenant_code = :tenantCode
+				AND rm.tenant_code = :tenantCode
+			`
+
+			const pendingRequests = await sequelize.query(query, {
+				type: QueryTypes.SELECT,
+				replacements: {
+					mentorUserId,
+					requestedStatus: common.CONNECTIONS_STATUS.REQUESTED,
+					tenantCode,
+				},
+			})
+
+			return pendingRequests || []
+		} catch (error) {
+			console.error('Error getting pending session requests for mentor:', error)
+			return []
+		}
+	}
+
+	static async rejectSessionRequestsDueToMentorDeletion(sessionRequests, orgCode, tenantCode) {
 		try {
 			for (const request of sessionRequests) {
 				// Mark request as rejected
 				await requestSessionQueries.rejectRequest(
 					request.requestee_id,
 					request.id,
-					'Mentor no longer available'
+					'Mentor no longer available',
+					tenantCode
 				)
 
 				// Get mentee details for notification
@@ -1036,7 +1301,8 @@ module.exports = class AdminService {
 					{
 						attributes: ['name', 'email'],
 					},
-					true
+					false,
+					tenantCode
 				)
 
 				if (menteeDetails.length > 0) {
@@ -1044,9 +1310,10 @@ module.exports = class AdminService {
 					await NotificationHelper.sendGenericNotification({
 						recipients: menteeDetails,
 						templateCode: process.env.SESSION_REQUEST_REJECTED_MENTOR_DELETION_EMAIL_TEMPLATE,
-						orgId,
+						orgCode,
 						templateData: { sessionName: request.title },
 						subjectData: { sessionName: request.title },
+						tenantCode,
 					})
 				}
 			}
@@ -1059,7 +1326,7 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async notifySessionManagersAboutMentorDeletion(sessions, mentorName, orgId) {
+	static async notifySessionManagersAboutMentorDeletion(sessions, mentorName, orgCode, tenantCode) {
 		try {
 			const templateCode = process.env.SESSION_MANAGER_MENTOR_DELETION_EMAIL_TEMPLATE
 			if (!templateCode) {
@@ -1085,7 +1352,8 @@ module.exports = class AdminService {
 					{
 						attributes: ['name', 'email'],
 					},
-					true
+					false,
+					tenantCode
 				)
 
 				if (managerDetails.length > 0) {
@@ -1099,9 +1367,10 @@ module.exports = class AdminService {
 					await NotificationHelper.sendGenericNotification({
 						recipients: managerDetails,
 						templateCode,
-						orgId,
+						orgCode,
 						templateData: { mentorName, sessionList },
 						subjectData: { mentorName },
+						tenantCode,
 					})
 				}
 			})
@@ -1115,7 +1384,7 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async notifySessionManagersAboutMenteeDeletion(sessions, menteeName, orgId) {
+	static async notifySessionManagersAboutMenteeDeletion(sessions, menteeName, orgCode, tenantCode) {
 		try {
 			const templateCode = process.env.SESSION_MANAGER_MENTEE_DELETION_EMAIL_TEMPLATE
 			if (!templateCode) {
@@ -1136,13 +1405,11 @@ module.exports = class AdminService {
 				const managerSessions = sessionsByManager[managerId]
 
 				// Get session manager details
-				const managerDetails = await userExtensionQueries.getUsersByUserIds(
-					[managerId],
-					{
-						attributes: ['name', 'email'],
-					},
-					true
-				)
+
+				const managerDetails = await userExtensionQueries.getUsersByUserIds([managerId], {
+					attributes: ['name', 'email'],
+					tenantCode,
+				})
 
 				if (managerDetails.length > 0) {
 					const sessionList = managerSessions
@@ -1155,9 +1422,10 @@ module.exports = class AdminService {
 					await NotificationHelper.sendGenericNotification({
 						recipients: managerDetails,
 						templateCode,
-						orgId,
+						orgCode,
 						templateData: { menteeName: menteeName, sessionList: sessionList },
 						subjectData: { menteeName: menteeName },
+						tenantCode,
 					})
 				}
 			})
@@ -1171,7 +1439,7 @@ module.exports = class AdminService {
 		}
 	}
 
-	static async notifyAttendeesAboutMentorDeletion(sessions, orgId) {
+	static async notifyAttendeesAboutSessionDeletion(sessions, orgCode, tenantCode) {
 		try {
 			const templateCode = process.env.SESSION_DELETED_MENTOR_DELETION_EMAIL_TEMPLATE
 			if (!templateCode) {
@@ -1196,7 +1464,8 @@ module.exports = class AdminService {
 					{
 						attributes: ['name', 'email'],
 					},
-					true
+					false,
+					tenantCode
 				)
 
 				if (attendeeDetails.length > 0) {
@@ -1204,9 +1473,10 @@ module.exports = class AdminService {
 						await NotificationHelper.sendGenericNotification({
 							recipients: attendeeDetails,
 							templateCode,
-							orgId,
+							orgCode,
 							templateData: { sessionName: session.title },
 							subjectData: { sessionName: session.title },
+							tenantCode,
 						})
 					}
 				}

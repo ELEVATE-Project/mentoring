@@ -25,7 +25,11 @@ const operatorMapping = new Map([
  * @returns {Array<Object>} - The array of valid configurations.
  */
 function getValidConfigs(config, userRoles) {
-	const userRoleTitles = userRoles.map((role) => role.title)
+	// Add null/undefined checks for userRoles
+	if (!userRoles || !Array.isArray(userRoles)) {
+		return []
+	}
+	const userRoleTitles = userRoles.map((role) => role?.title).filter(Boolean)
 	const validConfigs = []
 
 	function hasMatchingRole(requesterRoles) {
@@ -59,15 +63,14 @@ function getValidConfigs(config, userRoles) {
  * @returns {Promise<Object>} - A promise that resolves to the user details.
  * @throws {Error} - Throws an error if the user details cannot be retrieved.
  */
-async function getUserDetailsFromView(userId, isAMentor) {
+async function getUserDetailsFromView(userId, isAMentor, tenantCode) {
 	try {
 		if (isAMentor) {
-			return await mentorQueries.findOneFromView(userId)
+			return await mentorQueries.findOneFromView(userId, tenantCode)
 		} else {
-			return await menteeQueries.findOneFromView(userId)
+			return await menteeQueries.findOneFromView(userId, tenantCode)
 		}
 	} catch (error) {
-		console.log(error)
 		throw new Error(`Failed to get user details: ${error.message}`)
 	}
 }
@@ -79,15 +82,14 @@ async function getUserDetailsFromView(userId, isAMentor) {
  * @returns {Promise<Object>} - A promise that resolves to the user details.
  * @throws {Error} - Throws an error if the user details cannot be retrieved.
  */
-async function getUserDetails(userId, isAMentor) {
+async function getUserDetails(userId, isAMentor, tenantCode) {
 	try {
 		if (isAMentor) {
-			return await mentorQueries.getMentorExtension(userId)
+			return await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
 		} else {
-			return await menteeQueries.getMenteeExtension(userId)
+			return await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
 		}
 	} catch (error) {
-		console.log(error)
 		throw new Error(`Failed to get user details: ${error.message}`)
 	}
 }
@@ -96,15 +98,16 @@ exports.defaultRulesFilter = async function defaultRulesFilter({
 	ruleType,
 	requesterId,
 	roles,
-	requesterOrganizationId,
+	requesterOrganizationCode,
+	tenantCode,
 }) {
 	try {
 		const [userDetails, defaultRules] = await Promise.all([
-			getUserDetails(requesterId, isAMentor(roles)),
-			defaultRuleQueries.findAll({ type: ruleType, organization_id: requesterOrganizationId }),
+			getUserDetails(requesterId, isAMentor(roles), tenantCode),
+			defaultRuleQueries.findAll({ type: ruleType, organization_code: requesterOrganizationCode }, tenantCode),
 		])
 
-		const validConfigs = getValidConfigs(defaultRules, roles)
+		const validConfigs = getValidConfigs(defaultRules || [], roles)
 
 		if (validConfigs.length === 0) {
 			return ''
@@ -184,7 +187,6 @@ exports.defaultRulesFilter = async function defaultRulesFilter({
 
 		return whereClauses.join(' AND ')
 	} catch (error) {
-		console.error('Error:', error.message)
 		throw error // Re-throw the error after logging it
 	}
 }
@@ -193,16 +195,17 @@ exports.validateDefaultRulesFilter = async function validateDefaultRulesFilter({
 	ruleType,
 	requesterId,
 	roles,
-	requesterOrganizationId,
+	requesterOrganizationCode,
 	data,
+	tenantCode,
 }) {
 	try {
 		const [userDetails, defaultRules] = await Promise.all([
-			getUserDetails(requesterId, isAMentor(roles)),
-			defaultRuleQueries.findAll({ type: ruleType, organization_id: requesterOrganizationId }),
+			getUserDetails(requesterId, isAMentor(roles), tenantCode),
+			defaultRuleQueries.findAll({ type: ruleType, organization_code: requesterOrganizationCode }, tenantCode),
 		])
 
-		const validConfigs = getValidConfigs(defaultRules, roles)
+		const validConfigs = getValidConfigs(defaultRules || [], roles)
 
 		if (validConfigs.length === 0) {
 			return true //no rules to check, data is valid by default
@@ -242,7 +245,7 @@ exports.validateDefaultRulesFilter = async function validateDefaultRulesFilter({
 		}
 
 		if (mentorChecks.length > 0 && data.mentor_id) {
-			const mentorDetails = await getUserDetails(data.mentor_id, true)
+			const mentorDetails = await getUserDetails(data.mentor_id, true, tenantCode)
 
 			for (const { target_field, operator, requesterValue } of mentorChecks) {
 				const targetFieldValue =
@@ -258,7 +261,6 @@ exports.validateDefaultRulesFilter = async function validateDefaultRulesFilter({
 
 		return true // Data meets all conditions
 	} catch (error) {
-		console.error('Error:', error.message)
 		throw error // Re-throw the error after logging it
 	}
 }

@@ -33,7 +33,6 @@ exports.getAvailabilitiesByDay = ({ startEpoch, endEpoch, availabilities }) => {
 
 		return Object.fromEntries(arrayOfDays)
 	} catch (error) {
-		console.error(error)
 		return false
 	}
 }
@@ -130,7 +129,6 @@ exports.buildUserAvailabilities = ({ startEpoch, endEpoch, userAvailabilities })
 		})
 		return allEvents
 	} catch (error) {
-		console.error(error)
 		return false
 	}
 }

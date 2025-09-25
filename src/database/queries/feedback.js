@@ -6,7 +6,7 @@ module.exports = class QuestionsData {
 			const feedback = await Feedback.create(data)
 			return feedback
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -23,8 +23,10 @@ module.exports = class QuestionsData {
 		}
 	}
 
-	static async findAll(filter, attributes = {}) {
+	static async findAll(filter, tenantCode, attributes = {}) {
 		try {
+			// Ensure tenant isolation without mutating caller-provided filter
+			filter = { ...filter, tenant_code: tenantCode }
 			const feedbackData = await Feedback.findAll({
 				where: filter,
 				...attributes,
@@ -32,7 +34,7 @@ module.exports = class QuestionsData {
 			})
 			return feedbackData
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 
@@ -41,7 +43,7 @@ module.exports = class QuestionsData {
 			const feedbacks = await Feedback.bulkCreate(data)
 			return feedbacks
 		} catch (error) {
-			throw error
+			return error
 		}
 	}
 }

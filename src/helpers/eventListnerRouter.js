@@ -16,7 +16,6 @@ exports.eventListenerRouter = async (eventBody, { createFn = null, updateFn = nu
 				throw new Error(`Invalid EventType: ${eventBody.eventType}`)
 		}
 	} catch (error) {
-		console.error(error)
 		throw error
 	}
 }
