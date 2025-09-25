@@ -160,9 +160,13 @@ module.exports = class SessionsHelper {
 
 			// If time slot not available return corresponding error
 			if (timeSlot.isTimeSlotAvailable === false) {
-				const errorMessage = isSessionCreatedByManager
+				let errorMessage = isSessionCreatedByManager
 					? 'SESSION_CREATION_LIMIT_EXCEDED_FOR_GIVEN_MENTOR'
 					: { key: 'INVALID_TIME_SELECTION', interpolation: { sessionName: timeSlot.sessionName } }
+
+				if (bodyData.sessionCreatedByRequest) {
+					errorMessage = 'INVALID_TIME_SELECTION_FOR_GIVEN_MENTOR'
+				}
 
 				return responses.failureResponse({
 					message: errorMessage,

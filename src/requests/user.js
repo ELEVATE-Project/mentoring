@@ -133,7 +133,6 @@ const fetchUserDetails = async ({ token, userId }) => {
 
 		const isInternalTokenRequired = true
 		const userDetails = await requests.get(profileUrl, token, isInternalTokenRequired)
-
 		userDetails.data = userDetails.data || {}
 		userDetails.data.result = userDetails.data.result || {}
 		userDetails.data.result.user_roles = userDetails.data.result.user_roles || [{ title: common.MENTEE_ROLE }]
