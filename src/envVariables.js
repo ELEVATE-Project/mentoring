@@ -573,6 +573,16 @@ let enviromentVariables = {
 		optional: true,
 		default: 'session_creator_delete_the_session',
 	},
+	EVENTS_TOPIC: {
+		message: 'Required event topic for handling events',
+		optional: true,
+		default: 'mentoring.events',
+	},
+	EVENTS_GROUP_ID: {
+		message: 'Required event group id',
+		optional: true,
+		default: 'mentoring.event',
+	},
 }
 
 let success = true

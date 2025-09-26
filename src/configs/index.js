@@ -5,11 +5,10 @@
  * Description : Contains connections of all configs
  */
 
+require('./globals')()
+
 require('./kafka')()
 
 require('./cache')()
 
 require('./bull')()
-
-const path = require('path')
-global.PROJECT_ROOT_DIRECTORY = path.join(__dirname, '..')

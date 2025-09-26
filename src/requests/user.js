@@ -125,27 +125,28 @@ const validRoles = new Set([
  *   .catch(error => console.error(error));
  */
 
-const fetchUserDetails = async ({ token, userId }) => {
+const fetchUserDetails = async ({ token, userId, tenantCode }) => {
 	try {
 		let profileUrl = `${userBaseUrl}${endpoints.USER_PROFILE_DETAILS}`
 
+		if (tenantCode) profileUrl = `${userBaseUrl}${endpoints.USER_PROFILE_DETAILS_INTERNAL}`
+
 		if (userId) profileUrl += `/${userId}`
+		if (tenantCode) profileUrl += `?tenant_code=${tenantCode}`
 
 		const isInternalTokenRequired = true
 		const userDetails = await requests.get(profileUrl, token, isInternalTokenRequired)
 		userDetails.data = userDetails.data || {}
 		userDetails.data.result = userDetails.data.result || {}
-		userDetails.data.result.user_roles = userDetails.data.result.user_roles || [{ title: common.MENTEE_ROLE }]
-
-		if (
-			userDetails.data.result.user_roles.length === 1 &&
-			userDetails.data.result.user_roles[0].title === common.MENTEE_ROLE
-		)
-			return userDetails
+		// userDetails.data.result.user_roles = userDetails.data.result.user_roles || [{ title: common.MENTEE_ROLE }]
 
 		let isMentor = false
 		let isMenteeRolePresent = false
-		const roles = userDetails.data.result.user_roles.reduce((acc, role) => {
+
+		const rawRoles = userDetails?.data?.result?.user_roles ||
+			userDetails?.data?.result?.organizations?.[0]?.roles || [{ title: common.MENTEE_ROLE }]
+
+		const roles = rawRoles.reduce((acc, role) => {
 			if (validRoles.has(role.title)) {
 				if (role.title === common.MENTOR_ROLE) isMentor = true
 				else if (role.title === common.MENTEE_ROLE) isMenteeRolePresent = true
@@ -156,6 +157,10 @@ const fetchUserDetails = async ({ token, userId }) => {
 
 		if (!isMentor && !isMenteeRolePresent) roles.push({ title: common.MENTEE_ROLE })
 		userDetails.data.result.user_roles = roles
+
+		userDetails.data.result.organization_id =
+			userDetails?.data?.result?.organization_id || userDetails?.data?.result?.organizations?.[0]?.id.toString()
+		userDetails.data.result.organization_id = userDetails.data.result.organization_id.toString()
 
 		return userDetails
 	} catch (error) {
