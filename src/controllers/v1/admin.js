@@ -87,9 +87,7 @@ module.exports = class admin {
 	async triggerPeriodicViewRefreshInternal(req) {
 		try {
 			// Internal method - can refresh for specific tenant or all tenants
-			const tenantCode = req.query.tenant_code
-
-			if (!tenantCode) {
+			if (!req.query.tenant_code) {
 				const tenants = await userExtensionQueries.getDistinctTenantCodes()
 
 				if (tenants.length > 0) {
@@ -103,7 +101,7 @@ module.exports = class admin {
 			}
 
 			// Specific tenantCode provided - refresh for that tenant only
-			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name, tenantCode)
+			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name, req.query.tenant_code)
 		} catch (err) {
 			console.log(err)
 		}

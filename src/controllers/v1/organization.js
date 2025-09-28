@@ -3,9 +3,7 @@ const organizationService = require('@services/organization')
 module.exports = class Organization {
 	async update(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
-			return await organizationService.update(req.body, req.decodedToken, tenantCode)
+			return await organizationService.update(req.body, req.decodedToken, req.decodedToken.tenant_code)
 		} catch (error) {
 			return error
 		}

@@ -13,27 +13,21 @@ module.exports = class Mentees {
 	 */
 	async create(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-			const roles = req.decodedToken.roles
-
-			if (isAMentor(roles)) {
+			if (isAMentor(req.decodedToken.roles)) {
 				return await mentorsService.createMentorExtension(
 					req.body,
-					userId,
-					organizationCode,
-					tenantCode,
-					organizationId
+					req.decodedToken.id,
+					req.decodedToken.organization_code,
+					req.decodedToken.tenant_code,
+					req.decodedToken.organization_id
 				)
 			}
 			return await menteesService.createMenteeExtension(
 				req.body,
-				userId,
-				organizationCode,
-				tenantCode,
-				organizationId
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code,
+				req.decodedToken.organization_id
 			)
 		} catch (error) {
 			return error
@@ -51,15 +45,20 @@ module.exports = class Mentees {
 	 */
 	async update(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-			const roles = req.decodedToken.roles
-
-			if (isAMentor(roles)) {
-				return await mentorsService.updateMentorExtension(req.body, userId, organizationCode, tenantCode)
+			if (isAMentor(req.decodedToken.roles)) {
+				return await mentorsService.updateMentorExtension(
+					req.body,
+					req.decodedToken.id,
+					req.decodedToken.organization_code,
+					req.decodedToken.tenant_code
+				)
 			}
-			return await menteesService.updateMenteeExtension(req.body, userId, organizationCode, tenantCode)
+			return await menteesService.updateMenteeExtension(
+				req.body,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
 			return error
 		}
@@ -75,15 +74,17 @@ module.exports = class Mentees {
 	 */
 	async getExtension(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-			const roles = req.decodedToken.roles
-
-			if (isAMentor(roles)) {
-				return await mentorsService.getMentorExtension(req.query.id || userId, tenantCode)
+			if (isAMentor(req.decodedToken.roles)) {
+				return await mentorsService.getMentorExtension(
+					req.query.id || req.decodedToken.id,
+					req.decodedToken.tenant_code
+				)
 			}
-			return await menteesService.getMenteeExtension(userId, organizationCode, tenantCode)
+			return await menteesService.getMenteeExtension(
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
 			return error
 		}
@@ -99,17 +100,24 @@ module.exports = class Mentees {
 	 */
 	async read(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-			const roles = req.decodedToken.roles
-
-			if (isAMentor(roles)) {
-				return await mentorsService.read(userId, organizationCode, '', '', roles, tenantCode)
+			if (isAMentor(req.decodedToken.roles)) {
+				return await mentorsService.read(
+					req.decodedToken.id,
+					req.decodedToken.organization_code,
+					'',
+					'',
+					req.decodedToken.roles,
+					req.decodedToken.tenant_code
+				)
 			}
 
-			return await menteesService.read(userId, organizationId, organizationCode, roles, tenantCode)
+			return await menteesService.read(
+				req.decodedToken.id,
+				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
+				req.decodedToken.roles,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
 			return error
 		}
@@ -126,16 +134,12 @@ module.exports = class Mentees {
 
 	async filterList(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const filterList = await menteesService.getFilterList(
 				req.query.organization ? req.query.organization : 'true',
 				req.query.entity_types ? req.query.entity_types : '',
 				req.query.filter_type ? req.query.filter_type : '',
 				req.decodedToken,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 			return filterList
 		} catch (error) {
@@ -153,11 +157,7 @@ module.exports = class Mentees {
 	 */
 	async getCommunicationToken(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
-			return await menteesService.getCommunicationToken(req.decodedToken.id, tenantCode) // params since read will be public for mentees
+			return await menteesService.getCommunicationToken(req.decodedToken.id, req.decodedToken.tenant_code) // params since read will be public for mentees
 		} catch (error) {
 			return error
 		}
@@ -174,11 +174,7 @@ module.exports = class Mentees {
 	 */
 	async externalIdMapping(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
-			return await menteesService.externalMapping(req.body, tenantCode)
+			return await menteesService.externalMapping(req.body, req.decodedToken.tenant_code)
 		} catch (error) {
 			return error
 		}
@@ -201,11 +197,7 @@ module.exports = class Mentees {
 	 */
 	async logout(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
-			return await menteesService.logout(req.decodedToken.id, tenantCode) // Params since read will be public for mentees
+			return await menteesService.logout(req.decodedToken.id, req.decodedToken.tenant_code) // Params since read will be public for mentees
 		} catch (error) {
 			return error
 		}
@@ -226,18 +218,13 @@ module.exports = class Mentees {
 	 */
 	async details(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-			const roles = req.decodedToken.roles
-
 			return await menteesService.details(
 				req.params.id,
-				organizationCode,
-				userId,
-				isAMentor(roles),
-				roles,
-				tenantCode
+				req.decodedToken.organization_code,
+				req.decodedToken.id,
+				isAMentor(req.decodedToken.roles),
+				req.decodedToken.roles,
+				req.decodedToken.tenant_code
 			)
 		} catch (error) {
 			return error

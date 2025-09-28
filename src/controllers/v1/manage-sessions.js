@@ -23,13 +23,12 @@ module.exports = class Sessions {
 	 */
 	async downloadSessions(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
 			const sessionDetails = await sessionService.downloadList(
 				req.decodedToken.id,
 				req.query,
 				req.query.timezone,
 				req.searchText,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 			return sessionDetails
 		} catch (error) {
@@ -53,7 +52,6 @@ module.exports = class Sessions {
 	 */
 	async createdSessions(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
 			const sessionDetails = await sessionService.createdSessions(
 				req.decodedToken.id,
 				req.query,
@@ -61,7 +59,7 @@ module.exports = class Sessions {
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 			return sessionDetails
 		} catch (error) {

@@ -4,9 +4,11 @@ const reportTypeService = require('@services/report-type')
 module.exports = class ReportType {
 	async create(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const createReport = await reportTypeService.createReportType(req.body, organizationCode, tenantCode)
+			const createReport = await reportTypeService.createReportType(
+				req.body,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 			return createReport
 		} catch (error) {
 			return error
@@ -15,8 +17,7 @@ module.exports = class ReportType {
 
 	async read(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const getReportById = await reportTypeService.getReportType(req.query.title, tenantCode)
+			const getReportById = await reportTypeService.getReportType(req.query.title, req.decodedToken.tenant_code)
 			return getReportById
 		} catch (error) {
 			return error
@@ -25,9 +26,12 @@ module.exports = class ReportType {
 
 	async update(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
 			const filter = { id: req.query.id }
-			const updatedReport = await reportTypeService.updateReportType(filter, req.body, tenantCode)
+			const updatedReport = await reportTypeService.updateReportType(
+				filter,
+				req.body,
+				req.decodedToken.tenant_code
+			)
 			return updatedReport
 		} catch (error) {
 			return error
@@ -36,8 +40,7 @@ module.exports = class ReportType {
 
 	async delete(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const deleteReport = await reportTypeService.deleteReportType(req.query.id, tenantCode)
+			const deleteReport = await reportTypeService.deleteReportType(req.query.id, req.decodedToken.tenant_code)
 			return deleteReport
 		} catch (error) {
 			return error

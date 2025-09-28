@@ -18,9 +18,12 @@ module.exports = class Entity {
 	 */
 
 	async create(req) {
-		const params = req.body
 		try {
-			const createdEntity = await entityService.create(params, req.decodedToken.id, req.decodedToken.tenant_code)
+			const createdEntity = await entityService.create(
+				req.body,
+				req.decodedToken.id,
+				req.decodedToken.tenant_code
+			)
 			return createdEntity
 		} catch (error) {
 			return error
@@ -36,12 +39,10 @@ module.exports = class Entity {
 	 */
 
 	async update(req) {
-		const params = req.body
-		const id = req.params.id
 		try {
 			const updatedEntity = await entityService.update(
-				params,
-				id,
+				req.body,
+				req.params.id,
 				req.decodedToken.id,
 				req.decodedToken.tenant_code
 			)

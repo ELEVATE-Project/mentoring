@@ -19,16 +19,12 @@ module.exports = class Resources {
 
 	async delete(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const deletedResource = await resourcesService.deleteResource(
 				req.params.id,
 				req.query.sessionId,
-				userId,
-				organizationCode,
-				tenantCode
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return deletedResource
 		} catch (error) {

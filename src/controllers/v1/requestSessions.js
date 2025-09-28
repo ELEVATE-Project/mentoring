@@ -14,19 +14,15 @@ module.exports = class requestsSessions {
 	 */
 	async create(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const organizationId = req.decodedToken.organization_id
-			const userId = req.decodedToken.id
 			const SkipValidation = req.query.SkipValidation ? req.query.SkipValidation : false
 
 			return await requestSessionsService.create(
 				req.body,
-				userId,
-				organizationCode,
-				organizationId,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.organization_id,
 				SkipValidation,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 		} catch (error) {
 			return error
@@ -42,15 +38,12 @@ module.exports = class requestsSessions {
 	 */
 	async list(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const userId = req.decodedToken.id
-
 			const requestSessionDetails = await requestSessionsService.list(
-				userId,
+				req.decodedToken.id,
 				req.query.pageNo,
 				req.query.pageSize,
 				req.query.status ? req.query.status.split(',').map((s) => s.trim()) : [],
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 			return requestSessionDetails
 		} catch (error) {
@@ -68,21 +61,16 @@ module.exports = class requestsSessions {
 	 */
 	async accept(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const organizationId = req.decodedToken.organization_id
-			const userId = req.decodedToken.id
-
 			if (req.headers.timezone) {
 				req.body['time_zone'] = req.headers.timezone
 			}
 			const acceptRequestSession = await requestSessionsService.accept(
 				req.body,
-				userId,
-				organizationId,
-				organizationCode,
+				req.decodedToken.id,
+				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
 				isAMentor(req.decodedToken.roles),
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 			return acceptRequestSession
 		} catch (error) {
@@ -100,11 +88,12 @@ module.exports = class requestsSessions {
 	 */
 	async reject(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
-			return await requestSessionsService.reject(req.body, userId, organizationCode, tenantCode)
+			return await requestSessionsService.reject(
+				req.body,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
 			throw error
 		}
@@ -119,10 +108,11 @@ module.exports = class requestsSessions {
 	 */
 	async getDetails(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const userId = req.decodedToken.id
-
-			return await requestSessionsService.getInfo(req.query.request_session_id, userId, tenantCode)
+			return await requestSessionsService.getInfo(
+				req.query.request_session_id,
+				req.decodedToken.id,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
 			throw error
 		}
@@ -141,12 +131,8 @@ module.exports = class requestsSessions {
 	 */
 	async userAvailability(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationId = req.decodedToken.organization_id
-			const userId = req.decodedToken.id
-
 			return await requestSessionsService.userAvailability(
-				userId,
+				req.decodedToken.id,
 				req.query.pageNo,
 				req.query.pageSize,
 				req.query.searchText,
@@ -154,8 +140,8 @@ module.exports = class requestsSessions {
 				req.decodedToken.roles,
 				req.query.start_date,
 				req.query.end_date,
-				organizationId,
-				tenantCode
+				req.decodedToken.organization_id,
+				req.decodedToken.tenant_code
 			)
 		} catch (error) {
 			throw error

@@ -13,8 +13,7 @@ module.exports = class Connection {
 	 */
 	async getInfo(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			return await connectionsService.getInfo(req.body.user_id, req.decodedToken.id, tenantCode)
+			return await connectionsService.getInfo(req.body.user_id, req.decodedToken.id, req.decodedToken.tenant_code)
 		} catch (error) {
 			throw error
 		}
@@ -31,8 +30,7 @@ module.exports = class Connection {
 	 */
 	async initiate(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			return await connectionsService.initiate(req.body, req.decodedToken.id, tenantCode)
+			return await connectionsService.initiate(req.body, req.decodedToken.id, req.decodedToken.tenant_code)
 		} catch (error) {
 			throw error
 		}
@@ -50,8 +48,12 @@ module.exports = class Connection {
 	 */
 	async pending(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			return await connectionsService.pending(req.decodedToken.id, req.pageNo, req.pageSize, tenantCode)
+			return await connectionsService.pending(
+				req.decodedToken.id,
+				req.pageNo,
+				req.pageSize,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
 			throw error
 		}
@@ -68,12 +70,11 @@ module.exports = class Connection {
 	 */
 	async accept(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
 			return await connectionsService.accept(
 				req.body,
 				req.decodedToken.id,
 				req.decodedToken.organization_code,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 		} catch (error) {
 			throw error
@@ -91,12 +92,11 @@ module.exports = class Connection {
 	 */
 	async reject(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
 			return await connectionsService.reject(
 				req.body,
 				req.decodedToken.id,
 				req.decodedToken.organization_code,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 		} catch (error) {
 			throw error
@@ -118,7 +118,6 @@ module.exports = class Connection {
 	 */
 	async list(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
 			return await connectionsService.list(
 				req.pageNo,
 				req.pageSize,
@@ -126,7 +125,7 @@ module.exports = class Connection {
 				req.query,
 				req.decodedToken.id,
 				req.decodedToken.organization_code,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 		} catch (error) {
 			throw error

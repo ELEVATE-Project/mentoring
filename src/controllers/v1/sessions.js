@@ -108,12 +108,8 @@ module.exports = class Sessions {
 
 	async list(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const sessionDetails = await sessionService.list(
-				userId,
+				req.decodedToken.id,
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
@@ -121,8 +117,8 @@ module.exports = class Sessions {
 				req.query,
 				isAMentor(req.decodedToken.roles),
 				req.decodedToken.roles,
-				organizationCode,
-				tenantCode
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return sessionDetails
 		} catch (error) {
@@ -141,9 +137,7 @@ module.exports = class Sessions {
 
 	async share(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
-			const shareSessionDetails = await sessionService.share(req.params.id, tenantCode)
+			const shareSessionDetails = await sessionService.share(req.params.id, req.decodedToken.tenant_code)
 			return shareSessionDetails
 		} catch (error) {
 			return error
@@ -163,15 +157,13 @@ module.exports = class Sessions {
 
 	async enroll(req) {
 		try {
-			const isSelfEnrolled = true
-			const session = {}
 			const enrolledSession = await sessionService.enroll(
 				req.params.id,
 				req.decodedToken,
 				req.headers['timezone'],
 				isAMentor(req.decodedToken.roles),
-				isSelfEnrolled,
-				session,
+				true,
+				{},
 				null,
 				req.decodedToken.roles,
 				req.decodedToken.organization_id,
@@ -295,16 +287,12 @@ module.exports = class Sessions {
 
 	async feedback(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const sessionsFeedBack = await sessionService.feedback(
 				req.params.id,
 				req.body,
-				userId,
-				organizationCode,
-				tenantCode
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return sessionsFeedBack
 		} catch (error) {
@@ -323,12 +311,10 @@ module.exports = class Sessions {
 	 */
 
 	async updateRecordingUrl(req) {
-		const internalMeetingId = req.params.id
-		const recordingUrl = req.body.recordingUrl
 		try {
 			const sessionUpdated = await sessionService.updateRecordingUrl(
-				internalMeetingId,
-				recordingUrl,
+				req.params.id,
+				req.body.recordingUrl,
 				req.decodedToken.tenant_code
 			)
 			return sessionUpdated
@@ -350,16 +336,12 @@ module.exports = class Sessions {
 	async bulkUpdateMentorNames(req) {
 		try {
 			// For internal calls, extract from req.body instead of req.decodedToken
-			const tenantCode = req.body.tenant_code
-			const organizationCode = req.body.organization_code
-			const userId = req.body.user_id
-
 			const sessionUpdated = await sessionService.bulkUpdateMentorNames(
 				req.body.mentor_id,
 				req.body.mentor_name,
-				userId,
-				organizationCode,
-				tenantCode
+				req.body.user_id,
+				req.body.organization_code,
+				req.body.tenant_code
 			)
 			return sessionUpdated
 		} catch (error) {
@@ -381,11 +363,13 @@ module.exports = class Sessions {
 
 	async enrolledMentees(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
-			return await sessionService.enrolledMentees(req.params.id, req.query, userId, organizationCode, tenantCode)
+			return await sessionService.enrolledMentees(
+				req.params.id,
+				req.query,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
 			throw error
 		}
@@ -402,18 +386,14 @@ module.exports = class Sessions {
 
 	async addMentees(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const sessionDetails = await sessionService.addMentees(
 				req.params.id, // session id
 				req.body.mentees, // Array of mentee ids
 				req.headers['timezone'],
-				userId,
+				req.decodedToken.id,
 				req.decodedToken.organization_id, // organizationId
-				organizationCode, // organizationCode
-				tenantCode
+				req.decodedToken.organization_code, // organizationCode
+				req.decodedToken.tenant_code
 			)
 			return sessionDetails
 		} catch (error) {
@@ -432,16 +412,12 @@ module.exports = class Sessions {
 
 	async removeMentees(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const sessionDetails = await sessionService.removeMentees(
 				req.params.id, // session id
 				req.body.mentees, // Array of mentee ids
-				userId,
-				organizationCode,
-				tenantCode
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return sessionDetails
 		} catch (error) {
@@ -458,15 +434,11 @@ module.exports = class Sessions {
 	 */
 	async bulkSessionCreate(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const sessionUploadRes = await sessionService.bulkSessionCreate(
 				req.body.file_path,
-				userId,
-				organizationCode,
-				tenantCode,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code,
 				req.decodedToken.organizations[0].id
 			)
 			return sessionUploadRes
@@ -484,10 +456,10 @@ module.exports = class Sessions {
 	 */
 	async getSampleCSV(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-
-			const downloadUrlResponse = await sessionService.getSampleCSV(organizationCode, tenantCode)
+			const downloadUrlResponse = await sessionService.getSampleCSV(
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 			return downloadUrlResponse
 		} catch (error) {
 			return error

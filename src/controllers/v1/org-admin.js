@@ -22,9 +22,11 @@ module.exports = class OrgAdmin {
 
 	async setOrgPolicies(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
-			const orgPolicies = await orgAdminService.setOrgPolicies(req.decodedToken, req.body, tenantCode)
+			const orgPolicies = await orgAdminService.setOrgPolicies(
+				req.decodedToken,
+				req.body,
+				req.decodedToken.tenant_code
+			)
 			return orgPolicies
 		} catch (error) {
 			return error
@@ -33,9 +35,7 @@ module.exports = class OrgAdmin {
 
 	async getOrgPolicies(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
-			const orgPolicies = await orgAdminService.getOrgPolicies(req.decodedToken, tenantCode)
+			const orgPolicies = await orgAdminService.getOrgPolicies(req.decodedToken, req.decodedToken.tenant_code)
 			return orgPolicies
 		} catch (error) {
 			return error
@@ -168,12 +168,10 @@ module.exports = class OrgAdmin {
 
 	async uploadSampleCSV(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
 			const updatePath = await orgAdminService.uploadSampleCSV(
 				req.body.file_path,
 				req.decodedToken.organization_code,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 			return updatePath
 		} catch (error) {
@@ -191,10 +189,11 @@ module.exports = class OrgAdmin {
 	 */
 	async updateTheme(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-
-			const updateTheme = await orgAdminService.updateTheme(req.body, organizationCode, tenantCode)
+			const updateTheme = await orgAdminService.updateTheme(
+				req.body,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 			return updateTheme
 		} catch (error) {
 			return error
@@ -211,11 +210,9 @@ module.exports = class OrgAdmin {
 	 */
 	async themeDetails(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-
 			const themeDetails = await orgAdminService.themeDetails(
 				req.query.organizationCode ? req.query.organizationCode : req.decodedToken.organization_code,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 			return themeDetails
 		} catch (error) {

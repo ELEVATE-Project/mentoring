@@ -18,13 +18,12 @@ module.exports = class DefaultRule {
 	 */
 	async create(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
 			return await defaultRuleService.create(
 				req.body,
 				req.decodedToken.id,
 				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 		} catch (error) {
 			return error
@@ -47,14 +46,13 @@ module.exports = class DefaultRule {
 	 */
 	async update(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
 			return await defaultRuleService.update(
 				req.body,
 				req.params.id,
 				req.decodedToken.id,
 				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
-				tenantCode
+				req.decodedToken.tenant_code
 			)
 		} catch (error) {
 			return error
@@ -76,10 +74,13 @@ module.exports = class DefaultRule {
 	 */
 	async read(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
 			if (req.params.id)
-				return await defaultRuleService.readOne(req.params.id, req.decodedToken.organization_code, tenantCode)
-			return await defaultRuleService.readAll(req.decodedToken.organization_code, tenantCode)
+				return await defaultRuleService.readOne(
+					req.params.id,
+					req.decodedToken.organization_code,
+					req.decodedToken.tenant_code
+				)
+			return await defaultRuleService.readAll(req.decodedToken.organization_code, req.decodedToken.tenant_code)
 		} catch (error) {
 			return error
 		}
@@ -99,8 +100,11 @@ module.exports = class DefaultRule {
 	 */
 	async delete(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			return await defaultRuleService.delete(req.params.id, req.decodedToken.organization_code, tenantCode)
+			return await defaultRuleService.delete(
+				req.params.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 		} catch (error) {
 			return error
 		}

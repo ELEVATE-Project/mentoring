@@ -4,15 +4,11 @@ const roleExtensionService = require('@services/role-extension')
 module.exports = class Reports {
 	async create(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const organizationId = req.decodedToken.organization_id
-
 			const createReport = await roleExtensionService.createRoleExtension(
 				req.body,
-				organizationId,
-				organizationCode,
-				tenantCode
+				req.decodedToken.organization_id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return createReport
 		} catch (error) {
@@ -22,8 +18,10 @@ module.exports = class Reports {
 
 	async read(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const getReportById = await roleExtensionService.roleExtensionDetails(req.query.title, tenantCode)
+			const getReportById = await roleExtensionService.roleExtensionDetails(
+				req.query.title,
+				req.decodedToken.tenant_code
+			)
 			return getReportById
 		} catch (error) {
 			return error
@@ -32,8 +30,11 @@ module.exports = class Reports {
 
 	async update(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const updatedReport = await roleExtensionService.updateRoleExtension(req.query.title, req.body, tenantCode)
+			const updatedReport = await roleExtensionService.updateRoleExtension(
+				req.query.title,
+				req.body,
+				req.decodedToken.tenant_code
+			)
 			return updatedReport
 		} catch (error) {
 			return error
@@ -42,15 +43,11 @@ module.exports = class Reports {
 
 	async delete(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const deleteReport = await roleExtensionService.deleteRoleExtension(
 				req.query.title,
-				userId,
-				organizationCode,
-				tenantCode
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return deleteReport
 		} catch (error) {

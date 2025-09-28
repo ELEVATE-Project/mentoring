@@ -23,11 +23,12 @@ module.exports = class Questions {
 
 	async create(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
-			const createdQuestion = await questionsService.create(req.body, userId, organizationCode, tenantCode)
+			const createdQuestion = await questionsService.create(
+				req.body,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
 			return createdQuestion
 		} catch (error) {
 			return error
@@ -44,16 +45,12 @@ module.exports = class Questions {
 
 	async update(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
 			const updatedQuestion = await questionsService.update(
 				req.params.id,
 				req.body,
-				userId,
-				organizationCode,
-				tenantCode
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
 			)
 			return updatedQuestion
 		} catch (error) {
@@ -71,11 +68,7 @@ module.exports = class Questions {
 
 	async read(req) {
 		try {
-			const tenantCode = req.decodedToken.tenant_code
-			const organizationCode = req.decodedToken.organization_code
-			const userId = req.decodedToken.id
-
-			const questionData = await questionsService.read(req.params.id, tenantCode)
+			const questionData = await questionsService.read(req.params.id, req.decodedToken.tenant_code)
 			return questionData
 		} catch (error) {
 			return error
