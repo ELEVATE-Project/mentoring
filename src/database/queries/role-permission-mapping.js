@@ -4,7 +4,7 @@ exports.create = async (data) => {
 	try {
 		return RolePermissionMapping.create(data, { returning: true })
 	} catch (error) {
-		return error
+		throw error
 	}
 }
 
@@ -15,7 +15,7 @@ exports.delete = async (filter) => {
 		})
 		return deletedRows
 	} catch (error) {
-		return error
+		throw error
 	}
 }
 
@@ -28,6 +28,6 @@ exports.findAll = async (filter, attributes) => {
 		})
 		return findRolePermisdions
 	} catch (error) {
-		return error
+		throw error
 	}
 }

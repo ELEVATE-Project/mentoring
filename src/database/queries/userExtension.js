@@ -13,7 +13,7 @@ module.exports = class MenteeExtensionQueries {
 		try {
 			return await Object.keys(MenteeExtension.rawAttributes)
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -21,7 +21,7 @@ module.exports = class MenteeExtensionQueries {
 		try {
 			return await MenteeExtension.name
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	static async createMenteeExtension(data, tenantCode) {
@@ -29,7 +29,7 @@ module.exports = class MenteeExtensionQueries {
 			data.tenant_code = tenantCode
 			return await MenteeExtension.create(data, { returning: true })
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -71,7 +71,7 @@ module.exports = class MenteeExtensionQueries {
 				...otherOptions,
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -211,7 +211,7 @@ module.exports = class MenteeExtensionQueries {
 
 			return mentee
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -255,7 +255,7 @@ module.exports = class MenteeExtensionQueries {
 				},
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -271,7 +271,7 @@ module.exports = class MenteeExtensionQueries {
 
 			return result
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -305,7 +305,7 @@ module.exports = class MenteeExtensionQueries {
 
 			return result
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -407,7 +407,7 @@ module.exports = class MenteeExtensionQueries {
 				count: Number(count[0].count),
 			}
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	static async getMenteeExtensions(userIds, attributes = [], tenantCode) {
@@ -420,7 +420,7 @@ module.exports = class MenteeExtensionQueries {
 			const mentee = await MenteeExtension.findAll(queryOptions)
 			return mentee
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	static async findOneFromView(userId, tenantCode) {
@@ -439,7 +439,7 @@ module.exports = class MenteeExtensionQueries {
 
 			return user.length > 0 ? user[0] : null
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -573,7 +573,7 @@ module.exports = class MenteeExtensionQueries {
 				count: Number(count[0].count),
 			}
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	static async getAllUsersByIds(ids, tenantCode) {
@@ -598,7 +598,7 @@ module.exports = class MenteeExtensionQueries {
 			})
 			return results
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -638,7 +638,7 @@ module.exports = class MenteeExtensionQueries {
 			})
 			return results
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 

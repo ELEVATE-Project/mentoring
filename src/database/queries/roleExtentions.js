@@ -40,7 +40,7 @@ module.exports = class RoleExtensionService {
 			data.organization_id = organizationId
 			return await RoleExtension.create(data, { returning: true })
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -70,7 +70,7 @@ module.exports = class RoleExtensionService {
 				...otherOptions,
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -91,7 +91,7 @@ module.exports = class RoleExtensionService {
 			// Return the first updated record
 			return updatedExtension[0]
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -102,7 +102,7 @@ module.exports = class RoleExtensionService {
 			})
 			return deletedRows // Soft delete (paranoid enabled)
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 }

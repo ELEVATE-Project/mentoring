@@ -18,9 +18,7 @@ module.exports = class UserHelper {
 			const titles = userRoles.map((role) => role.title)
 			const filter = { role_title: titles }
 			const attributes = ['module', 'request_type']
-
 			const PermissionAndModules = await rolePermissionMappingQueries.findAll(filter, attributes)
-
 			const PermissionByModules = PermissionAndModules.reduce((PermissionByModules, { module, request_type }) => {
 				if (PermissionByModules[module]) {
 					PermissionByModules[module].request_type = [

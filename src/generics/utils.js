@@ -244,7 +244,9 @@ const entityTypeMapGenerator = (entityTypeData) => {
 			}
 		})
 		return entityTypeMap
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 
 function restructureBody(requestBody, entityData, allowedKeys) {
@@ -313,7 +315,9 @@ function restructureBody(requestBody, entityData, allowedKeys) {
 		if (Object.keys(requestBody.meta).length === 0) requestBody.meta = null
 		if (Object.keys(requestBody.custom_entity_text).length === 0) requestBody.custom_entity_text = null
 		return requestBody
-	} catch (error) {}
+	} catch (error) {
+		console.log(err)
+	}
 }
 
 function processDbResponse(responseBody, entityType) {

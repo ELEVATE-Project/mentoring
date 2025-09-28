@@ -6,7 +6,7 @@ module.exports = class QuestionsData {
 			const question = await Question.create(data, { returning: true })
 			return question
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -19,7 +19,7 @@ module.exports = class QuestionsData {
 			})
 			return questionData
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -32,7 +32,7 @@ module.exports = class QuestionsData {
 			})
 			return questionData
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -51,7 +51,7 @@ module.exports = class QuestionsData {
 
 			return rowsAffected > 0 ? 'QUESTION_UPDATED' : 'QUESTION_NOT_FOUND'
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	//To be updated later when the below function are called
@@ -66,7 +66,7 @@ module.exports = class QuestionsData {
 				return 'QUESTION_NOT_FOUND'
 			}
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	static async updateData(filter, update, options = {}) {
@@ -80,7 +80,7 @@ module.exports = class QuestionsData {
 				return 'QUESTION_NOT_FOUND'
 			}
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 }

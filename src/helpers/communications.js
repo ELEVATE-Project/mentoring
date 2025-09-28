@@ -22,6 +22,7 @@ exports.login = async (userId, tenantCode) => {
 		}
 	} catch (error) {
 		if (error.message === common.COMMUNICATION.UNAUTHORIZED) {
+			console.error('Error: Unauthorized access during login. Please check your tokens.')
 		}
 		throw error
 	}
@@ -40,6 +41,7 @@ exports.logout = async (userId, tenantCode) => {
 		return logout.result.status
 	} catch (error) {
 		if (error.message === common.COMMUNICATION.UNAUTHORIZED) {
+			console.error('Error: Unauthorized access during logout. Please check your tokens.')
 		}
 		throw error
 	}
@@ -57,6 +59,7 @@ exports.updateAvatar = async (userId, imageUrl, tenantCode) => {
 	try {
 		await communicationRequests.updateAvatar(userId, imageUrl, tenantCode)
 	} catch (error) {
+		console.error(`Error updating avatar for user ${userId}:`, error.message)
 		throw error
 	}
 }
@@ -73,6 +76,7 @@ exports.updateUser = async (userId, name, tenantCode) => {
 	try {
 		await communicationRequests.updateUser(userId, name, tenantCode)
 	} catch (error) {
+		console.error(`Error updating user ${userId}:`, error.message)
 		throw error
 	}
 }
@@ -104,6 +108,7 @@ exports.createOrUpdateUser = async ({ userId, name, email, image, tenantCode }) 
 			await this.create(userId, name, email, image, tenantCode)
 		}
 	} catch (error) {
+		console.error('Error in createOrUpdateUser:', error.message)
 		throw error
 	}
 }
@@ -140,6 +145,7 @@ exports.create = async (userId, name, email, image, tenantCode) => {
 		}
 	} catch (error) {
 		if (error.message === common.COMMUNICATION.UNAUTHORIZED) {
+			console.error('Error: Unauthorized access during signup. Please check your tokens.')
 		}
 		throw error
 	}
@@ -185,6 +191,7 @@ exports.createChatRoom = async (recipientUserId, initiatorUserId, initialMessage
 		})
 		return chatRoom
 	} catch (error) {
+		console.error('Create Room Failed:', error)
 		throw error
 	}
 }
@@ -212,6 +219,7 @@ exports.resolve = async (userId, tenantCode) => {
 		}
 	} catch (error) {
 		if (error.message === common.COMMUNICATION.UNAUTHORIZED) {
+			console.error('Error: Unauthorized access during resolve. Please check your tokens.')
 		}
 		throw error
 	}
@@ -245,6 +253,7 @@ exports.setActiveStatus = async (userId, activeStatus, confirmRelinquish, tenant
 		)
 		return setUserActiveStatus
 	} catch (error) {
+		console.error(`Error updating user ${userId}:`, error.message)
 		throw error
 	}
 }
@@ -270,6 +279,7 @@ exports.removeAvatar = async (userId, tenantCode) => {
 		const removeAvatarStatus = await communicationRequests.removeAvatar(userId, tenantCode)
 		return removeAvatarStatus
 	} catch (error) {
+		console.error(`Error remove avatar of the user ${userId}:`, error.message)
 		throw error
 	}
 }

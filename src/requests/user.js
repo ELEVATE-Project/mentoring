@@ -35,7 +35,8 @@ const emailEncryption = require('@utils/emailEncryption')
  * @example
  * const organizationId = 'org123';
  * fetchOrgDetails({ organizationId })
-
+ *   .then(response => console.log(response))
+ *   .catch(error => console.error(error));
 
  */
 
@@ -56,6 +57,7 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId, tena
 
 		return orgDetails
 	} catch (error) {
+		console.error('Error fetching organization details:', error)
 		throw error
 	}
 }
@@ -73,7 +75,8 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId, tena
  * @example
  * const organizationId = 'org123';
  * getOrgDetails({ organizationId })
-
+ *   .then(response => console.log(response))
+ *   .catch(error => console.error(error));
 
  */
 
@@ -90,6 +93,7 @@ const getOrgDetails = async function ({ organizationId, tenantCode }) {
 			},
 		}
 	} catch (error) {
+		console.error('Error fetching organization details:', error)
 		throw error
 	}
 }
@@ -170,6 +174,7 @@ const fetchUserDetails = async ({ token, userId, tenantCode }) => {
 
 		return userDetails
 	} catch (error) {
+		console.error(error)
 		throw error
 	}
 }
@@ -232,6 +237,7 @@ const getUserDetails = async (userId, tenantCode) => {
 
 		return response
 	} catch (error) {
+		console.error(error)
 		throw error
 	}
 }
@@ -855,6 +861,7 @@ const getProfileDetails = async ({ tenantCode, userId }) => {
 
 		return userDetails
 	} catch (error) {
+		console.error(error)
 		throw error
 	}
 }

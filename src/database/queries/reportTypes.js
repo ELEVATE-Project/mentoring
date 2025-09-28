@@ -7,7 +7,7 @@ module.exports = class ReportTypeQueries {
 			data.tenant_code = tenantCode
 			return await ReportType.create(data, { returning: true })
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -27,7 +27,7 @@ module.exports = class ReportTypeQueries {
 				raw: true,
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -46,7 +46,7 @@ module.exports = class ReportTypeQueries {
 				raw: true,
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -59,7 +59,7 @@ module.exports = class ReportTypeQueries {
 			})
 			return updatedReportType
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -70,7 +70,7 @@ module.exports = class ReportTypeQueries {
 			})
 			return deletedRows // Soft delete (paranoid enabled)
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 }

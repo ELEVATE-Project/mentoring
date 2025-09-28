@@ -6,7 +6,7 @@ module.exports = class AvailabilityData {
 			data.tenant_code = tenantCode
 			return await Availability.create(data, { returning: true })
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -20,7 +20,7 @@ module.exports = class AvailabilityData {
 				order: [['start_time', 'ASC']],
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -32,7 +32,7 @@ module.exports = class AvailabilityData {
 				...options,
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -43,7 +43,7 @@ module.exports = class AvailabilityData {
 				where: filter,
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 }

@@ -129,7 +129,9 @@ exports.buildSearchFilter = async function buildSearchFilter({
 			positionQuery,
 			sortQuery,
 		}
-	} catch (error) {}
+	} catch (error) {
+		console.log('Error:', error)
+	}
 }
 // Mapping of data types to SQL operators
 const dataTypeOperators = {
@@ -183,6 +185,7 @@ function buildQuery(entityTypes, entities) {
 		})
 		return queryParts.join(' OR ')
 	} catch (error) {
+		console.log('Error:', error)
 		return error
 	}
 }

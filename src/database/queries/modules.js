@@ -7,7 +7,7 @@ module.exports = class UserRoleModulesData {
 			const payload = { ...data, tenant_code: tenantCode }
 			return await Modules.create(payload, { returning: true })
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -15,7 +15,7 @@ module.exports = class UserRoleModulesData {
 		try {
 			return await Modules.findOne({ where: { id, tenant_code: tenantCode } })
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -30,7 +30,7 @@ module.exports = class UserRoleModulesData {
 			})
 			return modules
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -43,7 +43,7 @@ module.exports = class UserRoleModulesData {
 			})
 			return updatedModules
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -55,7 +55,7 @@ module.exports = class UserRoleModulesData {
 			})
 			return deletedRows
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 }

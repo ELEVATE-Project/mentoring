@@ -10,7 +10,7 @@ module.exports = class FormsData {
 			let form = await Form.create(data, { returning: true })
 			return form
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -30,7 +30,7 @@ module.exports = class FormsData {
 				raw: true,
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -53,7 +53,7 @@ module.exports = class FormsData {
 				raw: true,
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -82,7 +82,7 @@ module.exports = class FormsData {
 				return 'ENTITY_NOT_FOUND'
 			}
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -98,7 +98,7 @@ module.exports = class FormsData {
 			})
 			return formData
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 }

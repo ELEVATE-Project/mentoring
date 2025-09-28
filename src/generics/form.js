@@ -10,7 +10,7 @@ async function getAllFormsVersion(tenantCode, orgCode) {
 		}
 		return await formQueries.findAllTypeFormVersion(tenantCode, orgCode)
 	} catch (error) {
-		return error
+		console.error(error)
 	}
 }
 module.exports = { getAllFormsVersion }

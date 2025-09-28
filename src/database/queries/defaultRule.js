@@ -11,7 +11,8 @@ exports.create = async (data, tenantCode) => {
 		data.tenant_code = tenantCode
 		return await DefaultRule.create(data)
 	} catch (error) {
-		return error
+		console.error('Error creating DefaultRule:', error)
+		throw error
 	}
 }
 
@@ -36,7 +37,8 @@ exports.findOne = async (filter, options = {}) => {
 		})
 		return res
 	} catch (error) {
-		return error
+		console.error('Error finding DefaultRule:', error)
+		throw error
 	}
 }
 
@@ -61,7 +63,8 @@ exports.updateOne = async (filter, update, options = {}) => {
 			individualHooks: true,
 		})
 	} catch (error) {
-		return error
+		console.error('Error updating DefaultRule:', error)
+		throw error
 	}
 }
 
@@ -77,7 +80,8 @@ exports.deleteOne = async (filter) => {
 		})
 		return result
 	} catch (error) {
-		return error
+		console.error('Error deleting DefaultRule:', error)
+		throw error
 	}
 }
 
@@ -95,7 +99,8 @@ exports.findAndCountAll = async (filter, options = {}) => {
 			raw: true,
 		})
 	} catch (error) {
-		return error
+		console.error('Error finding DefaultRules:', error)
+		throw error
 	}
 }
 
@@ -124,6 +129,7 @@ exports.findAll = async (filter, tenantCode, options = {}) => {
 			raw: true,
 		})
 	} catch (error) {
-		return error
+		console.error('Error finding DefaultRules:', error)
+		throw error
 	}
 }

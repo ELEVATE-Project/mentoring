@@ -44,7 +44,7 @@ const filterConcreteAndMetaAttributes = async (modelAttributes, attributesList) 
 		})
 		return { concreteAttributes, metaAttributes }
 	} catch (err) {
-		return err
+		console.log(err)
 	}
 }
 
@@ -82,7 +82,9 @@ const rawAttributesTypeModifier = async (rawAttributes) => {
 			}
 		}
 		return outputArray
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 const metaAttributesTypeModifier = (data) => {
 	try {
@@ -116,7 +118,9 @@ const metaAttributesTypeModifier = (data) => {
 		})
 
 		return outputArray
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 
 const generateRandomCode = (length) => {
@@ -167,7 +171,9 @@ const materializedViewQueryBuilder = async (model, concreteFields, metaFields, t
 		  WHERE ${tenantWhereClause};`
 
 		return { materializedViewGenerationQuery, temporaryMaterializedViewName }
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 
 const createIndexesOnAllowFilteringFields = async (model, modelEntityTypes, fieldsWithDatatype, tenantCode) => {
@@ -196,7 +202,9 @@ const createIndexesOnAllowFilteringFields = async (model, modelEntityTypes, fiel
 				return await sequelize.query(query)
 			})
 		)
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 const createViewGINIndexOnSearch = async (model, config, fields, tenantCode) => {
 	try {
@@ -225,7 +233,9 @@ const createViewGINIndexOnSearch = async (model, config, fields, tenantCode) => 
                 `)
 			} catch (err) {}
 		}
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 // Function to execute index queries for a specific model
 const executeIndexQueries = async (modelName) => {
@@ -233,18 +243,24 @@ const executeIndexQueries = async (modelName) => {
 	const modelQueries = indexQueries.find((item) => item.modelName === modelName)
 
 	if (modelQueries) {
+		console.log(`Executing index queries for ${modelName}`)
 		for (const query of modelQueries.queries) {
 			try {
 				await sequelize.query(query)
-			} catch (error) {}
+			} catch (error) {
+				console.error(`Error executing query for ${modelName}: ${query}`, error)
+			}
 		}
 	} else {
+		console.log(`No index queries found for model: ${modelName}`)
 	}
 }
 const deleteMaterializedView = async (viewName) => {
 	try {
 		await sequelize.query(`DROP MATERIALIZED VIEW ${viewName};`)
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 
 const renameMaterializedView = async (temporaryMaterializedViewName, tableName, tenantCode) => {
@@ -267,6 +283,7 @@ const renameMaterializedView = async (temporaryMaterializedViewName, tableName, 
 		return randomViewName
 	} catch (error) {
 		await t.rollback()
+		console.error('Error executing transaction:', error)
 	}
 }
 
@@ -278,7 +295,9 @@ const createViewUniqueIndexOnPK = async (model, tenantCode) => {
 		const result = await sequelize.query(`
             CREATE UNIQUE INDEX ${tenantCode}_unique_index_${model.tableName}_${primaryKeys.map((key) => `_${key}`)} 
             ON ${viewName} (${primaryKeys.map((key) => `${key}`).join(', ')});`)
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 
 const generateMaterializedView = async (modelEntityTypes, tenantCode) => {
@@ -316,7 +335,9 @@ const generateMaterializedView = async (modelEntityTypes, tenantCode) => {
 		await createViewUniqueIndexOnPK(model, tenantCode)
 		await createViewGINIndexOnSearch(model, searchConfig, allFields, tenantCode)
 		await executeIndexQueries(model.name)
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 
 const getAllowFilteringEntityTypes = async (tenantCode) => {
@@ -374,7 +395,9 @@ const triggerViewBuild = async (tenantCode) => {
 		)
 
 		return entityTypesGroupedByModel
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 
 //Refresh Flow
@@ -393,7 +416,9 @@ const modelNameCollector = async (entityTypes) => {
 			})
 		)
 		return [...modelSet.values()]
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 
 const refreshMaterializedView = async (modelName, tenantCode) => {
@@ -428,7 +453,9 @@ const refreshNextView = (currentIndex, modelNames, tenantCode) => {
 			currentIndex = 0 // Reset to start over for next cycle
 		}
 		return currentIndex
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 
 const triggerPeriodicViewRefresh = async (tenantCode) => {
@@ -445,7 +472,9 @@ const triggerPeriodicViewRefresh = async (tenantCode) => {
 
 		// Immediately trigger the first refresh
 		currentIndex = refreshNextView(currentIndex, modelNames, tenantCode)
-	} catch (err) {}
+	} catch (err) {
+		console.log(err)
+	}
 }
 
 const checkAndCreateMaterializedViews = async () => {

@@ -6,7 +6,7 @@ module.exports = class permissionData {
 		try {
 			return await Permissions.create(data, { returning: true })
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -14,7 +14,7 @@ module.exports = class permissionData {
 		try {
 			return await Permissions.findByPk(id)
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -33,7 +33,7 @@ module.exports = class permissionData {
 			})
 			return permissions
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -45,7 +45,7 @@ module.exports = class permissionData {
 			})
 			return updatedPermission
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -58,7 +58,7 @@ module.exports = class permissionData {
 
 			return deletedRows
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -67,7 +67,7 @@ module.exports = class permissionData {
 			const permissionData = await Permissions.findByPk(filter)
 			return permissionData
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 

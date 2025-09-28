@@ -15,7 +15,7 @@ module.exports = class MentorExtensionQueries {
 		try {
 			return await Object.keys(MentorExtension.rawAttributes)
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -23,14 +23,14 @@ module.exports = class MentorExtensionQueries {
 		try {
 			return await MentorExtension.name
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	static async getTableName() {
 		try {
 			return await MentorExtension.tableName
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -46,7 +46,7 @@ module.exports = class MentorExtensionQueries {
 			})
 			return mentorExtension
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -99,7 +99,7 @@ module.exports = class MentorExtensionQueries {
 				  })
 			return result
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -127,7 +127,7 @@ module.exports = class MentorExtensionQueries {
 			}
 			return mentor
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -141,7 +141,7 @@ module.exports = class MentorExtensionQueries {
 
 			return await MentorExtension.destroy(options)
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	static async removeMentorDetails(userId, tenantCode) {
@@ -184,7 +184,7 @@ module.exports = class MentorExtensionQueries {
 				},
 			})
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	static async getMentorsByUserIds(ids, options = {}, tenantCode, unscoped = false) {
@@ -209,7 +209,7 @@ module.exports = class MentorExtensionQueries {
 
 			return result
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -223,7 +223,7 @@ module.exports = class MentorExtensionQueries {
 
 			return result
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -342,7 +342,7 @@ module.exports = class MentorExtensionQueries {
 				count: Number(count[0].count),
 			}
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -445,7 +445,7 @@ module.exports = class MentorExtensionQueries {
 			const mentors = await MentorExtension.findAll(queryOptions)
 			return mentors
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 	static async getMentorsFromView(
@@ -493,7 +493,7 @@ module.exports = class MentorExtensionQueries {
 				count: Number(count[0].count),
 			}
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -513,7 +513,7 @@ module.exports = class MentorExtensionQueries {
 
 			return user.length > 0 ? user[0] : null
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 }

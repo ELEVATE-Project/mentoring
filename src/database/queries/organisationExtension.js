@@ -122,7 +122,7 @@ module.exports = class OrganizationExtensionQueries {
 			const newOrgExtension = await OrganizationExtension.create(data, options)
 			return newOrgExtension
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 
@@ -161,7 +161,7 @@ module.exports = class OrganizationExtensionQueries {
 			})
 			return results
 		} catch (error) {
-			return error
+			throw error
 		}
 	}
 }
