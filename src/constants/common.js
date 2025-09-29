@@ -56,6 +56,7 @@ module.exports = {
 		'/sessions/removeAllSessions',
 		'/mentoring/v1/users/add',
 		'/mentoring/v1/users/delete',
+		'/requestSessions/expire',
 	],
 	COMPLETED_STATUS: 'COMPLETED',
 	UNFULFILLED_STATUS: 'UNFULFILLED',

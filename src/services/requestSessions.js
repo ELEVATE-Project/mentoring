@@ -378,6 +378,7 @@ module.exports = class requestSessionsHelper {
 				start_date: getRequestSessionDetails.start_date,
 				end_date: getRequestSessionDetails.end_date,
 				meta: getRequestSessionDetails.meta || null,
+				sessionCreatedByRequest: true,
 			})
 
 			// Create session
