@@ -388,7 +388,7 @@ module.exports = class SessionsHelper {
 			}
 
 			let emailTemplateCode
-			if (isSessionCreatedByManager && userDetails.email && notifyUser) {
+			if (bodyData.managerFlow && userDetails.email && notifyUser) {
 				if (data.type == common.SESSION_TYPE.PRIVATE) {
 					//assign template data
 					emailTemplateCode = process.env.MENTOR_PRIVATE_SESSION_INVITE_BY_MANAGER_EMAIL_TEMPLATE
