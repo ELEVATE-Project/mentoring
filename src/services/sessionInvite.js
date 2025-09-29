@@ -76,6 +76,7 @@ module.exports = class UserInviteHelper {
 				//update output path in file uploads
 				const rowsAffected = await fileUploadQueries.update(
 					{ id: data.fileDetails.id, organization_id: orgId },
+					tenantCode,
 					update
 				)
 				if (rowsAffected === 0) {
@@ -85,6 +86,7 @@ module.exports = class UserInviteHelper {
 				// send email to admin
 				const templateCode = process.env.SESSION_UPLOAD_EMAIL_TEMPLATE_CODE
 				if (templateCode) {
+					const defaults = await getDefaults()
 					const templateData = await notificationTemplateQueries.findOneEmailTemplate(
 						templateCode,
 						data.user.organization_code,
