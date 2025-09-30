@@ -137,6 +137,16 @@ module.exports = class UserHelper {
 	static async #createUserWithBody(userBody, tenantCode) {
 		let orgId = userBody.organization_id
 		let orgCode = userBody.organizations[0].code
+
+		// Check if orgId exists before calling toString()
+		if (!orgId) {
+			return responses.failureResponse({
+				message: 'ORGANIZATION_ID_REQUIRED',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		}
+
 		const orgExtension = await this.#createOrUpdateOrg({ id: orgId.toString(), code: orgCode }, tenantCode)
 
 		if (!orgExtension) {

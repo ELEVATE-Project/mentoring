@@ -10,6 +10,8 @@ const { isAMentor } = require('@generics/utils')
 const feedbackService = require('@services/feedback')
 const userService = require('@services/users')
 const adminService = require('@services/admin')
+const httpStatusCode = require('@generics/http-status')
+const responses = require('@helpers/responses')
 
 module.exports = class Users {
 	/**
@@ -145,6 +147,15 @@ module.exports = class Users {
 	 */
 	async delete(req) {
 		try {
+			// Check if req.body.id exists before calling toString()
+			if (!req.body.id) {
+				return responses.failureResponse({
+					message: 'USER_ID_REQUIRED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			// For internal calls, only req.body.id and req.body.tenant_code are available
 			// Other parameters (currentUserId, organizationCode, token) will use defaults
 			return await adminService.userDelete(

@@ -2451,7 +2451,11 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			if (sessionDetails.meeting_info.value == common.BBB_VALUE && sessionDetails.started_at != null && !isBBB) {
+			if (
+				sessionDetails?.meeting_info?.value == common.BBB_VALUE &&
+				sessionDetails.started_at != null &&
+				!isBBB
+			) {
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					result: [],
@@ -2470,21 +2474,30 @@ module.exports = class SessionsHelper {
 				{ returning: false, raw: true }
 			)
 
-			if (sessionDetails.meeting_info.value == common.BBB_VALUE && isBBB) {
+			if (sessionDetails?.meeting_info?.value == common.BBB_VALUE && isBBB) {
 				const recordingInfo = await bigBlueButtonRequests.getRecordings(sessionId)
 
 				if (recordingInfo?.data?.response) {
 					const { recordings } = recordingInfo.data.response
 
-					// Optimized: Create post session details with built-in session validation
-					await postSessionQueries.createWithSessionValidation(
-						{
-							session_id: sessionId,
-							recording_url: recordings.recording.playback.format.url,
-							recording: recordings,
-						},
-						tenantCode
-					)
+					// Check if recordings and nested recording structure exists before accessing
+					if (
+						recordings &&
+						recordings.recording &&
+						recordings.recording.playback &&
+						recordings.recording.playback.format &&
+						recordings.recording.playback.format.url
+					) {
+						// Create post session details with recording URL and tenant code
+						await postSessionQueries.createWithSessionValidation(
+							{
+								session_id: sessionId,
+								recording_url: recordings.recording.playback.format.url,
+								recording: recordings,
+							},
+							tenantCode
+						)
+					}
 				}
 			}
 
