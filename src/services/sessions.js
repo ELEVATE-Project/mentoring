@@ -123,7 +123,8 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const validMenteeIds = menteeIdsToEnroll.filter((id) => typeof id === 'number')
+			const validMenteeIds = menteeIdsToEnroll.filter((id) => typeof id === 'number' || typeof id === 'string')
+
 			if (menteeIdsToEnroll.length != 0 && validMenteeIds.length != 0) {
 				const menteesDetailsInMentor = await this.validateMentorExtensions(menteeIdsToEnroll)
 				const invalidMentorId =

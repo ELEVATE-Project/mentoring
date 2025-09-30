@@ -101,8 +101,9 @@ module.exports = class UserHelper {
 	static async update(updateData) {
 		try {
 			const userId = updateData.userId
+
 			const isNewUser = await this.#checkUserExistence(userId)
-			const result = await this.#createOrUpdateUserAndOrg(userId, isNewUser)
+			const result = await this.#createOrUpdateUserAndOrg(userId, isNewUser, undefined, updateData?.tenantCode)
 			return result
 		} catch (error) {
 			console.log(error)
@@ -146,8 +147,8 @@ module.exports = class UserHelper {
 				result: createResult.result,
 			})
 	}
-	static async #createOrUpdateUserAndOrg(userId, isNewUser, targetHasMentorRole = undefined) {
-		const userDetails = await userRequests.fetchUserDetails({ userId })
+	static async #createOrUpdateUserAndOrg(userId, isNewUser, targetHasMentorRole = undefined, tenantCode = '') {
+		const userDetails = await userRequests.fetchUserDetails({ userId, tenantCode })
 		if (!userDetails?.data?.result) {
 			return responses.failureResponse({
 				message: 'SOMETHING_WENT_WRONG',
@@ -190,10 +191,10 @@ module.exports = class UserHelper {
 
 	static #getExtensionData(userDetails, orgExtension) {
 		const data = {
-			id: userDetails.id,
+			id: userDetails.id.toString(),
 			name: userDetails?.name,
 			organization: {
-				id: orgExtension.organization_id,
+				id: orgExtension.organization_id.toString(),
 			},
 		}
 
@@ -341,7 +342,7 @@ module.exports = class UserHelper {
 		if (!userDetails.data.result) {
 			return 'FAILED_TO_GET_REQUIRED_USER_DETAILS'
 		} else {
-			const requiredFields = ['id', 'user_roles', 'email', 'name', 'organization', 'organization_id']
+			const requiredFields = ['id', 'user_roles', 'name', 'organization_id']
 			for (const field of requiredFields) {
 				if (!userDetails.data.result[field] || userDetails.data.result[field] == null) {
 					return 'FAILED_TO_GET_REQUIRED_USER_DETAILS'

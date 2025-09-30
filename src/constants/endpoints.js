@@ -2,6 +2,7 @@ module.exports = {
 	VERIFY_MENTOR: 'v1/account/verifyMentor',
 	LIST_ACCOUNTS: 'v1/account/list',
 	USER_PROFILE_DETAILS: 'v1/user/read',
+	USER_PROFILE_DETAILS_INTERNAL: 'v1/user/profileById',
 	GET_PROFILE_BY_ID: 'v1/user/profileById',
 	CREATE_MEETING: 'api/create',
 	JOIN_MEETING: 'api/join',
