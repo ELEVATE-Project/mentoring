@@ -437,7 +437,7 @@ module.exports = class Sessions {
 			const sessionUploadRes = await sessionService.bulkSessionCreate(
 				req.body.file_path,
 				req.decodedToken.id,
-				req.decodedToken.organization_code,
+				req.decodedToken.organization_codes[0],
 				req.decodedToken.tenant_code,
 				req.decodedToken.organizations[0].id
 			)
