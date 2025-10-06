@@ -666,7 +666,7 @@ module.exports = class SessionsHelper {
 			} else {
 				// If the api is called for updating the session details execution flow enters to this  else block
 				// If request body contains mentees field enroll/unenroll mentees from the session
-				if (bodyData.mentees) {
+				if (bodyData.mentees && sessionDetail.status != common.LIVE_STATUS) {
 					// Fetch mentees currently enrolled to the session
 					const sessionAttendees = await sessionAttendeesQueries.findAll({
 						session_id: sessionId,
@@ -701,7 +701,7 @@ module.exports = class SessionsHelper {
 						)
 					}
 				}
-				if (bodyData?.resources) {
+				if (bodyData?.resources && sessionDetail.status != common.LIVE_STATUS) {
 					await this.addResources(bodyData.resources, userId, sessionId)
 
 					bodyData.resources.forEach((element) => {
@@ -718,7 +718,11 @@ module.exports = class SessionsHelper {
 					})
 				}
 
-				if (bodyData.mentor_id && bodyData.mentor_id != sessionDetail.mentor_id) {
+				if (
+					bodyData.mentor_id &&
+					bodyData.mentor_id != sessionDetail.mentor_id &&
+					sessionDetail.status != common.LIVE_STATUS
+				) {
 					await sessionQueries.addOwnership(sessionId, bodyData.mentor_id)
 					mentorUpdated = true
 					const newMentor = await mentorExtensionQueries.getMentorExtension(
@@ -730,6 +734,10 @@ module.exports = class SessionsHelper {
 						bodyData.mentor_name = newMentor.name
 					}
 					this.setMentorPassword(sessionId, bodyData.mentor_id)
+				}
+
+				if (sessionDetail.status == common.LIVE_STATUS && bodyData?.meetingInfo) {
+					bodyData = bodyData.meetingInfo
 				}
 
 				const { rowsAffected, updatedRows } = await sessionQueries.updateOne({ id: sessionId }, bodyData, {
