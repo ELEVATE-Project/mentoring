@@ -27,7 +27,7 @@ module.exports = class UserInviteHelper {
 		return new Promise(async (resolve, reject) => {
 			try {
 				const filePath = data.fileDetails.input_path
-				const userId = data.user.id
+				const userId = data.user.userId
 				const orgId = data.user.organization_id
 				const notifyUser = true
 				const tenantCode = data.user.tenant_code
