@@ -574,6 +574,10 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
+			console.log('🔍 RIGHT BEFORE QUERY:')
+			console.log('🔍 orgCode:', orgCode, '| type:', typeof orgCode)
+			console.log('🔍 defaults.orgCode:', defaults.orgCode, '| type:', typeof defaults.orgCode)
+			console.log('🔍 Query array will be:', [orgCode, defaults.orgCode])
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
 				{
 					status: 'ACTIVE',
@@ -852,6 +856,10 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
+			console.log('🔍 RIGHT BEFORE QUERY:')
+			console.log('🔍 orgCode:', orgCode, '| type:', typeof orgCode)
+			console.log('🔍 defaults.orgCode:', defaults.orgCode, '| type:', typeof defaults.orgCode)
+			console.log('🔍 Query array will be:', [orgCode, defaults.orgCode])
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
 				{
 					status: 'ACTIVE',
