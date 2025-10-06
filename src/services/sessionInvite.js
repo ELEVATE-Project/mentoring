@@ -32,6 +32,7 @@ module.exports = class UserInviteHelper {
 				const notifyUser = true
 				const tenantCode = data.user.tenant_code
 				const orgCode = data.user.organization_code
+				console.log('DEBUG sessionInvite - orgCode:', orgCode, 'data.user:', JSON.stringify(data.user, null, 2))
 				const defaultOrgCode = data.user.defaultOrganiztionCode
 				const defaultTenantCode = data.user.defaultTenantCode
 

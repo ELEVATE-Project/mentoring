@@ -194,9 +194,9 @@ const createIndexesOnAllowFilteringFields = async (model, modelEntityTypes, fiel
 				// Determine the query based on the type
 				let query
 				if (type === 'character varying' || type === 'character text') {
-					query = `CREATE INDEX ${tenantCode}_idx_${model.tableName}_${attribute} ON ${viewName} USING gin (${attribute} gin_trgm_ops);`
+					query = `CREATE INDEX IF NOT EXISTS ${tenantCode}_idx_${model.tableName}_${attribute} ON ${viewName} USING gin (${attribute} gin_trgm_ops);`
 				} else {
-					query = `CREATE INDEX ${tenantCode}_idx_${model.tableName}_${attribute} ON ${viewName} USING gin (${attribute});`
+					query = `CREATE INDEX IF NOT EXISTS ${tenantCode}_idx_${model.tableName}_${attribute} ON ${viewName} USING gin (${attribute});`
 				}
 
 				return await sequelize.query(query)
@@ -227,7 +227,7 @@ const createViewGINIndexOnSearch = async (model, config, fields, tenantCode) => 
 		for (const field of fieldsForIndex) {
 			try {
 				await sequelize.query(`
-                    CREATE INDEX ${tenantCode}_gin_index_${model.tableName}_${field}
+                    CREATE INDEX IF NOT EXISTS ${tenantCode}_gin_index_${model.tableName}_${field}
                     ON ${viewName}
                     USING gin(${field} gin_trgm_ops);
                 `)
@@ -293,7 +293,9 @@ const createViewUniqueIndexOnPK = async (model, tenantCode) => {
 		const viewName = utils.getTenantViewName(tenantCode, model.tableName)
 
 		const result = await sequelize.query(`
-            CREATE UNIQUE INDEX ${tenantCode}_unique_index_${model.tableName}_${primaryKeys.map((key) => `_${key}`)} 
+            CREATE UNIQUE INDEX IF NOT EXISTS ${tenantCode}_unique_index_${model.tableName}_${primaryKeys.map(
+			(key) => `_${key}`
+		)} 
             ON ${viewName} (${primaryKeys.map((key) => `${key}`).join(', ')});`)
 	} catch (err) {
 		console.log(err)
