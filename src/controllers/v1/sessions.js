@@ -434,10 +434,14 @@ module.exports = class Sessions {
 	 */
 	async bulkSessionCreate(req) {
 		try {
+			const organizationCode =
+				req.decodedToken.organization_code ||
+				(req.decodedToken.organization_codes && req.decodedToken.organization_codes[0])
+
 			const sessionUploadRes = await sessionService.bulkSessionCreate(
 				req.body.file_path,
 				req.decodedToken.id,
-				req.decodedToken.organization_codes[0],
+				organizationCode,
 				req.decodedToken.tenant_code,
 				req.decodedToken.organizations[0].id
 			)
