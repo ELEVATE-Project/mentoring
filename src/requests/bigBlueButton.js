@@ -23,7 +23,7 @@ const userRequests = require('@requests/user')
  * @returns {String} - Meeting success message.
  */
 
-const createMeeting = function (meetingId, meetingName, attendeePW, moderatorPW, sessionDuration, tenantCode) {
+const createMeeting = function (meetingId, meetingName, attendeePW, moderatorPW, sessionDuration, tenantUrl) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			let endMeetingCallBackUrl = process.env.MEETING_END_CALLBACK_EVENTS + '%2F' + meetingId + '%3Fsource%3DBBB'
