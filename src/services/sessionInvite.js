@@ -767,7 +767,7 @@ module.exports = class UserInviteHelper {
 						} = await this.processSession(
 							session,
 							userId,
-							orgId,
+							orgCode,
 							validRowsCount,
 							invalidRowsCount,
 							tenantCode
@@ -796,7 +796,7 @@ module.exports = class UserInviteHelper {
 						} = await this.processSession(
 							session,
 							userId,
-							orgId,
+							orgCode,
 							validRowsCount,
 							invalidRowsCount,
 							tenantCode
