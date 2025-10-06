@@ -31,8 +31,22 @@ module.exports = class UserInviteHelper {
 				const orgId = data.user.organization_id
 				const notifyUser = true
 				const tenantCode = data.user.tenant_code
-				const orgCode = data.user.organization_code
-				console.log('DEBUG sessionInvite - orgCode:', orgCode, 'data.user:', JSON.stringify(data.user, null, 2))
+				console.log(
+					'🔍 RAW data.user.organization_code:',
+					data.user.organization_code,
+					'type:',
+					typeof data.user.organization_code
+				)
+				console.log(
+					'🔍 RAW data.user.organization_id:',
+					data.user.organization_id,
+					'type:',
+					typeof data.user.organization_id
+				)
+				console.log('🔍 COMPLETE data.user object:', JSON.stringify(data.user, null, 2))
+
+				const orgCode = String(data.user.organization_code)
+				console.log('🔍 AFTER String() conversion - orgCode:', orgCode, 'type:', typeof orgCode)
 				const defaultOrgCode = data.user.defaultOrganiztionCode
 				const defaultTenantCode = data.user.defaultTenantCode
 
