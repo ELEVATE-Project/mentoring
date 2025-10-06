@@ -310,15 +310,18 @@ module.exports = class MentorsHelper {
 					sessions.map(async (session) => {
 						const attendee = attendees.find((attendee) => attendee.session_id === session.id)
 						session.is_enrolled = !!attendee
-						if (session.is_enrolled && common.SESSION_TYPE.PRIVATE == session.type) {
-							return session
-						} else if (common.SESSION_TYPE.PUBLIC == session.type) {
-							return session
-						}
 					})
 				)
 
-				return sessions
+				// Filter to include only public sessions or private sessions where user is enrolled
+				const filteredSessions = sessions.filter((session) => {
+					return (
+						session.type === common.SESSION_TYPE.PUBLIC ||
+						(session.type === common.SESSION_TYPE.PRIVATE && session.is_enrolled)
+					)
+				})
+
+				return filteredSessions
 			} else {
 				return sessions
 			}
