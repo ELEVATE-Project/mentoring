@@ -31,22 +31,7 @@ module.exports = class UserInviteHelper {
 				const orgId = data.user.organization_id
 				const notifyUser = true
 				const tenantCode = data.user.tenant_code
-				console.log(
-					'🔍 RAW data.user.organization_code:',
-					data.user.organization_code,
-					'type:',
-					typeof data.user.organization_code
-				)
-				console.log(
-					'🔍 RAW data.user.organization_id:',
-					data.user.organization_id,
-					'type:',
-					typeof data.user.organization_id
-				)
-				console.log('🔍 COMPLETE data.user object:', JSON.stringify(data.user, null, 2))
-
 				const orgCode = String(data.user.organization_code)
-				console.log('🔍 AFTER String() conversion - orgCode:', orgCode, 'type:', typeof orgCode)
 				const defaultOrgCode = data.user.defaultOrganiztionCode
 				const defaultTenantCode = data.user.defaultTenantCode
 
@@ -424,7 +409,6 @@ module.exports = class UserInviteHelper {
 	}
 
 	static async processSession(session, userId, orgCode, validRowsCount, invalidRowsCount, tenantCode) {
-		console.log('🔍 processSession called for:', session.title || 'NO_TITLE')
 		const requiredFields = [
 			'action',
 			'title',
@@ -441,24 +425,9 @@ module.exports = class UserInviteHelper {
 			'meeting_info',
 		]
 
-		console.log('🔍 Checking required fields for session:', session.title || 'NO_TITLE')
-		requiredFields.forEach((field) => {
-			const value = session[field]
-			console.log(
-				`🔍 Field ${field}:`,
-				value,
-				'(type:',
-				typeof value,
-				', isEmpty:',
-				!value || (Array.isArray(value) && value.length === 0),
-				')'
-			)
-		})
-
 		const missingFields = requiredFields.filter(
 			(field) => !session[field] || (Array.isArray(session[field]) && session[field].length === 0)
 		)
-		console.log('🔍 Missing fields for', session.title || 'NO_TITLE', ':', missingFields)
 		if (missingFields.length > 0) {
 			session.status = 'Invalid'
 			session.statusMessage = this.appendWithComma(
@@ -604,10 +573,6 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			console.log('🔍 RIGHT BEFORE QUERY:')
-			console.log('🔍 orgCode:', orgCode, '| type:', typeof orgCode)
-			console.log('🔍 defaults.orgCode:', defaults.orgCode, '| type:', typeof defaults.orgCode)
-			console.log('🔍 Query array will be:', [orgCode, defaults.orgCode])
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
 				{
 					status: 'ACTIVE',
@@ -773,23 +738,9 @@ module.exports = class UserInviteHelper {
 			let rowsWithStatus = []
 			let validRowsCount = 0
 			let invalidRowsCount = 0
-			console.log('🔍 CSV DATA PROCESSING - Total rows:', csvData.length)
 			for (const session of csvData) {
-				console.log(
-					'🔍 Processing session:',
-					session.title || 'NO_TITLE',
-					'action:',
-					session.action,
-					'has_id:',
-					!!session.id
-				)
 				if (session.action.replace(/\s+/g, '').toLowerCase() === common.ACTIONS.CREATE) {
-					console.log('🔍 CREATE action detected for session:', session.title || 'NO_TITLE')
 					if (!session.id) {
-						console.log(
-							'🔍 Session has no ID, proceeding to processSession for:',
-							session.title || 'NO_TITLE'
-						)
 						const {
 							validRowsCount: valid,
 							invalidRowsCount: invalid,
@@ -804,20 +755,8 @@ module.exports = class UserInviteHelper {
 						)
 						validRowsCount = valid
 						invalidRowsCount = invalid
-						console.log(
-							'🔍 After processSession - session status:',
-							processedSession.status,
-							'for:',
-							processedSession.title || 'NO_TITLE'
-						)
 						rowsWithStatus.push(processedSession)
 					} else {
-						console.log(
-							'🔍 Session has ID, marking as Invalid for:',
-							session.title || 'NO_TITLE',
-							'id:',
-							session.id
-						)
 						session.status = 'Invalid'
 						session.statusMessage = this.appendWithComma(session.statusMessage, 'Invalid Row Action')
 						rowsWithStatus.push(session)
@@ -882,17 +821,6 @@ module.exports = class UserInviteHelper {
 				return restOfSessionData
 			})
 
-			console.log('🔍 About to processCreateData with SessionBodyData count:', SessionBodyData.length)
-			SessionBodyData.forEach((session, index) => {
-				console.log(
-					`🔍 SessionBodyData[${index}]:`,
-					session.title || 'NO_TITLE',
-					'status:',
-					session.status,
-					'action:',
-					session.action
-				)
-			})
 			const sessionCreationOutput = await this.processCreateData(
 				SessionBodyData,
 				userId,
@@ -923,10 +851,6 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			console.log('🔍 RIGHT BEFORE QUERY:')
-			console.log('🔍 orgCode:', orgCode, '| type:', typeof orgCode)
-			console.log('🔍 defaults.orgCode:', defaults.orgCode, '| type:', typeof defaults.orgCode)
-			console.log('🔍 Query array will be:', [orgCode, defaults.orgCode])
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
 				{
 					status: 'ACTIVE',
@@ -1049,25 +973,10 @@ module.exports = class UserInviteHelper {
 	}
 
 	static async processCreateData(SessionsArray, userId, orgId, isMentor, notifyUser, tenantCode, orgCode) {
-		console.log('🔍 processCreateData called with', SessionsArray.length, 'sessions')
 		const output = []
 		for (const data of SessionsArray) {
-			console.log(
-				'🔍 Processing session in processCreateData:',
-				data.title || 'NO_TITLE',
-				'status:',
-				data.status,
-				'action:',
-				data.action
-			)
 			if (data.status != 'Invalid') {
-				console.log('🔍 Session status is not Invalid, proceeding with:', data.title || 'NO_TITLE')
 				if (data.action.replace(/\s+/g, '').toLowerCase() === common.ACTIONS.CREATE) {
-					console.log(
-						'🔍 CREATE action confirmed for:',
-						data.title || 'NO_TITLE',
-						'Will attempt session creation'
-					)
 					data.status = common.PUBLISHED_STATUS
 					data.time_zone =
 						data.time_zone == common.TIMEZONE
