@@ -41,6 +41,7 @@ module.exports = {
                             ELSE TRUE
                         END
                     )
+                    AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
 			},
@@ -100,6 +101,7 @@ module.exports = {
                                 ELSE TRUE
                             END
                         )
+                        AND Session.deleted_at IS NULL
                         DYNAMIC_AND_CLAUSE
                 ) AS session_durations`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
@@ -163,6 +165,7 @@ module.exports = {
                     AND (CASE WHEN :userId IS NOT NULL THEN sa.mentee_id = :userId ELSE TRUE END)
                     AND (CASE WHEN :start_date IS NOT NULL THEN Session.start_date > :start_date ELSE TRUE END)
                     AND (CASE WHEN :end_date IS NOT NULL THEN Session.end_date < :end_date ELSE TRUE END)
+                    AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
 			},
@@ -183,6 +186,7 @@ module.exports = {
                 s.type AS "session_type",
                 s.categories AS "categories",
                 s.recommended_for AS "recommended_for",
+                s.deleted_at,
                 CASE WHEN sa.joined_at IS NOT NULL THEN 'Yes' ELSE 'No' END AS "session_attended",
                 ROUND(EXTRACT(EPOCH FROM (TO_TIMESTAMP(s.end_date) - TO_TIMESTAMP(s.start_date))) / 60) AS "duration_of_sessions_attended_in_minutes",
                 s.tenant_code
@@ -202,6 +206,7 @@ module.exports = {
                         OR (:session_type = 'PUBLIC' AND s.type = 'PUBLIC')
                         OR (:session_type = 'PRIVATE' AND s.type = 'PRIVATE')
                     )
+                    AND s.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
 			},
@@ -233,6 +238,7 @@ module.exports = {
                             ELSE TRUE
                         END
                     )
+                    AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
 			},
@@ -347,6 +353,7 @@ module.exports = {
                             ELSE TRUE
                         END
                     )
+                    AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
 			},
@@ -438,6 +445,7 @@ module.exports = {
                     AND (session.start_date > :start_date OR :start_date IS NULL)
                     AND (session.end_date < :end_date OR :end_date IS NULL)
                     AND (:userId IS NOT NULL)
+                    AND session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
 			},
@@ -474,6 +482,7 @@ module.exports = {
                             ELSE TRUE
                         END
                     )
+                    AND session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
 			},
@@ -517,6 +526,7 @@ module.exports = {
                             ELSE TRUE
                         END
                     )
+                    AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
 			},
@@ -560,6 +570,7 @@ module.exports = {
                             ELSE TRUE
                         END
                     )
+                    AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
 			},
@@ -637,6 +648,7 @@ module.exports = {
                         OR :session_type = 'Public'
                         OR :session_type = 'Private'
                     )
+                    AND s.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
 				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
 			},
@@ -675,6 +687,7 @@ module.exports = {
                                 ELSE TRUE
                             END
                         )
+                        AND session.deleted_at IS NULL
                     GROUP BY session.tenant_code, session.mentor_id, session.mentor_name
                 )
                 SELECT 
