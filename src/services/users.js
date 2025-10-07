@@ -112,8 +112,9 @@ module.exports = class UserHelper {
 	static async update(updateData, decodedToken, userId, organizationId, tenantCode) {
 		try {
 			const userId = updateData.userId
+
 			const isNewUser = await this.#checkUserExistence(userId, decodedToken.tenant_code)
-			const result = await this.#createOrUpdateUserAndOrg(userId, isNewUser, decodedToken)
+			const result = await this.#createOrUpdateUserAndOrg(userId, isNewUser, undefined, updateData?.tenantCode)
 			return result
 		} catch (error) {
 			throw error
@@ -168,9 +169,8 @@ module.exports = class UserHelper {
 				result: createResult.result,
 			})
 	}
-
-	static async #createOrUpdateUserAndOrg(userId, isNewUser, decodedToken) {
-		const userDetails = await userRequests.fetchUserDetails({ userId, tenantCode: decodedToken.tenant_code })
+	static async #createOrUpdateUserAndOrg(userId, isNewUser, targetHasMentorRole = undefined, tenantCode = '') {
+		const userDetails = await userRequests.fetchUserDetails({ userId, tenantCode })
 		if (!userDetails?.data?.result) {
 			return responses.failureResponse({
 				message: 'SOMETHING_WENT_WRONG',
@@ -216,11 +216,11 @@ module.exports = class UserHelper {
 
 	static #getExtensionData(userDetails, orgExtension) {
 		const data = {
-			id: userDetails.id,
+			id: userDetails.id.toString(),
 			name: userDetails?.name,
 			organization: {
-				id: orgExtension.organization_id,
-				code: orgExtension.organization_code,
+				id: orgExtension.organization_id.toString(),
+				code: orgExtension.organization_code.toString(),
 			},
 		}
 		let roles = userDetails?.user_roles

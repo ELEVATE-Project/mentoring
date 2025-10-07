@@ -137,9 +137,15 @@ const validRoles = new Set([
 
 const fetchUserDetails = async ({ token, userId, tenantCode }) => {
 	try {
-		let profileUrl = `${userBaseUrl}${endpoints.USER_PROFILE_DETAILS}`
-
+		const isTenantScoped = Boolean(tenantCode)
+		if (isTenantScoped && !userId) {
+			throw new Error('fetchUserDetails: tenantCode requires userId')
+		}
+		let profileUrl = `${userBaseUrl}${
+			isTenantScoped ? endpoints.USER_PROFILE_DETAILS_INTERNAL : endpoints.USER_PROFILE_DETAILS
+		}`
 		if (userId) profileUrl += `/${userId}`
+		if (isTenantScoped) profileUrl += `?tenant_code=${encodeURIComponent(tenantCode)}`
 
 		if (tenantCode) {
 			profileUrl += `?tenant_code=${tenantCode}`
@@ -149,17 +155,15 @@ const fetchUserDetails = async ({ token, userId, tenantCode }) => {
 		const userDetails = await requests.get(profileUrl, token, isInternalTokenRequired)
 		userDetails.data = userDetails.data || {}
 		userDetails.data.result = userDetails.data.result || {}
-		userDetails.data.result.user_roles = userDetails.data.result.user_roles || [{ title: common.MENTEE_ROLE }]
-
-		if (
-			userDetails.data.result.user_roles.length === 1 &&
-			userDetails.data.result.user_roles[0].title === common.MENTEE_ROLE
-		)
-			return userDetails
+		// userDetails.data.result.user_roles = userDetails.data.result.user_roles || [{ title: common.MENTEE_ROLE }]
 
 		let isMentor = false
 		let isMenteeRolePresent = false
-		const roles = userDetails.data.result.user_roles.reduce((acc, role) => {
+
+		const rawRoles = userDetails?.data?.result?.user_roles ||
+			userDetails?.data?.result?.organizations?.[0]?.roles || [{ title: common.MENTEE_ROLE }]
+
+		const roles = rawRoles.reduce((acc, role) => {
 			if (validRoles.has(role.title)) {
 				if (role.title === common.MENTOR_ROLE) isMentor = true
 				else if (role.title === common.MENTEE_ROLE) isMenteeRolePresent = true
@@ -170,6 +174,12 @@ const fetchUserDetails = async ({ token, userId, tenantCode }) => {
 
 		if (!isMentor && !isMenteeRolePresent) roles.push({ title: common.MENTEE_ROLE })
 		userDetails.data.result.user_roles = roles
+
+		const orgId = userDetails?.data?.result?.organization_id ?? userDetails?.data?.result?.organizations?.[0]?.id
+
+		if (orgId !== undefined && orgId !== null) {
+			userDetails.data.result.organization_id = orgId.toString()
+		}
 
 		return userDetails
 	} catch (error) {

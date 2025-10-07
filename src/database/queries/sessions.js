@@ -317,13 +317,15 @@ exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 		})
 
 		const sessionIdAndTitle = foundSessions.map((session) => {
-			return { id: session.id, title: session.title }
+			return { id: session.id, title: session.title, start_date: session.start_date }
 		})
 		const upcomingSessionIds = foundSessions.map((session) => session.id)
 
 		const updatedSessions = await Session.update(
 			{
 				deleted_at: currentDateTime,
+				mentor_name: common.USER_NOT_FOUND,
+				mentor_id: null,
 			},
 			{
 				where: {

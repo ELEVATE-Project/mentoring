@@ -434,11 +434,6 @@ let enviromentVariables = {
 		optional: true,
 		default: 'internalmentoring',
 	},
-	KAFKA_INTERNAL_CACHE_GROUP_ID: {
-		message: 'Required Default Internal Cache',
-		optional: true,
-		default: 'mentoring.cache',
-	},
 	MENTOR_ACCEPT_SESSION_REQUEST_EMAIL_TEMPLATE: {
 		message: 'Required email template name for request session accepted',
 		optional: true,
@@ -572,6 +567,16 @@ let enviromentVariables = {
 		message: 'Required KAFKA_HEALTH_CHECK_TOPIC',
 		optional: true,
 		default: 'mentoring-health-check-topic-check',
+	},
+	SESSION_CREATOR_DELETE_SESSION_EMAIL_TEMPLATE: {
+		message: 'Required email template name for when session creator has deleted the session',
+		optional: true,
+		default: 'session_creator_delete_the_session',
+	},
+	EVENTS_TOPIC: {
+		message: 'Required event topic for handling events',
+		optional: true,
+		default: 'mentoring.events',
 	},
 }
 
