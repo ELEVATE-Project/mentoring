@@ -265,16 +265,7 @@ module.exports = class AdminService {
 			if (isMentor) {
 				// Handle mentor-specific deletion tasks
 				await this.handleMentorDeletion(userId, userInfo, result)
-
-				// Remove mentor from DB
-				mentorDetailsRemoved = await mentorQueries.removeMentorDetails(userId) // userId = "1"
-
-				// Unenroll and notify attendees of sessions created by mentor
-				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(userId) // userId = "1"
-				result.isAttendeesNotified = await this.unenrollAndNotifySessionAttendees(
-					removedSessionsDetail,
-					userInfo.organization_id || ''
-				) //removedSessionsDetail , orgId : "1")
+				mentorDetailsRemoved = result.mentorDetailsRemoved
 			}
 
 			// Step 5: Session Request Deletion & Notifications
@@ -957,19 +948,34 @@ module.exports = class AdminService {
 					mentorInfo.name || 'Mentor',
 					orgId
 				)
+			} else {
+				result.isSessionManagerNotifiedForMentorDelete = true
+			}
 
-				// update upcoming sessions of mentor to set as deleted if he created only
+			// 4. update sessions where mentor was assigned (not created by mentor)
+			const assignedSessionIds = await this.updateSessionsWithAssignedMentor(mentorUserId, orgId)
+
+			// Unenroll and notify attendees of sessions created by mentor
+			result.isAttendeesNotified = await this.removeAndUnenrollAttendees(mentorUserId, orgId)
+
+			// set the sessions mentor name and mentor_id as null
+			await sessionQueries.updateRecords(
+				{ mentor_name: common.USER_NOT_FOUND, mentor_id: null },
+				{ where: { id: assignedSessionIds } }
+			)
+
+			console.log(`Update ${assignedSessionIds.length} sessions with mentor name`)
+
+			// Remove mentor from DB
+			result.mentorDetailsRemoved = await mentorQueries.removeMentorDetails(mentorUserId) // userId = "1"
+
+			if (upcomingSessions.length > 0) {
 				const sessionIds = [...new Set(upcomingSessions.map((s) => s.id))]
 				await sessionQueries.updateRecords(
 					{ deleted_at: new Date() },
 					{ where: { id: sessionIds, created_by: mentorUserId } }
 				)
-			} else {
-				result.isSessionManagerNotifiedForMentorDelete = true
 			}
-
-			// 4. Delete sessions where mentor was assigned (not created by mentor)
-			result.isAssignedSessionsUpdated = await this.updateSessionsWithAssignedMentor(mentorUserId, orgId)
 		} catch (error) {
 			console.error('Error in handleMentorDeletion:', error)
 			result.isMenteeNotifiedAboutMentorDeletion = false
@@ -979,35 +985,23 @@ module.exports = class AdminService {
 		}
 	}
 
+	static async removeAndUnenrollAttendees(mentorUserId, orgId) {
+		const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentorUserId) // userId = "1"
+		const isAttendeesNotified = await this.unenrollAndNotifySessionAttendees(removedSessionsDetail, orgId) //removedSessionsDetail , orgId : "1")
+
+		return isAttendeesNotified
+	}
+
 	static async updateSessionsWithAssignedMentor(mentorUserId, orgId) {
 		// Notify attendees about session deletion
 
 		const sessionsToUpdate = await sessionQueries.getSessionsAssignedToMentor(mentorUserId)
 		if (sessionsToUpdate.length == 0) {
-			return true
+			return []
 		}
-
-		const sessionsCreated = await sessionQueries.getSessionsCreatedByMentor(mentorUserId)
-
-		// Delete the sessions
 		const sessionIds = [...new Set(sessionsToUpdate.map((s) => s.id))]
-		await sessionQueries.updateRecords(
-			{ mentor_name: common.USER_NOT_FOUND, mentor_id: null },
-			{ where: { id: sessionIds } }
-		)
 
-		console.log(`Update ${sessionIds.length} sessions with mentor name`)
-
-		// if thres so no sessions created by mentor
-		if (sessionsCreated.length == 0) {
-			return true
-		}
-
-		// if the sessions created and managed by mentor
-		await this.notifyAttendeesAboutMentorDeletion(sessionsCreated, orgId)
-
-		console.log(`Total sessions : ${sessionsCreated.length} which assigned to mentor`)
-		return true
+		return sessionIds
 	}
 
 	static async notifyMenteesAboutMentorDeletion(mentees, mentorName, orgId) {

@@ -123,9 +123,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const validMenteeIds = menteeIdsToEnroll.filter((id) => typeof id === 'number' || typeof id === 'string')
-
-			if (menteeIdsToEnroll.length != 0 && validMenteeIds.length != 0) {
+			if (menteeIdsToEnroll.length != 0) {
 				const menteesDetailsInMentor = await this.validateMentorExtensions(menteeIdsToEnroll)
 				const invalidMentorId =
 					menteesDetailsInMentor.invalidMentors.length === 0 ? [] : menteesDetailsInMentor.invalidMentors
@@ -666,7 +664,7 @@ module.exports = class SessionsHelper {
 			} else {
 				// If the api is called for updating the session details execution flow enters to this  else block
 				// If request body contains mentees field enroll/unenroll mentees from the session
-				if (bodyData.mentees) {
+				if (bodyData.mentees && sessionDetail.status != common.LIVE_STATUS) {
 					// Fetch mentees currently enrolled to the session
 					const sessionAttendees = await sessionAttendeesQueries.findAll({
 						session_id: sessionId,
@@ -701,7 +699,7 @@ module.exports = class SessionsHelper {
 						)
 					}
 				}
-				if (bodyData?.resources) {
+				if (bodyData?.resources && sessionDetail.status != common.LIVE_STATUS) {
 					await this.addResources(bodyData.resources, userId, sessionId)
 
 					bodyData.resources.forEach((element) => {
@@ -718,7 +716,11 @@ module.exports = class SessionsHelper {
 					})
 				}
 
-				if (bodyData.mentor_id && bodyData.mentor_id != sessionDetail.mentor_id) {
+				if (
+					bodyData.mentor_id &&
+					bodyData.mentor_id != sessionDetail.mentor_id &&
+					sessionDetail.status != common.LIVE_STATUS
+				) {
 					await sessionQueries.addOwnership(sessionId, bodyData.mentor_id)
 					mentorUpdated = true
 					const newMentor = await mentorExtensionQueries.getMentorExtension(
@@ -730,6 +732,35 @@ module.exports = class SessionsHelper {
 						bodyData.mentor_name = newMentor.name
 					}
 					this.setMentorPassword(sessionId, bodyData.mentor_id)
+				}
+
+				if (sessionDetail.status === common.LIVE_STATUS) {
+					const hasOtherUpdates = Object.keys(bodyData).some(
+						(key) => !['meeting_info', 'status', 'updated_at'].includes(key)
+					)
+					if (hasOtherUpdates && !bodyData.meeting_info) {
+						return responses.failureResponse({
+							message: 'LIVE_SESSION_ONLY_ALLOWS_MEETING_INFO_UPDATES',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+
+					if (bodyData.meeting_info) {
+						if (!bodyData.meeting_info.platform || !bodyData.meeting_info.value) {
+							return responses.failureResponse({
+								message: 'INVALID_MEETING_INFO',
+								statusCode: httpStatusCode.bad_request,
+								responseCode: 'CLIENT_ERROR',
+							})
+						}
+						bodyData = { meeting_info: bodyData.meeting_info }
+					} else {
+						return responses.successResponse({
+							statusCode: httpStatusCode.ok,
+							message: 'NO_UPDATES_ALLOWED_ON_LIVE_SESSION',
+						})
+					}
 				}
 
 				const { rowsAffected, updatedRows } = await sessionQueries.updateOne({ id: sessionId }, bodyData, {
@@ -3199,8 +3230,7 @@ module.exports = class SessionsHelper {
 
 	static async validateMentorExtensions(userIds) {
 		try {
-			const filteredUserIds = userIds.filter((id) => typeof id === 'number')
-			const mentors = await mentorExtensionQueries.getMentorExtensions(filteredUserIds)
+			const mentors = await mentorExtensionQueries.getMentorExtensions(userIds)
 			const mentorMap = new Map(mentors.map((mentor) => [mentor.user_id, mentor]))
 			const validMentors = []
 			const invalidMentors = []
@@ -3220,8 +3250,7 @@ module.exports = class SessionsHelper {
 
 	static async validateMenteeExtensions(userIds) {
 		try {
-			const filteredUserIds = userIds.filter((id) => typeof id === 'number')
-			const mentees = await menteeExtensionQueries.getMenteeExtensions(filteredUserIds)
+			const mentees = await menteeExtensionQueries.getMenteeExtensions(userIds)
 			const menteeMap = new Map(mentees.map((mentee) => [mentee.user_id, mentee]))
 			const validMentees = []
 			const invalidMentees = []
