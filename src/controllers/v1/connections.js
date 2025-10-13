@@ -109,7 +109,8 @@ module.exports = class Connection {
 				req.searchText,
 				req.query,
 				req.decodedToken.id,
-				req.decodedToken.organization_id
+				req.decodedToken.organization_id,
+				req.decodedToken.roles
 			)
 		} catch (error) {
 			throw error

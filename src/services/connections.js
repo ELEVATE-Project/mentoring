@@ -15,6 +15,7 @@ const userRequests = require('@requests/user')
 const notificationQueries = require('@database/queries/notificationTemplate')
 const kafkaCommunication = require('@generics/kafka-communication')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
+const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/defaultRules')
 
 module.exports = class ConnectionHelper {
 	/**
@@ -380,7 +381,7 @@ module.exports = class ConnectionHelper {
 	 * @param {string} orgId - The organization ID for filtering.
 	 * @returns {Promise<Object>} A list of filtered connections.
 	 */
-	static async list(pageNo, pageSize, searchText, queryParams, userId, orgId) {
+	static async list(pageNo, pageSize, searchText, queryParams, userId, orgId, userRoles) {
 		try {
 			let organizationIds = []
 
@@ -398,6 +399,21 @@ module.exports = class ConnectionHelper {
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			})
 
+			const defaultRuleFilter = await defaultRulesFilter({
+				ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
+				requesterId: userId,
+				roles: userRoles,
+				requesterOrganizationId: orgId,
+			})
+
+			if (defaultRuleFilter.error && defaultRuleFilter.error.missingField) {
+				return responses.failureResponse({
+					message: 'PROFILE_NOT_UPDATED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData, userExtensionsModelName)
 
 			let roles = []
@@ -412,7 +428,8 @@ module.exports = class ConnectionHelper {
 				searchText,
 				userId,
 				organizationIds,
-				roles
+				roles,
+				defaultRuleFilter
 			)
 
 			if (extensionDetails.count === 0 || extensionDetails.data.length === 0) {

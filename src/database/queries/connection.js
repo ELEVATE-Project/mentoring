@@ -276,7 +276,8 @@ exports.getConnectionsDetails = async (
 	searchText = '',
 	userId,
 	organizationIds = [],
-	roles = []
+	roles = [],
+	defaultFilter = ''
 ) => {
 	try {
 		let additionalFilter = ''
@@ -304,6 +305,8 @@ exports.getConnectionsDetails = async (
 		} else if (roles.includes('mentee')) {
 			rolesFilter = `AND is_mentor = false`
 		}
+
+		const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''
 
 		const userFilterClause = `mv.user_id IN (SELECT friend_id FROM ${Connection.tableName} WHERE user_id = :userId)`
 
@@ -335,6 +338,7 @@ exports.getConnectionsDetails = async (
             ${filterClause}
             ${rolesFilter}
             ${additionalFilter}
+			${defaultFilterClause}
         `
 
 		const replacements = {
@@ -367,7 +371,8 @@ exports.getConnectionsDetails = async (
 		    ${filterClause}
 		    ${rolesFilter}
 		    ${orgFilter}
-		    ${additionalFilter};
+		    ${additionalFilter}
+			${defaultFilterClause};
 		`
 		const count = await sequelize.query(countQuery, {
 			type: QueryTypes.SELECT,
