@@ -4,7 +4,7 @@ var messageReceived = function (message) {
 	return new Promise(async function (resolve, reject) {
 		try {
 			message.userId = message.entityId.toString()
-			message.tenantCode = message.oldValues?.tenant_code
+			message.tenantCode = message?.tenant_code || message.oldValues?.tenant_code
 			const response = await userRequest.update(message)
 			return resolve(response)
 		} catch (error) {

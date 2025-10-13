@@ -1032,13 +1032,24 @@ module.exports = class MenteesHelper {
 				organization_ids = [...organizations.result]
 
 				if (organization_ids.length > 0) {
-					//get organization list
-					const organizationList = await userRequests.organizationList(organization_ids)
+					const defaultOrgId = await getDefaultOrgId()
+					if (!defaultOrgId) {
+						return responses.failureResponse({
+							message: 'DEFAULT_ORG_ID_NOT_SET',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+
+					let orgIdsWithoutDefaultOrg = organization_ids
+					if (organization_ids.length > 1) {
+						orgIdsWithoutDefaultOrg = organization_ids.filter((orgId) => orgId != defaultOrgId)
+					}
+
+					const organizationList = await userRequests.organizationList(orgIdsWithoutDefaultOrg)
 					if (organizationList.success && organizationList.data?.result?.length > 0) {
 						result.organizations = organizationList.data.result
 					}
-
-					const defaultOrgId = await getDefaultOrgId()
 
 					const modelName = []
 
@@ -1596,13 +1607,13 @@ module.exports = class MenteesHelper {
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
 				status: 'ACTIVE',
 				organization_id: {
-					[Op.in]: [orgId, defaultOrgId],
+					[Op.in]: [requestedUserExtension.organization_id, defaultOrgId],
 				},
 				model_names: { [Op.contains]: [menteeExtensionsModelName] },
 			})
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, requestedUserExtension.organization_id)
 			const processDbResponse = utils.processDbResponse(mentorExtension, validationData)
 
 			const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
@@ -1612,11 +1623,11 @@ module.exports = class MenteesHelper {
 			const connection = await connectionQueries.getConnection(userId, id)
 
 			const orgDetails = await organisationExtensionQueries.findOne(
-				{ organization_id: orgId },
+				{ organization_id: requestedUserExtension.organization_id },
 				{ attributes: ['name'] }
 			)
 			processDbResponse['organization'] = {
-				id: orgId,
+				id: requestedUserExtension.organization_id,
 				name: orgDetails.name,
 			}
 
