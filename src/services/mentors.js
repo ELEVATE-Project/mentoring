@@ -139,6 +139,10 @@ module.exports = class MentorsHelper {
 				})
 			}
 
+			if (menteeUserId && id != menteeUserId) {
+				upcomingSessions.data = await this.menteeSessionDetails(upcomingSessions.data, menteeUserId, tenantCode)
+			}
+
 			// Process entity types to add value labels.
 			const uniqueOrgIds =
 				upcomingSessions && upcomingSessions.data && Array.isArray(upcomingSessions.data)
@@ -154,9 +158,6 @@ module.exports = class MentorsHelper {
 			)
 
 			upcomingSessions.data = await this.sessionMentorDetails(upcomingSessions.data, tenantCode)
-			if (menteeUserId && id != menteeUserId) {
-				upcomingSessions.data = await this.menteeSessionDetails(upcomingSessions.data, menteeUserId, tenantCode)
-			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -359,10 +360,18 @@ module.exports = class MentorsHelper {
 					sessions.map(async (session) => {
 						const attendee = attendees.find((attendee) => attendee.session_id === session.id)
 						session.is_enrolled = !!attendee
+						session.enrolment_type = attendee?.type
 					})
 				)
 
-				return sessions
+				const filteredSessions = sessions.filter((session) => {
+					return (
+						session.type === common.SESSION_TYPE.PUBLIC ||
+						(session.type === common.SESSION_TYPE.PRIVATE && session.is_enrolled)
+					)
+				})
+
+				return filteredSessions
 			} else {
 				return sessions
 			}
@@ -773,6 +782,8 @@ module.exports = class MentorsHelper {
 				}
 			}
 
+			const mentorOrgCode = mentorProfile.data.result.organization_code
+
 			let mentorExtension
 			if (requestedMentorExtension) mentorExtension = requestedMentorExtension
 			else mentorExtension = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
@@ -825,7 +836,7 @@ module.exports = class MentorsHelper {
 				{
 					status: 'ACTIVE',
 					organization_code: {
-						[Op.in]: [orgCode, defaults.orgCode],
+						[Op.in]: [mentorOrgCode, defaults.orgCode],
 					},
 					model_names: { [Op.contains]: [mentorExtensionsModelName] },
 				},
@@ -842,7 +853,7 @@ module.exports = class MentorsHelper {
 			}
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, mentorOrgCode)
 			const processDbResponse = utils.processDbResponse(mentorExtension, validationData)
 			const totalSessionHosted = await sessionQueries.countHostedSessions(id, tenantCode)
 
@@ -870,11 +881,15 @@ module.exports = class MentorsHelper {
 			}
 
 			if (!mentorProfile.organization) {
-				const orgDetails = await organisationExtensionQueries.findOne({ organization_code: orgCode }, null, {
-					attributes: ['name'],
-				})
+				const orgDetails = await organisationExtensionQueries.findOne(
+					{ organization_code: mentorOrgCode },
+					tenantCode,
+					{
+						attributes: ['name'],
+					}
+				)
 				mentorProfile['organization'] = {
-					code: orgCode,
+					code: mentorOrgCode,
 					name: orgDetails.name,
 				}
 			}

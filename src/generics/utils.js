@@ -883,7 +883,7 @@ const generateDateRanges = (startEpoch, endEpoch, interval) => {
 				nextDate.setMonth(currentDate.getMonth() + 1)
 				dateRanges.push({
 					start_date: Math.floor(currentDate.getTime() / 1000),
-					end_date: Math.floor(new Date(nextDate.getFullYear(), nextDate.getMonth(), 0).getTime() / 1000),
+					end_date: Math.floor(Math.min(nextDate.getTime() - 1, endDate.getTime()) / 1000),
 				})
 				break
 			default:

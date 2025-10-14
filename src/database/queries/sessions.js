@@ -814,7 +814,8 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			mentor_id,
 			meeting_info,
 			visibility,
-			mentor_organization_id
+			mentor_organization_id,
+			type
 		FROM
 				${utils.getTenantViewName(tenantCode, Session.tableName)}
 		WHERE
