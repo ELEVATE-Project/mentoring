@@ -197,7 +197,14 @@ module.exports = class Reports {
 				})
 			}
 
-			const data = await reportService.fetchData(req.body, req.pageNo, req.pageSize)
+			const pageNo = Number.isInteger(parseInt(req.query?.pageNo, 10))
+				? parseInt(req.query.pageNo, 10)
+				: common.pagination.DEFAULT_PAGE_NO
+			const pageSizeRaw = parseInt(req.query?.pageSize, 10)
+			const pageSize = Number.isInteger(pageSizeRaw)
+				? Math.min(pageSizeRaw, 1000)
+				: common.pagination.DEFAULT_PAGE_SIZE
+			const data = await reportService.fetchData(req.body, pageNo, pageSize)
 			return data
 		} catch (error) {
 			// Optionally, log the error here

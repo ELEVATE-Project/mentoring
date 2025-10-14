@@ -670,7 +670,7 @@ module.exports = class ReportsHelper {
 		const lowerQuery = query.toLowerCase()
 
 		// Quick reject for tokens that must not appear (preserve current blacklist semantics)
-		const immediateForbidden = ['--', ';', '/*', '*/', '#', '\\', "'", '"']
+		const immediateForbidden = ['--', ';', '/*', '*/', '#', '\\']
 		if (immediateForbidden.some((tok) => lowerQuery.includes(tok))) return false
 
 		// Normalize: strip comments and literals, collapse whitespace

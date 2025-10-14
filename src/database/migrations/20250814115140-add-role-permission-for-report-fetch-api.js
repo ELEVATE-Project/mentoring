@@ -13,7 +13,7 @@ const getPermissionId = async (module, request_type, api_path) => {
 		})
 
 		if (!permission) {
-			throw 'no permission found'
+			throw new Error('Permission not found for module, request_type, and api_path')
 		}
 		return permission.id
 	} catch (error) {
