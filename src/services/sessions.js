@@ -49,6 +49,7 @@ const mentorQueries = require('@database/queries/mentorExtension')
 const emailEncryption = require('@utils/emailEncryption')
 const resourceQueries = require('@database/queries/resources')
 const feedbackService = require('@services/feedback')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class SessionsHelper {
 	/**
@@ -527,6 +528,14 @@ module.exports = class SessionsHelper {
 					console.log('📧 EMAIL DEBUG: Kafka push result:', kafkaResult)
 				}
 			}
+
+			// Invalidate session-related caches after successful creation
+			await this._invalidateSessionCaches({
+				tenantCode,
+				orgCode,
+				mentorId: processDbResponse.mentor_id || loggedInUserId,
+				menteeId: menteeIdsToEnroll.length > 0 ? menteeIdsToEnroll[0] : null,
+			})
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -1307,6 +1316,14 @@ module.exports = class SessionsHelper {
 				}
 			}
 
+			// Invalidate session-related caches after successful update
+			await this._invalidateSessionCaches({
+				tenantCode,
+				orgCode,
+				sessionId,
+				mentorId: sessionDetail.mentor_id,
+			})
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: message,
@@ -1335,11 +1352,27 @@ module.exports = class SessionsHelper {
 				filter.share_link = id
 			}
 
-			const sessionDetails = await sessionQueries.findOne(filter, tenantCode, {
+			let sessionDetails
+			const cacheId = filter.id ? filter.id.toString() : filter.share_link
+			const options = {
 				attributes: {
 					exclude: ['share_link', 'mentee_password', 'mentor_password'],
 				},
-			})
+			}
+			try {
+				sessionDetails = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: `details:${cacheId}`,
+					fetchFn: async () => {
+						return await sessionQueries.findOne(filter, tenantCode, options)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session details, falling back to database:', cacheError.message)
+				sessionDetails = await sessionQueries.findOne(filter, tenantCode, options)
+			}
 			if (!sessionDetails) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
@@ -2410,21 +2443,60 @@ module.exports = class SessionsHelper {
 					tenantCode = sessionData.tenant_code
 
 					// Now get the full session details with proper tenant context
-					sessionDetails = await sessionQueries.findOne(
-						{
-							id: sessionId,
-						},
-						tenantCode
-					)
+					try {
+						sessionDetails = await cacheHelper.getOrSet({
+							tenantCode,
+							orgId: 'unknown',
+							ns: common.CACHE_CONFIG.namespaces.sessions.name,
+							id: `session:${sessionId}:details`,
+							fetchFn: async () => {
+								return await sessionQueries.findOne(
+									{
+										id: sessionId,
+									},
+									tenantCode
+								)
+							},
+						})
+					} catch (cacheError) {
+						console.warn(
+							'Cache system failed for session details, falling back to database:',
+							cacheError.message
+						)
+						sessionDetails = await sessionQueries.findOne(
+							{
+								id: sessionId,
+							},
+							tenantCode
+						)
+					}
 				}
 			}
 
-			sessionDetails = await sessionQueries.findOne(
-				{
-					id: sessionId,
-				},
-				tenantCode
-			)
+			try {
+				sessionDetails = await cacheHelper.getOrSet({
+					tenantCode,
+					orgId: 'unknown',
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: `session:${sessionId}:details`,
+					fetchFn: async () => {
+						return await sessionQueries.findOne(
+							{
+								id: sessionId,
+							},
+							tenantCode
+						)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session details, falling back to database:', cacheError.message)
+				sessionDetails = await sessionQueries.findOne(
+					{
+						id: sessionId,
+					},
+					tenantCode
+				)
+			}
 
 			if (!sessionDetails) {
 				return responses.failureResponse({
@@ -3725,7 +3797,24 @@ module.exports = class SessionsHelper {
 
 		return Promise.allSettled(
 			mentorIds.map(async (mentorId) => {
-				const mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
+				let mentor
+				try {
+					mentor = await cacheHelper.getOrSet({
+						tenantCode,
+						orgId: 'unknown',
+						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+						id: `mentor:${mentorId}:org_code`,
+						fetchFn: async () => {
+							return await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
+						},
+					})
+				} catch (cacheError) {
+					console.warn(
+						'Cache system failed for mentor extension, falling back to database:',
+						cacheError.message
+					)
+					mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
+				}
 				if (!mentor) throw new MentorError('Invalid Mentor Id', { mentorId })
 
 				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentorId, tenantCode)
@@ -3852,6 +3941,50 @@ module.exports = class SessionsHelper {
 			throw error
 		}
 	}
+
+	/**
+	 * Invalidate session-related caches after CUD operations
+	 * @param {Object} params - Cache invalidation parameters
+	 * @param {String} params.tenantCode - Tenant code
+	 * @param {String} params.orgCode - Organization code
+	 * @param {String} params.sessionId - Session ID (optional)
+	 * @param {String} params.mentorId - Mentor ID (optional)
+	 * @param {String} params.menteeId - Mentee ID (optional)
+	 */
+	static async _invalidateSessionCaches({ tenantCode, orgCode, sessionId, mentorId, menteeId }) {
+		try {
+			// Invalidate session namespaces
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces.sessions.name,
+			})
+
+			// Invalidate mentor and mentee profile caches if provided
+			if (mentorId) {
+				await cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+				})
+			}
+
+			if (menteeId) {
+				await cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.mentee_profile.name,
+				})
+			}
+		} catch (err) {
+			console.error('Session cache invalidation failed', err)
+			// Don't throw - cache failures should not block main operations
+		}
+	}
+
+	/**
+	 * Cache session details with tenant/org isolation and cache failure handling
+	 */
 }
 
 class MentorError extends Error {

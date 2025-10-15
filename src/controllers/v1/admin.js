@@ -11,6 +11,7 @@ const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
 const userExtensionQueries = require('@database/queries/userExtension')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class admin {
 	/**
@@ -117,4 +118,123 @@ module.exports = class admin {
 	// 		return error
 	// 	}
 	// }
+
+	/**
+	 * Clear all cache for a tenant (admin only)
+	 * @method
+	 * @name clearAllCache
+	 * @param {Object} req - Request object
+	 * @returns {JSON} - Success/failure response
+	 */
+	async clearAllCache(req) {
+		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const orgCode = req.decodedToken.organization_code
+
+			// Clear all namespaces for the tenant
+			const namespaces = Object.keys(common.CACHE_CONFIG.namespaces)
+			const clearPromises = namespaces.map((ns) =>
+				cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces[ns].name,
+				})
+			)
+
+			await Promise.all(clearPromises)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'ALL_CACHE_CLEARED_SUCCESSFULLY',
+			})
+		} catch (error) {
+			console.error('Error clearing all cache:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_CLEAR_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
+		}
+	}
+
+	/**
+	 * Clear specific namespace cache (admin only)
+	 * @method
+	 * @name clearNamespaceCache
+	 * @param {Object} req - Request object
+	 * @param {String} req.params.namespace - Namespace to clear
+	 * @returns {JSON} - Success/failure response
+	 */
+	async clearNamespaceCache(req) {
+		try {
+			const namespace = req.params.namespace
+			const tenantCode = req.decodedToken.tenant_code
+			const orgCode = req.decodedToken.organization_code
+
+			// Validate namespace exists
+			if (!common.CACHE_CONFIG.namespaces[namespace]) {
+				return responses.failureResponse({
+					message: 'INVALID_NAMESPACE',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			// Clear specific namespace
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces[namespace].name,
+			})
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'NAMESPACE_CACHE_CLEARED_SUCCESSFULLY',
+				result: { namespace },
+			})
+		} catch (error) {
+			console.error('Error clearing namespace cache:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_CLEAR_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
+		}
+	}
+
+	/**
+	 * Get cache configuration and stats (admin only)
+	 * @method
+	 * @name getCacheStats
+	 * @param {Object} req - Request object
+	 * @returns {JSON} - Cache configuration and stats
+	 */
+	async getCacheStats(req) {
+		try {
+			const cacheConfig = cacheHelper._internal.CACHE_CONFIG
+			const stats = {
+				enabled: cacheConfig.enableCache,
+				shards: cacheConfig.shards,
+				namespaces: Object.keys(cacheConfig.namespaces).map((ns) => ({
+					name: ns,
+					ttl: cacheConfig.namespaces[ns].defaultTtl,
+					enabled: cacheConfig.namespaces[ns].enabled,
+					useInternal: cacheConfig.namespaces[ns].useInternal,
+				})),
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CACHE_STATS_FETCHED_SUCCESSFULLY',
+				result: stats,
+			})
+		} catch (error) {
+			console.error('Error fetching cache stats:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_STATS_FETCH_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
+		}
+	}
 }

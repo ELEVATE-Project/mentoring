@@ -28,6 +28,7 @@ const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/def
 
 const defaultSearchConfig = require('@configs/search.json')
 const emailEncryption = require('@utils/emailEncryption')
+const cacheHelper = require('@generics/cacheHelper')
 const communicationHelper = require('@helpers/communications')
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const { checkIfUserIsAccessible } = require('@helpers/saasUserAccessibility')
@@ -697,12 +698,32 @@ module.exports = class MenteesHelper {
 			)
 
 			const attributes = { exclude: ['mentee_password', 'mentor_password'] }
-			let sessionDetails = await sessionQueries.findAndCountAll(
-				{ id: usersUpcomingSessionIds },
-				tenantCode,
-				{ order: [['start_date', 'ASC']] },
-				{ attributes: attributes }
-			)
+			let sessionDetails
+			const cacheId = `sessions:${JSON.stringify(usersUpcomingSessionIds)}`
+			try {
+				sessionDetails = await cacheHelper.getOrSet({
+					tenantCode,
+					orgId: 'unknown',
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: cacheId,
+					fetchFn: async () => {
+						return await sessionQueries.findAndCountAll(
+							{ id: usersUpcomingSessionIds },
+							tenantCode,
+							{ order: [['start_date', 'ASC']] },
+							{ attributes: attributes }
+						)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session details, falling back to database:', cacheError.message)
+				sessionDetails = await sessionQueries.findAndCountAll(
+					{ id: usersUpcomingSessionIds },
+					tenantCode,
+					{ order: [['start_date', 'ASC']] },
+					{ attributes: attributes }
+				)
+			}
 			if (
 				sessionDetails &&
 				sessionDetails.rows &&
@@ -1558,9 +1579,43 @@ module.exports = class MenteesHelper {
 			// 	? ['external_mentee_visibility', 'organization_id']
 			// 	: ['external_mentor_visibility', 'organization_id']
 
-			const userPolicyDetails = isAMentor
-				? await mentorQueries.getMentorExtension(userId, ['organization_id'], false, tenantCode)
-				: await menteeQueries.getMenteeExtension(userId, ['organization_id'], false, tenantCode)
+			let userPolicyDetails
+			if (isAMentor) {
+				try {
+					userPolicyDetails = await cacheHelper.getOrSet({
+						tenantCode,
+						orgId: 'unknown',
+						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+						id: `mentor:${userId}:org_id`,
+						fetchFn: async () => {
+							return await mentorQueries.getMentorExtension(
+								userId,
+								['organization_id'],
+								false,
+								tenantCode
+							)
+						},
+					})
+				} catch (cacheError) {
+					console.warn(
+						'Cache system failed for mentor policy details, falling back to database:',
+						cacheError.message
+					)
+					userPolicyDetails = await mentorQueries.getMentorExtension(
+						userId,
+						['organization_id'],
+						false,
+						tenantCode
+					)
+				}
+			} else {
+				userPolicyDetails = await menteeQueries.getMenteeExtension(
+					userId,
+					['organization_id'],
+					false,
+					tenantCode
+				)
+			}
 
 			const getOrgPolicy = await organisationExtensionQueries.findOne(
 				{
@@ -1638,73 +1693,97 @@ module.exports = class MenteesHelper {
 	static async checkIfMenteeIsAccessible(userData, userId, isAMentor, tenantCode) {
 		try {
 			// user can be mentor or mentee, based on isAMentor key get policy details
-			const userPolicyDetails = isAMentor
-				? await mentorQueries.getMentorExtension(
+			let userPolicyDetails
+			if (isAMentor) {
+				try {
+					userPolicyDetails = await cacheHelper.getOrSet({
+						tenantCode,
+						orgId: 'unknown',
+						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+						id: `mentor:${userId}:ext_mentee_vis_org`,
+						fetchFn: async () => {
+							return await mentorQueries.getMentorExtension(
+								userId,
+								['external_mentee_visibility', 'organization_id'],
+								false,
+								tenantCode
+							)
+						},
+					})
+				} catch (cacheError) {
+					console.warn(
+						'Cache system failed for mentor policy details, falling back to database:',
+						cacheError.message
+					)
+					userPolicyDetails = await mentorQueries.getMentorExtension(
 						userId,
 						['external_mentee_visibility', 'organization_id'],
 						false,
 						tenantCode
-				  )
-				: await menteeQueries.getMenteeExtension(
-						userId,
-						['external_mentee_visibility', 'organization_id'],
-						false,
-						tenantCode
-				  )
-
-			// Throw error if mentor/mentee extension not found
-			if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
-				return responses.failureResponse({
-					statusCode: httpStatusCode.not_found,
-					message: isAMentor ? 'MENTORS_NOT_FOUND' : 'MENTEE_EXTENSION_NOT_FOUND',
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
-
-			// check the accessibility conditions
-			const accessibleUsers = userData.map((mentee) => {
-				let isAccessible = false
-
-				if (userPolicyDetails.external_mentee_visibility && userPolicyDetails.organization_id) {
-					const { external_mentee_visibility, organization_id } = userPolicyDetails
-
-					switch (external_mentee_visibility) {
-						/**
-						 * if user external_mentee_visibility is current. He can only see his/her organizations mentee
-						 * so we will check mentee's organization_id and user organization_id are matching
-						 */
-						case common.CURRENT:
-							isAccessible = mentee.organization_id === organization_id
-							break
-						/**
-						 * If user external_mentee_visibility is associated
-						 * <<point**>> first we need to check if mentee's visible_to_organizations contain the user organization_id and verify mentee's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
-						 */
-						case common.ASSOCIATED:
-							isAccessible =
-								(mentee.visible_to_organizations.includes(organization_id) &&
-									mentee.mentee_visibility != common.CURRENT) ||
-								mentee.organization_id === organization_id
-							break
-						/**
-						 * We need to check if mentee's visible_to_organizations contain the user organization_id and verify mentee's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
-						 * OR if mentee visibility is ALL that mentee is also accessible
-						 */
-						case common.ALL:
-							isAccessible =
-								(mentee.visible_to_organizations.includes(organization_id) &&
-									mentee.mentee_visibility != common.CURRENT) ||
-								mentee.mentee_visibility === common.ALL ||
-								mentee.organization_id === organization_id
-							break
-						default:
-							break
-					}
+					)
 				}
-				return { mentee, isAccessible }
-			})
-			const isAccessible = accessibleUsers.some((user) => user.isAccessible)
-			return isAccessible
+			} else {
+				userPolicyDetails = await menteeQueries.getMenteeExtension(
+					userId,
+					['external_mentee_visibility', 'organization_id'],
+					false,
+					tenantCode
+				)
+
+				// Throw error if mentor/mentee extension not found
+				if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
+					return responses.failureResponse({
+						statusCode: httpStatusCode.not_found,
+						message: isAMentor ? 'MENTORS_NOT_FOUND' : 'MENTEE_EXTENSION_NOT_FOUND',
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+
+				// check the accessibility conditions
+				const accessibleUsers = userData.map((mentee) => {
+					let isAccessible = false
+
+					if (userPolicyDetails.external_mentee_visibility && userPolicyDetails.organization_id) {
+						const { external_mentee_visibility, organization_id } = userPolicyDetails
+
+						switch (external_mentee_visibility) {
+							/**
+							 * if user external_mentee_visibility is current. He can only see his/her organizations mentee
+							 * so we will check mentee's organization_id and user organization_id are matching
+							 */
+							case common.CURRENT:
+								isAccessible = mentee.organization_id === organization_id
+								break
+							/**
+							 * If user external_mentee_visibility is associated
+							 * <<point**>> first we need to check if mentee's visible_to_organizations contain the user organization_id and verify mentee's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
+							 */
+							case common.ASSOCIATED:
+								isAccessible =
+									(mentee.visible_to_organizations.includes(organization_id) &&
+										mentee.mentee_visibility != common.CURRENT) ||
+									mentee.organization_id === organization_id
+								break
+							/**
+							 * We need to check if mentee's visible_to_organizations contain the user organization_id and verify mentee's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
+							 * OR if mentee visibility is ALL that mentee is also accessible
+							 */
+							case common.ALL:
+								isAccessible =
+									(mentee.visible_to_organizations.includes(organization_id) &&
+										mentee.mentee_visibility != common.CURRENT) ||
+									mentee.mentee_visibility === common.ALL ||
+									mentee.organization_id === organization_id
+								break
+							default:
+								break
+						}
+					}
+					return { mentee, isAccessible }
+				})
+				const isAccessible = accessibleUsers.some((user) => user.isAccessible)
+				return isAccessible
+			}
 		} catch (error) {
 			return error
 		}
@@ -1885,8 +1964,27 @@ module.exports = class MenteesHelper {
 			}
 
 			let mentorExtension
-			if (requestedUserExtension) mentorExtension = requestedUserExtension
-			else mentorExtension = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+			if (requestedUserExtension) {
+				mentorExtension = requestedUserExtension
+			} else {
+				try {
+					mentorExtension = await cacheHelper.getOrSet({
+						tenantCode,
+						orgId: 'unknown',
+						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+						id: `mentor:${id}:all`,
+						fetchFn: async () => {
+							return await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+						},
+					})
+				} catch (cacheError) {
+					console.warn(
+						'Cache system failed for mentor extension, falling back to database:',
+						cacheError.message
+					)
+					mentorExtension = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+				}
+			}
 
 			mentorExtension = utils.deleteProperties(mentorExtension, [
 				'user_id',

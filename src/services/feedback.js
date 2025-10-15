@@ -10,6 +10,7 @@ const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class MenteesHelper {
 	/**
@@ -134,9 +135,25 @@ module.exports = class MenteesHelper {
 
 	static async forms(sessionId, roles, tenantCode) {
 		try {
-			let sessioninfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-				attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
-			})
+			let sessioninfo
+			try {
+				sessioninfo = await cacheHelper.getOrSet({
+					tenantCode,
+					orgId: 'unknown',
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: `session:${sessionId}:feedback_sets`,
+					fetchFn: async () => {
+						return await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+							attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
+						})
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session info, falling back to database:', cacheError.message)
+				sessioninfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+					attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
+				})
+			}
 
 			if (!sessioninfo) {
 				return responses.failureResponse({
@@ -187,9 +204,25 @@ module.exports = class MenteesHelper {
 		}
 		try {
 			//get session details
-			let sessionInfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-				attributes: ['is_feedback_skipped', 'mentor_id'],
-			})
+			let sessionInfo
+			try {
+				sessionInfo = await cacheHelper.getOrSet({
+					tenantCode,
+					orgId: 'unknown',
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: `session:${sessionId}:feedback_skip_mentor`,
+					fetchFn: async () => {
+						return await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+							attributes: ['is_feedback_skipped', 'mentor_id'],
+						})
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session info, falling back to database:', cacheError.message)
+				sessionInfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+					attributes: ['is_feedback_skipped', 'mentor_id'],
+				})
+			}
 
 			if (!sessionInfo) {
 				return responses.failureResponse({

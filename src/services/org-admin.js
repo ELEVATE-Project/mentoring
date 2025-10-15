@@ -15,6 +15,7 @@ const questionSetQueries = require('../database/queries/question-set')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class OrgAdminService {
 	/**
@@ -55,7 +56,21 @@ module.exports = class OrgAdminService {
 		try {
 			// Check current role based on that swap data
 			// If current role is mentor validate data from mentor_extenion table
-			let mentorDetails = await mentorQueries.getMentorExtension(bodyData.user_id, [], true, tenantCode)
+			let mentorDetails
+			try {
+				mentorDetails = await cacheHelper.getOrSet({
+					tenantCode,
+					orgId: updateData.organization_id || 'unknown',
+					ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+					id: `mentor:${bodyData.user_id}:all`,
+					fetchFn: async () => {
+						return await mentorQueries.getMentorExtension(bodyData.user_id, [], true, tenantCode)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for mentor details, falling back to database:', cacheError.message)
+				mentorDetails = await mentorQueries.getMentorExtension(bodyData.user_id, [], true, tenantCode)
+			}
 			// If such mentor return error
 			if (!mentorDetails) {
 				return responses.failureResponse({
@@ -524,7 +539,24 @@ module.exports = class OrgAdminService {
 				})
 			for (let key in userIds) {
 				const userId = userIds[key]
-				const mentorDetails = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+				let mentorDetails
+				try {
+					mentorDetails = await cacheHelper.getOrSet({
+						tenantCode,
+						orgId: defaults.orgCode,
+						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+						id: `mentor:${userId}:all`,
+						fetchFn: async () => {
+							return await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+						},
+					})
+				} catch (cacheError) {
+					console.warn(
+						'Cache system failed for mentor details, falling back to database:',
+						cacheError.message
+					)
+					mentorDetails = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+				}
 				if (mentorDetails?.user_id) {
 					// Deactivate upcoming sessions of user as mentor
 					const removedSessionsDetail = await sessionQueries.deactivateAndReturnMentorSessions(

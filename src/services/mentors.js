@@ -27,6 +27,7 @@ const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/def
 const connectionQueries = require('@database/queries/connection')
 const communicationHelper = require('@helpers/communications')
 const searchConfig = require('@root/config.json')
+const cacheHelper = require('@generics/cacheHelper')
 module.exports = class MentorsHelper {
 	/**
 	 * upcomingSessions.
@@ -462,6 +463,13 @@ module.exports = class MentorsHelper {
 
 			const processDbResponse = utils.processDbResponse(response.toJSON(), validationData)
 
+			// Evict mentor-related caches after successful creation
+			await this._invalidateMentorCaches({
+				tenantCode,
+				orgCode,
+				mentorId: userId,
+			})
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTOR_EXTENSION_CREATED',
@@ -624,6 +632,14 @@ module.exports = class MentorsHelper {
 				}
 
 				const processDbResponse = utils.processDbResponse(fallbackUpdatedUser, validationData)
+
+				// Evict mentor-related caches after successful update
+				await this._invalidateMentorCaches({
+					tenantCode,
+					orgCode,
+					mentorId: userId,
+				})
+
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'MENTOR_EXTENSION_UPDATED',
@@ -634,6 +650,14 @@ module.exports = class MentorsHelper {
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
 			const processDbResponse = utils.processDbResponse(updatedMentor[0], validationData)
+
+			// Evict mentor-related caches after successful update
+			await this._invalidateMentorCaches({
+				tenantCode,
+				orgCode,
+				mentorId: userId,
+			})
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTOR_EXTENSION_UPDATED',
@@ -653,6 +677,8 @@ module.exports = class MentorsHelper {
 	 */
 	static async getMentorExtension(userId, tenantCode) {
 		try {
+			// Note: orgCode not available in this method signature, so we can't use org-scoped cache
+			// This would need to be refactored to include orgCode parameter for proper caching
 			const mentor = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
 			if (!mentor) {
 				return responses.failureResponse({
@@ -1562,4 +1588,32 @@ module.exports = class MentorsHelper {
 			// Don't throw error to avoid breaking the main flow
 		}
 	}
+
+	/**
+	 * Evict mentor-related caches after CUD operations
+	 */
+	static async _invalidateMentorCaches({ tenantCode, orgCode, mentorId }) {
+		try {
+			// Evict mentor profile caches
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+			})
+
+			// Evict sessions caches as mentor data affects sessions
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces.sessions.name,
+			})
+		} catch (err) {
+			console.error('Mentor cache invalidation failed', err)
+			// Don't throw - cache failures should not block main operations
+		}
+	}
+
+	/**
+	 * Cache mentor extension data with tenant/org isolation and cache failure handling
+	 */
 }

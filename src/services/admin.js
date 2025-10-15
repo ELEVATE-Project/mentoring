@@ -21,6 +21,7 @@ const { sequelize, Session, SessionAttendee, Connection, RequestSession } = requ
 const { literal } = require('sequelize')
 const sessionRequestMappingQueries = require('@database/queries/requestSessionMapping')
 // sessionOwnership removed - functionality replaced by direct Session queries
+const cacheHelper = require('@generics/cacheHelper')
 
 // Generic notification helper class
 class NotificationHelper {
@@ -38,7 +39,28 @@ class NotificationHelper {
 				return true
 			}
 
-			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCode, tenantCodes)
+			let template
+			try {
+				template = await cacheHelper.getOrSet({
+					tenantCode: tenantCodes[0],
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
+					id: `template:${templateCode}:${orgCode}`,
+					fetchFn: async () => {
+						return await notificationTemplateQueries.findOneEmailTemplate(
+							templateCode,
+							orgCode,
+							tenantCodes
+						)
+					},
+				})
+			} catch (cacheError) {
+				console.warn(
+					'Cache system failed for notification template, falling back to database:',
+					cacheError.message
+				)
+				template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCode, tenantCodes)
+			}
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -81,7 +103,28 @@ class NotificationHelper {
 		try {
 			if (!sessions?.length || !templateCode) return true
 
-			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCodes, tenantCodes)
+			let template
+			try {
+				template = await cacheHelper.getOrSet({
+					tenantCode: tenantCodes[0],
+					orgCode: orgCodes[0],
+					ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
+					id: `template:${templateCode}:${orgCodes[0]}`,
+					fetchFn: async () => {
+						return await notificationTemplateQueries.findOneEmailTemplate(
+							templateCode,
+							orgCodes,
+							tenantCodes
+						)
+					},
+				})
+			} catch (cacheError) {
+				console.warn(
+					'Cache system failed for notification template, falling back to database:',
+					cacheError.message
+				)
+				template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCodes, tenantCodes)
+			}
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -1056,12 +1099,26 @@ module.exports = class AdminService {
 	static async notifyMentorAboutPrivateSessionCancellation(mentorId, sessionDetails, orgCodes, tenantCodes) {
 		try {
 			// Get mentor details
-			const mentorDetails = await mentorQueries.getMentorExtension(
-				mentorId,
-				['name', 'email'],
-				true,
-				tenantCodes[0] // Use primary tenant for database query
-			)
+			let mentorDetails
+			try {
+				mentorDetails = await cacheHelper.getOrSet({
+					tenantCode: tenantCodes[0],
+					orgCode: orgCodes[0],
+					ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+					id: `mentor:${mentorId}:name_email`,
+					fetchFn: async () => {
+						return await mentorQueries.getMentorExtension(mentorId, ['name', 'email'], true, tenantCodes[0])
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for mentor details, falling back to database:', cacheError.message)
+				mentorDetails = await mentorQueries.getMentorExtension(
+					mentorId,
+					['name', 'email'],
+					true,
+					tenantCodes[0]
+				)
+			}
 			if (!mentorDetails) {
 				console.log('Mentor details not found for notification')
 				return false

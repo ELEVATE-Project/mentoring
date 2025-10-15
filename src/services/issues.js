@@ -7,6 +7,7 @@ const notificationTemplateQueries = require('@database/queries/notificationTempl
 const issueQueries = require('../database/queries/issue')
 const userRequests = require('@requests/user')
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
 
 const menteeExtensionQueries = require('@database/queries/userExtension')
 
@@ -38,11 +39,32 @@ module.exports = class issuesHelper {
 			bodyData.organization_code = decodedToken.organization_code
 
 			if (process.env.ENABLE_EMAIL_FOR_REPORT_ISSUE === 'true') {
-				const templateData = await notificationTemplateQueries.findOneEmailTemplate(
-					process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE,
-					decodedToken.organization_code,
-					tenantCode
-				)
+				let templateData
+				try {
+					templateData = await cacheHelper.getOrSet({
+						tenantCode,
+						orgCode: decodedToken.organization_code,
+						ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
+						id: `template:${process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE}:${decodedToken.organization_code}`,
+						fetchFn: async () => {
+							return await notificationTemplateQueries.findOneEmailTemplate(
+								process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE,
+								decodedToken.organization_code,
+								tenantCode
+							)
+						},
+					})
+				} catch (cacheError) {
+					console.warn(
+						'Cache system failed for notification template, falling back to database:',
+						cacheError.message
+					)
+					templateData = await notificationTemplateQueries.findOneEmailTemplate(
+						process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE,
+						decodedToken.organization_code,
+						tenantCode
+					)
+				}
 
 				let metaItems = ''
 				if (bodyData.meta_data) {

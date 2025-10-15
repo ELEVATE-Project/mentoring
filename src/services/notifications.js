@@ -7,6 +7,7 @@ const notificationQueries = require('@database/queries/notificationTemplate')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const userRequests = require('@requests/user')
 const menteeQueries = require('@database/queries/userExtension')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class Notifications {
 	/**
@@ -28,13 +29,33 @@ module.exports = class Notifications {
 			const sessionId = Number(lastPart)
 
 			// Find session data
-			let sessions = await sessionQueries.findOne(
-				{
-					id: sessionId,
-					status: common.PUBLISHED_STATUS,
-				},
-				tenantCode
-			)
+			let sessions
+			try {
+				sessions = await cacheHelper.getOrSet({
+					tenantCode,
+					orgId: 'unknown',
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: `session:${sessionId}:published`,
+					fetchFn: async () => {
+						return await sessionQueries.findOne(
+							{
+								id: sessionId,
+								status: common.PUBLISHED_STATUS,
+							},
+							tenantCode
+						)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session data, falling back to database:', cacheError.message)
+				sessions = await sessionQueries.findOne(
+					{
+						id: sessionId,
+						status: common.PUBLISHED_STATUS,
+					},
+					tenantCode
+				)
+			}
 
 			// Get email template based on incoming request.
 			let emailTemplate = await notificationQueries.findOneEmailTemplate(

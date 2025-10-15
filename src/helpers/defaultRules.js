@@ -3,6 +3,7 @@ const defaultRuleQueries = require('@database/queries/defaultRule')
 const mentorQueries = require('@database/queries/mentorExtension')
 const menteeQueries = require('@database/queries/userExtension')
 const common = require('@constants/common')
+const cacheHelper = require('@generics/cacheHelper')
 
 const { isAMentor } = require('@generics/utils')
 
@@ -86,7 +87,20 @@ async function getUserDetailsFromView(userId, isAMentor, tenantCode) {
 async function getUserDetails(userId, isAMentor, tenantCode) {
 	try {
 		if (isAMentor) {
-			return await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+			try {
+				return await cacheHelper.getOrSet({
+					tenantCode,
+					orgId: 'unknown',
+					ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+					id: `mentor:${userId}:all`,
+					fetchFn: async () => {
+						return await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for mentor extension, falling back to database:', cacheError.message)
+				return await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+			}
 		} else {
 			return await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
 		}

@@ -12,6 +12,7 @@ const menteesService = require('@services/mentees')
 const orgAdminService = require('@services/org-admin')
 
 const userServiceHelper = require('@helpers/users')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class UserHelper {
 	/**

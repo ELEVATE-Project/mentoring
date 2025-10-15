@@ -236,4 +236,74 @@ module.exports = {
 	SESSION_PRE_RESOURCE_TYPE: 'pre',
 	USER_NOT_FOUND: 'USER NOT FOUND',
 	UNDER_DELETION_STATUS: 'UNDER_DELETION',
+	CACHE_CONFIG: {
+		enableCache: true,
+		shards: 32,
+		common: {
+			list: 'list',
+		},
+		namespaces: {
+			forms: {
+				name: 'forms',
+				enabled: true,
+				defaultTtl: 0, // No expiry
+				useInternal: false,
+			},
+			entities: {
+				name: 'entities',
+				enabled: true,
+				defaultTtl: 1800, // 30 mins
+				useInternal: false,
+			},
+			entity_types: {
+				name: 'entity_types',
+				enabled: true,
+				defaultTtl: 0, // No expiry
+				useInternal: false,
+			},
+			organizations: {
+				name: 'organizations',
+				enabled: true,
+				defaultTtl: 86400, // 24 hours
+				useInternal: false,
+			},
+			roles_permissions: {
+				name: 'roles_permissions',
+				enabled: true,
+				defaultTtl: 0, // No expiry
+				useInternal: false,
+			},
+			permissions: {
+				name: 'permissions',
+				enabled: true,
+				defaultTtl: 0, // No expiry
+				useInternal: false,
+			},
+			notification_templates: {
+				name: 'notification_templates',
+				enabled: true,
+				defaultTtl: 0, // No expiry
+				useInternal: false,
+			},
+			mentor_profile: {
+				name: 'mentor_profile',
+				enabled: true,
+				defaultTtl: 1800, // 30 mins
+				useInternal: false,
+			},
+			mentee_profile: {
+				name: 'mentee_profile',
+				enabled: true,
+				defaultTtl: 1800, // 30 mins
+				useInternal: false,
+			},
+			sessions: {
+				name: 'upcomming_session', //rename as upcomming_session
+				enabled: true,
+				defaultTtl: 3600, // 1 hour
+				useInternal: false,
+				// add one variable to calculate size or data size -> need to discuss
+			},
+		},
+	},
 }

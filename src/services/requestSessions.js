@@ -13,6 +13,7 @@ const sessionService = require('@services/sessions')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const utils = require('@generics/utils')
 const kafkaCommunication = require('@generics/kafka-communication')
+const cacheHelper = require('@generics/cacheHelper')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const entityTypeQueries = require('@database/queries/entityType')
 const { Op } = require('sequelize')
@@ -42,12 +43,21 @@ module.exports = class requestSessionsHelper {
 
 	static async create(bodyData, userId, organizationCode, organizationId, SkipValidation, tenantCode) {
 		try {
-			const mentorUserExists = await mentorQueries.getMentorExtension(
-				bodyData.requestee_id,
-				[],
-				false,
-				tenantCode
-			)
+			let mentorUserExists
+			try {
+				mentorUserExists = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: organizationCode,
+					ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+					id: `mentor:${bodyData.requestee_id}:all`,
+					fetchFn: async () => {
+						return await mentorQueries.getMentorExtension(bodyData.requestee_id, [], false, tenantCode)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for mentor extension, falling back to database:', cacheError.message)
+				mentorUserExists = await mentorQueries.getMentorExtension(bodyData.requestee_id, [], false, tenantCode)
+			}
 			if (!mentorUserExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,

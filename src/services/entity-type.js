@@ -8,6 +8,7 @@ const { getDefaults } = require('@helpers/getDefaultOrgId')
 const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class EntityHelper {
 	/**
@@ -34,6 +35,10 @@ module.exports = class EntityHelper {
 			}
 
 			const entityType = await entityTypeQueries.createEntityType(bodyData, tenantCode)
+
+			// Invalidate entity-type related caches after successful creation
+			await this._invalidateEntityTypeCaches({ tenantCode, orgCode })
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_TYPE_CREATED_SUCCESSFULLY',
@@ -92,6 +97,9 @@ module.exports = class EntityHelper {
 				})
 			}
 
+			// Invalidate entity-type related caches after successful update
+			await this._invalidateEntityTypeCaches({ tenantCode, orgCode })
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: 'ENTITY_TYPE_UPDATED_SUCCESSFULLY',
@@ -125,11 +133,33 @@ module.exports = class EntityHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			const entities = await entityTypeQueries.findAllEntityTypes(
-				{ [Op.or]: [orgCode, defaults.orgCode] },
-				{ [Op.in]: [tenantCode, defaults.tenantCode] },
-				attributes
-			)
+			let entities
+			try {
+				entities = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.entity_types.name,
+					id: 'system_all',
+					fetchFn: async () => {
+						const defaults = await getDefaults()
+						const attributes = ['value', 'label', 'id']
+						return await entityTypeQueries.findAllEntityTypes(
+							{ [Op.or]: [orgCode, defaults.orgCode] },
+							{ [Op.in]: [tenantCode, defaults.tenantCode] },
+							attributes
+						)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for entity types, falling back to database:', cacheError.message)
+				const defaults = await getDefaults()
+				const attributes = ['value', 'label', 'id']
+				entities = await entityTypeQueries.findAllEntityTypes(
+					{ [Op.or]: [orgCode, defaults.orgCode] },
+					{ [Op.in]: [tenantCode, defaults.tenantCode] },
+					attributes
+				)
+			}
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -171,9 +201,26 @@ module.exports = class EntityHelper {
 				},
 				tenant_code: { [Op.in]: [defaults.tenantCode, tenantCode] },
 			}
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: [defaults.tenantCode, tenantCode],
-			})
+			let entityTypes
+			const cacheId = `user:${JSON.stringify(filter)}`
+			try {
+				entityTypes = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.entity_types.name,
+					id: cacheId,
+					fetchFn: async () => {
+						return await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+							[Op.in]: [defaults.tenantCode, tenantCode],
+						})
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for user entity types, falling back to database:', cacheError.message)
+				entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+					[Op.in]: [defaults.tenantCode, tenantCode],
+				})
+			}
 
 			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 
@@ -338,6 +385,52 @@ module.exports = class EntityHelper {
 			})
 		} catch (error) {
 			throw error
+		}
+	}
+
+	/**
+	 * Invalidate entity-type related caches after CUD operations
+	 * Following the user service pattern for entity type cache invalidation
+	 */
+	static async _invalidateEntityTypeCaches({ tenantCode, orgCode }) {
+		try {
+			// Evict entity_types namespace
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces.entity_types.name,
+			})
+
+			// Evict entities namespace as they're related
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces.entities.name,
+			})
+
+			// Similar to user service: also evict profile-related caches as entity types affect profiles
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+			})
+
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces.mentee_profile.name,
+			})
+
+			// Special handling for default org - invalidate all orgs (similar to user service pattern)
+			const defaults = await getDefaults()
+			if (defaults.orgCode === orgCode) {
+				await cacheHelper.evictTenantByPattern(tenantCode, {
+					patternSuffix: `org:*:${common.CACHE_CONFIG.namespaces.entity_types.name}:*`,
+				})
+			}
+		} catch (err) {
+			console.error('Entity type cache invalidation failed', err)
+			// Don't throw - cache failures should not block main operations
 		}
 	}
 }
