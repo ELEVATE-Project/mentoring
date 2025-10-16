@@ -193,7 +193,8 @@ module.exports = {
                     SELECT
                         session_id,
                         mentee_id,
-                        joined_at
+                        joined_at,
+                        created_at
                     FROM
                         public.session_attendees
                 )
@@ -206,7 +207,8 @@ module.exports = {
                     Session.categories AS "categories",
                     Session.recommended_for AS "recommended_for",
                     CASE WHEN sa.joined_at IS NOT NULL THEN 'Yes' ELSE 'No' END AS "session_attended",
-                    ROUND(EXTRACT(EPOCH FROM (TO_TIMESTAMP(Session.end_date)-TO_TIMESTAMP(Session.start_date)))/60) AS "duration_of_sessions_attended_in_minutes"
+                    ROUND(EXTRACT(EPOCH FROM (TO_TIMESTAMP(Session.end_date)-TO_TIMESTAMP(Session.start_date)))/60) AS "duration_of_sessions_attended_in_minutes",
+                    sa.created_at
                 FROM
                     Session
                 LEFT JOIN
@@ -223,7 +225,7 @@ module.exports = {
                         OR :session_type = 'PRIVATE' AND Session.type = 'PRIVATE'
                     )
                     AND Session.deleted_at IS NULL
-                    DYNAMIC_AND_CLAUSE;`,
+                    DYNAMIC_AND_CLAUSE; order by sa.created_at`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
 				created_at: Sequelize.literal('CURRENT_TIMESTAMP'),

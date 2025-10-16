@@ -4,23 +4,8 @@ var messageReceived = function (message) {
 	return new Promise(async function (resolve, reject) {
 		try {
 			message.userId = message.entityId.toString()
-			message.tenantCode = message.oldValues?.tenant_code
-
-			// Create a mock decodedToken for internal service call
-			const mockDecodedToken = {
-				id: message.userId,
-				tenant_code: message.tenantCode,
-				organization_id: message.organizations?.[0]?.id || null,
-				organization_code: message.organizations?.[0]?.code || null,
-			}
-
-			const response = await userRequest.update(
-				message,
-				mockDecodedToken,
-				message.userId,
-				mockDecodedToken.organization_id,
-				message.tenantCode
-			)
+			message.tenantCode = message?.tenant_code || message.oldValues?.tenant_code
+			const response = await userRequest.update(message)
 			return resolve(response)
 		} catch (error) {
 			return reject(error)

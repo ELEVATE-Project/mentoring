@@ -408,11 +408,21 @@ module.exports = class ReportsHelper {
 						: query.replace('DYNAMIC_AND_CLAUSE', filterCompleteQuery)
 					// Add sorting
 					if (sortColumn && columnMappings[sortColumn]) {
-						query += ` ORDER BY 
-						CASE 
-						  WHEN :sort_column = '${sortColumn}' THEN ${columnMappings[sortColumn]}
-						  ELSE NULL
-						END ${sortType} NULLS LAST`
+						// Validate sortType against whitelist
+						const validSortTypes = ['ASC', 'DESC']
+						const safeSortType = validSortTypes.includes(sortType.toUpperCase())
+							? sortType.toUpperCase()
+							: 'ASC'
+						const mappedColumn = columnMappings[sortColumn]
+
+						const orderByClause = `ORDER BY 
+							${mappedColumn} ${safeSortType} NULLS LAST`
+
+						// Remove any existing ORDER BY clause (case-insensitive)
+						query = query.replace(/order\s+by[\s\S]*?(?=(limit|offset|fetch|\)|$))/i, '')
+
+						// Append the new ORDER BY clause
+						query += ` ${orderByClause}`
 					}
 
 					// Add pagination

@@ -1316,54 +1316,58 @@ module.exports = class MenteesHelper {
 				filter_type,
 				tenantCode
 			)
-			if (organizations.success) {
+
+			const defaults = await getDefaults()
+
+			if (organizations.success && organizations.result.organizationCodes?.length > 0) {
 				organization_codes = organizations.result.organizationCodes
 				tenantCodes = organizations.result.tenantCodes
-				if (organization_codes.length > 0) {
-					//get organization list
-					const organizationList = await userRequests.organizationList(organization_codes, tenantCodes)
-					if (organizationList.success && organizationList.data?.result?.length > 0) {
-						result.organizations = organizationList.data.result
-					}
 
-					const defaults = await getDefaults()
+				let orgCodesWithoutDefaultOrg = organization_codes
+				if (organization_codes.length > 1) {
+					orgCodesWithoutDefaultOrg = organization_codes.filter((orgCode) => orgCode != defaults.orgCode)
+				}
 
-					const modelName = []
+				const organizationList = await userRequests.organizationList(orgCodesWithoutDefaultOrg, tenantCodes)
+				if (organizationList.success && organizationList.data?.result?.length > 0) {
+					result.organizations = organizationList.data.result
+				}
 
-					const queryMap = {
-						[common.MENTEE_ROLE]: menteeQueries.getModelName,
-						[common.MENTOR_ROLE]: mentorQueries.getModelName,
-						[common.SESSION]: sessionQueries.getModelName,
-					}
+				const modelName = []
 
-					if (queryMap[filter_type.toLowerCase()]) {
-						const modelNameResult = await queryMap[filter_type.toLowerCase()]()
-						modelName.push(modelNameResult)
-					}
-					// get entity type with entities list
-					const getEntityTypesWithEntities = await getOrgIdAndEntityTypes.getEntityTypeWithEntitiesBasedOnOrg(
-						organization_codes,
-						entity_type,
-						defaults.orgCode ? defaults.orgCode : '',
-						modelName,
-						{},
-						tenantCodes,
-						defaults.tenantCode ? defaults.tenantCode : ''
-					)
-					if (getEntityTypesWithEntities.success && getEntityTypesWithEntities.result) {
-						let entityTypesWithEntities = getEntityTypesWithEntities.result
-						if (entityTypesWithEntities.length > 0) {
-							let convertedData = utils.convertEntitiesForFilter(entityTypesWithEntities)
-							let doNotRemoveDefaultOrg = false
-							if (organization_codes.includes(defaults.orgCode)) {
-								doNotRemoveDefaultOrg = true
-							}
-							result.entity_types = utils.filterEntitiesBasedOnParent(
-								convertedData,
-								defaults.orgCode,
-								doNotRemoveDefaultOrg
-							)
+				const queryMap = {
+					[common.MENTEE_ROLE]: menteeQueries.getModelName,
+					[common.MENTOR_ROLE]: mentorQueries.getModelName,
+					[common.SESSION]: sessionQueries.getModelName,
+				}
+
+				if (queryMap[filter_type.toLowerCase()]) {
+					const modelNameResult = await queryMap[filter_type.toLowerCase()]()
+					modelName.push(modelNameResult)
+				}
+				// get entity type with entities list
+				const getEntityTypesWithEntities = await getOrgIdAndEntityTypes.getEntityTypeWithEntitiesBasedOnOrg(
+					organization_codes,
+					entity_type,
+					defaults.orgCode ? defaults.orgCode : '',
+					modelName,
+					{},
+					tenantCodes,
+					defaults.tenantCode ? defaults.tenantCode : ''
+				)
+				if (getEntityTypesWithEntities.success && getEntityTypesWithEntities.result) {
+					let entityTypesWithEntities = getEntityTypesWithEntities.result
+					if (entityTypesWithEntities.length > 0) {
+						let convertedData = utils.convertEntitiesForFilter(entityTypesWithEntities)
+						let doNotRemoveDefaultOrg = false
+						if (organization_codes.includes(defaults.orgCode)) {
+							doNotRemoveDefaultOrg = true
 						}
+						result.entity_types = utils.filterEntitiesBasedOnParent(
+							convertedData,
+							defaults.orgCode,
+							doNotRemoveDefaultOrg
+						)
 					}
 				}
 			}
@@ -2057,7 +2061,7 @@ module.exports = class MenteesHelper {
 				{
 					status: 'ACTIVE',
 					organization_code: {
-						[Op.in]: [organizationCode, defaults.orgCode],
+						[Op.in]: [requestedUserExtension.organization_code, defaults.orgCode],
 					},
 					model_names: { [Op.contains]: [menteeExtensionsModelName] },
 				},
@@ -2067,7 +2071,7 @@ module.exports = class MenteesHelper {
 			)
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, requestedUserExtension.organization_code)
 			const processDbResponse = utils.processDbResponse(mentorExtension, validationData)
 
 			const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
@@ -2077,12 +2081,13 @@ module.exports = class MenteesHelper {
 			const connection = await connectionQueries.getConnection(userId, id, tenantCode)
 
 			const orgDetails = await organisationExtensionQueries.findOne(
-				{ organization_code: organizationCode },
+				{ organization_code: requestedUserExtension.organization_code },
 				tenantCode,
 				{ attributes: ['name', 'organization_code', 'organization_id'] }
 			)
 			processDbResponse['organization'] = {
-				id: orgDetails.organization_id,
+				id: orgDetails.organization_code,
+
 				name: orgDetails.name,
 			}
 

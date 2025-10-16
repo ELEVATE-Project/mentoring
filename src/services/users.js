@@ -238,7 +238,7 @@ module.exports = class UserHelper {
 			competency: userDetails?.competency,
 			designation: userDetails?.designation,
 			language: userDetails?.language,
-			image: userDetails?.image ? userDetails.image : '',
+			image: userDetails?.image_cloud_path || userDetails?.image || '',
 		}
 
 		// Add only defined values to the data object
@@ -315,7 +315,7 @@ module.exports = class UserHelper {
 			roleChangePayload.current_roles = [common.MENTOR_ROLE]
 			roleChangePayload.new_roles = [common.MENTEE_ROLE]
 			isRoleChanged = true
-		} else if (!isAMentee && !menteeExtension.is_mentor) {
+		} else if (isAMentee && !menteeExtension.is_mentor) {
 			roleChangePayload.current_roles = [common.MENTEE_ROLE]
 			roleChangePayload.new_roles = [common.MENTOR_ROLE]
 			isRoleChanged = true
