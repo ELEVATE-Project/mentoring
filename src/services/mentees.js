@@ -541,18 +541,59 @@ module.exports = class MenteesHelper {
 			return defaultRuleFilter
 		}
 
-		let sessions = await sessionQueries.getUpcomingSessionsFromView(
+		// Create cache key for public sessions with ALL parameters that affect results
+		const cacheKey = this._buildPublicSessionsCacheKey({
 			page,
 			limit,
 			searchFilter,
 			userId,
 			filteredQuery,
-			tenantCode,
 			saasFilter,
 			additionalProjectionString,
 			search,
-			defaultRuleFilter
-		)
+			defaultRuleFilter,
+			organizationCode,
+			tenantCode,
+			roles: roles.join(','), // Include user roles as they affect visibility
+		})
+
+		let sessions
+		try {
+			sessions = await cacheHelper.getOrSet({
+				tenantCode,
+				orgCode: organizationCode,
+				ns: 'upcoming-public-sessions',
+				id: cacheKey,
+				fetchFn: async () => {
+					return await sessionQueries.getUpcomingSessionsFromView(
+						page,
+						limit,
+						searchFilter,
+						userId,
+						filteredQuery,
+						tenantCode,
+						saasFilter,
+						additionalProjectionString,
+						search,
+						defaultRuleFilter
+					)
+				},
+			})
+		} catch (cacheError) {
+			console.warn('Cache system failed for public sessions, falling back to database:', cacheError.message)
+			sessions = await sessionQueries.getUpcomingSessionsFromView(
+				page,
+				limit,
+				searchFilter,
+				userId,
+				filteredQuery,
+				tenantCode,
+				saasFilter,
+				additionalProjectionString,
+				search,
+				defaultRuleFilter
+			)
+		}
 		if (sessions && sessions.rows && Array.isArray(sessions.rows) && sessions.rows.length > 0) {
 			const uniqueOrgIds = [...new Set(sessions.rows.map((obj) => obj?.mentor_organization_id).filter(Boolean))]
 			sessions.rows = await entityTypeService.processEntityTypesToAddValueLabels(
@@ -2102,5 +2143,57 @@ module.exports = class MenteesHelper {
 				})
 			}
 		}
+	}
+
+	/**
+	 * Build cache key for public sessions with all parameters that affect results
+	 * @method
+	 * @name _buildPublicSessionsCacheKey
+	 * @param {Object} params - All parameters that affect query results
+	 * @returns {String} - Unique cache key
+	 */
+	static _buildPublicSessionsCacheKey(params) {
+		const crypto = require('crypto')
+
+		// Create a deterministic hash of all parameters that affect query results
+		const keyData = {
+			page: params.page,
+			limit: params.limit,
+			search: params.search || '',
+			organizationCode: params.organizationCode,
+			roles: params.roles || '',
+			// Hash complex objects to avoid key length issues
+			searchFilter: this._hashObject(params.searchFilter),
+			filteredQuery: this._hashObject(params.filteredQuery),
+			saasFilter: this._hashObject(params.saasFilter),
+			defaultRuleFilter: this._hashObject(params.defaultRuleFilter),
+			additionalProjectionString: params.additionalProjectionString || '',
+		}
+
+		// Create deterministic string from parameters
+		const keyString = Object.keys(keyData)
+			.sort()
+			.map((key) => `${key}:${keyData[key]}`)
+			.join('|')
+
+		// Hash the key string to create shorter, consistent cache key
+		const hash = crypto.createHash('md5').update(keyString).digest('hex').substring(0, 16)
+
+		return `page:${params.page}:limit:${params.limit}:${hash}`
+	}
+
+	/**
+	 * Create consistent hash for complex objects
+	 * @method
+	 * @name _hashObject
+	 * @param {Object} obj - Object to hash
+	 * @returns {String} - Hash string
+	 */
+	static _hashObject(obj) {
+		if (!obj || typeof obj !== 'object') return String(obj || '')
+
+		const crypto = require('crypto')
+		const jsonString = JSON.stringify(obj, Object.keys(obj).sort())
+		return crypto.createHash('md5').update(jsonString).digest('hex').substring(0, 8)
 	}
 }

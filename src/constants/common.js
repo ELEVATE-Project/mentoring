@@ -298,11 +298,29 @@ module.exports = {
 				useInternal: false,
 			},
 			sessions: {
-				name: 'upcomming_session', //rename as upcomming_session
+				name: 'upcoming_sessions', // More specific: individual session details and user enrollments
 				enabled: true,
 				defaultTtl: 3600, // 1 hour
 				useInternal: false,
 				// add one variable to calculate size or data size -> need to discuss
+			},
+			'upcoming-public-sessions': {
+				name: 'upcoming_public_sessions',
+				enabled: true,
+				defaultTtl: 600, // 10 minutes - shorter for dynamic data
+				useInternal: false, // Redis only for large datasets
+			},
+			'sessions-metadata': {
+				name: 'sessions-metadata',
+				enabled: true,
+				defaultTtl: 300, // 5 minutes - very dynamic metadata
+				useInternal: true, // Small metadata can use memory
+			},
+			app_config: {
+				name: 'app_config',
+				enabled: true,
+				defaultTtl: 0, // no expiry
+				useInternal: true, // Enable memory cache for faster access
 			},
 		},
 	},

@@ -8,9 +8,10 @@ module.exports = class Config {
 	 * @returns {JSON} - returns success response.
 	 */
 
-	async config() {
+	async config(req) {
 		try {
-			const config = await platformService.getConfig()
+			const tenantCode = req.decodedToken ? req.decodedToken.tenant_code : process.env.DEFAULT_TENANT_CODE
+			const config = await platformService.getConfig(tenantCode)
 			return config
 		} catch (error) {
 			return error

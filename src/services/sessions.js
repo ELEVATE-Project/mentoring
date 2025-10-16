@@ -1976,6 +1976,15 @@ module.exports = class SessionsHelper {
 				await kafkaCommunication.pushEmailToKafka(payload)
 			}
 
+			// Invalidate session-related caches after successful enrollment
+			await this._invalidateSessionCaches({
+				tenantCode,
+				orgCode,
+				sessionId,
+				mentorId: session.mentor_id,
+				menteeId: userId,
+			})
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'USER_ENROLLED_SUCCESSFULLY',
@@ -2087,6 +2096,15 @@ module.exports = class SessionsHelper {
 				await kafkaCommunication.pushEmailToKafka(payload)
 			}
 
+			// Invalidate session-related caches after successful unenrollment
+			await this._invalidateSessionCaches({
+				tenantCode,
+				orgCode: userTokenData.organization_code,
+				sessionId,
+				mentorId: session.mentor_id,
+				menteeId: userTokenData.id,
+			})
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: 'USER_UNENROLLED_SUCCESSFULLY',
@@ -2167,6 +2185,14 @@ module.exports = class SessionsHelper {
 					{ share_link: shareLink },
 					tenantCode
 				)
+
+				// Invalidate session caches after share link update
+				await this._invalidateSessionCaches({
+					tenantCode,
+					orgCode: session.mentor_organization_id,
+					sessionId,
+					mentorId: session.mentor_id,
+				})
 			}
 			return responses.successResponse({
 				message: 'SESSION_LINK_GENERATED_SUCCESSFULLY',
@@ -3426,6 +3452,14 @@ module.exports = class SessionsHelper {
 				})
 			}
 
+			// Invalidate session-related caches after successful mentee removal
+			await this._invalidateSessionCaches({
+				tenantCode,
+				orgCode: organizationId,
+				sessionId,
+				mentorId: sessionDetails.mentor_id,
+			})
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'USER_UNENROLLED_SUCCESSFULLY',
@@ -3767,6 +3801,15 @@ module.exports = class SessionsHelper {
 				}
 			})
 
+			// Invalidate all session caches after bulk session deletion
+			if (successfulMentorIds.length > 0) {
+				await this._invalidateSessionCaches({
+					tenantCode,
+					orgCode: organisationCode,
+					// No specific session ID as this is bulk deletion
+				})
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'BULK_SESSIONS_REMOVED',
@@ -3958,6 +4001,20 @@ module.exports = class SessionsHelper {
 				tenantCode,
 				orgCode: orgCode,
 				ns: common.CACHE_CONFIG.namespaces.sessions.name,
+			})
+
+			// Invalidate upcoming public sessions cache (new cache for home feed)
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: 'upcoming-public-sessions',
+			})
+
+			// Invalidate sessions metadata cache
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: 'sessions-metadata',
 			})
 
 			// Invalidate mentor and mentee profile caches if provided
