@@ -267,40 +267,62 @@ module.exports = class MenteesHelper {
 		try {
 			/* All Sessions */
 
-			let allSessions = await this.getAllSessions(
-				page,
-				limit,
-				search,
-				userId,
-				queryParams,
-				isAMentor,
-				'',
-				roles,
-				organizationCode,
-				tenantCode
-			)
+			let result = {}
 
-			if (allSessions.error && allSessions.error.missingField) {
-				return responses.failureResponse({
-					message: 'PROFILE_NOT_UPDATED',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
+			let scope = ['all', 'my']
+			if (queryParams.sessionScope) {
+				scope = queryParams.sessionScope.split(',').map((s) => s.trim().toLowerCase())
+				delete queryParams.sessionScope
+			}
+			let errors = []
+			if (scope.includes('all')) {
+				let allSessions = await this.getAllSessions(
+					page,
+					limit,
+					search,
+					userId,
+					queryParams,
+					isAMentor,
+					'',
+					roles,
+					organizationCode,
+					tenantCode
+				)
+
+				if (allSessions.error && allSessions.error.missingField) {
+					errors.push({ scope: 'all', message: 'PROFILE_NOT_UPDATED' })
+				} else {
+					result.all_sessions = allSessions.rows
+					result.allSessions_count = allSessions.count
+				}
 			}
 
-			/* My Sessions */
-			let mySessions = await this.getMySessions(page, limit, search, userId, start_date, end_date, tenantCode)
-
-			const result = {
-				all_sessions: allSessions.rows,
-				my_sessions: mySessions.rows,
+			if (scope.includes('my')) {
+				try {
+					let mySessions = await this.getMySessions(
+						page,
+						limit,
+						search,
+						userId,
+						start_date,
+						end_date,
+						tenantCode
+					)
+					result.my_sessions = mySessions.rows
+					result.my_sessions_count = mySessions.count
+				} catch (error) {
+					// Handle error similarly to getAllSessions or add to errors array
+					console.error('Error fetching my sessions:', error)
+				}
 			}
+
 			const feedbackData = await feedbackHelper.pending(userId, isAMentor, organizationCode, tenantCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'SESSION_FETCHED_SUCCESSFULLY',
 				result: result,
+				error: errors,
 				meta: {
 					type: 'feedback',
 					data: feedbackData.result,
@@ -1398,7 +1420,7 @@ module.exports = class MenteesHelper {
 	 * @param {Boolean} isAMentor - true/false.
 	 * @returns {Promise<Object>} - returns the list of mentees
 	 */
-	static async list(pageNo, pageSize, searchText, queryParams, userId, isAMentor, organizationId, tenantCode) {
+	static async list(pageNo, pageSize, searchText, queryParams, userId, isAMentor, organizationCode, tenantCode) {
 		try {
 			let additionalProjectionString = ''
 
@@ -1553,11 +1575,23 @@ module.exports = class MenteesHelper {
 						}
 					}
 
+					let imageUrl = null
+					// Safely get downloadable URL for image with error handling
+					if (user.image) {
+						try {
+							imageUrl = (await utils.getDownloadableUrl(user.image)) ?? null
+						} catch (error) {
+							console.error(`Failed to get downloadable URL for user ${user.user_id}:`, error)
+							imageUrl = null
+						}
+					}
+
 					return {
 						...user,
 						id: user.user_id, // Add 'id' key, to be removed later
 						email: decryptedEmail,
 						organization: orgMap[user.organization_id] || null,
+						image: imageUrl,
 					}
 				})
 			)
