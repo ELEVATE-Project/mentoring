@@ -10,6 +10,7 @@ const fs = require('fs')
 const MenteeExtensionQueries = require('@database/queries/userExtension')
 const utils = require('@generics/utils')
 const path = require('path')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = async function (req, res, next) {
 	try {
@@ -268,9 +269,31 @@ function getApiPaths(parts) {
 
 async function fetchPermissions(roleTitle, apiPath, module) {
 	if (Array.isArray(roleTitle) && !roleTitle.includes(common.PUBLIC_ROLE)) roleTitle.push(common.PUBLIC_ROLE)
-	const filter = { role_title: roleTitle, module, api_path: { [Op.in]: apiPath } }
-	const attributes = ['request_type', 'api_path', 'module']
-	return await rolePermissionMappingQueries.findAll(filter, attributes)
+
+	// Create cache key for role permissions: rolePerm:<role_title>:<module>:<request_type>:<api_path>
+	const roleKey = Array.isArray(roleTitle) ? roleTitle.join(',') : roleTitle
+	const apiPathKey = Array.isArray(apiPath) ? apiPath.join(',') : apiPath
+	const cacheKey = `${roleKey}:${module}:*:${apiPathKey}`
+
+	try {
+		return await cacheHelper.getOrSet({
+			key: cacheKey,
+			tenantCode: process.env.DEFAULT_TENANT_CODE, // Permissions are cross-tenant for now
+			ns: 'roles_permissions',
+			ttl: 0, // No expiry as requested
+			fetchFn: async () => {
+				const filter = { role_title: roleTitle, module, api_path: { [Op.in]: apiPath } }
+				const attributes = ['request_type', 'api_path', 'module']
+				return await rolePermissionMappingQueries.findAll(filter, attributes)
+			},
+		})
+	} catch (error) {
+		console.error('Cache error in fetchPermissions, falling back to database:', error)
+		// Fallback to direct database query if cache fails
+		const filter = { role_title: roleTitle, module, api_path: { [Op.in]: apiPath } }
+		const attributes = ['request_type', 'api_path', 'module']
+		return await rolePermissionMappingQueries.findAll(filter, attributes)
+	}
 }
 
 async function verifyToken(token) {

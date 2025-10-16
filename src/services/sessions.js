@@ -2363,6 +2363,18 @@ module.exports = class SessionsHelper {
 				)
 			}
 
+			// Invalidate cache after session status changes from PUBLISHED to LIVE
+			try {
+				await this._invalidateSessionCaches({
+					tenantCode,
+					orgCode: userTokenData.organization_code,
+					sessionId,
+					mentorId: loggedInUserId,
+				})
+			} catch (cacheError) {
+				console.error('Cache invalidation failed in session start, continuing with operation:', cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'SESSION_START_LINK',

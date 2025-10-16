@@ -4,8 +4,31 @@ const permissionsQueries = require('@database/queries/permissions')
 const { UniqueConstraintError, ForeignKeyConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class modulesHelper {
+	/**
+	 * Invalidate role-permission caches
+	 * @method
+	 * @name _invalidateRolePermissionCaches
+	 * @param {string} roleTitle - Role title to invalidate cache for
+	 */
+	static async _invalidateRolePermissionCaches(roleTitle) {
+		try {
+			// Invalidate both cache namespaces used by role-permission system
+			await cacheHelper.evictNamespace({
+				tenantCode: process.env.DEFAULT_TENANT_CODE,
+				ns: 'roles_permissions',
+			})
+			await cacheHelper.evictNamespace({
+				tenantCode: process.env.DEFAULT_TENANT_CODE,
+				ns: 'permissions',
+			})
+		} catch (error) {
+			console.error('Failed to invalidate role-permission caches:', error)
+		}
+	}
+
 	/**
 	 * Create rolePermission.
 	 * @method
@@ -40,6 +63,9 @@ module.exports = class modulesHelper {
 
 			// Database Operation: Create role permission mapping
 			const rolePermissionMapping = await rolePermissionMappingQueries.create(data)
+
+			// Invalidate cache after successful creation
+			await this._invalidateRolePermissionCaches(roleTitle)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -83,6 +109,10 @@ module.exports = class modulesHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Invalidate cache after successful deletion
+			await this._invalidateRolePermissionCaches(roleTitle)
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ROLE_PERMISSION_DELETED_SUCCESSFULLY',
