@@ -225,7 +225,7 @@ module.exports = {
                         OR :session_type = 'PRIVATE' AND Session.type = 'PRIVATE'
                     )
                     AND Session.deleted_at IS NULL
-                    DYNAMIC_AND_CLAUSE; order by sa.created_at`,
+                    DYNAMIC_AND_CLAUSE; order by sa.created_at desc`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
 				created_at: Sequelize.literal('CURRENT_TIMESTAMP'),

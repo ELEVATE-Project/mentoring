@@ -878,14 +878,29 @@ const generateDateRanges = (startEpoch, endEpoch, interval) => {
 				})
 
 				break
-			case 'month':
-				nextDate = new Date(currentDate)
-				nextDate.setMonth(currentDate.getMonth() + 1)
+			case 'month': {
+				let rangeStart
+				if (dateRanges.length === 0) {
+					// use startDate as currentDate
+					rangeStart = new Date(currentDate)
+				} else {
+					// for next month onwords start from 1st of current month
+					rangeStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+				}
+
+				// 1st of next month
+				nextDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 1, 1)
+
+				const rangeEnd = new Date(Math.min(nextDate.getTime() - 1000, endDate.getTime())) // 1 sec before next month
+
 				dateRanges.push({
-					start_date: Math.floor(currentDate.getTime() / 1000),
-					end_date: Math.floor(Math.min(nextDate.getTime() - 1, endDate.getTime()) / 1000),
+					start_date: Math.floor(rangeStart.getTime() / 1000),
+					end_date: Math.floor(rangeEnd.getTime() / 1000),
 				})
+
+				currentDate = nextDate // set to 1st of next month
 				break
+			}
 			default:
 				throw new Error('Invalid interval. Valid options: "day", "week", "month"')
 		}
