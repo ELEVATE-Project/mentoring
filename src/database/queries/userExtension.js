@@ -570,4 +570,24 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
+
+	static async getAllUsersByOrgId(orgIds) {
+		try {
+			if (!Array.isArray(orgIds) || orgIds.length === 0) {
+				return []
+			}
+			const query = `
+			SELECT user_id
+			FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
+			WHERE organization_id IN (:orgIds)
+		`
+			const results = await Sequelize.query(query, {
+				type: QueryTypes.SELECT,
+				replacements: { orgIds },
+			})
+			return results
+		} catch (error) {
+			throw error
+		}
+	}
 }
