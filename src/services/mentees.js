@@ -218,39 +218,55 @@ module.exports = class MenteesHelper {
 		try {
 			/* All Sessions */
 
-			let allSessions = await this.getAllSessions(
-				page,
-				limit,
-				search,
-				userId,
-				queryParams,
-				isAMentor,
-				'',
-				roles,
-				orgId
-			)
+			let result = {}
 
-			if (allSessions.error && allSessions.error.missingField) {
-				return responses.failureResponse({
-					message: 'PROFILE_NOT_UPDATED',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
+			let scope = ['all', 'my']
+			if (queryParams.sessionScope) {
+				scope = queryParams.sessionScope.split(',').map((s) => s.trim().toLowerCase())
+				delete queryParams.sessionScope
+			}
+			let errors = []
+			if (scope.includes('all')) {
+				let allSessions = await this.getAllSessions(
+					page,
+					limit,
+					search,
+					userId,
+					queryParams,
+					isAMentor,
+					'',
+					roles,
+					orgId
+				)
+
+				if (allSessions.error && allSessions.error.missingField) {
+					errors.push({ scope: 'all', message: 'PROFILE_NOT_UPDATED' })
+				} else {
+					result.all_sessions = allSessions.rows
+					result.allSessions_count = allSessions.count
+				}
+			}
+
+			if (scope.includes('my')) {
+				try {
+					let mySessions = await this.getMySessions(page, limit, search, userId, start_date, end_date)
+					result.my_sessions = mySessions.rows
+					result.my_sessions_count = mySessions.count
+				} catch (error) {
+					// Handle error similarly to getAllSessions or add to errors array
+					console.error('Error fetching my sessions:', error)
+				}
 			}
 
 			/* My Sessions */
-			let mySessions = await this.getMySessions(page, limit, search, userId, start_date, end_date)
 
-			const result = {
-				all_sessions: allSessions.rows,
-				my_sessions: mySessions.rows,
-			}
 			const feedbackData = await feedbackHelper.pending(userId, isAMentor)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'SESSION_FETCHED_SUCCESSFULLY',
 				result: result,
+				error: errors,
 				meta: {
 					type: 'feedback',
 					data: feedbackData.result,
@@ -1252,6 +1268,16 @@ module.exports = class MenteesHelper {
 					id: user.user_id, // Add 'id' key, to be removed later
 					email: user.email ? await emailEncryption.decrypt(user.email) : null, // Decrypt email
 					organization: orgMap[user.organization_id] || null,
+					image: user.image
+						? await (async () => {
+								try {
+									return (await utils.getDownloadableUrl(user.image)) ?? null
+								} catch (error) {
+									console.error(`Failed to get downloadable URL for user ${user.user_id}:`, error)
+									return null
+								}
+						  })()
+						: null,
 				}))
 			)
 
