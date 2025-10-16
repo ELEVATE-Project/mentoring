@@ -305,7 +305,7 @@ exports.getConnectionsDetails = async (
 			rolesFilter = `AND is_mentor = false`
 		}
 
-		const userFilterClause = `mv.user_id IN (SELECT friend_id FROM ${Connection.tableName} WHERE user_id = :userId)`
+		const userFilterClause = `c.deleted_at IS NULL and mv.user_id IN (SELECT friend_id FROM ${Connection.tableName} WHERE user_id = :userId)`
 
 		const projectionClause = `
 		mv.name,
