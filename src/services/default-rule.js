@@ -149,17 +149,19 @@ module.exports = class DefaultRuleHelper {
 					for (const friendId of connectionsData) {
 						const requestedUserExtension = await menteeExtensionQueries.getMenteeExtension(friendId)
 
-						const validateDefaultRules = await validateDefaultRulesFilter({
-							ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
-							requesterId: currentUserId,
-							roles: roles,
-							requesterOrganizationId: orgId,
-							data: requestedUserExtension,
-						})
+						if (requestedUserExtension) {
+							const validateDefaultRules = await validateDefaultRulesFilter({
+								ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
+								requesterId: currentUserId,
+								roles: roles,
+								requesterOrganizationId: orgId,
+								data: requestedUserExtension,
+							})
 
-						if (!validateDefaultRules) {
-							await connections.deleteConnections(currentUserId, friendId)
-							await connections.deleteConnections(friendId, currentUserId)
+							if (!validateDefaultRules) {
+								await connections.deleteConnections(currentUserId, friendId)
+								await connections.deleteConnections(friendId, currentUserId)
+							}
 						}
 					}
 
@@ -170,16 +172,18 @@ module.exports = class DefaultRuleHelper {
 							const friendId = request.friend_id
 							const requestedUserExtension = await menteeExtensionQueries.getMenteeExtension(friendId)
 
-							const validateDefaultRules = await validateDefaultRulesFilter({
-								ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
-								requesterId: currentUserId,
-								roles: roles,
-								requesterOrganizationId: orgId,
-								data: requestedUserExtension,
-							})
+							if (requestedUserExtension) {
+								const validateDefaultRules = await validateDefaultRulesFilter({
+									ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
+									requesterId: currentUserId,
+									roles: roles,
+									requesterOrganizationId: orgId,
+									data: requestedUserExtension,
+								})
 
-							if (!validateDefaultRules) {
-								await connections.deleteConnectionsRequests(currentUserId, friendId)
+								if (!validateDefaultRules) {
+									await connections.deleteConnectionsRequests(currentUserId, friendId)
+								}
 							}
 						}
 					}
