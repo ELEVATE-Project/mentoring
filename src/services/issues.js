@@ -3,7 +3,7 @@ const httpStatusCode = require('@generics/http-status')
 
 const utils = require('@generics/utils')
 const kafkaCommunication = require('@generics/kafka-communication')
-const notificationTemplateQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 const issueQueries = require('../database/queries/issue')
 const userRequests = require('@requests/user')
 const responses = require('@helpers/responses')
@@ -39,32 +39,11 @@ module.exports = class issuesHelper {
 			bodyData.organization_code = decodedToken.organization_code
 
 			if (process.env.ENABLE_EMAIL_FOR_REPORT_ISSUE === 'true') {
-				let templateData
-				try {
-					templateData = await cacheHelper.getOrSet({
-						tenantCode,
-						orgCode: decodedToken.organization_code,
-						ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
-						id: `template:${process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE}:${decodedToken.organization_code}`,
-						fetchFn: async () => {
-							return await notificationTemplateQueries.findOneEmailTemplate(
-								process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE,
-								decodedToken.organization_code,
-								tenantCode
-							)
-						},
-					})
-				} catch (cacheError) {
-					console.warn(
-						'Cache system failed for notification template, falling back to database:',
-						cacheError.message
-					)
-					templateData = await notificationTemplateQueries.findOneEmailTemplate(
-						process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE,
-						decodedToken.organization_code,
-						tenantCode
-					)
-				}
+				let templateData = await notificationService.findOneEmailTemplateCached(
+					process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE,
+					decodedToken.organization_code,
+					tenantCode
+				)
 
 				let metaItems = ''
 				if (bodyData.meta_data) {

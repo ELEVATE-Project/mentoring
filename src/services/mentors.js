@@ -10,7 +10,7 @@ const _ = require('lodash')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const sessionQueries = require('@database/queries/sessions')
 const entityTypeQueries = require('@database/queries/entityType')
-const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const organizationService = require('@services/organization')
 const orgAdminService = require('@services/org-admin')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
@@ -80,13 +80,14 @@ module.exports = class MentorsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+			let validationData = await entityTypeService.readAllEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					allow_filtering: true,
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				orgCode,
+				tenantCode
 			)
 
 			if (!orgCode) {
@@ -400,7 +401,7 @@ module.exports = class MentorsHelper {
 			const organization_name = orgCode // Temporary fallback, can be updated later
 
 			// Find organisation policy from organisation_extension table
-			let organisationPolicy = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+			let organisationPolicy = await organizationService.findOrInsertOrganizationExtensionCached(
 				orgId,
 				orgCode,
 				organization_name,
@@ -426,7 +427,7 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -434,9 +435,8 @@ module.exports = class MentorsHelper {
 					},
 					model_names: { [Op.contains]: [mentorExtensionsModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				orgCode,
+				tenantCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -549,7 +549,7 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -557,9 +557,8 @@ module.exports = class MentorsHelper {
 					},
 					model_names: { [Op.contains]: [mentorExtensionsModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				orgCode,
+				tenantCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -584,11 +583,11 @@ module.exports = class MentorsHelper {
 				//organization.id. This is added for the users/update workflow where
 				//both both user data and organisation can change at the same time.
 				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: orgCode, tenantCode })
-				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+				const orgPolicies = await organizationService.findOrInsertOrganizationExtensionCached(
 					data.organization.id,
 					orgCode,
-					tenantCode,
-					userOrgDetails.data.result.name
+					userOrgDetails.data.result.name,
+					tenantCode
 				)
 				if (!orgPolicies?.organization_id) {
 					return responses.failureResponse({
@@ -706,6 +705,36 @@ module.exports = class MentorsHelper {
 	}
 
 	/**
+	 * Get mentor extension details by user ID with caching.
+	 * @method
+	 * @name getMentorExtensionCached
+	 * @param {String} userId - User ID of the mentor.
+	 * @param {Array} attributes - Attributes to select (default: []).
+	 * @param {Boolean} unScoped - Whether to use unscoped query (default: false).
+	 * @param {String} tenantCode - Tenant code for isolation.
+	 * @returns {Promise<Object>} - Cached mentor extension details.
+	 */
+	static async getMentorExtensionCached(userId, attributes = [], unScoped = false, tenantCode) {
+		try {
+			// Create cache key based on query parameters
+			const cacheKey = `mentor:${userId}:${attributes.sort().join(',')}:${unScoped}`
+
+			return await cacheHelper.getOrSet({
+				tenantCode,
+				ns: 'user-extension',
+				id: cacheKey,
+				ttl: 300, // 5 minutes
+				fetchFn: async () => {
+					return await mentorQueries.getMentorExtension(userId, attributes, unScoped, tenantCode)
+				},
+			})
+		} catch (cacheError) {
+			console.warn('Cache system failed for mentor extension, falling back to database:', cacheError.message)
+			return await mentorQueries.getMentorExtension(userId, attributes, unScoped, tenantCode)
+		}
+	}
+
+	/**
 	 * Delete a mentor extension by user ID.
 	 * @method
 	 * @name deleteMentorExtension
@@ -727,6 +756,71 @@ module.exports = class MentorsHelper {
 			})
 		} catch (error) {
 			return error
+		}
+	}
+
+	/**
+	 * Get mentors by user IDs with caching for bulk operations.
+	 * @method
+	 * @name getMentorsByUserIdsCached
+	 * @param {Array} ids - Array of user IDs.
+	 * @param {Object} options - Query options (default: {}).
+	 * @param {String} tenantCode - Tenant code for isolation.
+	 * @param {Boolean} unscoped - Whether to use unscoped query (default: false).
+	 * @returns {Promise<Array>} - Cached mentors data.
+	 */
+	static async getMentorsByUserIdsCached(ids, options = {}, tenantCode, unscoped = false) {
+		if (ids.length === 0) return []
+
+		try {
+			// Try to get cached individual mentors first
+			const cachedResults = []
+			const missingIds = []
+
+			// Check cache for each mentor individually
+			for (const id of ids) {
+				const cacheKey = `mentor:${id}::${unscoped}`
+				try {
+					const cached = await cacheHelper.get(
+						await cacheHelper.buildKey({ tenantCode, ns: 'user-extension', id: cacheKey })
+					)
+					if (cached) {
+						cachedResults.push(cached)
+					} else {
+						missingIds.push(id)
+					}
+				} catch (cacheErr) {
+					// If individual cache lookup fails, add to missing list
+					missingIds.push(id)
+				}
+			}
+
+			// Fetch missing mentors from database
+			let dbResults = []
+			if (missingIds.length > 0) {
+				dbResults = await mentorQueries.getMentorsByUserIds(missingIds, options, tenantCode, unscoped)
+
+				// Cache individual results for future lookups
+				for (const mentor of dbResults) {
+					const cacheKey = `mentor:${mentor.user_id}::${unscoped}`
+					try {
+						await cacheHelper.setScoped({
+							tenantCode,
+							ns: 'user-extension',
+							id: cacheKey,
+							value: mentor,
+							ttl: 300,
+						})
+					} catch (cacheErr) {
+						console.warn('Failed to cache individual mentor:', cacheErr.message)
+					}
+				}
+			}
+
+			return [...cachedResults, ...dbResults]
+		} catch (cacheError) {
+			console.warn('Cache system failed for bulk mentors, falling back to database:', cacheError.message)
+			return await mentorQueries.getMentorsByUserIds(ids, options, tenantCode, unscoped)
 		}
 	}
 
@@ -858,7 +952,7 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -866,9 +960,8 @@ module.exports = class MentorsHelper {
 					},
 					model_names: { [Op.contains]: [mentorExtensionsModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				orgCode,
+				tenantCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -907,7 +1000,7 @@ module.exports = class MentorsHelper {
 			}
 
 			if (!mentorProfile.organization) {
-				const orgDetails = await organisationExtensionQueries.findOne(
+				const orgDetails = await organizationService.findOneCached(
 					{ organization_code: mentorOrgCode },
 					tenantCode,
 					{
@@ -1108,13 +1201,14 @@ module.exports = class MentorsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+			let validationData = await entityTypeService.readAllEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					allow_filtering: true,
 					model_names: { [Op.contains]: [mentorExtensionsModelName] },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				orgCode,
+				tenantCode
 			)
 
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData, mentorExtensionsModelName)
@@ -1258,7 +1352,7 @@ module.exports = class MentorsHelper {
 						[Op.in]: organizationCodes,
 					},
 				}
-				organizationDetails = await organisationExtensionQueries.findAll(orgFilter, tenantCode, {
+				organizationDetails = await organizationService.findAllCached(orgFilter, tenantCode, {
 					attributes: ['name', 'organization_code'],
 					raw: true, // Ensure plain objects
 				})
@@ -1606,9 +1700,28 @@ module.exports = class MentorsHelper {
 
 	/**
 	 * Evict mentor-related caches after CUD operations
+	 * Following the entity-type service pattern for comprehensive cache invalidation
 	 */
 	static async _invalidateMentorCaches({ tenantCode, orgCode, mentorId }) {
 		try {
+			// Evict user-extension caches (new namespace for mentor/mentee extension data)
+			if (mentorId) {
+				// Invalidate specific mentor's cache entries
+				await cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: 'user-extension',
+					patternSuffix: `mentor:${mentorId}:*`,
+				})
+			} else {
+				// Invalidate all mentor extension caches for the organization
+				await cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: 'user-extension',
+				})
+			}
+
 			// Evict mentor profile caches
 			await cacheHelper.evictNamespace({
 				tenantCode,

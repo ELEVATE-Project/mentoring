@@ -1,5 +1,6 @@
 'use strict'
 const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeService = require('@services/entity-type')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const entityQueries = require('@database/queries/entity')
 const { Op } = require('sequelize')
@@ -222,7 +223,7 @@ async function getEntityTypeFilter(modelName, config, search, searchOn, tenantCo
 		entityTypes = config.fields.filter((field) => field.isAnEntityType === true).map((field) => field.name)
 	}
 
-	entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+	entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 		{
 			status: 'ACTIVE',
 			organization_code: defaults.orgCode,
@@ -230,7 +231,8 @@ async function getEntityTypeFilter(modelName, config, search, searchOn, tenantCo
 			allow_filtering: true,
 			value: entityTypes,
 		},
-		{ [Op.in]: [tenantCode, defaults.tenantCode] }
+		defaults.orgCode,
+		tenantCode
 	)
 
 	const entityTypeIds = entityTypes.map((entityType) => entityType.id)

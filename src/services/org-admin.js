@@ -6,7 +6,7 @@ const menteeQueries = require('@database/queries/userExtension')
 const httpStatusCode = require('@generics/http-status')
 const sessionQueries = require('@database/queries/sessions')
 const adminService = require('./admin')
-const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const organizationService = require('@services/organization')
 const entityTypeQueries = require('@database/queries/entityType')
 const userRequests = require('@requests/user')
 const utils = require('@generics/utils')
@@ -95,7 +95,7 @@ module.exports = class OrgAdminService {
 					})
 				}
 
-				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+				const orgPolicies = await organizationService.findOrInsertOrganizationExtensionCached(
 					bodyData.organization_id,
 					bodyData.organization_code,
 					organizationDetails.data.result.name,
@@ -205,7 +205,7 @@ module.exports = class OrgAdminService {
 					})
 				}
 
-				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+				const orgPolicies = await organizationService.findOrInsertOrganizationExtensionCached(
 					bodyData.organization_id,
 					bodyData.organization_code,
 					organizationDetails.data.result.name,
@@ -327,7 +327,7 @@ module.exports = class OrgAdminService {
 
 	static async getOrgPolicies(decodedToken, tenantCode) {
 		try {
-			const orgPolicies = await organisationExtensionQueries.getById(decodedToken.organization_id)
+			const orgPolicies = await organizationService.getByIdCached(decodedToken.organization_id)
 			if (orgPolicies) {
 				delete orgPolicies.deleted_at
 				return responses.successResponse({
@@ -474,10 +474,10 @@ module.exports = class OrgAdminService {
 				})
 
 			// Get organization policies
-			const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+			const orgPolicies = await organizationService.findOrInsertOrganizationExtensionCached(
 				orgId,
-				organizationDetails.data.result.name,
 				bodyData.organization_code,
+				organizationDetails.data.result.name,
 				tenantCode
 			)
 			if (!orgPolicies?.organization_id) {
@@ -800,7 +800,7 @@ module.exports = class OrgAdminService {
 				statusCode: httpStatusCode.bad_request,
 				responseCode: 'CLIENT_ERROR',
 			})
-		let organizationDetails = await organisationExtensionQueries.getById(
+		let organizationDetails = await organizationService.getByIdCached(
 			{ [Op.in]: [defaults.orgCode, orgCode] },
 			{ [Op.in]: [defaults.tenantCode, tenantCode] }
 		)

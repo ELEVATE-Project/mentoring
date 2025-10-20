@@ -9,9 +9,11 @@ const axios = require('axios')
 const common = require('@constants/common')
 const userRequests = require('@requests/user')
 const sessionService = require('@services/sessions')
+const entityTypeService = require('@services/entity-type')
 const ProjectRootDir = path.join(__dirname, '../')
 const fileUploadQueries = require('@database/queries/fileUpload')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 const kafkaCommunication = require('@generics/kafka-communication')
 const cacheHelper = require('@generics/cacheHelper')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
@@ -88,32 +90,12 @@ module.exports = class UserInviteHelper {
 				const templateCode = process.env.SESSION_UPLOAD_EMAIL_TEMPLATE_CODE
 				if (templateCode) {
 					const defaults = await getDefaults()
-					let templateData
-					try {
-						templateData = await cacheHelper.getOrSet({
-							tenantCode: defaults.tenantCode,
-							orgCode: data.user.organization_code,
-							ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
-							id: `template:${templateCode}:${data.user.organization_code}`,
-							fetchFn: async () => {
-								return await notificationTemplateQueries.findOneEmailTemplate(
-									templateCode,
-									data.user.organization_code,
-									defaults.tenantCode
-								)
-							},
-						})
-					} catch (cacheError) {
-						console.warn(
-							'Cache system failed for notification template, falling back to database:',
-							cacheError.message
-						)
-						templateData = await notificationTemplateQueries.findOneEmailTemplate(
-							templateCode,
-							data.user.organization_code,
-							defaults.tenantCode
-						)
-					}
+					// Use centralized notification service with built-in caching
+					const templateData = await notificationService.findOneEmailTemplateCached(
+						templateCode,
+						data.user.organization_code,
+						defaults.tenantCode
+					)
 
 					if (templateData) {
 						const sessionUploadURL = await utils.getDownloadableUrl(output_path)
@@ -595,7 +577,7 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -603,9 +585,8 @@ module.exports = class UserInviteHelper {
 					},
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				orgCode,
+				tenantCode
 			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,
@@ -873,7 +854,7 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -881,7 +862,8 @@ module.exports = class UserInviteHelper {
 					},
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				orgCode,
+				tenantCode
 			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,

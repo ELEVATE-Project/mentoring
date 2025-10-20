@@ -297,6 +297,12 @@ module.exports = {
 				defaultTtl: 1800, // 30 mins
 				useInternal: false,
 			},
+			'user-extension': {
+				name: 'user-extension',
+				enabled: true,
+				defaultTtl: 300, // 5 minutes - frequently accessed user extension data
+				useInternal: false,
+			},
 			sessions: {
 				name: 'upcoming_sessions', // More specific: individual session details and user enrollments
 				enabled: true,

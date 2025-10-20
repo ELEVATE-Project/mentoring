@@ -13,6 +13,7 @@ const utils = require('@generics/utils')
 const communicationHelper = require('@helpers/communications')
 const userRequests = require('@requests/user')
 const notificationQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 const kafkaCommunication = require('@generics/kafka-communication')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 
@@ -149,7 +150,7 @@ module.exports = class ConnectionHelper {
 			userDetails.image &&= (await userRequests.getDownloadableUrl(userDetails.image))?.result
 
 			// Fetch entity types associated with the user
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -157,9 +158,8 @@ module.exports = class ConnectionHelper {
 					},
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				userDetails.organization_code,
+				tenantCode
 			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_code)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
@@ -431,13 +431,14 @@ module.exports = class ConnectionHelper {
 				})
 
 			// Fetch validation data for filtering connections (excluding roles)
-			const validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+			const validationData = await entityTypeService.readAllEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					allow_filtering: true,
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				{ [Op.in]: [defaults.tenantCode, tenantCode] }
+				orgCode,
+				tenantCode
 			)
 
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData, userExtensionsModelName)
@@ -537,7 +538,7 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get email template
-			const templateData = await notificationQueries.findOneEmailTemplate(
+			const templateData = await notificationService.findOneEmailTemplateCached(
 				templateCode,
 				orgCode.toString(),
 				tenantCode
@@ -600,7 +601,7 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get email template
-			const templateData = await notificationQueries.findOneEmailTemplate(
+			const templateData = await notificationService.findOneEmailTemplateCached(
 				templateCode,
 				orgCode.toString(),
 				tenantCode

@@ -6,7 +6,7 @@ const menteeQueries = require('@database/queries/userExtension')
 const mentorQueries = require('@database/queries/mentorExtension')
 const responses = require('@helpers/responses')
 
-const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const organizationService = require('@services/organization')
 const mentorsService = require('@services/mentors')
 const menteesService = require('@services/mentees')
 const orgAdminService = require('@services/org-admin')
@@ -253,7 +253,7 @@ module.exports = class UserHelper {
 
 	static async #createOrUpdateOrg(orgData, tenantCode) {
 		// Use organization_id as organization_code for lookup since they're the same in user service data
-		let orgExtension = await organisationExtensionQueries.getById(orgData.code, tenantCode)
+		let orgExtension = await organizationService.getByIdCached(orgData.code, tenantCode)
 		if (orgExtension) return orgExtension
 
 		const orgExtensionData = {

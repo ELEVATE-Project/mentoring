@@ -356,6 +356,174 @@ module.exports = class EntityHelper {
 	}
 
 	/**
+	 * Read user entity types and entities with caching and fallback
+	 * @method
+	 * @name readUserEntityTypesAndEntitiesCached
+	 * @param {Object} filter - Filter criteria for entity types
+	 * @param {String} orgCode - Organization code
+	 * @param {String} tenantCode - Tenant code
+	 * @returns {Array} - Cached entity types with entities
+	 */
+	static async readUserEntityTypesAndEntitiesCached(filter, orgCode, tenantCode) {
+		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode || !defaults.tenantCode) {
+				throw new Error('DEFAULT_ORG_CODE_OR_TENANT_CODE_NOT_SET')
+			}
+
+			// Create cache ID based on filter to ensure cache uniqueness
+			const cacheId = `user_entities:${JSON.stringify(filter)}`
+
+			let entityTypesWithEntities
+			try {
+				entityTypesWithEntities = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.entity_types.name,
+					id: cacheId,
+					fetchFn: async () => {
+						// Merge tenant codes including defaults for fallback
+						const tenantCodes = { [Op.in]: [defaults.tenantCode, tenantCode] }
+						return await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodes)
+					},
+				})
+			} catch (cacheError) {
+				console.warn(
+					'Cache system failed for user entity types with entities, falling back to database:',
+					cacheError.message
+				)
+				const tenantCodes = { [Op.in]: [defaults.tenantCode, tenantCode] }
+				entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodes)
+			}
+
+			return entityTypesWithEntities
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Read all entity types with caching and fallback
+	 * @method
+	 * @name readAllEntityTypesCached
+	 * @param {Array|Object} orgCodes - Organization codes
+	 * @param {Array|Object} tenantCodes - Tenant codes
+	 * @param {Array} attributes - Attributes to select
+	 * @param {Object} filter - Additional filter criteria
+	 * @returns {Array} - Cached entity types
+	 */
+	static async readAllEntityTypesCached(orgCodes, tenantCodes, attributes, filter = {}) {
+		try {
+			// Create cache ID based on all parameters to ensure cache uniqueness
+			const cacheId = `all_types:${JSON.stringify({ orgCodes, tenantCodes, attributes, filter })}`
+
+			let entityTypes
+			try {
+				entityTypes = await cacheHelper.getOrSet({
+					tenantCode: Array.isArray(tenantCodes) ? tenantCodes[0] : tenantCodes,
+					orgCode: Array.isArray(orgCodes) ? orgCodes[0] : orgCodes,
+					ns: common.CACHE_CONFIG.namespaces.entity_types.name,
+					id: cacheId,
+					fetchFn: async () => {
+						return await entityTypeQueries.findAllEntityTypes(orgCodes, tenantCodes, attributes, filter)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for all entity types, falling back to database:', cacheError.message)
+				entityTypes = await entityTypeQueries.findAllEntityTypes(orgCodes, tenantCodes, attributes, filter)
+			}
+
+			return entityTypes
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Read all entity types and entities with caching and fallback
+	 * @method
+	 * @name readAllEntityTypesAndEntitiesCached
+	 * @param {Object} filter - Filter criteria for entity types
+	 * @param {String} orgCode - Organization code
+	 * @param {String} tenantCode - Tenant code
+	 * @returns {Array} - Cached entity types with entities
+	 */
+	static async readAllEntityTypesAndEntitiesCached(filter, orgCode, tenantCode) {
+		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode || !defaults.tenantCode) {
+				throw new Error('DEFAULT_ORG_CODE_OR_TENANT_CODE_NOT_SET')
+			}
+
+			// Create cache ID based on filter to ensure cache uniqueness
+			const cacheId = `all_with_entities:${JSON.stringify(filter)}`
+
+			let entityTypesWithEntities
+			try {
+				entityTypesWithEntities = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.entity_types.name,
+					id: cacheId,
+					fetchFn: async () => {
+						// Merge tenant codes including defaults for fallback
+						const tenantCodes = { [Op.in]: [defaults.tenantCode, tenantCode] }
+						return await entityTypeQueries.findAllEntityTypesAndEntities(filter, tenantCodes)
+					},
+				})
+			} catch (cacheError) {
+				console.warn(
+					'Cache system failed for all entity types with entities, falling back to database:',
+					cacheError.message
+				)
+				const tenantCodes = { [Op.in]: [defaults.tenantCode, tenantCode] }
+				entityTypesWithEntities = await entityTypeQueries.findAllEntityTypesAndEntities(filter, tenantCodes)
+			}
+
+			return entityTypesWithEntities
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Read one entity type with caching and fallback
+	 * @method
+	 * @name readOneEntityTypeCached
+	 * @param {Object} filter - Filter criteria for entity type
+	 * @param {Array|Object} tenantCodes - Tenant codes
+	 * @param {Object} options - Query options
+	 * @returns {Object} - Cached entity type
+	 */
+	static async readOneEntityTypeCached(filter, tenantCodes, options = {}) {
+		try {
+			// Create cache ID based on all parameters to ensure cache uniqueness
+			const cacheId = `one_type:${JSON.stringify({ filter, tenantCodes, options })}`
+			const tenantCode = Array.isArray(tenantCodes) ? tenantCodes[0] : tenantCodes
+
+			let entityType
+			try {
+				entityType = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: filter.organization_code || 'default',
+					ns: common.CACHE_CONFIG.namespaces.entity_types.name,
+					id: cacheId,
+					fetchFn: async () => {
+						return await entityTypeQueries.findOneEntityType(filter, tenantCodes, options)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for one entity type, falling back to database:', cacheError.message)
+				entityType = await entityTypeQueries.findOneEntityType(filter, tenantCodes, options)
+			}
+
+			return entityType
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
 	 * Delete All entity type and entities based on entityType value.
 	 * @method
 	 * @name delete

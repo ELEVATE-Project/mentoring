@@ -5,6 +5,7 @@ const kafkaCommunication = require('@generics/kafka-communication')
 const sessionQueries = require('@database/queries/sessions')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 const mentorQueries = require('@database/queries/mentorExtension')
 const menteeQueries = require('@database/queries/userExtension')
 const adminService = require('../generics/materializedViews')
@@ -39,28 +40,8 @@ class NotificationHelper {
 				return true
 			}
 
-			let template
-			try {
-				template = await cacheHelper.getOrSet({
-					tenantCode: tenantCodes[0],
-					orgCode: orgCode,
-					ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
-					id: `template:${templateCode}:${orgCode}`,
-					fetchFn: async () => {
-						return await notificationTemplateQueries.findOneEmailTemplate(
-							templateCode,
-							orgCode,
-							tenantCodes
-						)
-					},
-				})
-			} catch (cacheError) {
-				console.warn(
-					'Cache system failed for notification template, falling back to database:',
-					cacheError.message
-				)
-				template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCode, tenantCodes)
-			}
+			// Use centralized notification service with built-in caching
+			const template = await notificationService.findOneEmailTemplateCached(templateCode, orgCode, tenantCodes)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -103,28 +84,8 @@ class NotificationHelper {
 		try {
 			if (!sessions?.length || !templateCode) return true
 
-			let template
-			try {
-				template = await cacheHelper.getOrSet({
-					tenantCode: tenantCodes[0],
-					orgCode: orgCodes[0],
-					ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
-					id: `template:${templateCode}:${orgCodes[0]}`,
-					fetchFn: async () => {
-						return await notificationTemplateQueries.findOneEmailTemplate(
-							templateCode,
-							orgCodes,
-							tenantCodes
-						)
-					},
-				})
-			} catch (cacheError) {
-				console.warn(
-					'Cache system failed for notification template, falling back to database:',
-					cacheError.message
-				)
-				template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCodes, tenantCodes)
-			}
+			// Use centralized notification service with built-in caching
+			const template = await notificationService.findOneEmailTemplateCached(templateCode, orgCodes, tenantCodes)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true

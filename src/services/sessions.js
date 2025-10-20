@@ -16,6 +16,7 @@ const entityTypeQueries = require('@database/queries/entityType')
 const entitiesQueries = require('@database/queries/entity')
 const { Op } = require('sequelize')
 const notificationQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 
 const schedulerRequest = require('@requests/scheduler')
 const fileService = require('@services/files')
@@ -24,6 +25,7 @@ const userRequests = require('@requests/user')
 const utils = require('@generics/utils')
 const bigBlueButtonService = require('./bigBlueButton')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const organizationService = require('@services/organization')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const menteeService = require('@services/mentees')
@@ -235,7 +237,7 @@ module.exports = class SessionsHelper {
 				})
 
 			const sessionModelName = await sessionQueries.getModelName()
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			const entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -243,9 +245,8 @@ module.exports = class SessionsHelper {
 					},
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				orgCode,
+				tenantCode
 			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
@@ -389,7 +390,7 @@ module.exports = class SessionsHelper {
 
 					let resourceTemplate = process.env.RESOURCE_ADD_EMAIL_TEMPLATE_CODE
 					// This is the template used to send email to session mentees when resource added
-					let templateData = await notificationQueries.findOneEmailTemplate(
+					let templateData = await notificationService.findOneEmailTemplateCached(
 						resourceTemplate,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -490,7 +491,7 @@ module.exports = class SessionsHelper {
 				}
 				console.log('📧 EMAIL DEBUG: Selected email template code:', emailTemplateCode)
 				// send mail to mentors on session creation if session created by manager
-				const templateData = await notificationQueries.findOneEmailTemplate(
+				const templateData = await notificationService.findOneEmailTemplateCached(
 					emailTemplateCode,
 					{ [Op.in]: [orgCode, defaults.orgCode] },
 					{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -715,7 +716,7 @@ module.exports = class SessionsHelper {
 
 			const sessionModelName = await sessionQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -723,7 +724,8 @@ module.exports = class SessionsHelper {
 					},
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				orgCode,
+				tenantCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -1044,14 +1046,14 @@ module.exports = class SessionsHelper {
 					// isSessionCreatedByManager
 					// 	? (sessionDeleteEmailTemplate = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE)
 					// 	: (sessionDeleteEmailTemplate = process.env.MENTOR_SESSION_DELETE_EMAIL_TEMPLATE)
-					templateData = await notificationQueries.findOneEmailTemplate(
+					templateData = await notificationService.findOneEmailTemplateCached(
 						sessionDeleteEmailTemplate,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
 					)
 					mentorEmailTemplate = sessionDeleteEmailTemplate
 				} else if (isSessionReschedule && !isSessionCreatedByManager) {
-					templateData = await notificationQueries.findOneEmailTemplate(
+					templateData = await notificationService.findOneEmailTemplateCached(
 						process.env.MENTOR_SESSION_RESCHEDULE_EMAIL_TEMPLATE,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -1061,7 +1063,7 @@ module.exports = class SessionsHelper {
 					// if only title is changed. then a different email has to send to mentor and mentees
 					let sessionUpdateByMangerTemplate = process.env.MENTEE_SESSION_EDITED_BY_MANAGER_EMAIL_TEMPLATE
 					// This is the template used to send email to session mentees when it is edited
-					templateData = await notificationQueries.findOneEmailTemplate(
+					templateData = await notificationService.findOneEmailTemplateCached(
 						sessionUpdateByMangerTemplate,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -1072,7 +1074,7 @@ module.exports = class SessionsHelper {
 
 				if (preResourceSendEmail) {
 					let preResourceTemplate = process.env.PRE_RESOURCE_EMAIL_TEMPLATE_CODE
-					preOrPostEmailTemplate = await notificationQueries.findOneEmailTemplate(
+					preOrPostEmailTemplate = await notificationService.findOneEmailTemplateCached(
 						preResourceTemplate,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -1080,7 +1082,7 @@ module.exports = class SessionsHelper {
 				}
 				if (postResourceSendEmail) {
 					let postResourceTemplate = process.env.POST_RESOURCE_EMAIL_TEMPLATE_CODE
-					preOrPostEmailTemplate = await notificationQueries.findOneEmailTemplate(
+					preOrPostEmailTemplate = await notificationService.findOneEmailTemplateCached(
 						postResourceTemplate,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -1089,7 +1091,7 @@ module.exports = class SessionsHelper {
 
 				if (mentorUpdated) {
 					let mentorChangedTemplateName = process.env.SESSION_MENTOR_CHANGED_EMAIL_TEMPLATE
-					mentorChangedTemplate = await notificationQueries.findOneEmailTemplate(
+					mentorChangedTemplate = await notificationService.findOneEmailTemplateCached(
 						mentorChangedTemplateName,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -1097,7 +1099,7 @@ module.exports = class SessionsHelper {
 				}
 
 				// if (triggerSessionMeetinkAddEmail) {
-				// 	templateData = await notificationQueries.findOneEmailTemplate(
+				// 	templateData = await notificationService.findOneEmailTemplateCached(
 				// 		process.env.SESSION_MEETLINK_ADDED_EMAIL_TEMPLATE,
 				// 		orgId
 				// 	)
@@ -1548,7 +1550,7 @@ module.exports = class SessionsHelper {
 				sessionAccessorDetails = mentorExtension
 			}
 			// sessionAccessorDetails
-			const orgDetails = await organisationExtensionQueries.findOne(
+			const orgDetails = await organizationService.findOneCached(
 				{ organization_id: sessionAccessorDetails.organization_id },
 				tenantCode,
 				{ attributes: ['name'] }
@@ -1576,13 +1578,14 @@ module.exports = class SessionsHelper {
 			const sessionModelName = await sessionQueries.getModelName()
 			const modelNames = [mentorExtensionsModelName, sessionModelName].filter(Boolean)
 
-			let entityTypeData = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypeData = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_id: { [Op.in]: orgIds },
 					model_names: { [Op.overlap]: modelNames },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				orgCode,
+				tenantCode
 			)
 
 			if (mentorExtension?.user_id) {
@@ -1599,7 +1602,7 @@ module.exports = class SessionsHelper {
 
 			sessionDetails['resources'] = await this.getResources(sessionDetails.id, tenantCode)
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -1607,7 +1610,8 @@ module.exports = class SessionsHelper {
 					},
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				orgCode,
+				tenantCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -1975,7 +1979,7 @@ module.exports = class SessionsHelper {
 				await sessionQueries.updateEnrollmentCount(sessionId, false, tenantCode)
 			}
 
-			const templateData = await notificationQueries.findOneEmailTemplate(
+			const templateData = await notificationService.findOneEmailTemplateCached(
 				emailTemplateCode,
 				session.mentor_organization_id,
 				tenantCode
@@ -2097,7 +2101,7 @@ module.exports = class SessionsHelper {
 				await sessionQueries.updateEnrollmentCount(sessionId, false, tenantCode)
 			}
 
-			const templateData = await notificationQueries.findOneEmailTemplate(
+			const templateData = await notificationService.findOneEmailTemplateCached(
 				emailTemplateCode,
 				session.mentor_organization_id,
 				tenantCode
@@ -2599,7 +2603,7 @@ module.exports = class SessionsHelper {
 			}
 			if (resourceInfo && resourceInfo.length > 0) {
 				let postResourceTemplate = process.env.POST_RESOURCE_EMAIL_TEMPLATE_CODE
-				let templateData = await notificationQueries.findOneEmailTemplate(
+				let templateData = await notificationService.findOneEmailTemplateCached(
 					postResourceTemplate,
 					sessionDetails.mentor_organization_id,
 					{ [Op.in]: [defaults.tenantCode, tenantCode] }
@@ -3352,7 +3356,7 @@ module.exports = class SessionsHelper {
 				)
 				oldSessionDuration = duration.asMinutes()
 			}
-			const templateData = await notificationQueries.findOneEmailTemplate(
+			const templateData = await notificationService.findOneEmailTemplateCached(
 				templateCode,
 				{ [Op.in]: [orgCode, defaults.orgCode] },
 				{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -3666,7 +3670,7 @@ module.exports = class SessionsHelper {
 				tenantCode
 			)
 
-			const orgDetails = await organisationExtensionQueries.findOne(
+			const orgDetails = await organizationService.findOneCached(
 				{ organization_code: organizationCode },
 				tenantCode,
 				{ attributes: ['name'] }
@@ -3726,7 +3730,7 @@ module.exports = class SessionsHelper {
 			}
 			let path = process.env.SAMPLE_CSV_FILE_PATH
 			if (orgCode != defaults.orgCode) {
-				const result = await organisationExtensionQueries.findOne({ organization_code: orgCode }, tenantCode, {
+				const result = await organizationService.findOneCached({ organization_code: orgCode }, tenantCode, {
 					attributes: ['uploads'],
 				})
 				if (result && result.uploads) {

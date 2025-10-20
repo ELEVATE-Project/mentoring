@@ -407,6 +407,139 @@ module.exports = class NotificationTemplateHelper {
 	}
 
 	/**
-	 * Cache notification template details with cache failure handling
+	 * Get Email Template with Header and Footer composition (CACHED VERSION)
+	 * Cache-first implementation with graceful fallback to database
+	 * Supports the same parameter formats as the query method for compatibility
+	 * @method
+	 * @name findOneEmailTemplateCached
+	 * @param {String} code - Template code
+	 * @param {String|Array|Object} orgCodeParam - Organization code(s) - supports same formats as query method
+	 * @param {String|Array|Object} tenantCodeParam - Tenant code(s) - supports same formats as query method
+	 * @returns {Object|Error} - Cached composed template data
 	 */
+	static async findOneEmailTemplateCached(code, orgCodeParam, tenantCodeParam) {
+		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode || !defaults.tenantCode) {
+				throw new Error('DEFAULT_ORG_CODE_OR_TENANT_CODE_NOT_SET')
+			}
+
+			// Create cache ID based on parameters - normalize complex parameters for consistent caching
+			const orgCodeForCache = Array.isArray(orgCodeParam)
+				? orgCodeParam[0]
+				: orgCodeParam && typeof orgCodeParam === 'object' && orgCodeParam[Op.in]
+				? orgCodeParam[Op.in][0]
+				: orgCodeParam || 'default'
+			const tenantCodeForCache = Array.isArray(tenantCodeParam)
+				? tenantCodeParam[0]
+				: tenantCodeParam && typeof tenantCodeParam === 'object' && tenantCodeParam[Op.in]
+				? tenantCodeParam[Op.in][0]
+				: tenantCodeParam || defaults.tenantCode
+
+			const cacheId = `email_template:${code}:${orgCodeForCache}:${tenantCodeForCache}`
+
+			let templateData
+			try {
+				templateData = await cacheHelper.getOrSet({
+					tenantCode: tenantCodeForCache,
+					orgCode: orgCodeForCache,
+					ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
+					id: cacheId,
+					fetchFn: async () => {
+						// Use the query method directly to maintain exact same parameter handling and business logic
+						return await notificationTemplateQueries.findOneEmailTemplate(
+							code,
+							orgCodeParam,
+							tenantCodeParam
+						)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for email template, falling back to database:', cacheError.message)
+				templateData = await notificationTemplateQueries.findOneEmailTemplate(
+					code,
+					orgCodeParam,
+					tenantCodeParam
+				)
+			}
+
+			return templateData
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Find notification templates by filter (CACHED VERSION)
+	 * Cache-first implementation with graceful fallback to database
+	 * @method
+	 * @name findTemplatesByFilterCached
+	 * @param {Object} filter - Filter criteria
+	 * @param {String} orgCode - Organization code
+	 * @param {String} tenantCode - Tenant code
+	 * @returns {Array} - Cached template data
+	 */
+	static async findTemplatesByFilterCached(filter, orgCode, tenantCode) {
+		try {
+			// Create cache ID based on filter to ensure cache uniqueness
+			const cacheId = `templates_filter:${JSON.stringify(filter)}`
+
+			let templateData
+			try {
+				templateData = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode || 'default',
+					ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
+					id: cacheId,
+					fetchFn: async () => {
+						return await notificationTemplateQueries.findTemplatesByFilter(filter)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for templates filter, falling back to database:', cacheError.message)
+				templateData = await notificationTemplateQueries.findTemplatesByFilter(filter)
+			}
+
+			return templateData
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Find one notification template (CACHED VERSION)
+	 * Cache-first implementation with graceful fallback to database
+	 * @method
+	 * @name findOneCached
+	 * @param {Object} filter - Filter criteria
+	 * @param {String} tenantCode - Tenant code
+	 * @param {Object} options - Query options
+	 * @returns {Object} - Cached template data
+	 */
+	static async findOneCached(filter, tenantCode, options = {}) {
+		try {
+			// Create cache ID based on all parameters to ensure cache uniqueness
+			const cacheId = `one_template:${JSON.stringify({ filter, options })}`
+
+			let templateData
+			try {
+				templateData = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: filter.organization_code || 'default',
+					ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
+					id: cacheId,
+					fetchFn: async () => {
+						return await notificationTemplateQueries.findOne(filter, tenantCode, options)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for one template, falling back to database:', cacheError.message)
+				templateData = await notificationTemplateQueries.findOne(filter, tenantCode, options)
+			}
+
+			return templateData
+		} catch (error) {
+			throw error
+		}
+	}
 }
