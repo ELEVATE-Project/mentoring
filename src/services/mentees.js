@@ -70,7 +70,13 @@ module.exports = class MenteesHelper {
 		const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
 		//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
-		const processDbResponse = utils.processDbResponse(mentee, validationData)
+		let processDbResponse = utils.processDbResponse(mentee, validationData)
+
+		const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+		let displayProperties = []
+		for (const entityType of sortedEntityType) {
+			displayProperties.push({ key: entityType.value, ...entityType.meta })
+		}
 
 		const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id)
 
@@ -116,6 +122,7 @@ module.exports = class MenteesHelper {
 				sessions_attended: totalSession,
 				...menteeDetails.data.result,
 				...processDbResponse,
+				displayProperties,
 			},
 		})
 	}
@@ -557,7 +564,7 @@ module.exports = class MenteesHelper {
 
 	static async getMySessions(page, limit, search, userId, startDate, endDate) {
 		try {
-			const upcomingSessions = await sessionQueries.getUpcomingSessions(
+			const sessionDetails = await sessionQueries.getEnrolledSessions(
 				page,
 				limit,
 				search,
@@ -565,34 +572,11 @@ module.exports = class MenteesHelper {
 				startDate,
 				endDate
 			)
-			const upcomingSessionIds = upcomingSessions.rows.map((session) => session.id)
-			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
-				userId,
-				upcomingSessionIds
-			)
 
-			let sessionAndMenteeMap = {}
-			usersUpcomingSessions.forEach((session) => {
-				sessionAndMenteeMap[session.session_id] = session.type
-			})
-
-			const usersUpcomingSessionIds = usersUpcomingSessions.map(
-				(usersUpcomingSession) => usersUpcomingSession.session_id
-			)
-
-			const attributes = { exclude: ['mentee_password', 'mentor_password'] }
-			let sessionDetails = await sessionQueries.findAndCountAll(
-				{ id: usersUpcomingSessionIds },
-				{ order: [['start_date', 'ASC']] },
-				{ attributes: attributes }
-			)
-			if (sessionDetails.rows.length > 0) {
-				sessionDetails.rows.forEach((session) => {
-					if (sessionAndMenteeMap.hasOwnProperty(session.id)) {
-						session.enrolled_type = sessionAndMenteeMap[session.id]
-					}
-				})
-
+			if (!sessionDetails || typeof sessionDetails.count !== 'number' || !Array.isArray(sessionDetails.rows)) {
+				return { rows: [], count: 0 }
+			}
+			if (sessionDetails.count > 0) {
 				const uniqueOrgIds = [...new Set(sessionDetails.rows.map((obj) => obj.mentor_organization_id))]
 				sessionDetails.rows = await entityTypeService.processEntityTypesToAddValueLabels(
 					sessionDetails.rows,
@@ -600,8 +584,9 @@ module.exports = class MenteesHelper {
 					common.sessionModelName,
 					'mentor_organization_id'
 				)
+				sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows)
+				sessionDetails.rows = sessionDetails.rows.map((r) => ({ ...r, is_enrolled: true }))
 			}
-			sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows)
 
 			return sessionDetails
 		} catch (error) {
@@ -1668,11 +1653,18 @@ module.exports = class MenteesHelper {
 				processDbResponse.connection_details = connection.meta
 			}
 
+			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+			let displayProperties = []
+			for (const entityType of sortedEntityType) {
+				displayProperties.push({ key: entityType.value, ...entityType.meta })
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'PROFILE_FTECHED_SUCCESSFULLY',
 				result: {
 					...processDbResponse,
+					displayProperties,
 				},
 			})
 		} catch (error) {

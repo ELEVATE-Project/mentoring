@@ -1258,6 +1258,28 @@ function transformEntityTypes(input) {
 	return { entityTypes }
 }
 
+function sortData(data = [], path = 'meta.sequence') {
+	const getValue = (obj, path) => {
+		return path.split('.').reduce((acc, key) => acc?.[key], obj)
+	}
+
+	return [...data].sort((a, b) => {
+		const aVal = getValue(a, path)
+		const bVal = getValue(b, path)
+
+		if (aVal !== undefined && bVal !== undefined) {
+			const aNum = Number(aVal)
+			const bNum = Number(bVal)
+			if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum
+			// Fallback to string comparison for non-numeric values
+			return String(aVal).localeCompare(String(bVal))
+		}
+		if (aVal !== undefined) return -1
+		if (bVal !== undefined) return 1
+		return 0
+	})
+}
+
 module.exports = {
 	hash: hash,
 	getCurrentMonthRange,
@@ -1319,4 +1341,5 @@ module.exports = {
 	mapEntityTypeToData,
 	getDynamicEntityCondition,
 	transformEntityTypes,
+	sortData,
 }

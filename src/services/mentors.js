@@ -731,6 +731,12 @@ module.exports = class MentorsHelper {
 			const processDbResponse = utils.processDbResponse(mentorExtension, validationData)
 			const totalSessionHosted = await sessionQueries.countHostedSessions(id)
 
+			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+			let displayProperties = []
+			for (const entityType of sortedEntityType) {
+				displayProperties.push({ key: entityType.value, ...entityType.meta })
+			}
+
 			const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id)
 
 			const mentorPermissions = await permissions.getPermissions(roles)
@@ -786,6 +792,7 @@ module.exports = class MentorsHelper {
 					...mentorProfile,
 					...processDbResponse,
 					...userProfile, // Include userProfile only if token was provided
+					displayProperties,
 				},
 			})
 		} catch (error) {
