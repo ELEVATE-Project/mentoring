@@ -129,7 +129,8 @@ module.exports = class Reports {
 				req.query.group_by ? req.query.group_by : 'month',
 				filter_column.length > 0 ? filter_column : undefined, // Pass filter_column only if it's not empty
 				filter_value.length > 0 ? filter_value : undefined, // Pass filter_value only if it's not empty
-				req.decodedToken.tenant_code
+				req.decodedToken.tenant_code,
+				req.headers.timezone
 			)
 			return reportData
 		} catch (error) {

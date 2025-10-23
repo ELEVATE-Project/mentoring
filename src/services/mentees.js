@@ -95,7 +95,13 @@ module.exports = class MenteesHelper {
 		const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
 		//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
-		const processDbResponse = utils.processDbResponse(mentee, validationData)
+		let processDbResponse = utils.processDbResponse(mentee, validationData)
+
+		const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+		let displayProperties = []
+		for (const entityType of sortedEntityType) {
+			displayProperties.push({ key: entityType.value, ...entityType.meta })
+		}
 
 		const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
 
@@ -149,6 +155,7 @@ module.exports = class MenteesHelper {
 				sessions_attended: totalSession,
 				...menteeDetails.data.result,
 				...processDbResponse,
+				displayProperties,
 			},
 		})
 	}
@@ -725,7 +732,7 @@ module.exports = class MenteesHelper {
 
 	static async getMySessions(page, limit, search, userId, startDate, endDate, tenantCode) {
 		try {
-			const upcomingSessions = await sessionQueries.getUpcomingSessions(
+			const upcomingSessions = await sessionQueries.getEnrolledSessions(
 				page,
 				limit,
 				search,
@@ -734,6 +741,7 @@ module.exports = class MenteesHelper {
 				endDate,
 				tenantCode
 			)
+
 			const upcomingSessionIds =
 				upcomingSessions && upcomingSessions.rows && Array.isArray(upcomingSessions.rows)
 					? upcomingSessions.rows.map((session) => session.id).filter((id) => id != null)
@@ -758,7 +766,6 @@ module.exports = class MenteesHelper {
 				(usersUpcomingSession) => usersUpcomingSession.session_id
 			)
 
-			// Get user's organization code for cache structure
 			const userExtension = await menteeQueries.getMenteeExtension(
 				userId,
 				['organization_code'],
@@ -768,12 +775,14 @@ module.exports = class MenteesHelper {
 			const orgCode = userExtension?.organization_code
 
 			const attributes = { exclude: ['mentee_password', 'mentor_password'] }
+
 			let sessionDetails
 			const cacheId = `sessions:${JSON.stringify(usersUpcomingSessionIds)}`
+
 			try {
 				sessionDetails = await cacheHelper.getOrSet({
 					tenantCode,
-					orgCode: orgCode,
+					orgCode,
 					ns: common.CACHE_CONFIG.namespaces.sessions.name,
 					id: cacheId,
 					fetchFn: async () => {
@@ -781,7 +790,7 @@ module.exports = class MenteesHelper {
 							{ id: usersUpcomingSessionIds },
 							tenantCode,
 							{ order: [['start_date', 'ASC']] },
-							{ attributes: attributes }
+							{ attributes }
 						)
 					},
 				})
@@ -791,9 +800,10 @@ module.exports = class MenteesHelper {
 					{ id: usersUpcomingSessionIds },
 					tenantCode,
 					{ order: [['start_date', 'ASC']] },
-					{ attributes: attributes }
+					{ attributes }
 				)
 			}
+
 			if (
 				sessionDetails &&
 				sessionDetails.rows &&
@@ -815,13 +825,11 @@ module.exports = class MenteesHelper {
 					[],
 					[tenantCode]
 				)
+				sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows)
+				sessionDetails.rows = sessionDetails.rows.map((r) => ({ ...r, is_enrolled: true }))
 			}
-			if (sessionDetails && sessionDetails.rows) {
-				sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows, tenantCode)
-				return sessionDetails
-			} else {
-				return { rows: [], count: 0 }
-			}
+
+			return sessionDetails || { rows: [], count: 0 }
 		} catch (error) {
 			throw error
 		}
@@ -2292,11 +2300,18 @@ module.exports = class MenteesHelper {
 				processDbResponse.connection_details = connection.meta
 			}
 
+			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+			let displayProperties = []
+			for (const entityType of sortedEntityType) {
+				displayProperties.push({ key: entityType.value, ...entityType.meta })
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'PROFILE_FTECHED_SUCCESSFULLY',
 				result: {
 					...processDbResponse,
+					displayProperties,
 				},
 			})
 		} catch (error) {

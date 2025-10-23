@@ -316,7 +316,7 @@ exports.getConnectionsDetails = async (
 			rolesFilter = `AND is_mentor = false`
 		}
 
-		const userFilterClause = `mv.user_id IN (SELECT friend_id FROM ${Connection.tableName} WHERE user_id = :userId AND tenant_code = :tenantCode)`
+		const userFilterClause = `c.deleted_at IS NULL and mv.user_id IN (SELECT friend_id FROM ${Connection.tableName} WHERE user_id = :userId AND tenant_code = :tenantCode)`
 
 		const projectionClause = `
 		mv.name,
@@ -503,6 +503,82 @@ exports.getRequestsCount = async (userId, tenantCode) => {
 				tenant_code: tenantCode,
 				status: common.CONNECTIONS_STATUS.REQUESTED,
 			},
+		})
+		return result
+	} catch (error) {
+		throw error
+	}
+}
+
+exports.deleteConnections = async (userId, friend_id) => {
+	try {
+		const now = new Date()
+
+		const modelsToUpdate = [{ model: Connection, status: common.CONNECTIONS_STATUS.ACCEPTED }]
+
+		let deleted = false
+
+		for (const { model, status } of modelsToUpdate) {
+			const [affectedRows] = await model.update(
+				{ deleted_at: now },
+				{
+					where: {
+						[Op.and]: [{ user_id: userId }, { friend_id: friend_id }],
+						status,
+					},
+				}
+			)
+
+			if (affectedRows > 0) {
+				deleted = true
+			}
+		}
+
+		return deleted
+	} catch (error) {
+		throw error
+	}
+}
+exports.deleteConnectionsRequests = async (userId, friend_id) => {
+	try {
+		const now = new Date()
+
+		const modelsToUpdate = [{ model: ConnectionRequest, status: common.CONNECTIONS_STATUS.REQUESTED }]
+
+		let deleted = false
+
+		for (const { model, status } of modelsToUpdate) {
+			const [affectedRows] = await model.update(
+				{ deleted_at: now },
+				{
+					where: {
+						[Op.and]: [{ user_id: userId }, { friend_id: friend_id }],
+						status,
+					},
+				}
+			)
+
+			if (affectedRows > 0) {
+				deleted = true
+			}
+		}
+
+		return deleted
+	} catch (error) {
+		throw error
+	}
+}
+
+exports.getConnectionRequestsForUser = async (userId) => {
+	try {
+		// This will retrieve send and received request
+
+		const result = await ConnectionRequest.findAndCountAll({
+			where: {
+				user_id: userId,
+				status: common.CONNECTIONS_STATUS.REQUESTED,
+			},
+			raw: true,
 		})
 		return result
 	} catch (error) {
