@@ -72,10 +72,15 @@ module.exports = class MenteeExtensionQueries {
 
 	static async addVisibleToOrg(organizationId, newRelatedOrgs, options = {}) {
 		// Update user extension and concat related org to the org id
+
+		const newRelatedOrgsArray = Array.from(newRelatedOrgs.values())
+
+		const newRelatedOrgsSql = newRelatedOrgsArray.map((e) => `'${e}'`).join(',')
+
 		await MenteeExtension.update(
 			{
 				visible_to_organizations: sequelize.literal(
-					`array_cat("visible_to_organizations", ARRAY[${newRelatedOrgs}]::integer[])`
+					`array_cat(COALESCE("visible_to_organizations", ARRAY[]::varchar[]), ARRAY[${newRelatedOrgsSql}]::varchar[])`
 				),
 			},
 			{
@@ -85,7 +90,7 @@ module.exports = class MenteeExtensionQueries {
 						{
 							[Op.not]: {
 								visible_to_organizations: {
-									[Op.contains]: newRelatedOrgs,
+									[Op.contains]: newRelatedOrgsArray,
 								},
 							},
 						},
@@ -100,17 +105,17 @@ module.exports = class MenteeExtensionQueries {
 				individualHooks: true,
 			}
 		)
-		// Update user extension and append org id to all the related orgs
+
 		return await MenteeExtension.update(
 			{
 				visible_to_organizations: sequelize.literal(
-					`COALESCE("visible_to_organizations", ARRAY[]::integer[]) || ARRAY[${organizationId}]::integer[]`
+					`COALESCE("visible_to_organizations", ARRAY[]::varchar[]) || ARRAY[${organizationId}]::varchar[]`
 				),
 			},
 			{
 				where: {
 					organization_id: {
-						[Op.in]: [...newRelatedOrgs],
+						[Op.in]: newRelatedOrgsArray,
 					},
 					[Op.or]: [
 						{
@@ -139,13 +144,13 @@ module.exports = class MenteeExtensionQueries {
 		  SET "visible_to_organizations" = (
 			SELECT array_agg(elem)
 			FROM unnest("visible_to_organizations") AS elem
-			WHERE elem NOT IN (${elementsToRemove.join(',')})
+			WHERE elem NOT IN (:elementsToRemove)
 		  )
 		  WHERE organization_id = :orgId
 		`
 
 		await Sequelize.query(organizationUpdateQuery, {
-			replacements: { orgId },
+			replacements: { orgId, elementsToRemove },
 			type: Sequelize.QueryTypes.UPDATE,
 		})
 		const relatedOrganizationUpdateQuery = `
@@ -153,13 +158,13 @@ module.exports = class MenteeExtensionQueries {
 		  SET "visible_to_organizations" = (
 			SELECT array_agg(elem)
 			FROM unnest("visible_to_organizations") AS elem
-			WHERE elem NOT IN (${orgId})
+			WHERE elem NOT IN (:orgId)
 		  )
 		  WHERE organization_id IN (:elementsToRemove)
 		`
 
 		await Sequelize.query(relatedOrganizationUpdateQuery, {
-			replacements: { elementsToRemove },
+			replacements: { elementsToRemove, orgId },
 			type: Sequelize.QueryTypes.UPDATE,
 		})
 	}

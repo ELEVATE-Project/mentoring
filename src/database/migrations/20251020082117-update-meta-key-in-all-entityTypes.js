@@ -21,13 +21,13 @@ module.exports = {
 					label: 'Designation',
 					visible: true,
 					visibility: 'main',
-					sequence: 1,
+					sequence: 3,
 				},
 				area_of_expertise: {
 					label: 'Area Of Expertise',
 					visible: true,
 					visibility: 'main',
-					sequence: 1,
+					sequence: 4,
 				},
 			}
 
