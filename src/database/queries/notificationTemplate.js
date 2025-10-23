@@ -187,14 +187,22 @@ module.exports = class NotificationTemplateData {
 
 			// Compose template with header and footer
 			if (selectedTemplate && selectedTemplate.email_header) {
-				const header = await this.getEmailHeader(selectedTemplate.email_header)
+				const header = await this.getEmailHeader(
+					selectedTemplate.email_header,
+					selectedTemplate.tenant_code,
+					selectedTemplate.organization_code
+				)
 				if (header && header.body) {
 					selectedTemplate.body = header.body + selectedTemplate.body
 				}
 			}
 
 			if (selectedTemplate && selectedTemplate.email_footer) {
-				const footer = await this.getEmailFooter(selectedTemplate.email_footer)
+				const footer = await this.getEmailFooter(
+					selectedTemplate.email_footer,
+					selectedTemplate.tenant_code,
+					selectedTemplate.organization_code
+				)
 				if (footer && footer.body) {
 					selectedTemplate.body += footer.body
 				}
@@ -206,14 +214,21 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async getEmailHeader(headerCode) {
+	static async getEmailHeader(headerCode, tenantCode, orgCode) {
 		try {
+			const filter = {
+				code: headerCode,
+				type: 'emailHeader',
+				status: 'active',
+				tenant_code: tenantCode,
+			}
+
+			if (orgCode) {
+				filter.organization_code = orgCode
+			}
+
 			return await NotificationTemplate.findOne({
-				where: {
-					code: headerCode,
-					type: 'emailHeader',
-					status: 'active',
-				},
+				where: filter,
 				raw: true,
 			})
 		} catch (error) {
@@ -221,14 +236,21 @@ module.exports = class NotificationTemplateData {
 		}
 	}
 
-	static async getEmailFooter(footerCode) {
+	static async getEmailFooter(footerCode, tenantCode, orgCode) {
 		try {
+			const filter = {
+				code: footerCode,
+				type: 'emailFooter',
+				status: 'active',
+				tenant_code: tenantCode,
+			}
+
+			if (orgCode) {
+				filter.organization_code = orgCode
+			}
+
 			return await NotificationTemplate.findOne({
-				where: {
-					code: footerCode,
-					type: 'emailFooter',
-					status: 'active',
-				},
+				where: filter,
 				raw: true,
 			})
 		} catch (error) {

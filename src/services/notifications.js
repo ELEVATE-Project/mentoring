@@ -28,22 +28,26 @@ module.exports = class Notifications {
 			// Convert the last part to an integer
 			const sessionId = Number(lastPart)
 
+			// First get basic session data to extract organization code
+			const basicSessionData = await sessionQueries.findOne(
+				{
+					id: sessionId,
+					status: common.PUBLISHED_STATUS,
+				},
+				tenantCode
+			)
+			const orgCode = basicSessionData?.organization_code
+
 			// Find session data
 			let sessions
 			try {
 				sessions = await cacheHelper.getOrSet({
 					tenantCode,
-					orgId: 'unknown',
+					orgCode: orgCode,
 					ns: common.CACHE_CONFIG.namespaces.sessions.name,
 					id: `session:${sessionId}:published`,
 					fetchFn: async () => {
-						return await sessionQueries.findOne(
-							{
-								id: sessionId,
-								status: common.PUBLISHED_STATUS,
-							},
-							tenantCode
-						)
+						return basicSessionData // Use the data we already fetched
 					},
 				})
 			} catch (cacheError) {

@@ -103,7 +103,7 @@ module.exports = class MentorsHelper {
 				requesterId: menteeUserId,
 				roles: roles,
 				requesterOrganizationCode: orgCode,
-				tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+				tenantCode: tenantCode,
 			})
 
 			if (defaultRuleFilter.error && defaultRuleFilter.error.missingField) {
@@ -716,20 +716,41 @@ module.exports = class MentorsHelper {
 	 */
 	static async getMentorExtensionCached(userId, attributes = [], unScoped = false, tenantCode) {
 		try {
-			// Create cache key based on query parameters
-			const cacheKey = `mentor:${userId}:${attributes.sort().join(',')}:${unScoped}`
+			// Get user's organization for cache key structure
+			const userExtension = await mentorQueries.getMentorExtension(
+				userId,
+				['organization_code'],
+				false,
+				tenantCode
+			)
+			const orgCode = userExtension?.organization_code || 'default'
 
-			return await cacheHelper.getOrSet({
-				tenantCode,
-				ns: 'user-extension',
-				id: cacheKey,
-				ttl: 300, // 5 minutes
-				fetchFn: async () => {
-					return await mentorQueries.getMentorExtension(userId, attributes, unScoped, tenantCode)
-				},
-			})
-		} catch (cacheError) {
-			console.warn('Cache system failed for mentor extension, falling back to database:', cacheError.message)
+			// Create tenant:org structured cache key
+			const cacheKey = `tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${userId}:${attributes
+				.sort()
+				.join(',')}:${unScoped}`
+
+			try {
+				// Use direct Redis operations with tenant/org structure
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					return cached
+				}
+
+				// Fetch from database if not in cache
+				const result = await mentorQueries.getMentorExtension(userId, attributes, unScoped, tenantCode)
+				if (result !== undefined) {
+					const ttl = 300 // 5 minutes
+					await cacheHelper.set(cacheKey, result, ttl)
+				}
+
+				return result
+			} catch (cacheError) {
+				console.warn('Cache system failed for mentor extension, falling back to database:', cacheError.message)
+				return await mentorQueries.getMentorExtension(userId, attributes, unScoped, tenantCode)
+			}
+		} catch (error) {
+			console.warn('Error in getMentorExtensionCached, falling back to database:', error.message)
 			return await mentorQueries.getMentorExtension(userId, attributes, unScoped, tenantCode)
 		}
 	}
@@ -773,18 +794,26 @@ module.exports = class MentorsHelper {
 		if (ids.length === 0) return []
 
 		try {
+			// Get organization code for cache structure - fetch from one of the mentors if needed
+			let orgCode = process.env.DEFAULT_ORGANISATION_CODE
+			if (ids.length > 0) {
+				// Get first mentor's org code to use for cache structure
+				const firstMentor = await mentorQueries.getMentorsByUserIds([ids[0]], options, tenantCode, unscoped)
+				if (firstMentor.length > 0 && firstMentor[0].organization_code) {
+					orgCode = firstMentor[0].organization_code
+				}
+			}
+
 			// Try to get cached individual mentors first
 			const cachedResults = []
 			const missingIds = []
 
-			// Check cache for each mentor individually
+			// Check cache for each mentor individually using tenant:org structure
 			for (const id of ids) {
-				const cacheKey = `mentor:${id}::${unscoped}`
+				const cacheKey = `tenant:${tenantCode}:org:${orgCode}:mentor_profile:mentor:${id}:${unscoped}`
 				try {
-					const cached = await cacheHelper.get(
-						await cacheHelper.buildKey({ tenantCode, ns: 'user-extension', id: cacheKey })
-					)
-					if (cached) {
+					const cached = await cacheHelper.get(cacheKey)
+					if (cached !== null && cached !== undefined) {
 						cachedResults.push(cached)
 					} else {
 						missingIds.push(id)
@@ -800,17 +829,13 @@ module.exports = class MentorsHelper {
 			if (missingIds.length > 0) {
 				dbResults = await mentorQueries.getMentorsByUserIds(missingIds, options, tenantCode, unscoped)
 
-				// Cache individual results for future lookups
+				// Cache individual results using tenant:org structure
 				for (const mentor of dbResults) {
-					const cacheKey = `mentor:${mentor.user_id}::${unscoped}`
+					const mentorOrgCode = mentor.organization_code || orgCode
+					const cacheKey = `tenant:${tenantCode}:org:${mentorOrgCode}:mentor_profile:mentor:${mentor.user_id}:${unscoped}`
 					try {
-						await cacheHelper.setScoped({
-							tenantCode,
-							ns: 'user-extension',
-							id: cacheKey,
-							value: mentor,
-							ttl: 300,
-						})
+						const ttl = 300 // 5 minutes TTL
+						await cacheHelper.set(cacheKey, mentor, ttl)
 					} catch (cacheErr) {
 						console.warn('Failed to cache individual mentor:', cacheErr.message)
 					}
@@ -1258,7 +1283,7 @@ module.exports = class MentorsHelper {
 				requesterId: queryParams.menteeId ? queryParams.menteeId : userId,
 				roles: roles,
 				requesterOrganizationCode: orgCode,
-				tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+				tenantCode: tenantCode,
 			})
 
 			if (defaultRuleFilter.error && defaultRuleFilter.error.missingField) {
@@ -1640,6 +1665,9 @@ module.exports = class MentorsHelper {
 				[tenantCode]
 			)
 
+			// Cache only PUBLIC type sessions for upcoming-public-sessions discovery
+			await this._cachePublicSessionsForDiscovery(sessionDetails.rows, organizationId, tenantCode)
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'SESSION_FETCHED_SUCCESSFULLY',
@@ -1647,6 +1675,80 @@ module.exports = class MentorsHelper {
 			})
 		} catch (error) {
 			throw error
+		}
+	}
+
+	/**
+	 * Private method: Cache only PUBLIC sessions for upcoming-public-sessions discovery
+	 * Filters mentor's created sessions to cache only PUBLIC type sessions in the upcoming-public-sessions cache
+	 * @param {Array} sessions - Array of all session objects (public and private)
+	 * @param {String} organizationId - Organization ID for cache key
+	 * @param {String} tenantCode - Tenant code for cache key
+	 */
+	static async _cachePublicSessionsForDiscovery(sessions, organizationId, tenantCode) {
+		try {
+			if (!sessions || sessions.length === 0) {
+				return
+			}
+
+			// Filter only PUBLIC type sessions for caching
+			const publicSessions = sessions.filter((session) => {
+				return (
+					session.type &&
+					(session.type.value === common.SESSION_TYPE.PUBLIC ||
+						session.type === common.SESSION_TYPE.PUBLIC ||
+						session.type === 'PUBLIC')
+				)
+			})
+
+			if (publicSessions.length === 0) {
+				console.log('No public sessions to cache for discovery')
+				return
+			}
+
+			console.log(
+				`Caching ${publicSessions.length} public sessions for discovery out of ${sessions.length} total sessions`
+			)
+
+			// Cache public sessions using the same format as upcoming-public-sessions
+			// Ensure data is properly serializable by converting to plain objects
+			const serializableSessions = publicSessions.map((session) => {
+				// Create a plain object copy without any complex nested objects that might cause serialization issues
+				return {
+					...session,
+					// Ensure all fields are serializable
+					organization: session.organization
+						? {
+								...session.organization,
+						  }
+						: null,
+				}
+			})
+
+			const cacheData = {
+				rows: serializableSessions,
+				count: serializableSessions.length,
+			}
+
+			// Use a similar cache key structure as mentees service but for mentor's public sessions
+			const cacheKey = `mentor_public_sessions:${Date.now()}`
+
+			try {
+				await cacheHelper.set({
+					tenantCode,
+					orgCode: organizationId,
+					ns: 'upcoming-public-sessions',
+					id: cacheKey,
+					data: cacheData,
+				})
+				console.log(`✅ Cached ${publicSessions.length} public sessions with key: ${cacheKey}`)
+			} catch (cacheError) {
+				console.warn('Failed to cache public sessions for discovery:', cacheError.message)
+				console.error('Cache error details:', cacheError)
+			}
+		} catch (error) {
+			console.error('Error in _cachePublicSessionsForDiscovery:', error.message)
+			// Don't throw - cache failures should not break main functionality
 		}
 	}
 
@@ -1704,37 +1806,43 @@ module.exports = class MentorsHelper {
 	 */
 	static async _invalidateMentorCaches({ tenantCode, orgCode, mentorId }) {
 		try {
-			// Evict user-extension caches (new namespace for mentor/mentee extension data)
+			// Evict mentor profile caches using tenant:org structure
 			if (mentorId) {
-				// Invalidate specific mentor's cache entries
-				await cacheHelper.evictNamespace({
-					tenantCode,
-					orgCode: orgCode,
-					ns: 'user-extension',
-					patternSuffix: `mentor:${mentorId}:*`,
-				})
+				// Invalidate specific mentor's cache entries using the new cache key structure
+				const patterns = [
+					`tenant:${tenantCode}:org:${orgCode}:mentor_profile:mentor:${mentorId}:*`,
+					`tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${mentorId}:*`,
+				]
+
+				for (const pattern of patterns) {
+					try {
+						await cacheHelper.evictPattern(pattern)
+					} catch (evictErr) {
+						console.warn('Failed to evict cache pattern:', pattern, evictErr.message)
+					}
+				}
 			} else {
-				// Invalidate all mentor extension caches for the organization
-				await cacheHelper.evictNamespace({
-					tenantCode,
-					orgCode: orgCode,
-					ns: 'user-extension',
-				})
+				// Invalidate all mentor profile caches for the organization
+				const patterns = [
+					`tenant:${tenantCode}:org:${orgCode}:mentor_profile:*`,
+					`tenant:${tenantCode}:org:${orgCode}:user_profile_cache:*`,
+				]
+
+				for (const pattern of patterns) {
+					try {
+						await cacheHelper.evictPattern(pattern)
+					} catch (evictErr) {
+						console.warn('Failed to evict cache pattern:', pattern, evictErr.message)
+					}
+				}
 			}
 
-			// Evict mentor profile caches
-			await cacheHelper.evictNamespace({
-				tenantCode,
-				orgCode: orgCode,
-				ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
-			})
-
 			// Evict sessions caches as mentor data affects sessions
-			await cacheHelper.evictNamespace({
-				tenantCode,
-				orgCode: orgCode,
-				ns: common.CACHE_CONFIG.namespaces.sessions.name,
-			})
+			try {
+				await cacheHelper.evictPattern(`tenant:${tenantCode}:org:${orgCode}:sessions:*`)
+			} catch (evictErr) {
+				console.warn('Failed to evict sessions cache pattern:', evictErr.message)
+			}
 		} catch (err) {
 			console.error('Mentor cache invalidation failed', err)
 			// Don't throw - cache failures should not block main operations

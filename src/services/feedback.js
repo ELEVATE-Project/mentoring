@@ -135,17 +135,21 @@ module.exports = class MenteesHelper {
 
 	static async forms(sessionId, roles, tenantCode) {
 		try {
+			// First get basic session data to extract organization code
+			const basicSessionData = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+				attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set', 'organization_code'],
+			})
+			const orgCode = basicSessionData?.organization_code
+
 			let sessioninfo
 			try {
 				sessioninfo = await cacheHelper.getOrSet({
 					tenantCode,
-					orgId: 'unknown',
+					orgCode: orgCode,
 					ns: common.CACHE_CONFIG.namespaces.sessions.name,
 					id: `session:${sessionId}:feedback_sets`,
 					fetchFn: async () => {
-						return await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-							attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
-						})
+						return basicSessionData // Use the data we already fetched
 					},
 				})
 			} catch (cacheError) {
@@ -203,18 +207,22 @@ module.exports = class MenteesHelper {
 			delete updateData.feedback_as
 		}
 		try {
+			// First get basic session data to extract organization code
+			const basicSessionData = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+				attributes: ['is_feedback_skipped', 'mentor_id', 'organization_code'],
+			})
+			const orgCode = basicSessionData?.organization_code
+
 			//get session details
 			let sessionInfo
 			try {
 				sessionInfo = await cacheHelper.getOrSet({
 					tenantCode,
-					orgId: 'unknown',
+					orgCode: orgCode,
 					ns: common.CACHE_CONFIG.namespaces.sessions.name,
 					id: `session:${sessionId}:feedback_skip_mentor`,
 					fetchFn: async () => {
-						return await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-							attributes: ['is_feedback_skipped', 'mentor_id'],
-						})
+						return basicSessionData // Use the data we already fetched
 					},
 				})
 			} catch (cacheError) {

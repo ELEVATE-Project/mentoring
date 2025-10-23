@@ -60,7 +60,7 @@ module.exports = class OrgAdminService {
 			try {
 				mentorDetails = await cacheHelper.getOrSet({
 					tenantCode,
-					orgId: updateData.organization_id || 'unknown',
+					orgCode: updateData.organization_code,
 					ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
 					id: `mentor:${bodyData.user_id}:all`,
 					fetchFn: async () => {
@@ -545,7 +545,7 @@ module.exports = class OrgAdminService {
 				try {
 					mentorDetails = await cacheHelper.getOrSet({
 						tenantCode,
-						orgId: defaults.orgCode,
+						orgCode: defaults.orgCode,
 						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
 						id: `mentor:${userId}:all`,
 						fetchFn: async () => {

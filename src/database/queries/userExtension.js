@@ -543,6 +543,7 @@ module.exports = class MenteeExtensionQueries {
 			const replacements = {
 				...filter.replacements, // Add filter parameters to replacements
 				search: `%${searchText}%`,
+				tenantCode: tenantCode,
 			}
 
 			// Always provide offset and limit replacements since they're in the query
@@ -563,12 +564,7 @@ module.exports = class MenteeExtensionQueries {
 			const countQuery = `
 				SELECT COUNT(*) AS count
 				FROM ${viewName}
-				WHERE
-					${userFilterClause}
-					${filterClause}
-					${saasFilterClause}
-					${additionalFilter}
-					${defaultFilter}
+				${whereClause}
 			`
 
 			const count = await Sequelize.query(countQuery, {

@@ -297,8 +297,8 @@ module.exports = {
 				defaultTtl: 1800, // 30 mins
 				useInternal: false,
 			},
-			'user-extension': {
-				name: 'user-extension',
+			user_extension: {
+				name: 'user_extension',
 				enabled: true,
 				defaultTtl: 300, // 5 minutes - frequently accessed user extension data
 				useInternal: false,

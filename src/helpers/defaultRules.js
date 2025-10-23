@@ -84,13 +84,13 @@ async function getUserDetailsFromView(userId, isAMentor, tenantCode) {
  * @returns {Promise<Object>} - A promise that resolves to the user details.
  * @throws {Error} - Throws an error if the user details cannot be retrieved.
  */
-async function getUserDetails(userId, isAMentor, tenantCode) {
+async function getUserDetails(userId, isAMentor, tenantCode, orgCode) {
 	try {
 		if (isAMentor) {
 			try {
 				return await cacheHelper.getOrSet({
 					tenantCode,
-					orgId: 'unknown',
+					orgCode: orgCode,
 					ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
 					id: `mentor:${userId}:all`,
 					fetchFn: async () => {
@@ -119,7 +119,7 @@ exports.defaultRulesFilter = async function defaultRulesFilter({
 }) {
 	try {
 		const [userDetails, defaultRules] = await Promise.all([
-			getUserDetails(requesterId, isAMentor(roles), tenantCode),
+			getUserDetails(requesterId, isAMentor(roles), tenantCode, requesterOrganizationCode),
 			defaultRuleQueries.findAll({ type: ruleType, organization_code: requesterOrganizationCode }, tenantCode),
 		])
 
@@ -219,7 +219,7 @@ exports.validateDefaultRulesFilter = async function validateDefaultRulesFilter({
 }) {
 	try {
 		const [userDetails, defaultRules] = await Promise.all([
-			getUserDetails(requesterId, isAMentor(roles), tenantCode),
+			getUserDetails(requesterId, isAMentor(roles), tenantCode, requesterOrganizationCode),
 			defaultRuleQueries.findAll({ type: ruleType, organization_code: requesterOrganizationCode }, tenantCode),
 		])
 
@@ -263,7 +263,7 @@ exports.validateDefaultRulesFilter = async function validateDefaultRulesFilter({
 		}
 
 		if (mentorChecks.length > 0 && data.mentor_id) {
-			const mentorDetails = await getUserDetails(data.mentor_id, true, tenantCode)
+			const mentorDetails = await getUserDetails(data.mentor_id, true, tenantCode, requesterOrganizationCode)
 
 			for (const { target_field, operator, requesterValue } of mentorChecks) {
 				const targetFieldValue =

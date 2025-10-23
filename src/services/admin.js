@@ -8,6 +8,8 @@ const notificationTemplateQueries = require('@database/queries/notificationTempl
 const notificationService = require('@services/notification')
 const mentorQueries = require('@database/queries/mentorExtension')
 const menteeQueries = require('@database/queries/userExtension')
+const menteesService = require('@services/mentees')
+const mentorsService = require('@services/mentors')
 const adminService = require('../generics/materializedViews')
 const responses = require('@helpers/responses')
 const requestSessionQueries = require('@database/queries/requestSessions')
@@ -97,7 +99,7 @@ class NotificationHelper {
 						? await this.getSessionAttendeeIds(session.id, tenantCode)
 						: [session[recipientField]]
 
-				const recipients = await menteeQueries.getUsersByUserIds(recipientIds, {}, tenantCode, true)
+				const recipients = await menteesService.getUsersByUserIdsCached(recipientIds, {}, tenantCode, true)
 
 				const emailPromises = recipients.map(async (recipient) => {
 					const templateData = {
@@ -154,8 +156,8 @@ module.exports = class AdminService {
 		try {
 			let result = {}
 
-			// Step 1: Fetch user details
-			const getUserDetails = await menteeQueries.getUsersByUserIds([userId], {}, tenantCode, false) // userId = "1"
+			// Step 1: Fetch user details (using cached version for better performance)
+			const getUserDetails = await menteesService.getUsersByUserIdsCached([userId], {}, tenantCode, false) // userId = "1"
 
 			if (!getUserDetails || getUserDetails.length === 0) {
 				return responses.failureResponse({
@@ -217,11 +219,15 @@ module.exports = class AdminService {
 					// Continue with deletion process even if no mentors are connected
 					mentorIds = []
 				}
-				// Get mentor details for notification
-				const connectedMentors = await userExtensionQueries.getUsersByUserIds(mentorIds, {
-					attributes: ['user_id', 'name', 'email'],
+				// Get mentor details for notification (using cached version)
+				const connectedMentors = await menteesService.getUsersByUserIdsCached(
+					mentorIds,
+					{
+						attributes: ['user_id', 'name', 'email'],
+					},
 					tenantCode,
-				})
+					false
+				)
 
 				// Soft delete in communication service - handle invalid-users gracefully
 				let removeChatUser, removeChatAvatar, updateChatUserName
@@ -1152,7 +1158,7 @@ module.exports = class AdminService {
 				'user_id',
 				tenantCode
 			)
-			const connectedMentees = await userExtensionQueries.getUsersByUserIds(
+			const connectedMentees = await menteesService.getUsersByUserIdsCached(
 				menteeIds,
 				{
 					attributes: ['user_id', 'name', 'email'],
@@ -1266,13 +1272,13 @@ module.exports = class AdminService {
 				return []
 			}
 
-			const mentees = await userExtensionQueries.getUsersByUserIds(
+			const mentees = await menteesService.getUsersByUserIdsCached(
 				menteeIds,
 				{
 					attributes: ['user_id', 'name', 'email'],
 				},
-				false,
-				tenantCode
+				tenantCode,
+				false
 			)
 
 			return mentees || []
@@ -1359,13 +1365,13 @@ module.exports = class AdminService {
 				)
 
 				// Get mentee details for notification
-				const menteeDetails = await userExtensionQueries.getUsersByUserIds(
+				const menteeDetails = await menteesService.getUsersByUserIdsCached(
 					[request.requestor_id],
 					{
 						attributes: ['name', 'email'],
 					},
-					false,
-					tenantCodes[0]
+					tenantCodes[0],
+					false
 				)
 
 				if (menteeDetails.length > 0) {
@@ -1410,13 +1416,13 @@ module.exports = class AdminService {
 				const managerSessions = sessionsByManager[managerId]
 
 				// Get session manager details
-				const managerDetails = await userExtensionQueries.getUsersByUserIds(
+				const managerDetails = await menteesService.getUsersByUserIdsCached(
 					[managerId],
 					{
 						attributes: ['name', 'email'],
 					},
-					false,
-					tenantCodes[0]
+					tenantCodes[0],
+					false
 				)
 
 				if (managerDetails.length > 0) {
@@ -1468,13 +1474,13 @@ module.exports = class AdminService {
 				const managerSessions = sessionsByManager[managerId]
 
 				// Get session manager details using user's tenant code for DB query
-				const managerDetails = await userExtensionQueries.getUsersByUserIds(
+				const managerDetails = await menteesService.getUsersByUserIdsCached(
 					[managerId],
 					{
 						attributes: ['name', 'email'],
 					},
-					false,
-					tenantCodes[0]
+					tenantCodes[0],
+					false
 				)
 
 				if (managerDetails.length > 0) {

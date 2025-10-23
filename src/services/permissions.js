@@ -201,15 +201,23 @@ module.exports = class PermissionsHelper {
 
 			let permission
 			try {
-				permission = await cacheHelper.getOrSet({
-					tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-					orgCode: 'default',
-					ns: common.CACHE_CONFIG.namespaces.permissions.name,
-					id: cacheId,
-					fetchFn: async () => {
-						return await permissionsQueries.findPermissionById(id)
-					},
-				})
+				// Use direct cache key without tenant/org structure
+				const cacheKey = `${common.CACHE_CONFIG.namespaces.permissions.name}:${cacheId}`
+
+				// Try to get from cache first
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					permission = cached
+				} else {
+					// Fetch from database if not in cache
+					permission = await permissionsQueries.findPermissionById(id)
+
+					// Store in cache
+					if (permission !== undefined) {
+						const ttl = common.CACHE_CONFIG.namespaces.permissions.defaultTtl || 0
+						await cacheHelper.set(cacheKey, permission, ttl || undefined)
+					}
+				}
 			} catch (cacheError) {
 				console.warn('Cache system failed for permission by ID, falling back to database:', cacheError.message)
 				permission = await permissionsQueries.findPermissionById(id)
@@ -234,19 +242,27 @@ module.exports = class PermissionsHelper {
 	static async findAllPermissionsCached(filter, attributes, options = {}) {
 		try {
 			// Create cache ID based on all parameters
-			const cacheId = `permissions_all:${JSON.stringify({ filter, attributes, options })}`
+			const cacheId = `all:${JSON.stringify({ filter, attributes, options })}`
 
 			let permissions
 			try {
-				permissions = await cacheHelper.getOrSet({
-					tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-					orgCode: 'default',
-					ns: common.CACHE_CONFIG.namespaces.permissions.name,
-					id: cacheId,
-					fetchFn: async () => {
-						return await permissionsQueries.findAllPermissions(filter, attributes, options)
-					},
-				})
+				// Use direct cache key without tenant/org structure
+				const cacheKey = `${common.CACHE_CONFIG.namespaces.permissions.name}:${cacheId}`
+
+				// Try to get from cache first
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					permissions = cached
+				} else {
+					// Fetch from database if not in cache
+					permissions = await permissionsQueries.findAllPermissions(filter, attributes, options)
+
+					// Store in cache
+					if (permissions !== undefined) {
+						const ttl = common.CACHE_CONFIG.namespaces.permissions.defaultTtl || 0
+						await cacheHelper.set(cacheKey, permissions, ttl || undefined)
+					}
+				}
 			} catch (cacheError) {
 				console.warn(
 					'Cache system failed for permissions findAll, falling back to database:',
@@ -272,20 +288,26 @@ module.exports = class PermissionsHelper {
 	 */
 	static async findCached(filter, attributes) {
 		try {
-			// Create cache ID based on filter and attributes
-			const cacheId = `permissions_find:${JSON.stringify({ filter, attributes })}`
+			// Create cache ID based on filter and attributes (matching roles_permissions pattern)
+			const cacheId = `find:${JSON.stringify({ filter, attributes })}`
 
 			let permissions
 			try {
-				permissions = await cacheHelper.getOrSet({
-					tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-					orgCode: 'default',
-					ns: common.CACHE_CONFIG.namespaces.permissions.name,
-					id: cacheId,
-					fetchFn: async () => {
-						return await permissionsQueries.find(filter, attributes)
-					},
-				})
+				// Use direct Redis operations without tenant/org codes for permissions
+				const cacheKey = `${common.CACHE_CONFIG.namespaces.permissions.name}:${cacheId}`
+
+				// Try to get from cache first
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					permissions = cached
+				} else {
+					// Fetch from database if not in cache
+					permissions = await permissionsQueries.find(filter, attributes)
+					if (permissions !== undefined) {
+						const ttl = common.CACHE_CONFIG.namespaces.permissions.defaultTtl || 0
+						await cacheHelper.set(cacheKey, permissions, ttl || undefined)
+					}
+				}
 			} catch (cacheError) {
 				console.warn('Cache system failed for permissions find, falling back to database:', cacheError.message)
 				permissions = await permissionsQueries.find(filter, attributes)
@@ -304,18 +326,11 @@ module.exports = class PermissionsHelper {
 	static async _invalidatePermissionCaches() {
 		try {
 			// Evict permissions namespace
-			await cacheHelper.evictNamespace({
-				tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-				orgCode: 'default',
-				ns: common.CACHE_CONFIG.namespaces.permissions.name,
-			})
+			// Evict permission caches using direct pattern deletion (no tenant/org structure)
+			await cacheHelper.scanAndDelete(`${common.CACHE_CONFIG.namespaces.permissions.name}:*`)
 
 			// Also evict role_permissions namespace since they're related
-			await cacheHelper.evictNamespace({
-				tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-				orgCode: 'default',
-				ns: common.CACHE_CONFIG.namespaces.roles_permissions.name,
-			})
+			await cacheHelper.scanAndDelete(`${common.CACHE_CONFIG.namespaces.roles_permissions.name}:*`)
 		} catch (err) {
 			console.error('Permission cache invalidation failed', err)
 			// Don't throw - cache failures should not block main operations

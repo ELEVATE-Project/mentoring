@@ -554,7 +554,7 @@ module.exports = class MenteesHelper {
 			requesterId: userId,
 			roles: roles,
 			requesterOrganizationCode: organizationCode,
-			tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+			tenantCode: tenantCode,
 		})
 
 		if (defaultRuleFilter.error && defaultRuleFilter.error.missingField) {
@@ -758,13 +758,22 @@ module.exports = class MenteesHelper {
 				(usersUpcomingSession) => usersUpcomingSession.session_id
 			)
 
+			// Get user's organization code for cache structure
+			const userExtension = await menteeQueries.getMenteeExtension(
+				userId,
+				['organization_code'],
+				false,
+				tenantCode
+			)
+			const orgCode = userExtension?.organization_code
+
 			const attributes = { exclude: ['mentee_password', 'mentor_password'] }
 			let sessionDetails
 			const cacheId = `sessions:${JSON.stringify(usersUpcomingSessionIds)}`
 			try {
 				sessionDetails = await cacheHelper.getOrSet({
 					tenantCode,
-					orgId: 'unknown',
+					orgCode: orgCode,
 					ns: common.CACHE_CONFIG.namespaces.sessions.name,
 					id: cacheId,
 					fetchFn: async () => {
@@ -1301,20 +1310,41 @@ module.exports = class MenteesHelper {
 	 */
 	static async getMenteeExtensionCached(userId, attributes = [], unScoped = false, tenantCode) {
 		try {
-			// Create cache key based on query parameters
-			const cacheKey = `mentee:${userId}:${attributes.sort().join(',')}:${unScoped}`
+			// Get user's organization for cache key structure
+			const userExtension = await menteeQueries.getMenteeExtension(
+				userId,
+				['organization_code'],
+				false,
+				tenantCode
+			)
+			const orgCode = userExtension?.organization_code || 'default'
 
-			return await cacheHelper.getOrSet({
-				tenantCode,
-				ns: 'user-extension',
-				id: cacheKey,
-				ttl: 300, // 5 minutes
-				fetchFn: async () => {
-					return await menteeQueries.getMenteeExtension(userId, attributes, unScoped, tenantCode)
-				},
-			})
-		} catch (cacheError) {
-			console.warn('Cache system failed for mentee extension, falling back to database:', cacheError.message)
+			// Create tenant:org structured cache key
+			const cacheKey = `tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${userId}:${attributes
+				.sort()
+				.join(',')}:${unScoped}`
+
+			try {
+				// Use direct Redis operations with tenant/org structure
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					return cached
+				}
+
+				// Fetch from database if not in cache
+				const result = await menteeQueries.getMenteeExtension(userId, attributes, unScoped, tenantCode)
+				if (result !== undefined) {
+					const ttl = 300 // 5 minutes
+					await cacheHelper.set(cacheKey, result, ttl)
+				}
+
+				return result
+			} catch (cacheError) {
+				console.warn('Cache system failed for mentee extension, falling back to database:', cacheError.message)
+				return await menteeQueries.getMenteeExtension(userId, attributes, unScoped, tenantCode)
+			}
+		} catch (error) {
+			console.warn('Error in getMenteeExtensionCached, falling back to database:', error.message)
 			return await menteeQueries.getMenteeExtension(userId, attributes, unScoped, tenantCode)
 		}
 	}
@@ -1358,18 +1388,26 @@ module.exports = class MenteesHelper {
 		if (ids.length === 0) return []
 
 		try {
+			// Get organization code for cache structure - fetch from one of the users if needed
+			let orgCode = process.env.DEFAULT_ORGANISATION_CODE
+			if (ids.length > 0) {
+				// Get first user's org code to use for cache structure
+				const firstUser = await menteeQueries.getUsersByUserIds([ids[0]], options, tenantCode, unscoped)
+				if (firstUser.length > 0 && firstUser[0].organization_code) {
+					orgCode = firstUser[0].organization_code
+				}
+			}
+
 			// Try to get cached individual users first
 			const cachedResults = []
 			const missingIds = []
 
-			// Check cache for each user individually
+			// Check cache for each user individually using tenant:org structure
 			for (const id of ids) {
-				const cacheKey = `mentee:${id}::${unscoped}`
+				const cacheKey = `tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${id}:${unscoped}`
 				try {
-					const cached = await cacheHelper.get(
-						await cacheHelper.buildKey({ tenantCode, ns: 'user-extension', id: cacheKey })
-					)
-					if (cached) {
+					const cached = await cacheHelper.get(cacheKey)
+					if (cached !== null && cached !== undefined) {
 						cachedResults.push(cached)
 					} else {
 						missingIds.push(id)
@@ -1385,17 +1423,13 @@ module.exports = class MenteesHelper {
 			if (missingIds.length > 0) {
 				dbResults = await menteeQueries.getUsersByUserIds(missingIds, options, tenantCode, unscoped)
 
-				// Cache individual results for future lookups
+				// Cache individual results using tenant:org structure
 				for (const user of dbResults) {
-					const cacheKey = `mentee:${user.user_id}::${unscoped}`
+					const userOrgCode = user.organization_code || orgCode
+					const cacheKey = `tenant:${tenantCode}:org:${userOrgCode}:user_profile_cache:${user.user_id}:${unscoped}`
 					try {
-						await cacheHelper.setScoped({
-							tenantCode,
-							ns: 'user-extension',
-							id: cacheKey,
-							value: user,
-							ttl: 300,
-						})
+						const ttl = 300 // 5 minutes TTL
+						await cacheHelper.set(cacheKey, user, ttl)
 					} catch (cacheErr) {
 						console.warn('Failed to cache individual user:', cacheErr.message)
 					}
@@ -1758,20 +1792,31 @@ module.exports = class MenteesHelper {
 			let userPolicyDetails
 			if (isAMentor) {
 				try {
-					userPolicyDetails = await cacheHelper.getOrSet({
-						tenantCode,
-						orgId: 'unknown',
-						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
-						id: `mentor:${userId}:org_id`,
-						fetchFn: async () => {
-							return await mentorQueries.getMentorExtension(
-								userId,
-								['organization_id'],
-								false,
-								tenantCode
-							)
-						},
-					})
+					// Get user's organization for cache key structure
+					const userExtension = await mentorQueries.getMentorExtension(
+						userId,
+						['organization_code'],
+						false,
+						tenantCode
+					)
+					const orgCode = userExtension?.organization_code || 'default'
+
+					// Use tenant:org structured cache key
+					const cacheKey = `tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${userId}:org_id`
+					const cached = await cacheHelper.get(cacheKey)
+					if (cached !== null && cached !== undefined) {
+						userPolicyDetails = cached
+					} else {
+						userPolicyDetails = await mentorQueries.getMentorExtension(
+							userId,
+							['organization_id'],
+							false,
+							tenantCode
+						)
+						if (userPolicyDetails !== undefined) {
+							await cacheHelper.set(cacheKey, userPolicyDetails, 300) // 5 minutes TTL
+						}
+					}
 				} catch (cacheError) {
 					console.warn(
 						'Cache system failed for mentor policy details, falling back to database:',
@@ -1872,20 +1917,31 @@ module.exports = class MenteesHelper {
 			let userPolicyDetails
 			if (isAMentor) {
 				try {
-					userPolicyDetails = await cacheHelper.getOrSet({
-						tenantCode,
-						orgId: 'unknown',
-						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
-						id: `mentor:${userId}:ext_mentee_vis_org`,
-						fetchFn: async () => {
-							return await mentorQueries.getMentorExtension(
-								userId,
-								['external_mentee_visibility', 'organization_id'],
-								false,
-								tenantCode
-							)
-						},
-					})
+					// Get user's organization for cache key structure
+					const userExtension = await mentorQueries.getMentorExtension(
+						userId,
+						['organization_code'],
+						false,
+						tenantCode
+					)
+					const orgCode = userExtension?.organization_code || 'default'
+
+					// Use tenant:org structured cache key
+					const cacheKey = `tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${userId}:ext_mentee_vis_org`
+					const cached = await cacheHelper.get(cacheKey)
+					if (cached !== null && cached !== undefined) {
+						userPolicyDetails = cached
+					} else {
+						userPolicyDetails = await mentorQueries.getMentorExtension(
+							userId,
+							['external_mentee_visibility', 'organization_id'],
+							false,
+							tenantCode
+						)
+						if (userPolicyDetails !== undefined) {
+							await cacheHelper.set(cacheKey, userPolicyDetails, 300) // 5 minutes TTL
+						}
+					}
 				} catch (cacheError) {
 					console.warn(
 						'Cache system failed for mentor policy details, falling back to database:',
@@ -2143,14 +2199,18 @@ module.exports = class MenteesHelper {
 			if (requestedUserExtension) {
 				mentorExtension = requestedUserExtension
 			} else {
+				// First get mentor data to extract organization code
+				const mentorData = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+				const orgCode = mentorData?.organization_code
+
 				try {
 					mentorExtension = await cacheHelper.getOrSet({
 						tenantCode,
-						orgId: 'unknown',
+						orgCode: orgCode,
 						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
 						id: `mentor:${id}:all`,
 						fetchFn: async () => {
-							return await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+							return mentorData // Use the data we already fetched
 						},
 					})
 				} catch (cacheError) {
@@ -2338,13 +2398,13 @@ module.exports = class MenteesHelper {
 	 */
 	static async _invalidateMenteeCaches({ tenantCode, orgCode, menteeId }) {
 		try {
-			// Evict user-extension caches (new namespace for mentor/mentee extension data)
+			// Evict user_extension caches (new namespace for mentor/mentee extension data)
 			if (menteeId) {
 				// Invalidate specific mentee's cache entries
 				await cacheHelper.evictNamespace({
 					tenantCode,
 					orgCode: orgCode,
-					ns: 'user-extension',
+					ns: 'user_extension',
 					patternSuffix: `mentee:${menteeId}:*`,
 				})
 			} else {
@@ -2352,7 +2412,7 @@ module.exports = class MenteesHelper {
 				await cacheHelper.evictNamespace({
 					tenantCode,
 					orgCode: orgCode,
-					ns: 'user-extension',
+					ns: 'user_extension',
 				})
 			}
 

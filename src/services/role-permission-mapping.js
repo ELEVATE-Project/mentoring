@@ -18,14 +18,9 @@ module.exports = class modulesHelper {
 	static async _invalidateRolePermissionCaches(roleTitle) {
 		try {
 			// Invalidate both cache namespaces used by role-permission system
-			await cacheHelper.evictNamespace({
-				tenantCode: process.env.DEFAULT_TENANT_CODE,
-				ns: 'roles_permissions',
-			})
-			await cacheHelper.evictNamespace({
-				tenantCode: process.env.DEFAULT_TENANT_CODE,
-				ns: 'permissions',
-			})
+			// Evict caches using direct pattern deletion (no tenant/org structure)
+			await cacheHelper.scanAndDelete('roles_permissions:*')
+			await cacheHelper.scanAndDelete('permissions:*')
 		} catch (error) {
 			console.error('Failed to invalidate role-permission caches:', error)
 		}
@@ -186,17 +181,25 @@ module.exports = class modulesHelper {
 
 			let permissionAndModules
 			try {
-				permissionAndModules = await cacheHelper.getOrSet({
-					tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-					orgCode: 'default',
-					ns: common.CACHE_CONFIG.namespaces.roles_permissions.name,
-					id: cacheId,
-					fetchFn: async () => {
-						const filter = { role_title: roleTitle }
-						const attributes = ['module', 'request_type']
-						return await rolePermissionMappingQueries.findAll(filter, attributes)
-					},
-				})
+				// Use direct cache key without tenant/org structure
+				const cacheKey = `${common.CACHE_CONFIG.namespaces.roles_permissions.name}:${cacheId}`
+
+				// Try to get from cache first
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					permissionAndModules = cached
+				} else {
+					// Fetch from database if not in cache
+					const filter = { role_title: roleTitle }
+					const attributes = ['module', 'request_type']
+					permissionAndModules = await rolePermissionMappingQueries.findAll(filter, attributes)
+
+					// Store in cache
+					if (permissionAndModules !== undefined) {
+						const ttl = common.CACHE_CONFIG.namespaces.roles_permissions.defaultTtl || 0
+						await cacheHelper.set(cacheKey, permissionAndModules, ttl || undefined)
+					}
+				}
 			} catch (cacheError) {
 				console.warn('Cache system failed for role permissions, falling back to database:', cacheError.message)
 				const filter = { role_title: roleTitle }
@@ -254,15 +257,23 @@ module.exports = class modulesHelper {
 
 			let rolePermissions
 			try {
-				rolePermissions = await cacheHelper.getOrSet({
-					tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-					orgCode: 'default',
-					ns: common.CACHE_CONFIG.namespaces.roles_permissions.name,
-					id: cacheId,
-					fetchFn: async () => {
-						return await rolePermissionMappingQueries.findAll(filter, attributes)
-					},
-				})
+				// Use direct cache key without tenant/org structure
+				const cacheKey = `${common.CACHE_CONFIG.namespaces.roles_permissions.name}:${cacheId}`
+
+				// Try to get from cache first
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					rolePermissions = cached
+				} else {
+					// Fetch from database if not in cache
+					rolePermissions = await rolePermissionMappingQueries.findAll(filter, attributes)
+
+					// Store in cache
+					if (rolePermissions !== undefined) {
+						const ttl = common.CACHE_CONFIG.namespaces.roles_permissions.defaultTtl || 0
+						await cacheHelper.set(cacheKey, rolePermissions, ttl || undefined)
+					}
+				}
 			} catch (cacheError) {
 				console.warn(
 					'Cache system failed for role permissions findAll, falling back to database:',

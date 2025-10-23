@@ -237,22 +237,31 @@ module.exports = class SessionsHelper {
 				})
 
 			const sessionModelName = await sessionQueries.getModelName()
-			const entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [orgCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [sessionModelName] },
+
+			const filter = {
+				status: 'ACTIVE',
+				organization_code: {
+					[Op.in]: [orgCode, defaults.orgCode],
 				},
+				model_names: { [Op.contains]: [sessionModelName] },
+			}
+
+			const entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
+				filter,
 				orgCode,
 				tenantCode
 			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
+
+			// Filter validation data to only include entity types that actually belong to Session model
+			const sessionOnlyValidationData = validationData.filter(
+				(entityType) => entityType.model_names && entityType.model_names.includes('Session')
+			)
+
 			bodyData.status = common.PUBLISHED_STATUS
-			let res = utils.validateInput(bodyData, validationData, sessionModelName, skipValidation)
+			let res = utils.validateInput(bodyData, sessionOnlyValidationData, sessionModelName, skipValidation)
 			if (!res.success) {
 				return responses.failureResponse({
 					message: 'SESSION_CREATION_FAILED',
@@ -1445,9 +1454,9 @@ module.exports = class SessionsHelper {
 						ruleType: common.DEFAULT_RULES.SESSION_TYPE,
 						requesterId: userId,
 						roles: roles,
-						requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
+						requesterOrganizationCode: orgCode,
 						data: sessionDetails,
-						tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+						tenantCode: tenantCode,
 					})
 				}
 				if (validateDefaultRules?.error && validateDefaultRules?.error?.missingField) {
@@ -2514,20 +2523,19 @@ module.exports = class SessionsHelper {
 				if (sessionData && sessionData.tenant_code) {
 					tenantCode = sessionData.tenant_code
 
-					// Now get the full session details with proper tenant context
+					// First get basic session data to extract organization code
+					const basicSessionData = await sessionQueries.findOne({ id: sessionId }, tenantCode)
+					const orgCode = basicSessionData?.organization_code
+
+					// Now get the full session details with proper tenant and org context
 					try {
 						sessionDetails = await cacheHelper.getOrSet({
 							tenantCode,
-							orgId: 'unknown',
+							orgCode: orgCode,
 							ns: common.CACHE_CONFIG.namespaces.sessions.name,
 							id: `session:${sessionId}:details`,
 							fetchFn: async () => {
-								return await sessionQueries.findOne(
-									{
-										id: sessionId,
-									},
-									tenantCode
-								)
+								return basicSessionData // Use the data we already fetched
 							},
 						})
 					} catch (cacheError) {
@@ -2545,19 +2553,18 @@ module.exports = class SessionsHelper {
 				}
 			}
 
+			// First get basic session data to extract organization code
+			const basicSessionData = await sessionQueries.findOne({ id: sessionId }, tenantCode)
+			const orgCode = basicSessionData?.organization_code
+
 			try {
 				sessionDetails = await cacheHelper.getOrSet({
 					tenantCode,
-					orgId: 'unknown',
+					orgCode: orgCode,
 					ns: common.CACHE_CONFIG.namespaces.sessions.name,
 					id: `session:${sessionId}:details`,
 					fetchFn: async () => {
-						return await sessionQueries.findOne(
-							{
-								id: sessionId,
-							},
-							tenantCode
-						)
+						return basicSessionData // Use the data we already fetched
 					},
 				})
 			} catch (cacheError) {
@@ -3884,15 +3891,19 @@ module.exports = class SessionsHelper {
 
 		return Promise.allSettled(
 			mentorIds.map(async (mentorId) => {
+				// First get mentor data to extract organization code
+				const mentorData = await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
+				const orgCode = mentorData?.organization_code
+
 				let mentor
 				try {
 					mentor = await cacheHelper.getOrSet({
 						tenantCode,
-						orgId: 'unknown',
+						orgCode: orgCode,
 						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
 						id: `mentor:${mentorId}:org_code`,
 						fetchFn: async () => {
-							return await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
+							return mentorData // Use the data we already fetched
 						},
 					})
 				} catch (cacheError) {
@@ -3900,7 +3911,7 @@ module.exports = class SessionsHelper {
 						'Cache system failed for mentor extension, falling back to database:',
 						cacheError.message
 					)
-					mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
+					mentor = mentorData // Use the data we already fetched
 				}
 				if (!mentor) throw new MentorError('Invalid Mentor Id', { mentorId })
 
