@@ -11,6 +11,7 @@ const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 
 module.exports = class MenteesHelper {
 	/**
@@ -451,7 +452,7 @@ const getFeedbackQuestions = async function (formCode, tenantCode) {
 
 const ratingCalculation = async function (ratingData, mentor_id, tenantCode) {
 	try {
-		let mentorDetails = await mentorExtensionQueries.getMentorExtension(mentor_id, tenantCode)
+		let mentorDetails = await cacheService.getMentorExtensionCached(mentor_id, [], false, tenantCode)
 		let mentorRating = mentorDetails.rating
 		let updateData
 

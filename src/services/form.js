@@ -11,6 +11,7 @@ const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
 const cacheHelper = require('@generics/cacheHelper')
 const common = require('@constants/common')
+const cacheService = require('@helpers/cache')
 
 module.exports = class FormsHelper {
 	/**
@@ -150,21 +151,7 @@ module.exports = class FormsHelper {
 			let form
 			const cacheId = filter.type ? `${filter.type}:${filter.sub_type || 'default'}` : 'unknown'
 			try {
-				form = await cacheHelper.getOrSet({
-					tenantCode,
-					orgCode: orgCode,
-					ns: common.CACHE_CONFIG.namespaces.forms.name,
-					id: cacheId,
-					fetchFn: async () => {
-						const formFilter = {
-							...filter,
-							status: 'ACTIVE',
-							tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
-						}
-
-						return await formQueries.findOneForm(formFilter, { [Op.in]: [tenantCode, defaults.tenantCode] })
-					},
-				})
+				form = await cacheService.findFormCached(filter, orgCode, tenantCode)
 			} catch (cacheError) {
 				console.warn('Cache system failed for form details, falling back to database:', cacheError.message)
 				const formFilter = {

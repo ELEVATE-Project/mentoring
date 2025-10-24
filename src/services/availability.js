@@ -9,6 +9,8 @@ const { getAvailabilitiesByDay, buildUserAvailabilities } = require('@dtos/avail
 const userRequests = require('@requests/user')
 const _ = require('lodash')
 const menteeQueries = require('@database/queries/userExtension')
+const cacheService = require('@helpers/cache')
+const menteesService = require('@services/mentees')
 
 module.exports = class availabilityHelper {
 	/**
@@ -460,7 +462,7 @@ module.exports = class availabilityHelper {
 
 			const available_users = updatedAvailabilities.map(({ user_id }) => user_id)
 
-			const userDetails = await menteeQueries.getUsersByUserIds(
+			const userDetails = await cacheService.getUsersByUserIdsCached(
 				available_users,
 				{
 					attributes: ['user_id', 'name', 'email'],

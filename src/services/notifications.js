@@ -8,6 +8,7 @@ const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const userRequests = require('@requests/user')
 const menteeQueries = require('@database/queries/userExtension')
 const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 
 module.exports = class Notifications {
 	/**
@@ -113,7 +114,7 @@ module.exports = class Notifications {
 			}
 
 			// Get attendees accound details
-			const attendeesAccounts = await menteeQueries.getUsersByUserIds(
+			const attendeesAccounts = await cacheService.getUsersByUserIdsCached(
 				allAttendees,
 				{
 					attributes: ['user_id', 'name', 'email'],

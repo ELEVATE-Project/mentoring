@@ -7,6 +7,7 @@ const { Op } = require('sequelize')
 const { eventListenerRouter } = require('@helpers/eventListnerRouter')
 const responses = require('@helpers/responses')
 const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 module.exports = class OrganizationService {
@@ -117,7 +118,7 @@ module.exports = class OrganizationService {
 
 	/**
 	 * Get organization extension by ID with caching (CACHED VERSION)
-	 * Cache-first implementation with graceful fallback to database
+	 * Delegates to centralized cache helper
 	 * @method
 	 * @name getByIdCached
 	 * @param {String} orgCode - Organization code
@@ -125,43 +126,12 @@ module.exports = class OrganizationService {
 	 * @returns {Object} - Cached organization extension data
 	 */
 	static async getByIdCached(orgCode, tenantCode) {
-		try {
-			const defaults = await getDefaults()
-			if (!defaults.orgCode || !defaults.tenantCode) {
-				throw new Error('DEFAULT_ORG_CODE_OR_TENANT_CODE_NOT_SET')
-			}
-
-			// Create cache ID based on parameters to ensure cache uniqueness
-			const cacheId = `org_extension:${orgCode}:${tenantCode}`
-
-			let orgExtension
-			try {
-				orgExtension = await cacheHelper.getOrSet({
-					tenantCode,
-					orgCode: orgCode || defaults.orgCode,
-					ns: common.CACHE_CONFIG.namespaces.organization_extensions.name,
-					id: cacheId,
-					fetchFn: async () => {
-						return await organisationExtensionQueries.getById(orgCode, tenantCode)
-					},
-				})
-			} catch (cacheError) {
-				console.warn(
-					'Cache system failed for organization extension, falling back to database:',
-					cacheError.message
-				)
-				orgExtension = await organisationExtensionQueries.getById(orgCode, tenantCode)
-			}
-
-			return orgExtension
-		} catch (error) {
-			throw error
-		}
+		return await cacheService.getByIdCached(orgCode, tenantCode)
 	}
 
 	/**
 	 * Find one organization extension with caching (CACHED VERSION)
-	 * Cache-first implementation with graceful fallback to database
+	 * Delegates to centralized cache helper
 	 * @method
 	 * @name findOneCached
 	 * @param {Object} filter - Filter criteria
@@ -170,33 +140,7 @@ module.exports = class OrganizationService {
 	 * @returns {Object} - Cached organization extension data
 	 */
 	static async findOneCached(filter, tenantCode, options = {}) {
-		try {
-			// Create cache ID based on all parameters to ensure cache uniqueness
-			const cacheId = `org_ext_one:${JSON.stringify({ filter, options })}`
-
-			let orgExtension
-			try {
-				orgExtension = await cacheHelper.getOrSet({
-					tenantCode,
-					orgCode: filter.organization_code || 'default',
-					ns: common.CACHE_CONFIG.namespaces.organization_extensions.name,
-					id: cacheId,
-					fetchFn: async () => {
-						return await organisationExtensionQueries.findOne(filter, tenantCode, options)
-					},
-				})
-			} catch (cacheError) {
-				console.warn(
-					'Cache system failed for organization extension findOne, falling back to database:',
-					cacheError.message
-				)
-				orgExtension = await organisationExtensionQueries.findOne(filter, tenantCode, options)
-			}
-
-			return orgExtension
-		} catch (error) {
-			throw error
-		}
+		return await cacheService.findOneOrganizationCached(filter, tenantCode, options)
 	}
 
 	/**

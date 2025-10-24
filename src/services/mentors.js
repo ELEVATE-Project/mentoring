@@ -28,6 +28,7 @@ const connectionQueries = require('@database/queries/connection')
 const communicationHelper = require('@helpers/communications')
 const searchConfig = require('@root/config.json')
 const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 module.exports = class MentorsHelper {
 	/**
 	 * upcomingSessions.
@@ -54,7 +55,7 @@ module.exports = class MentorsHelper {
 		try {
 			let requestedMentorExtension = false
 			if (id !== '' && isAMentor !== '' && roles !== '') {
-				requestedMentorExtension = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+				requestedMentorExtension = await cacheService.getMentorExtensionCached(id, [], false, tenantCode)
 				if (!requestedMentorExtension) {
 					return responses.failureResponse({
 						statusCode: httpStatusCode.bad_request,
@@ -80,7 +81,7 @@ module.exports = class MentorsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			let validationData = await entityTypeService.readAllEntityTypesAndEntitiesCached(
+			let validationData = await cacheService.readAllEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					allow_filtering: true,
@@ -119,7 +120,7 @@ module.exports = class MentorsHelper {
 			// Filter upcoming sessions based on saas policy
 			const saasFilter = await menteesService.filterSessionsBasedOnSaasPolicy(menteeUserId, isAMentor, tenantCode)
 
-			let upcomingSessions = await sessionQueries.getMentorsUpcomingSessionsFromView(
+			let upcomingSessions = await cacheService.getMentorsUpcomingSessionsFromViewCached(
 				page,
 				limit,
 				search,
@@ -150,7 +151,7 @@ module.exports = class MentorsHelper {
 				upcomingSessions && upcomingSessions.data && Array.isArray(upcomingSessions.data)
 					? [...new Set(upcomingSessions.data.map((obj) => obj.mentor_organization_id))]
 					: []
-			upcomingSessions.data = await entityTypeService.processEntityTypesToAddValueLabels(
+			upcomingSessions.data = await cacheService.processEntityTypesToAddValueLabelsCached(
 				upcomingSessions.data,
 				uniqueOrgIds,
 				common.sessionModelName,
@@ -288,7 +289,7 @@ module.exports = class MentorsHelper {
 	 */
 	static async share(id, userId, organizationId, tenantCode) {
 		try {
-			const mentorsDetails = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+			const mentorsDetails = await cacheService.getMentorExtensionCached(id, [], false, tenantCode)
 			if (!mentorsDetails) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.bad_request,
@@ -401,7 +402,7 @@ module.exports = class MentorsHelper {
 			const organization_name = orgCode // Temporary fallback, can be updated later
 
 			// Find organisation policy from organisation_extension table
-			let organisationPolicy = await organizationService.findOrInsertOrganizationExtensionCached(
+			let organisationPolicy = await cacheService.findOrInsertOrganizationExtensionCached(
 				orgId,
 				orgCode,
 				organization_name,
@@ -427,7 +428,7 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
+			let entityTypes = await cacheService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -507,7 +508,7 @@ module.exports = class MentorsHelper {
 	static async updateMentorExtension(data, userId, orgCode, tenantCode) {
 		try {
 			// Fetch current mentee extension data
-			const currentUser = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+			const currentUser = await cacheService.getMentorExtensionCached(userId, [], false, tenantCode)
 			if (!currentUser) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -549,7 +550,7 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
+			let entityTypes = await cacheService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -583,7 +584,7 @@ module.exports = class MentorsHelper {
 				//organization.id. This is added for the users/update workflow where
 				//both both user data and organisation can change at the same time.
 				let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: orgCode, tenantCode })
-				const orgPolicies = await organizationService.findOrInsertOrganizationExtensionCached(
+				const orgPolicies = await cacheService.findOrInsertOrganizationExtensionCached(
 					data.organization.id,
 					orgCode,
 					userOrgDetails.data.result.name,
@@ -687,7 +688,7 @@ module.exports = class MentorsHelper {
 		try {
 			// Note: orgCode not available in this method signature, so we can't use org-scoped cache
 			// This would need to be refactored to include orgCode parameter for proper caching
-			const mentor = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+			const mentor = await cacheService.getMentorExtensionCached(userId, [], false, tenantCode)
 			if (!mentor) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -701,57 +702,6 @@ module.exports = class MentorsHelper {
 			})
 		} catch (error) {
 			return error
-		}
-	}
-
-	/**
-	 * Get mentor extension details by user ID with caching.
-	 * @method
-	 * @name getMentorExtensionCached
-	 * @param {String} userId - User ID of the mentor.
-	 * @param {Array} attributes - Attributes to select (default: []).
-	 * @param {Boolean} unScoped - Whether to use unscoped query (default: false).
-	 * @param {String} tenantCode - Tenant code for isolation.
-	 * @returns {Promise<Object>} - Cached mentor extension details.
-	 */
-	static async getMentorExtensionCached(userId, attributes = [], unScoped = false, tenantCode) {
-		try {
-			// Get user's organization for cache key structure
-			const userExtension = await mentorQueries.getMentorExtension(
-				userId,
-				['organization_code'],
-				false,
-				tenantCode
-			)
-			const orgCode = userExtension?.organization_code || 'default'
-
-			// Create tenant:org structured cache key
-			const cacheKey = `tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${userId}:${attributes
-				.sort()
-				.join(',')}:${unScoped}`
-
-			try {
-				// Use direct Redis operations with tenant/org structure
-				const cached = await cacheHelper.get(cacheKey)
-				if (cached !== null && cached !== undefined) {
-					return cached
-				}
-
-				// Fetch from database if not in cache
-				const result = await mentorQueries.getMentorExtension(userId, attributes, unScoped, tenantCode)
-				if (result !== undefined) {
-					const ttl = 300 // 5 minutes
-					await cacheHelper.set(cacheKey, result, ttl)
-				}
-
-				return result
-			} catch (cacheError) {
-				console.warn('Cache system failed for mentor extension, falling back to database:', cacheError.message)
-				return await mentorQueries.getMentorExtension(userId, attributes, unScoped, tenantCode)
-			}
-		} catch (error) {
-			console.warn('Error in getMentorExtensionCached, falling back to database:', error.message)
-			return await mentorQueries.getMentorExtension(userId, attributes, unScoped, tenantCode)
 		}
 	}
 
@@ -878,7 +828,7 @@ module.exports = class MentorsHelper {
 			let requestedMentorExtension = false
 			if (userId !== '' && isAMentor !== '' && roles !== '') {
 				// Get mentor visibility and org id
-				requestedMentorExtension = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+				requestedMentorExtension = await cacheService.getMentorExtensionCached(id, [], false, tenantCode)
 
 				const validateDefaultRules = await validateDefaultRulesFilter({
 					ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
@@ -931,7 +881,7 @@ module.exports = class MentorsHelper {
 
 			let mentorExtension
 			if (requestedMentorExtension) mentorExtension = requestedMentorExtension
-			else mentorExtension = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+			else mentorExtension = await cacheService.getMentorExtensionCached(id, [], false, tenantCode)
 
 			// If no mentor extension found, but user has admin/mentor roles, check if user extension exists and update it
 			if (!mentorExtension && roles && roles.some((role) => role.title === 'admin' || role.title === 'mentor')) {
@@ -948,7 +898,7 @@ module.exports = class MentorsHelper {
 						tenantCode
 					)
 					// Get the updated mentor extension
-					mentorExtension = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+					mentorExtension = await cacheService.getMentorExtensionCached(id, [], false, tenantCode)
 				}
 			}
 
@@ -977,7 +927,7 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
+			let entityTypes = await cacheService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -1031,7 +981,7 @@ module.exports = class MentorsHelper {
 			}
 
 			if (!mentorProfile.organization) {
-				const orgDetails = await organizationService.findOneCached(
+				const orgDetails = await cacheService.findOneOrganizationCached(
 					{ organization_code: mentorOrgCode },
 					tenantCode,
 					{
@@ -1083,13 +1033,13 @@ module.exports = class MentorsHelper {
 		try {
 			// user can be mentor or mentee, based on isAMentor key get policy details
 			const userPolicyDetails = isAMentor
-				? await mentorQueries.getMentorExtension(
+				? await cacheService.getMentorExtensionCached(
 						userId,
 						['external_mentor_visibility', 'organization_id'],
 						false,
 						tenantCode
 				  )
-				: await menteeQueries.getMenteeExtension(
+				: await cacheService.getMenteeExtensionCached(
 						userId,
 						['external_mentor_visibility', 'organization_id'],
 						false,
@@ -1233,7 +1183,7 @@ module.exports = class MentorsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			let validationData = await entityTypeService.readAllEntityTypesAndEntitiesCached(
+			let validationData = await cacheService.readAllEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					allow_filtering: true,
@@ -1339,7 +1289,7 @@ module.exports = class MentorsHelper {
 			}
 
 			// Fetch mentor data
-			let extensionDetails = await mentorQueries.getMentorsByUserIdsFromView(
+			let extensionDetails = await cacheService.getMentorsByUserIdsFromViewCached(
 				connectedMentorsIds ? connectedMentorsIds : [],
 				pageNo,
 				pageSize,
@@ -1384,7 +1334,7 @@ module.exports = class MentorsHelper {
 						[Op.in]: organizationCodes,
 					},
 				}
-				organizationDetails = await organizationService.findAllCached(orgFilter, tenantCode, {
+				organizationDetails = await cacheService.findAllOrganizationsCached(orgFilter, tenantCode, {
 					attributes: ['name', 'organization_code'],
 					raw: true, // Ensure plain objects
 				})
@@ -1413,7 +1363,7 @@ module.exports = class MentorsHelper {
 			const connectedMentorIds = new Set(connectedUsers.map((connectedUser) => connectedUser.friend_id))
 
 			if (extensionDetails.data && Array.isArray(extensionDetails.data) && extensionDetails.data.length > 0) {
-				extensionDetails.data = await entityTypeService.processEntityTypesToAddValueLabels(
+				extensionDetails.data = await cacheService.processEntityTypesToAddValueLabelsCached(
 					extensionDetails.data,
 					organizationCodes,
 					mentorExtensionsModelName,
@@ -1501,7 +1451,7 @@ module.exports = class MentorsHelper {
 		try {
 			// Always query mentee extension for mentor list filtering policy
 			// Even if user is also a mentor/admin, we need their mentee visibility policy
-			const userPolicyDetails = await menteeQueries.getMenteeExtension(
+			const userPolicyDetails = await cacheService.getMenteeExtensionCached(
 				userId,
 				['external_mentor_visibility', 'organization_code'],
 				false,
@@ -1663,7 +1613,7 @@ module.exports = class MentorsHelper {
 				...new Set(sessionDetails.rows.map((obj) => obj.organization?.organization_code).filter(Boolean)),
 			]
 
-			sessionDetails.rows = await entityTypeService.processEntityTypesToAddValueLabels(
+			sessionDetails.rows = await cacheService.processEntityTypesToAddValueLabelsCached(
 				sessionDetails.rows,
 				uniqueOrgIds,
 				common.sessionModelName,

@@ -9,6 +9,7 @@ const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
 const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 
 module.exports = class EntityHelper {
 	/**

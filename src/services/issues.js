@@ -10,6 +10,7 @@ const responses = require('@helpers/responses')
 const cacheHelper = require('@generics/cacheHelper')
 
 const menteeExtensionQueries = require('@database/queries/userExtension')
+const cacheService = require('@helpers/cache')
 
 module.exports = class issuesHelper {
 	/**
@@ -23,9 +24,10 @@ module.exports = class issuesHelper {
 
 	static async create(bodyData, decodedToken, tenantCode) {
 		try {
-			const userDetails = await menteeExtensionQueries.getMenteeExtension(
+			const userDetails = await cacheService.getMenteeExtensionCached(
 				decodedToken.id,
 				['name', 'user_id', 'email'],
+				false,
 				tenantCode
 			)
 			if (!userDetails) throw createUnauthorizedResponse('USER_NOT_FOUND')

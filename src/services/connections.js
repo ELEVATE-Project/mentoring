@@ -16,6 +16,7 @@ const notificationQueries = require('@database/queries/notificationTemplate')
 const notificationService = require('@services/notification')
 const kafkaCommunication = require('@generics/kafka-communication')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
+const cacheService = require('@helpers/cache')
 
 module.exports = class ConnectionHelper {
 	/**
@@ -42,7 +43,7 @@ module.exports = class ConnectionHelper {
 	static async initiate(bodyData, userId, tenantCode) {
 		try {
 			// Check if the target user exists
-			const userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id, [], false, tenantCode)
+			const userExists = await cacheService.getMenteeExtensionCached(bodyData.user_id, [], false, tenantCode)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -120,7 +121,7 @@ module.exports = class ConnectionHelper {
 
 			const [userExtensionsModelName, userDetails] = await Promise.all([
 				userExtensionQueries.getModelName(),
-				userExtensionQueries.getMenteeExtension(
+				cacheService.getMenteeExtensionCached(
 					friendId,
 					[
 						'name',
@@ -208,7 +209,7 @@ module.exports = class ConnectionHelper {
 
 			// Map friend details by user IDs
 			const friendIds = connections.rows.map((connection) => connection.friend_id)
-			let friendDetails = await userExtensionQueries.getUsersByUserIds(
+			let friendDetails = await cacheService.getUsersByUserIdsCached(
 				friendIds,
 				{
 					attributes: [
@@ -309,7 +310,7 @@ module.exports = class ConnectionHelper {
 
 			await connectionQueries.approveRequest(userId, bodyData.user_id, connectionRequest.meta, tenantCode)
 
-			const userDetails = await userExtensionQueries.getUsersByUserIds(
+			const userDetails = await cacheService.getUsersByUserIdsCached(
 				[userId, bodyData.user_id],
 				{
 					attributes: ['settings', 'user_id'],
@@ -521,17 +522,17 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get mentee details
-			const menteeDetails = await userExtensionQueries.getUsersByUserIds(
+			const menteeDetails = await cacheService.getUsersByUserIdsCached(
 				[menteeId],
 				{
 					attributes: ['name', 'email', 'user_id'],
 				},
-				false,
-				tenantCode
+				tenantCode,
+				false
 			)
 
 			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
+			const mentorDetails = await cacheService.getMentorExtensionCached(mentorId, ['name'], true, tenantCode)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return
@@ -584,17 +585,17 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get mentee details
-			const menteeDetails = await userExtensionQueries.getUsersByUserIds(
+			const menteeDetails = await cacheService.getUsersByUserIdsCached(
 				[menteeId],
 				{
 					attributes: ['name', 'email', 'user_id'],
 				},
-				false,
-				tenantCode
+				tenantCode,
+				false
 			)
 
 			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
+			const mentorDetails = await cacheService.getMentorExtensionCached(mentorId, ['name'], true, tenantCode)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return

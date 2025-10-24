@@ -1452,6 +1452,46 @@ module.exports = class MenteesHelper {
 	}
 
 	/**
+	 * Get all users by organization IDs with caching.
+	 * @method
+	 * @name getAllUsersByOrgIdCached
+	 * @param {Array} orgIds - Array of organization IDs.
+	 * @param {String} tenantCode - Tenant code for isolation.
+	 * @returns {Promise<Array>} - Cached users data by organization.
+	 */
+	static async getAllUsersByOrgIdCached(orgIds, tenantCode) {
+		if (!Array.isArray(orgIds) || orgIds.length === 0) {
+			return []
+		}
+
+		try {
+			const cacheKey = `tenant:${tenantCode}:org:all:users-by-org:${orgIds.sort().join(',')}`
+			const ttl = 300 // 5 minutes TTL
+
+			// Try to get from cache first
+			const cached = await cacheHelper.get(cacheKey)
+			if (cached) {
+				return cached
+			}
+
+			// Fallback to database query
+			const users = await menteeQueries.getAllUsersByOrgId(orgIds, tenantCode)
+
+			// Cache the result
+			try {
+				await cacheHelper.set(cacheKey, users, ttl)
+			} catch (cacheErr) {
+				console.warn('Failed to cache users by organization:', cacheErr.message)
+			}
+
+			return users
+		} catch (cacheError) {
+			console.warn('Cache system failed for users by organization, falling back to database:', cacheError.message)
+			return await menteeQueries.getAllUsersByOrgId(orgIds, tenantCode)
+		}
+	}
+
+	/**
 	 * Get entities and organization filter
 	 * @method
 	 * @name getFilterList

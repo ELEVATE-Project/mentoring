@@ -52,6 +52,7 @@ const emailEncryption = require('@utils/emailEncryption')
 const resourceQueries = require('@database/queries/resources')
 const feedbackService = require('@services/feedback')
 const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 
 module.exports = class SessionsHelper {
 	/**

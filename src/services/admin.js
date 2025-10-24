@@ -24,7 +24,7 @@ const { sequelize, Session, SessionAttendee, Connection, RequestSession } = requ
 const { literal } = require('sequelize')
 const sessionRequestMappingQueries = require('@database/queries/requestSessionMapping')
 // sessionOwnership removed - functionality replaced by direct Session queries
-const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 
 // Generic notification helper class
 class NotificationHelper {
@@ -99,7 +99,7 @@ class NotificationHelper {
 						? await this.getSessionAttendeeIds(session.id, tenantCode)
 						: [session[recipientField]]
 
-				const recipients = await menteesService.getUsersByUserIdsCached(recipientIds, {}, tenantCode, true)
+				const recipients = await cacheService.getUsersByUserIdsCached(recipientIds, {}, tenantCode, true)
 
 				const emailPromises = recipients.map(async (recipient) => {
 					const templateData = {
@@ -134,7 +134,11 @@ class NotificationHelper {
 
 	static async getSessionAttendeeIds(sessionId, tenantCode) {
 		try {
-			const attendees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, tenantCode)
+			const attendees = await cacheService.findAllSessionAttendeesCached(
+				{ session_id: sessionId },
+				['mentee_id'],
+				tenantCode
+			)
 			return attendees.map((attendee) => attendee.mentee_id)
 		} catch (error) {
 			console.error('Error getting session attendee IDs:', error)
@@ -157,7 +161,7 @@ module.exports = class AdminService {
 			let result = {}
 
 			// Step 1: Fetch user details (using cached version for better performance)
-			const getUserDetails = await menteesService.getUsersByUserIdsCached([userId], {}, tenantCode, false) // userId = "1"
+			const getUserDetails = await cacheService.getUsersByUserIdsCached([userId], {}, tenantCode, false) // userId = "1"
 
 			if (!getUserDetails || getUserDetails.length === 0) {
 				return responses.failureResponse({
@@ -220,7 +224,7 @@ module.exports = class AdminService {
 					mentorIds = []
 				}
 				// Get mentor details for notification (using cached version)
-				const connectedMentors = await menteesService.getUsersByUserIdsCached(
+				const connectedMentors = await cacheService.getUsersByUserIdsCached(
 					mentorIds,
 					{
 						attributes: ['user_id', 'name', 'email'],
@@ -369,7 +373,7 @@ module.exports = class AdminService {
 			result.areUserDetailsCleared = removedUserDetails > 0
 
 			// Get private sessions where deleted mentee was the only attendee
-			const privateSessions = await sessionQueries.getUpcomingSessionsOfMentee(
+			const privateSessions = await cacheService.getUpcomingSessionsOfMenteeCached(
 				userId,
 				common.SESSION_TYPE.PRIVATE,
 				tenantCode
@@ -377,7 +381,7 @@ module.exports = class AdminService {
 
 			// increment seats_remaining
 			try {
-				const upcomingPublicSessions = await sessionQueries.getUpcomingSessionsOfMentee(
+				const upcomingPublicSessions = await cacheService.getUpcomingSessionsOfMenteeCached(
 					userId,
 					common.SESSION_TYPE.PUBLIC,
 					tenantCode
@@ -426,7 +430,10 @@ module.exports = class AdminService {
 				result.isUnenrolledFromSessions = false
 			}
 
-			// Step 9: Final Response
+			// Step 9: Cache Invalidation - invalidate user-related caches after successful deletion
+			await cacheService.invalidateUserDeletionCaches(userId, tenantCode, organizationCode, isMentor)
+
+			// Step 10: Final Response
 			const allOperationsSuccessful =
 				result.isUnenrolledFromSessions &&
 				result.areUserDetailsCleared &&
@@ -613,12 +620,12 @@ module.exports = class AdminService {
 
 	static async unenrollFromUpcomingSessions(userId, tenantCode) {
 		try {
-			const upcomingSessions = await sessionQueries.getAllUpcomingSessions(false, tenantCode)
+			const upcomingSessions = await cacheService.getAllUpcomingSessionsCached(false, tenantCode)
 
 			const upcomingSessionsId = Array.isArray(upcomingSessions)
 				? upcomingSessions.map((session) => session.id)
 				: []
-			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
+			const usersUpcomingSessions = await cacheService.usersUpcomingSessionsCached(
 				userId,
 				upcomingSessionsId,
 				tenantCode
@@ -996,7 +1003,7 @@ module.exports = class AdminService {
 
 			// Get mentor details for notification
 			const mentors = (await mentorQueries.getMentorsByUserIds)
-				? await mentorQueries.getMentorsByUserIds(
+				? await cacheService.getMentorsByUserIdsCachedEnhanced(
 						mentorIds,
 						{
 							attributes: ['user_id', 'name', 'email'],
@@ -1004,7 +1011,7 @@ module.exports = class AdminService {
 						tenantCode,
 						false
 				  )
-				: await userExtensionQueries.getUsersByUserIds(
+				: await cacheService.getUsersByUserIdsCached(
 						mentorIds,
 						{
 							attributes: ['user_id', 'name', 'email'],
@@ -1078,8 +1085,11 @@ module.exports = class AdminService {
 					},
 				})
 			} catch (cacheError) {
-				console.warn('Cache system failed for mentor details, falling back to database:', cacheError.message)
-				mentorDetails = await mentorQueries.getMentorExtension(
+				console.warn(
+					'Cache system failed for mentor details, falling back to cached service:',
+					cacheError.message
+				)
+				mentorDetails = await cacheService.getMentorExtensionCached(
 					mentorId,
 					['name', 'email'],
 					true,
@@ -1120,7 +1130,7 @@ module.exports = class AdminService {
 			const tenantCodes = [tenantCode, defaults.tenantCode].filter(Boolean)
 
 			// 1. Get upcoming private sessions where deleted mentee was enrolled
-			const upcomingSessions = await sessionQueries.getUpcomingSessionsOfMentee(
+			const upcomingSessions = await cacheService.getUpcomingSessionsOfMenteeCached(
 				userId,
 				common.SESSION_TYPE.PRIVATE,
 				tenantCode
@@ -1158,7 +1168,7 @@ module.exports = class AdminService {
 				'user_id',
 				tenantCode
 			)
-			const connectedMentees = await menteesService.getUsersByUserIdsCached(
+			const connectedMentees = await cacheService.getUsersByUserIdsCached(
 				menteeIds,
 				{
 					attributes: ['user_id', 'name', 'email'],
@@ -1192,7 +1202,7 @@ module.exports = class AdminService {
 			}
 
 			// 3. Get upcoming sessions for mentor - use user tenant for DB query
-			const upcomingSessions = await sessionQueries.getUpcomingSessionsForMentor(mentorUserId, tenantCode)
+			const upcomingSessions = await cacheService.getUpcomingSessionsForMentorCached(mentorUserId, tenantCode)
 
 			// 4. Notify session managers about sessions with deleted mentor
 			if (upcomingSessions.length > 0) {
@@ -1272,7 +1282,7 @@ module.exports = class AdminService {
 				return []
 			}
 
-			const mentees = await menteesService.getUsersByUserIdsCached(
+			const mentees = await cacheService.getUsersByUserIdsCached(
 				menteeIds,
 				{
 					attributes: ['user_id', 'name', 'email'],
@@ -1365,7 +1375,7 @@ module.exports = class AdminService {
 				)
 
 				// Get mentee details for notification
-				const menteeDetails = await menteesService.getUsersByUserIdsCached(
+				const menteeDetails = await cacheService.getUsersByUserIdsCached(
 					[request.requestor_id],
 					{
 						attributes: ['name', 'email'],
@@ -1416,7 +1426,7 @@ module.exports = class AdminService {
 				const managerSessions = sessionsByManager[managerId]
 
 				// Get session manager details
-				const managerDetails = await menteesService.getUsersByUserIdsCached(
+				const managerDetails = await cacheService.getUsersByUserIdsCached(
 					[managerId],
 					{
 						attributes: ['name', 'email'],
@@ -1474,7 +1484,7 @@ module.exports = class AdminService {
 				const managerSessions = sessionsByManager[managerId]
 
 				// Get session manager details using user's tenant code for DB query
-				const managerDetails = await menteesService.getUsersByUserIdsCached(
+				const managerDetails = await cacheService.getUsersByUserIdsCached(
 					[managerId],
 					{
 						attributes: ['name', 'email'],
@@ -1531,13 +1541,13 @@ module.exports = class AdminService {
 			const notificationPromises = Object.keys(sessionsByAttendee).map(async (attendeeId) => {
 				const attendeeSessions = sessionsByAttendee[attendeeId]
 
-				const attendeeDetails = await userExtensionQueries.getUsersByUserIds(
+				const attendeeDetails = await cacheService.getUsersByUserIdsCached(
 					[attendeeId],
 					{
 						attributes: ['name', 'email'],
 					},
-					false,
-					tenantCode
+					tenantCode,
+					false
 				)
 
 				if (attendeeDetails.length > 0) {
