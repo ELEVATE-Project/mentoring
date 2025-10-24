@@ -3,10 +3,12 @@ const common = require('@constants/common')
 const kafkaCommunication = require('@generics/kafka-communication')
 const utils = require('@generics/utils')
 const sessionQueries = require('@database/queries/sessions')
-const notificationQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const userRequests = require('@requests/user')
 const menteeQueries = require('@database/queries/userExtension')
+const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 
 module.exports = class Notifications {
 	/**
@@ -27,17 +29,41 @@ module.exports = class Notifications {
 			// Convert the last part to an integer
 			const sessionId = Number(lastPart)
 
-			// Find session data
-			let sessions = await sessionQueries.findOne(
+			// First get basic session data to extract organization code
+			const basicSessionData = await sessionQueries.findOne(
 				{
 					id: sessionId,
 					status: common.PUBLISHED_STATUS,
 				},
 				tenantCode
 			)
+			const orgCode = basicSessionData?.organization_code
+
+			// Find session data
+			let sessions
+			try {
+				sessions = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: `session:${sessionId}:published`,
+					fetchFn: async () => {
+						return basicSessionData // Use the data we already fetched
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session data, falling back to database:', cacheError.message)
+				sessions = await sessionQueries.findOne(
+					{
+						id: sessionId,
+						status: common.PUBLISHED_STATUS,
+					},
+					tenantCode
+				)
+			}
 
 			// Get email template based on incoming request.
-			let emailTemplate = await notificationQueries.findOneEmailTemplate(
+			let emailTemplate = await notificationService.findOneEmailTemplateCached(
 				notificataionTemplate,
 				jobCreatorOrgCode,
 				tenantCode
@@ -88,7 +114,7 @@ module.exports = class Notifications {
 			}
 
 			// Get attendees accound details
-			const attendeesAccounts = await menteeQueries.getUsersByUserIds(
+			const attendeesAccounts = await cacheService.getUsersByUserIdsCached(
 				allAttendees,
 				{
 					attributes: ['user_id', 'name', 'email'],

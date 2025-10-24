@@ -3,12 +3,14 @@ const httpStatusCode = require('@generics/http-status')
 
 const utils = require('@generics/utils')
 const kafkaCommunication = require('@generics/kafka-communication')
-const notificationTemplateQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 const issueQueries = require('../database/queries/issue')
 const userRequests = require('@requests/user')
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
 
 const menteeExtensionQueries = require('@database/queries/userExtension')
+const cacheService = require('@helpers/cache')
 
 module.exports = class issuesHelper {
 	/**
@@ -22,9 +24,10 @@ module.exports = class issuesHelper {
 
 	static async create(bodyData, decodedToken, tenantCode) {
 		try {
-			const userDetails = await menteeExtensionQueries.getMenteeExtension(
+			const userDetails = await cacheService.getMenteeExtensionCached(
 				decodedToken.id,
 				['name', 'user_id', 'email'],
+				false,
 				tenantCode
 			)
 			if (!userDetails) throw createUnauthorizedResponse('USER_NOT_FOUND')
@@ -38,7 +41,7 @@ module.exports = class issuesHelper {
 			bodyData.organization_code = decodedToken.organization_code
 
 			if (process.env.ENABLE_EMAIL_FOR_REPORT_ISSUE === 'true') {
-				const templateData = await notificationTemplateQueries.findOneEmailTemplate(
+				let templateData = await notificationService.findOneEmailTemplateCached(
 					process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE,
 					decodedToken.organization_code,
 					tenantCode

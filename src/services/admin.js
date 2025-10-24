@@ -5,8 +5,11 @@ const kafkaCommunication = require('@generics/kafka-communication')
 const sessionQueries = require('@database/queries/sessions')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 const mentorQueries = require('@database/queries/mentorExtension')
 const menteeQueries = require('@database/queries/userExtension')
+const menteesService = require('@services/mentees')
+const mentorsService = require('@services/mentors')
 const adminService = require('../generics/materializedViews')
 const responses = require('@helpers/responses')
 const requestSessionQueries = require('@database/queries/requestSessions')
@@ -21,6 +24,7 @@ const { sequelize, Session, SessionAttendee, Connection, RequestSession } = requ
 const { literal } = require('sequelize')
 const sessionRequestMappingQueries = require('@database/queries/requestSessionMapping')
 // sessionOwnership removed - functionality replaced by direct Session queries
+const cacheService = require('@helpers/cache')
 
 // Generic notification helper class
 class NotificationHelper {
@@ -38,7 +42,8 @@ class NotificationHelper {
 				return true
 			}
 
-			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCode, tenantCodes)
+			// Use centralized notification service with built-in caching
+			const template = await notificationService.findOneEmailTemplateCached(templateCode, orgCode, tenantCodes)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -81,7 +86,8 @@ class NotificationHelper {
 		try {
 			if (!sessions?.length || !templateCode) return true
 
-			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCodes, tenantCodes)
+			// Use centralized notification service with built-in caching
+			const template = await notificationService.findOneEmailTemplateCached(templateCode, orgCodes, tenantCodes)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -93,7 +99,7 @@ class NotificationHelper {
 						? await this.getSessionAttendeeIds(session.id, tenantCode)
 						: [session[recipientField]]
 
-				const recipients = await menteeQueries.getUsersByUserIds(recipientIds, {}, tenantCode, true)
+				const recipients = await cacheService.getUsersByUserIdsCached(recipientIds, {}, tenantCode, true)
 
 				const emailPromises = recipients.map(async (recipient) => {
 					const templateData = {
@@ -128,7 +134,11 @@ class NotificationHelper {
 
 	static async getSessionAttendeeIds(sessionId, tenantCode) {
 		try {
-			const attendees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, tenantCode)
+			const attendees = await cacheService.findAllSessionAttendeesCached(
+				{ session_id: sessionId },
+				['mentee_id'],
+				tenantCode
+			)
 			return attendees.map((attendee) => attendee.mentee_id)
 		} catch (error) {
 			console.error('Error getting session attendee IDs:', error)
@@ -150,8 +160,8 @@ module.exports = class AdminService {
 		try {
 			let result = {}
 
-			// Step 1: Fetch user details
-			const getUserDetails = await menteeQueries.getUsersByUserIds([userId], {}, tenantCode, false) // userId = "1"
+			// Step 1: Fetch user details (using cached version for better performance)
+			const getUserDetails = await cacheService.getUsersByUserIdsCached([userId], {}, tenantCode, false) // userId = "1"
 
 			if (!getUserDetails || getUserDetails.length === 0) {
 				return responses.failureResponse({
@@ -213,11 +223,15 @@ module.exports = class AdminService {
 					// Continue with deletion process even if no mentors are connected
 					mentorIds = []
 				}
-				// Get mentor details for notification
-				const connectedMentors = await userExtensionQueries.getUsersByUserIds(mentorIds, {
-					attributes: ['user_id', 'name', 'email'],
+				// Get mentor details for notification (using cached version)
+				const connectedMentors = await cacheService.getUsersByUserIdsCached(
+					mentorIds,
+					{
+						attributes: ['user_id', 'name', 'email'],
+					},
 					tenantCode,
-				})
+					false
+				)
 
 				// Soft delete in communication service - handle invalid-users gracefully
 				let removeChatUser, removeChatAvatar, updateChatUserName
@@ -359,7 +373,7 @@ module.exports = class AdminService {
 			result.areUserDetailsCleared = removedUserDetails > 0
 
 			// Get private sessions where deleted mentee was the only attendee
-			const privateSessions = await sessionQueries.getUpcomingSessionsOfMentee(
+			const privateSessions = await cacheService.getUpcomingSessionsOfMenteeCached(
 				userId,
 				common.SESSION_TYPE.PRIVATE,
 				tenantCode
@@ -367,7 +381,7 @@ module.exports = class AdminService {
 
 			// increment seats_remaining
 			try {
-				const upcomingPublicSessions = await sessionQueries.getUpcomingSessionsOfMentee(
+				const upcomingPublicSessions = await cacheService.getUpcomingSessionsOfMenteeCached(
 					userId,
 					common.SESSION_TYPE.PUBLIC,
 					tenantCode
@@ -416,7 +430,10 @@ module.exports = class AdminService {
 				result.isUnenrolledFromSessions = false
 			}
 
-			// Step 9: Final Response
+			// Step 9: Cache Invalidation - invalidate user-related caches after successful deletion
+			await cacheService.invalidateUserDeletionCaches(userId, tenantCode, organizationCode, isMentor)
+
+			// Step 10: Final Response
 			const allOperationsSuccessful =
 				result.isUnenrolledFromSessions &&
 				result.areUserDetailsCleared &&
@@ -603,12 +620,12 @@ module.exports = class AdminService {
 
 	static async unenrollFromUpcomingSessions(userId, tenantCode) {
 		try {
-			const upcomingSessions = await sessionQueries.getAllUpcomingSessions(false, tenantCode)
+			const upcomingSessions = await cacheService.getAllUpcomingSessionsCached(false, tenantCode)
 
 			const upcomingSessionsId = Array.isArray(upcomingSessions)
 				? upcomingSessions.map((session) => session.id)
 				: []
-			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
+			const usersUpcomingSessions = await cacheService.usersUpcomingSessionsCached(
 				userId,
 				upcomingSessionsId,
 				tenantCode
@@ -986,7 +1003,7 @@ module.exports = class AdminService {
 
 			// Get mentor details for notification
 			const mentors = (await mentorQueries.getMentorsByUserIds)
-				? await mentorQueries.getMentorsByUserIds(
+				? await cacheService.getMentorsByUserIdsCachedEnhanced(
 						mentorIds,
 						{
 							attributes: ['user_id', 'name', 'email'],
@@ -994,7 +1011,7 @@ module.exports = class AdminService {
 						tenantCode,
 						false
 				  )
-				: await userExtensionQueries.getUsersByUserIds(
+				: await cacheService.getUsersByUserIdsCached(
 						mentorIds,
 						{
 							attributes: ['user_id', 'name', 'email'],
@@ -1056,12 +1073,29 @@ module.exports = class AdminService {
 	static async notifyMentorAboutPrivateSessionCancellation(mentorId, sessionDetails, orgCodes, tenantCodes) {
 		try {
 			// Get mentor details
-			const mentorDetails = await mentorQueries.getMentorExtension(
-				mentorId,
-				['name', 'email'],
-				true,
-				tenantCodes[0] // Use primary tenant for database query
-			)
+			let mentorDetails
+			try {
+				mentorDetails = await cacheHelper.getOrSet({
+					tenantCode: tenantCodes[0],
+					orgCode: orgCodes[0],
+					ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+					id: `mentor:${mentorId}:name_email`,
+					fetchFn: async () => {
+						return await mentorQueries.getMentorExtension(mentorId, ['name', 'email'], true, tenantCodes[0])
+					},
+				})
+			} catch (cacheError) {
+				console.warn(
+					'Cache system failed for mentor details, falling back to cached service:',
+					cacheError.message
+				)
+				mentorDetails = await cacheService.getMentorExtensionCached(
+					mentorId,
+					['name', 'email'],
+					true,
+					tenantCodes[0]
+				)
+			}
 			if (!mentorDetails) {
 				console.log('Mentor details not found for notification')
 				return false
@@ -1096,7 +1130,7 @@ module.exports = class AdminService {
 			const tenantCodes = [tenantCode, defaults.tenantCode].filter(Boolean)
 
 			// 1. Get upcoming private sessions where deleted mentee was enrolled
-			const upcomingSessions = await sessionQueries.getUpcomingSessionsOfMentee(
+			const upcomingSessions = await cacheService.getUpcomingSessionsOfMenteeCached(
 				userId,
 				common.SESSION_TYPE.PRIVATE,
 				tenantCode
@@ -1134,7 +1168,7 @@ module.exports = class AdminService {
 				'user_id',
 				tenantCode
 			)
-			const connectedMentees = await userExtensionQueries.getUsersByUserIds(
+			const connectedMentees = await cacheService.getUsersByUserIdsCached(
 				menteeIds,
 				{
 					attributes: ['user_id', 'name', 'email'],
@@ -1168,7 +1202,7 @@ module.exports = class AdminService {
 			}
 
 			// 3. Get upcoming sessions for mentor - use user tenant for DB query
-			const upcomingSessions = await sessionQueries.getUpcomingSessionsForMentor(mentorUserId, tenantCode)
+			const upcomingSessions = await cacheService.getUpcomingSessionsForMentorCached(mentorUserId, tenantCode)
 
 			// 4. Notify session managers about sessions with deleted mentor
 			if (upcomingSessions.length > 0) {
@@ -1248,13 +1282,13 @@ module.exports = class AdminService {
 				return []
 			}
 
-			const mentees = await userExtensionQueries.getUsersByUserIds(
+			const mentees = await cacheService.getUsersByUserIdsCached(
 				menteeIds,
 				{
 					attributes: ['user_id', 'name', 'email'],
 				},
-				false,
-				tenantCode
+				tenantCode,
+				false
 			)
 
 			return mentees || []
@@ -1341,13 +1375,13 @@ module.exports = class AdminService {
 				)
 
 				// Get mentee details for notification
-				const menteeDetails = await userExtensionQueries.getUsersByUserIds(
+				const menteeDetails = await cacheService.getUsersByUserIdsCached(
 					[request.requestor_id],
 					{
 						attributes: ['name', 'email'],
 					},
-					false,
-					tenantCodes[0]
+					tenantCodes[0],
+					false
 				)
 
 				if (menteeDetails.length > 0) {
@@ -1392,13 +1426,13 @@ module.exports = class AdminService {
 				const managerSessions = sessionsByManager[managerId]
 
 				// Get session manager details
-				const managerDetails = await userExtensionQueries.getUsersByUserIds(
+				const managerDetails = await cacheService.getUsersByUserIdsCached(
 					[managerId],
 					{
 						attributes: ['name', 'email'],
 					},
-					false,
-					tenantCodes[0]
+					tenantCodes[0],
+					false
 				)
 
 				if (managerDetails.length > 0) {
@@ -1450,13 +1484,13 @@ module.exports = class AdminService {
 				const managerSessions = sessionsByManager[managerId]
 
 				// Get session manager details using user's tenant code for DB query
-				const managerDetails = await userExtensionQueries.getUsersByUserIds(
+				const managerDetails = await cacheService.getUsersByUserIdsCached(
 					[managerId],
 					{
 						attributes: ['name', 'email'],
 					},
-					false,
-					tenantCodes[0]
+					tenantCodes[0],
+					false
 				)
 
 				if (managerDetails.length > 0) {
@@ -1507,13 +1541,13 @@ module.exports = class AdminService {
 			const notificationPromises = Object.keys(sessionsByAttendee).map(async (attendeeId) => {
 				const attendeeSessions = sessionsByAttendee[attendeeId]
 
-				const attendeeDetails = await userExtensionQueries.getUsersByUserIds(
+				const attendeeDetails = await cacheService.getUsersByUserIdsCached(
 					[attendeeId],
 					{
 						attributes: ['name', 'email'],
 					},
-					false,
-					tenantCode
+					tenantCode,
+					false
 				)
 
 				if (attendeeDetails.length > 0) {

@@ -1,6 +1,7 @@
 const userRequests = require('@requests/user')
 const common = require('@constants/common')
 const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeService = require('@services/entity-type')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const { Op } = require('sequelize')
 
@@ -237,9 +238,11 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 			// Handle both array and string cases for tenantCodes
 			const tenantCodeArray = Array.isArray(tenantCodes) ? tenantCodes : [tenantCodes]
 			const finalTenantCodes = defaultTenantCode ? [...tenantCodeArray, defaultTenantCode] : tenantCodeArray
-			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: finalTenantCodes,
-			})
+			let entityTypesWithEntities = await entityTypeService.readUserEntityTypesAndEntitiesCached(
+				filter,
+				Array.isArray(organization_codes) ? organization_codes[0] : organization_codes,
+				Array.isArray(tenantCodes) ? tenantCodes[0] : tenantCodes
+			)
 			return {
 				success: true,
 				result: entityTypesWithEntities,

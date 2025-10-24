@@ -10,6 +10,10 @@ const httpStatusCode = require('@generics/http-status')
 const { Op } = require('sequelize')
 const { UniqueConstraintError } = require('sequelize')
 
+const connections = require('@database/queries/connection')
+const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/defaultRules')
+const cacheService = require('@helpers/cache')
+
 module.exports = class DefaultRuleHelper {
 	/**
 	 * Validates the target and requester fields in the body data.
@@ -36,14 +40,14 @@ module.exports = class DefaultRuleHelper {
 		const [modelName, mentorModelName] = await Promise.all([modelNamePromise, mentorModelNamePromise])
 
 		const validFieldsPromise = Promise.all([
-			entityTypeQueries.findAllEntityTypes(orgCodes, tenantCodes, ['id', 'data_type'], {
+			cacheService.readAllEntityTypesCached(orgCodes, tenantCodes, ['id', 'data_type'], {
 				status: 'ACTIVE',
 				value: bodyData.target_field,
 				model_names: { [Op.contains]: [modelName] },
 				required: true,
 				allow_filtering: true,
 			}),
-			entityTypeQueries.findAllEntityTypes(orgCodes, tenantCodes, ['id', 'data_type'], {
+			cacheService.readAllEntityTypesCached(orgCodes, tenantCodes, ['id', 'data_type'], {
 				status: 'ACTIVE',
 				value: bodyData.requester_field,
 				model_names: { [Op.contains]: [mentorModelName] },
@@ -145,6 +149,71 @@ module.exports = class DefaultRuleHelper {
 			}
 
 			const defaultRule = await defaultRuleQueries.create(bodyData, tenantCode)
+
+			if (bodyData.type === common.DEFAULT_RULES.MENTOR_TYPE) {
+				let userAccounts = await cacheService.getAllUsersByOrgIdCached([orgId], tenantCode)
+
+				for (const element of userAccounts) {
+					let currentUserId = element.user_id
+					let roles = [{ title: common.MENTEE_ROLE }]
+					if (element.is_mentor) roles.push({ title: common.MENTOR_ROLE })
+
+					// Check connections
+					const connectionsData = await connections.getConnectedUsers(currentUserId, 'friend_id', 'user_id')
+					for (const friendId of connectionsData) {
+						const requestedUserExtension = await cacheService.getMenteeExtensionCached(
+							friendId,
+							[],
+							false,
+							tenantCode
+						)
+
+						if (requestedUserExtension) {
+							const validateDefaultRules = await validateDefaultRulesFilter({
+								ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
+								requesterId: currentUserId,
+								roles: roles,
+								requesterOrganizationId: orgId,
+								data: requestedUserExtension,
+							})
+
+							if (!validateDefaultRules) {
+								await connections.deleteConnections(currentUserId, friendId)
+								await connections.deleteConnections(friendId, currentUserId)
+							}
+						}
+					}
+
+					// Check connection requests
+					const connectionsRequests = await connections.getConnectionRequestsForUser(currentUserId)
+					if (connectionsRequests.count > 0) {
+						for (const request of connectionsRequests.rows) {
+							const friendId = request.friend_id
+							const requestedUserExtension = await cacheService.getMenteeExtensionCached(
+								friendId,
+								[],
+								false,
+								tenantCode
+							)
+
+							if (requestedUserExtension) {
+								const validateDefaultRules = await validateDefaultRulesFilter({
+									ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
+									requesterId: currentUserId,
+									roles: roles,
+									requesterOrganizationId: orgId,
+									data: requestedUserExtension,
+								})
+
+								if (!validateDefaultRules) {
+									await connections.deleteConnectionsRequests(currentUserId, friendId)
+								}
+							}
+						}
+					}
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'DEFAULT_RULE_CREATED_SUCCESSFULLY',

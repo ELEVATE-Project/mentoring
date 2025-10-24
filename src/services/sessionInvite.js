@@ -9,10 +9,13 @@ const axios = require('axios')
 const common = require('@constants/common')
 const userRequests = require('@requests/user')
 const sessionService = require('@services/sessions')
+const entityTypeService = require('@services/entity-type')
 const ProjectRootDir = path.join(__dirname, '../')
 const fileUploadQueries = require('@database/queries/fileUpload')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 const kafkaCommunication = require('@generics/kafka-communication')
+const cacheHelper = require('@generics/cacheHelper')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const sessionQueries = require('@database/queries/sessions')
 const entityTypeQueries = require('@database/queries/entityType')
@@ -87,7 +90,8 @@ module.exports = class UserInviteHelper {
 				const templateCode = process.env.SESSION_UPLOAD_EMAIL_TEMPLATE_CODE
 				if (templateCode) {
 					const defaults = await getDefaults()
-					const templateData = await notificationTemplateQueries.findOneEmailTemplate(
+					// Use centralized notification service with built-in caching
+					const templateData = await notificationService.findOneEmailTemplateCached(
 						templateCode,
 						data.user.organization_code,
 						defaults.tenantCode
@@ -573,7 +577,7 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -581,9 +585,8 @@ module.exports = class UserInviteHelper {
 					},
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				orgCode,
+				tenantCode
 			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,
@@ -851,7 +854,7 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -859,7 +862,8 @@ module.exports = class UserInviteHelper {
 					},
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				orgCode,
+				tenantCode
 			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,

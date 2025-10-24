@@ -6,12 +6,13 @@ const menteeQueries = require('@database/queries/userExtension')
 const mentorQueries = require('@database/queries/mentorExtension')
 const responses = require('@helpers/responses')
 
-const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const organizationService = require('@services/organization')
 const mentorsService = require('@services/mentors')
 const menteesService = require('@services/mentees')
 const orgAdminService = require('@services/org-admin')
 
 const userServiceHelper = require('@helpers/users')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class UserHelper {
 	/**
@@ -252,7 +253,7 @@ module.exports = class UserHelper {
 
 	static async #createOrUpdateOrg(orgData, tenantCode) {
 		// Use organization_id as organization_code for lookup since they're the same in user service data
-		let orgExtension = await organisationExtensionQueries.getById(orgData.code, tenantCode)
+		let orgExtension = await organizationService.getByIdCached(orgData.code, tenantCode)
 		if (orgExtension) return orgExtension
 
 		const orgExtensionData = {
@@ -293,6 +294,7 @@ module.exports = class UserHelper {
 
 	static async #updateUser(userExtensionData, decodedToken) {
 		const isAMentee = userExtensionData.roles.some((role) => role.title === common.MENTEE_ROLE)
+		const isAMentor = userExtensionData.roles.some((role) => role.title === common.MENTOR_ROLE)
 		const roleChangePayload = {
 			user_id: userExtensionData.id,
 			organization_id: userExtensionData.organization.id,
@@ -310,11 +312,15 @@ module.exports = class UserHelper {
 
 		if (!menteeExtension) throw new Error('User Not Found')
 
-		if (isAMentee && menteeExtension.is_mentor) {
+		if (isAMentor && !menteeExtension.is_mentor) {
+			roleChangePayload.current_roles = [common.MENTEE_ROLE]
+			roleChangePayload.new_roles = [common.MENTOR_ROLE]
+			isRoleChanged = true
+		} else if (isAMentee && menteeExtension.is_mentor) {
 			roleChangePayload.current_roles = [common.MENTOR_ROLE]
 			roleChangePayload.new_roles = [common.MENTEE_ROLE]
 			isRoleChanged = true
-		} else if (isAMentee && !menteeExtension.is_mentor) {
+		} else if (!isAMentee && !menteeExtension.is_mentor) {
 			roleChangePayload.current_roles = [common.MENTEE_ROLE]
 			roleChangePayload.new_roles = [common.MENTOR_ROLE]
 			isRoleChanged = true

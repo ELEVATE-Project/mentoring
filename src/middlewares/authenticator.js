@@ -10,6 +10,7 @@ const fs = require('fs')
 const MenteeExtensionQueries = require('@database/queries/userExtension')
 const utils = require('@generics/utils')
 const path = require('path')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = async function (req, res, next) {
 	try {
@@ -50,8 +51,9 @@ module.exports = async function (req, res, next) {
 				configData = JSON.parse(rawData)
 				if (!configData.authTokenUserInformation) {
 					defaultTokenExtraction = true
+				} else {
+					configData = configData.authTokenUserInformation
 				}
-				configData = configData.authTokenUserInformation
 			} catch (error) {
 				console.error('Error parsing config.json:', error)
 			}
@@ -268,9 +270,41 @@ function getApiPaths(parts) {
 
 async function fetchPermissions(roleTitle, apiPath, module) {
 	if (Array.isArray(roleTitle) && !roleTitle.includes(common.PUBLIC_ROLE)) roleTitle.push(common.PUBLIC_ROLE)
-	const filter = { role_title: roleTitle, module, api_path: { [Op.in]: apiPath } }
-	const attributes = ['request_type', 'api_path', 'module']
-	return await rolePermissionMappingQueries.findAll(filter, attributes)
+
+	// Create cache key for role permissions: rolePerm:<role_title>:<module>:<request_type>:<api_path>
+	const roleKey = Array.isArray(roleTitle) ? roleTitle.join(',') : roleTitle
+	const apiPathKey = Array.isArray(apiPath) ? apiPath.join(',') : apiPath
+	const cacheId = `rolePerm:${roleKey}:${module}:*:${apiPathKey}`
+
+	try {
+		// Use direct cache key without tenant/org structure for cross-tenant permissions
+		const cacheKey = `${common.CACHE_CONFIG.namespaces.roles_permissions.name}:${cacheId}`
+
+		// Try to get from cache first
+		const cached = await cacheHelper.get(cacheKey)
+		if (cached !== null && cached !== undefined) {
+			return cached
+		}
+
+		// Fetch from database if not in cache
+		const filter = { role_title: roleTitle, module, api_path: { [Op.in]: apiPath } }
+		const attributes = ['request_type', 'api_path', 'module']
+		const permissions = await rolePermissionMappingQueries.findAll(filter, attributes)
+
+		// Store in cache with default TTL for permissions
+		if (permissions !== undefined) {
+			const ttl = common.CACHE_CONFIG.namespaces.roles_permissions.defaultTtl || 0
+			await cacheHelper.set(cacheKey, permissions, ttl || undefined)
+		}
+
+		return permissions
+	} catch (error) {
+		console.error('Cache error in fetchPermissions, falling back to database:', error)
+		// Fallback to direct database query if cache fails
+		const filter = { role_title: roleTitle, module, api_path: { [Op.in]: apiPath } }
+		const attributes = ['request_type', 'api_path', 'module']
+		return await rolePermissionMappingQueries.findAll(filter, attributes)
+	}
 }
 
 async function verifyToken(token) {
@@ -300,9 +334,15 @@ async function fetchUserProfile(authHeader) {
 	const profileUrl = `${userBaseUrl}${endpoints.USER_PROFILE_DETAILS}`
 	const user = await requests.get(profileUrl, authHeader, false)
 
-	if (!user || !user.success) throw createUnauthorizedResponse('USER_NOT_FOUND')
-	if (!user.data || !user.data.result) throw createUnauthorizedResponse('USER_NOT_FOUND')
-	if (user.data.result.deleted_at !== null) throw createUnauthorizedResponse('USER_ROLE_UPDATED')
+	if (!user || !user.success) {
+		throw createUnauthorizedResponse('USER_NOT_FOUND')
+	}
+	if (!user.data || !user.data.result) {
+		throw createUnauthorizedResponse('USER_NOT_FOUND')
+	}
+	if (user.data.result.deleted_at !== null) {
+		throw createUnauthorizedResponse('USER_ROLE_UPDATED')
+	}
 	return user.data.result
 }
 
@@ -322,7 +362,9 @@ async function dbBasedRoleValidation(decodedToken) {
 		false,
 		tenantCode
 	)
-	if (!menteeExtension) throw createUnauthorizedResponse('USER_NOT_FOUND')
+	if (!menteeExtension) {
+		throw createUnauthorizedResponse('USER_NOT_FOUND')
+	}
 
 	const roleMismatch = (isMentor && !menteeExtension.is_mentor) || (!isMentor && menteeExtension.is_mentor)
 	if (roleMismatch) throw createUnauthorizedResponse('USER_ROLE_UPDATED')

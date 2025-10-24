@@ -846,66 +846,68 @@ Date.prototype.getWeek = function () {
 	return 1 + Math.ceil((firstThursday - target) / 604800000)
 }
 
-const generateDateRanges = (startEpoch, endEpoch, interval) => {
-	const startDate = new Date(startEpoch * 1000)
-	const endDate = new Date(endEpoch * 1000)
+const generateDateRanges = (startEpoch, endEpoch, interval, timeZone = 'UTC') => {
+	const startMoment = moment.unix(startEpoch).tz(timeZone)
+	const endMoment = moment.unix(endEpoch).tz(timeZone)
 
 	const dateRanges = []
-	let currentDate = new Date(startDate)
+	let current = startMoment.clone()
 
-	while (currentDate <= endDate) {
-		let nextDate
+	while (current.isSameOrBefore(endMoment)) {
+		let next, rangeStart, rangeEnd
 
 		switch (interval) {
 			case 'day':
-				nextDate = new Date(currentDate)
-				nextDate.setDate(currentDate.getDate() + 1)
-				dateRanges.push({
-					start_date: Math.floor(currentDate.getTime() / 1000),
-					end_date: Math.floor(nextDate.getTime() / 1000) - 1,
-				})
-				break
-			case 'week':
-				const currentWeek = currentDate.getWeek()
-				const sunday = new Date(currentDate)
-				sunday.setDate(sunday.getDate() - sunday.getDay())
-				nextDate = new Date(sunday)
-				nextDate.setDate(sunday.getDate() + 7)
+				rangeStart = current.clone().startOf('day')
+				rangeEnd = current.clone().endOf('day')
 
-				dateRanges.push({
-					start_date: Math.floor(sunday.getTime() / 1000),
-					end_date: Math.floor(Math.min(nextDate.getTime() - 1, endDate.getTime()) / 1000),
-				})
-
-				break
-			case 'month': {
-				let rangeStart
-				if (dateRanges.length === 0) {
-					// use startDate as currentDate
-					rangeStart = new Date(currentDate)
-				} else {
-					// for next month onwords start from 1st of current month
-					rangeStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+				if (rangeEnd.isAfter(endMoment)) {
+					rangeEnd = endMoment.clone()
 				}
 
-				// 1st of next month
-				nextDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth() + 1, 1)
-
-				const rangeEnd = new Date(Math.min(nextDate.getTime() - 1000, endDate.getTime())) // 1 sec before next month
-
 				dateRanges.push({
-					start_date: Math.floor(rangeStart.getTime() / 1000),
-					end_date: Math.floor(rangeEnd.getTime() / 1000),
+					start_date: rangeStart.unix(),
+					end_date: rangeEnd.unix(),
 				})
 
-				currentDate = nextDate // set to 1st of next month
+				current = current.clone().add(1, 'day')
 				break
-			}
+
+			case 'week':
+				rangeStart = current.clone().startOf('week') // Sunday by default
+				rangeEnd = current.clone().endOf('week')
+
+				if (rangeEnd.isAfter(endMoment)) {
+					rangeEnd = endMoment.clone()
+				}
+
+				dateRanges.push({
+					start_date: rangeStart.unix(),
+					end_date: rangeEnd.unix(),
+				})
+
+				current = current.clone().add(1, 'week')
+				break
+
+			case 'month':
+				rangeStart = current.clone().startOf('month')
+				rangeEnd = current.clone().endOf('month')
+
+				if (rangeEnd.isAfter(endMoment)) {
+					rangeEnd = endMoment.clone()
+				}
+
+				dateRanges.push({
+					start_date: rangeStart.unix(),
+					end_date: rangeEnd.unix(),
+				})
+
+				current = current.clone().add(1, 'month')
+				break
+
 			default:
 				throw new Error('Invalid interval. Valid options: "day", "week", "month"')
 		}
-
-		currentDate = nextDate
 	}
 
 	return dateRanges
@@ -1269,6 +1271,28 @@ const getTenantViewName = (tenantCode, tableName) => {
 	return `${tenantCode}_m_${tableName}`
 }
 
+function sortData(data = [], path = 'meta.sequence') {
+	const getValue = (obj, path) => {
+		return path.split('.').reduce((acc, key) => acc?.[key], obj)
+	}
+
+	return [...data].sort((a, b) => {
+		const aVal = getValue(a, path)
+		const bVal = getValue(b, path)
+
+		if (aVal !== undefined && bVal !== undefined) {
+			const aNum = Number(aVal)
+			const bNum = Number(bVal)
+			if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum
+			// Fallback to string comparison for non-numeric values
+			return String(aVal).localeCompare(String(bVal))
+		}
+		if (aVal !== undefined) return -1
+		if (bVal !== undefined) return 1
+		return 0
+	})
+}
+
 module.exports = {
 	hash: hash,
 	getCurrentMonthRange,
@@ -1331,4 +1355,5 @@ module.exports = {
 	getDynamicEntityCondition,
 	transformEntityTypes,
 	getTenantViewName,
+	sortData,
 }

@@ -4,6 +4,9 @@ const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
+const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
+const common = require('@constants/common')
 
 module.exports = class NotificationTemplateHelper {
 	/**
@@ -31,6 +34,13 @@ module.exports = class NotificationTemplateHelper {
 			bodyData['created_by'] = tokenInformation.id
 
 			const createdNotification = await notificationTemplateQueries.create(bodyData, tenantCode)
+
+			// Invalidate notification template caches after successful creation
+			await this._invalidateNotificationTemplateCaches({
+				tenantCode,
+				orgCode: tokenInformation.organization_code,
+			})
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'NOTIFICATION_TEMPLATE_CREATED_SUCCESSFULLY',
@@ -75,6 +85,12 @@ module.exports = class NotificationTemplateHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Invalidate notification template caches after successful update
+			await this._invalidateNotificationTemplateCaches({
+				tenantCode,
+				orgCode: tokenInformation.organization_code,
+			})
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
@@ -123,7 +139,11 @@ module.exports = class NotificationTemplateHelper {
 				filter.code = code
 			}
 
-			const notificationTemplates = await notificationTemplateQueries.findTemplatesByFilter(filter)
+			const notificationTemplates = await cacheService.findTemplatesByFilterCached(
+				filter,
+				organizationCode,
+				tenantCode
+			)
 
 			if (!notificationTemplates || notificationTemplates.length === 0) {
 				return responses.failureResponse({
@@ -175,7 +195,11 @@ module.exports = class NotificationTemplateHelper {
 				tenant_code: [tenantCode, defaults.tenantCode],
 			}
 
-			const notificationTemplates = await notificationTemplateQueries.findTemplatesByFilter(filter)
+			const notificationTemplates = await cacheService.findTemplatesByFilterCached(
+				filter,
+				organizationCode,
+				tenantCode
+			)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -223,7 +247,7 @@ module.exports = class NotificationTemplateHelper {
 				tenant_code: [tenantCode, defaults.tenantCode],
 			}
 
-			const templateData = await notificationTemplateQueries.findTemplatesByFilter(filter)
+			const templateData = await cacheService.findTemplatesByFilterCached(filter, orgCode, tenantCode)
 
 			if (!templateData || templateData.length === 0) {
 				return null
@@ -293,7 +317,7 @@ module.exports = class NotificationTemplateHelper {
 				tenant_code: [tenantCode, defaults.tenantCode],
 			}
 
-			const headerData = await notificationTemplateQueries.findTemplatesByFilter(filter)
+			const headerData = await cacheService.findTemplatesByFilterCached(filter, orgCode, tenantCode)
 
 			if (!headerData || headerData.length === 0) {
 				return null
@@ -347,7 +371,7 @@ module.exports = class NotificationTemplateHelper {
 				tenant_code: [tenantCode, defaults.tenantCode],
 			}
 
-			const footerData = await notificationTemplateQueries.findTemplatesByFilter(filter)
+			const footerData = await cacheService.findTemplatesByFilterCached(filter, orgCode, tenantCode)
 
 			if (!footerData || footerData.length === 0) {
 				return null
@@ -362,6 +386,32 @@ module.exports = class NotificationTemplateHelper {
 			)
 		} catch (error) {
 			return error
+		}
+	}
+
+	/**
+	 * Invalidate notification template related caches after CUD operations
+	 * Following the user service pattern for notification template cache invalidation
+	 */
+	static async _invalidateNotificationTemplateCaches({ tenantCode, orgCode }) {
+		try {
+			// Invalidate notification_templates namespace
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces.notification_templates.name,
+			})
+
+			// Special handling for default org - invalidate all orgs (similar to user service pattern)
+			const defaults = await getDefaults()
+			if (defaults.orgCode === orgCode) {
+				await cacheHelper.evictTenantByPattern(tenantCode, {
+					patternSuffix: `org:*:${common.CACHE_CONFIG.namespaces.notification_templates.name}:*`,
+				})
+			}
+		} catch (err) {
+			console.error('Notification template cache invalidation failed', err)
+			// Don't throw - cache failures should not block main operations
 		}
 	}
 }

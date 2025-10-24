@@ -9,6 +9,9 @@ const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
+const common = require('@constants/common')
+const cacheService = require('@helpers/cache')
 
 module.exports = class FormsHelper {
 	/**
@@ -29,8 +32,10 @@ module.exports = class FormsHelper {
 			const form = await formQueries.createForm(bodyData, tenantCode)
 
 			await utils.internalDel('formVersion')
-
 			await KafkaProducer.clearInternalCache('formVersion')
+
+			// Invalidate form caches after successful creation
+			await this._invalidateFormCaches({ tenantCode, orgCode })
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -88,6 +93,10 @@ module.exports = class FormsHelper {
 			}
 			await utils.internalDel('formVersion')
 			await KafkaProducer.clearInternalCache('formVersion')
+
+			// Invalidate form caches after successful update
+			await this._invalidateFormCaches({ tenantCode, orgCode })
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: 'FORM_UPDATED_SUCCESSFULLY',
@@ -138,20 +147,29 @@ module.exports = class FormsHelper {
 				filter.organization_code = { [Op.in]: [orgCode, defaults.orgCode] }
 			}
 
-			// Business logic: Try both current tenant and default tenant
-			const tenantCodes = [tenantCode, defaults.tenantCode]
-			const forms = await formQueries.findFormsByFilter(filter, tenantCodes)
+			// Use cached form lookup with inline implementation
+			let form
+			const cacheId = filter.type ? `${filter.type}:${filter.sub_type || 'default'}` : 'unknown'
+			try {
+				form = await cacheService.findFormCached(filter, orgCode, tenantCode)
+			} catch (cacheError) {
+				console.warn('Cache system failed for form details, falling back to database:', cacheError.message)
+				const formFilter = {
+					...filter,
+					status: 'ACTIVE',
+					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
+				}
 
-			if (!forms || forms.length === 0) {
+				form = await formQueries.findOneForm(formFilter, { [Op.in]: [tenantCode, defaults.tenantCode] })
+			}
+
+			if (!form) {
 				return responses.failureResponse({
 					message: 'FORM_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-
-			// Business logic: Prefer current tenant over default tenant
-			const form = forms.find((f) => f.tenant_code === tenantCode) || forms[0]
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -185,6 +203,32 @@ module.exports = class FormsHelper {
 			})
 		} catch (error) {
 			return error
+		}
+	}
+
+	/**
+	 * Invalidate form-related caches after CUD operations
+	 * Following the user service pattern for form cache invalidation
+	 */
+	static async _invalidateFormCaches({ tenantCode, orgCode }) {
+		try {
+			// Invalidate forms namespace
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces.forms.name,
+			})
+
+			// Special handling for default org - invalidate all orgs (similar to user service pattern)
+			const defaults = await getDefaults()
+			if (defaults.orgCode === orgCode) {
+				await cacheHelper.evictTenantByPattern(tenantCode, {
+					patternSuffix: `org:*:${common.CACHE_CONFIG.namespaces.forms.name}:*`,
+				})
+			}
+		} catch (err) {
+			console.error('Form cache invalidation failed', err)
+			// Don't throw - cache failures should not block main operations
 		}
 	}
 }

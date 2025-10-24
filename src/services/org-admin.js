@@ -6,7 +6,6 @@ const menteeQueries = require('@database/queries/userExtension')
 const httpStatusCode = require('@generics/http-status')
 const sessionQueries = require('@database/queries/sessions')
 const adminService = require('./admin')
-const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const entityTypeQueries = require('@database/queries/entityType')
 const userRequests = require('@requests/user')
 const utils = require('@generics/utils')
@@ -15,6 +14,8 @@ const questionSetQueries = require('../database/queries/question-set')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 
 module.exports = class OrgAdminService {
 	/**
@@ -55,7 +56,7 @@ module.exports = class OrgAdminService {
 		try {
 			// Check current role based on that swap data
 			// If current role is mentor validate data from mentor_extenion table
-			let mentorDetails = await mentorQueries.getMentorExtension(bodyData.user_id, [], true, tenantCode)
+			let mentorDetails = await cacheService.getMentorExtensionCached(bodyData.user_id, [], true, tenantCode)
 			// If such mentor return error
 			if (!mentorDetails) {
 				return responses.failureResponse({
@@ -80,7 +81,7 @@ module.exports = class OrgAdminService {
 					})
 				}
 
-				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+				const orgPolicies = await cacheService.findOrInsertOrganizationExtensionCached(
 					bodyData.organization_id,
 					bodyData.organization_code,
 					organizationDetails.data.result.name,
@@ -166,7 +167,7 @@ module.exports = class OrgAdminService {
 	static async changeRoleToMentor(bodyData, updateData = {}, tenantCode) {
 		try {
 			// Get mentee_extension data
-			let menteeDetails = await menteeQueries.getMenteeExtension(bodyData.user_id, '', true, tenantCode)
+			let menteeDetails = await cacheService.getMenteeExtensionCached(bodyData.user_id, [], true, tenantCode)
 
 			// If no mentee present return error
 			if (!menteeDetails) {
@@ -190,7 +191,7 @@ module.exports = class OrgAdminService {
 					})
 				}
 
-				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+				const orgPolicies = await cacheService.findOrInsertOrganizationExtensionCached(
 					bodyData.organization_id,
 					bodyData.organization_code,
 					organizationDetails.data.result.name,
@@ -312,7 +313,12 @@ module.exports = class OrgAdminService {
 
 	static async getOrgPolicies(decodedToken, tenantCode) {
 		try {
-			const orgPolicies = await organisationExtensionQueries.getById(decodedToken.organization_id)
+			const orgPolicies = await cacheService.findOneOrganizationCached(
+				{
+					organization_code: decodedToken.organization_code,
+				},
+				tenantCode
+			)
 			if (orgPolicies) {
 				delete orgPolicies.deleted_at
 				return responses.successResponse({
@@ -386,7 +392,7 @@ module.exports = class OrgAdminService {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			let entityTypeDetails = await entityTypeQueries.findOneEntityType(filter, {
+			let entityTypeDetails = await cacheService.findOneEntityTypeCached(filter, {
 				[Op.in]: [defaults.tenantCode, tenantCode],
 			})
 
@@ -459,10 +465,10 @@ module.exports = class OrgAdminService {
 				})
 
 			// Get organization policies
-			const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+			const orgPolicies = await cacheService.findOrInsertOrganizationExtensionCached(
 				orgId,
-				organizationDetails.data.result.name,
 				bodyData.organization_code,
+				organizationDetails.data.result.name,
 				tenantCode
 			)
 			if (!orgPolicies?.organization_id) {
@@ -526,7 +532,7 @@ module.exports = class OrgAdminService {
 				})
 			for (let key in userIds) {
 				const userId = userIds[key]
-				const mentorDetails = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+				let mentorDetails = await cacheService.getMentorExtensionCached(userId, [], false, tenantCode)
 				if (mentorDetails?.user_id) {
 					// Deactivate upcoming sessions of user as mentor
 					const removedSessionsDetail = await sessionQueries.deactivateAndReturnMentorSessions(
@@ -544,7 +550,7 @@ module.exports = class OrgAdminService {
 				}
 
 				//unenroll from upcoming session
-				const menteeDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+				const menteeDetails = await cacheService.getMenteeExtensionCached(userId, [], false, tenantCode)
 				if (menteeDetails?.user_id) {
 					await adminService.unenrollFromUpcomingSessions(userId, tenantCode)
 					deactivatedIdsList.push(userId)
@@ -768,9 +774,11 @@ module.exports = class OrgAdminService {
 				statusCode: httpStatusCode.bad_request,
 				responseCode: 'CLIENT_ERROR',
 			})
-		let organizationDetails = await organisationExtensionQueries.getById(
-			{ [Op.in]: [defaults.orgCode, orgCode] },
-			{ [Op.in]: [defaults.tenantCode, tenantCode] }
+		let organizationDetails = await cacheService.findOneOrganizationCached(
+			{
+				organization_code: { [Op.in]: [defaults.orgCode, orgCode] },
+			},
+			tenantCode
 		)
 
 		if (!organizationDetails) {

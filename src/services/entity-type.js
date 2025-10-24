@@ -8,6 +8,8 @@ const { getDefaults } = require('@helpers/getDefaultOrgId')
 const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
+const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 
 module.exports = class EntityHelper {
 	/**
@@ -34,6 +36,10 @@ module.exports = class EntityHelper {
 			}
 
 			const entityType = await entityTypeQueries.createEntityType(bodyData, tenantCode)
+
+			// Invalidate entity-type related caches after successful creation
+			await this._invalidateEntityTypeCaches({ tenantCode, orgCode })
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_TYPE_CREATED_SUCCESSFULLY',
@@ -92,6 +98,9 @@ module.exports = class EntityHelper {
 				})
 			}
 
+			// Invalidate entity-type related caches after successful update
+			await this._invalidateEntityTypeCaches({ tenantCode, orgCode })
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: 'ENTITY_TYPE_UPDATED_SUCCESSFULLY',
@@ -125,11 +134,33 @@ module.exports = class EntityHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			const entities = await entityTypeQueries.findAllEntityTypes(
-				{ [Op.or]: [orgCode, defaults.orgCode] },
-				{ [Op.in]: [tenantCode, defaults.tenantCode] },
-				attributes
-			)
+			let entities
+			try {
+				entities = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.entity_types.name,
+					id: 'system_all',
+					fetchFn: async () => {
+						const defaults = await getDefaults()
+						const attributes = ['value', 'label', 'id']
+						return await entityTypeQueries.findAllEntityTypes(
+							{ [Op.or]: [orgCode, defaults.orgCode] },
+							{ [Op.in]: [tenantCode, defaults.tenantCode] },
+							attributes
+						)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for entity types, falling back to database:', cacheError.message)
+				const defaults = await getDefaults()
+				const attributes = ['value', 'label', 'id']
+				entities = await entityTypeQueries.findAllEntityTypes(
+					{ [Op.or]: [orgCode, defaults.orgCode] },
+					{ [Op.in]: [tenantCode, defaults.tenantCode] },
+					attributes
+				)
+			}
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -171,9 +202,60 @@ module.exports = class EntityHelper {
 				},
 				tenant_code: { [Op.in]: [defaults.tenantCode, tenantCode] },
 			}
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: [defaults.tenantCode, tenantCode],
-			})
+			let entityTypes
+			// Create tenant and org based cache key for entity types
+			const cacheKey = `tenant:${tenantCode}:org:${orgCode}:${common.CACHE_CONFIG.namespaces.entity_types.name}:user_entities`
+
+			try {
+				// Use direct Redis operations without tenant/org codes
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					entityTypes = cached
+				} else {
+					const dbResult = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+						[Op.in]: [defaults.tenantCode, tenantCode],
+					})
+
+					// Ensure model_names arrays are properly maintained
+					if (dbResult && Array.isArray(dbResult)) {
+						dbResult.forEach((entityType) => {
+							if (entityType.model_names && !Array.isArray(entityType.model_names)) {
+								// Fix corrupted model_names - convert object back to array
+								if (typeof entityType.model_names === 'object' && entityType.model_names !== null) {
+									entityType.model_names = Object.values(entityType.model_names).filter(Boolean)
+								} else {
+									entityType.model_names = []
+								}
+							}
+						})
+					}
+
+					entityTypes = dbResult
+					if (entityTypes !== undefined) {
+						const ttl = common.CACHE_CONFIG.namespaces.entity_types.defaultTtl || 0
+						await cacheHelper.set(cacheKey, entityTypes, ttl || undefined)
+					}
+				}
+
+				// Fix model_names arrays if they got corrupted in cache
+				if (entityTypes && Array.isArray(entityTypes)) {
+					entityTypes.forEach((entityType) => {
+						if (entityType.model_names && !Array.isArray(entityType.model_names)) {
+							// Fix corrupted model_names - convert object back to array
+							if (typeof entityType.model_names === 'object' && entityType.model_names !== null) {
+								entityType.model_names = Object.values(entityType.model_names).filter(Boolean)
+							} else {
+								entityType.model_names = []
+							}
+						}
+					})
+				}
+			} catch (cacheError) {
+				console.warn('Cache system failed for user entity types, falling back to database:', cacheError.message)
+				entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+					[Op.in]: [defaults.tenantCode, tenantCode],
+				})
+			}
 
 			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 
@@ -309,6 +391,302 @@ module.exports = class EntityHelper {
 	}
 
 	/**
+	 * Read user entity types and entities with caching and fallback
+	 * @method
+	 * @name readUserEntityTypesAndEntitiesCached
+	 * @param {Object} filter - Filter criteria for entity types
+	 * @param {String} orgCode - Organization code
+	 * @param {String} tenantCode - Tenant code
+	 * @returns {Array} - Cached entity types with entities
+	 */
+	static async readUserEntityTypesAndEntitiesCached(filter, orgCode, tenantCode) {
+		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode || !defaults.tenantCode) {
+				throw new Error('DEFAULT_ORG_CODE_OR_TENANT_CODE_NOT_SET')
+			}
+
+			// Create tenant and org based cache key with model separation
+			const modelNames =
+				filter.model_names?.[Op.contains] || filter.model_names?.[Op.overlap] || filter.model_names || []
+			const modelName = Array.isArray(modelNames) ? modelNames[0] : modelNames || 'all'
+			const cacheKey = `tenant:${tenantCode}:org:${orgCode}:${common.CACHE_CONFIG.namespaces.entity_types.name}:${modelName}`
+			console.log('🔍 [ENTITY CACHE DEBUG] Looking for cache key:', cacheKey)
+			console.log('🔍 [ENTITY CACHE DEBUG] Filter:', JSON.stringify(filter, null, 2))
+			console.log('🔍 [ENTITY CACHE DEBUG] Extracted model name:', modelName)
+
+			let entityTypesWithEntities
+			try {
+				// Use direct Redis operations without tenant/org codes
+				const cached = await cacheHelper.get(cacheKey)
+				console.log('🔍 [ENTITY CACHE DEBUG] Cache result:', cached ? 'FOUND' : 'NOT FOUND')
+				if (cached !== null && cached !== undefined) {
+					entityTypesWithEntities = cached
+					console.log('🔍 [ENTITY CACHE DEBUG] Using cached data, count:', entityTypesWithEntities?.length)
+				} else {
+					// Merge tenant codes including defaults for fallback
+					const tenantCodes = { [Op.in]: [defaults.tenantCode, tenantCode] }
+					const dbResult = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodes)
+					console.log('🔍 [ENTITY CACHE DEBUG] DB result count:', dbResult?.length)
+					console.log('🔍 [ENTITY CACHE DEBUG] DB result sample model_names:', dbResult?.[0]?.model_names)
+
+					// Ensure model_names arrays are properly maintained
+					if (dbResult && Array.isArray(dbResult)) {
+						dbResult.forEach((entityType) => {
+							if (entityType.model_names && !Array.isArray(entityType.model_names)) {
+								// Fix corrupted model_names - convert object back to array
+								if (typeof entityType.model_names === 'object' && entityType.model_names !== null) {
+									entityType.model_names = Object.values(entityType.model_names).filter(Boolean)
+								} else {
+									entityType.model_names = []
+								}
+							}
+						})
+					}
+
+					entityTypesWithEntities = dbResult
+					if (entityTypesWithEntities !== undefined) {
+						const ttl = common.CACHE_CONFIG.namespaces.entity_types.defaultTtl || 0
+						await cacheHelper.set(cacheKey, entityTypesWithEntities, ttl || undefined)
+						console.log('🔍 [ENTITY CACHE DEBUG] Saved to cache with key:', cacheKey)
+					}
+				}
+
+				// Fix model_names arrays if they got corrupted in cache
+				if (entityTypesWithEntities && Array.isArray(entityTypesWithEntities)) {
+					entityTypesWithEntities.forEach((entityType) => {
+						if (entityType.model_names && !Array.isArray(entityType.model_names)) {
+							// Fix corrupted model_names - convert object back to array
+							if (typeof entityType.model_names === 'object' && entityType.model_names !== null) {
+								entityType.model_names = Object.values(entityType.model_names).filter(Boolean)
+							} else {
+								entityType.model_names = []
+							}
+						}
+					})
+				}
+			} catch (cacheError) {
+				console.warn(
+					'Cache system failed for user entity types with entities, falling back to database:',
+					cacheError.message
+				)
+				const tenantCodes = { [Op.in]: [defaults.tenantCode, tenantCode] }
+				entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodes)
+			}
+
+			return entityTypesWithEntities
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Read all entity types with caching and fallback
+	 * @method
+	 * @name readAllEntityTypesCached
+	 * @param {Array|Object} orgCodes - Organization codes
+	 * @param {Array|Object} tenantCodes - Tenant codes
+	 * @param {Array} attributes - Attributes to select
+	 * @param {Object} filter - Additional filter criteria
+	 * @returns {Array} - Cached entity types
+	 */
+	static async readAllEntityTypesCached(orgCodes, tenantCodes, attributes, filter = {}) {
+		try {
+			// Create tenant and org based cache key for all entity types
+			const tenantCode = Array.isArray(tenantCodes) ? tenantCodes[0] : tenantCodes
+			const orgCode = Array.isArray(orgCodes) ? orgCodes[0] : orgCodes
+			const cacheKey = `tenant:${tenantCode}:org:${orgCode}:${common.CACHE_CONFIG.namespaces.entity_types.name}:all_types`
+
+			let entityTypes
+			try {
+				// Use direct Redis operations with tenant/org structure
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					entityTypes = cached
+				} else {
+					const dbResult = await entityTypeQueries.findAllEntityTypes(
+						orgCodes,
+						tenantCodes,
+						attributes,
+						filter
+					)
+
+					// Ensure model_names arrays are properly maintained
+					if (dbResult && Array.isArray(dbResult)) {
+						dbResult.forEach((entityType) => {
+							if (entityType.model_names && !Array.isArray(entityType.model_names)) {
+								// Fix corrupted model_names - convert object back to array
+								if (typeof entityType.model_names === 'object' && entityType.model_names !== null) {
+									entityType.model_names = Object.values(entityType.model_names).filter(Boolean)
+								} else {
+									entityType.model_names = []
+								}
+							}
+						})
+					}
+
+					entityTypes = dbResult
+					if (entityTypes !== undefined) {
+						const ttl = common.CACHE_CONFIG.namespaces.entity_types.defaultTtl || 0
+						await cacheHelper.set(cacheKey, entityTypes, ttl || undefined)
+					}
+				}
+
+				// Fix model_names arrays if they got corrupted in cache
+				if (entityTypes && Array.isArray(entityTypes)) {
+					entityTypes.forEach((entityType) => {
+						if (entityType.model_names && !Array.isArray(entityType.model_names)) {
+							// Fix corrupted model_names - convert object back to array
+							if (typeof entityType.model_names === 'object' && entityType.model_names !== null) {
+								entityType.model_names = Object.values(entityType.model_names).filter(Boolean)
+							} else {
+								entityType.model_names = []
+							}
+						}
+					})
+				}
+			} catch (cacheError) {
+				console.warn('Cache system failed for all entity types, falling back to database:', cacheError.message)
+				entityTypes = await entityTypeQueries.findAllEntityTypes(orgCodes, tenantCodes, attributes, filter)
+			}
+
+			return entityTypes
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Read all entity types and entities with caching and fallback
+	 * @method
+	 * @name readAllEntityTypesAndEntitiesCached
+	 * @param {Object} filter - Filter criteria for entity types
+	 * @param {String} orgCode - Organization code
+	 * @param {String} tenantCode - Tenant code
+	 * @returns {Array} - Cached entity types with entities
+	 */
+	static async readAllEntityTypesAndEntitiesCached(filter, orgCode, tenantCode) {
+		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode || !defaults.tenantCode) {
+				throw new Error('DEFAULT_ORG_CODE_OR_TENANT_CODE_NOT_SET')
+			}
+
+			// Create tenant and org based cache key for all entity types with entities
+			const modelNames =
+				filter.model_names?.[Op.contains] || filter.model_names?.[Op.overlap] || filter.model_names || []
+			const modelName = Array.isArray(modelNames) ? modelNames[0] : modelNames || 'all'
+			const cacheKey = `tenant:${tenantCode}:org:${orgCode}:${common.CACHE_CONFIG.namespaces.entity_types.name}:all_${modelName}`
+
+			let entityTypesWithEntities
+			try {
+				// Use direct Redis operations without tenant/org codes
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					entityTypesWithEntities = cached
+				} else {
+					// Merge tenant codes including defaults for fallback
+					const tenantCodes = { [Op.in]: [defaults.tenantCode, tenantCode] }
+					const dbResult = await entityTypeQueries.findAllEntityTypesAndEntities(filter, tenantCodes)
+
+					// Ensure model_names arrays are properly maintained
+					if (dbResult && Array.isArray(dbResult)) {
+						dbResult.forEach((entityType) => {
+							if (entityType.model_names && !Array.isArray(entityType.model_names)) {
+								// Fix corrupted model_names - convert object back to array
+								if (typeof entityType.model_names === 'object' && entityType.model_names !== null) {
+									entityType.model_names = Object.values(entityType.model_names).filter(Boolean)
+								} else {
+									entityType.model_names = []
+								}
+							}
+						})
+					}
+
+					entityTypesWithEntities = dbResult
+					if (entityTypesWithEntities !== undefined) {
+						const ttl = common.CACHE_CONFIG.namespaces.entity_types.defaultTtl || 0
+						await cacheHelper.set(cacheKey, entityTypesWithEntities, ttl || undefined)
+					}
+				}
+			} catch (cacheError) {
+				console.warn(
+					'Cache system failed for all entity types with entities, falling back to database:',
+					cacheError.message
+				)
+				const tenantCodes = { [Op.in]: [defaults.tenantCode, tenantCode] }
+				entityTypesWithEntities = await entityTypeQueries.findAllEntityTypesAndEntities(filter, tenantCodes)
+			}
+
+			return entityTypesWithEntities
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Read one entity type with caching and fallback
+	 * @method
+	 * @name readOneEntityTypeCached
+	 * @param {Object} filter - Filter criteria for entity type
+	 * @param {Array|Object} tenantCodes - Tenant codes
+	 * @param {Object} options - Query options
+	 * @returns {Object} - Cached entity type
+	 */
+	static async readOneEntityTypeCached(filter, tenantCodes, options = {}) {
+		try {
+			// Create tenant and org based cache key for one entity type
+			const tenantCode = Array.isArray(tenantCodes) ? tenantCodes[0] : tenantCodes
+			const orgCode = filter.organization_code || 'default'
+			const cacheKey = `tenant:${tenantCode}:org:${orgCode}:${common.CACHE_CONFIG.namespaces.entity_types.name}:one_type`
+
+			let entityType
+			try {
+				// Use direct Redis operations with tenant/org structure
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					entityType = cached
+				} else {
+					const dbResult = await entityTypeQueries.findOneEntityType(filter, tenantCodes, options)
+
+					// Ensure model_names arrays are properly maintained
+					if (dbResult && dbResult.model_names && !Array.isArray(dbResult.model_names)) {
+						// Fix corrupted model_names - convert object back to array
+						if (typeof dbResult.model_names === 'object' && dbResult.model_names !== null) {
+							dbResult.model_names = Object.values(dbResult.model_names).filter(Boolean)
+						} else {
+							dbResult.model_names = []
+						}
+					}
+
+					entityType = dbResult
+					if (entityType !== undefined) {
+						const ttl = common.CACHE_CONFIG.namespaces.entity_types.defaultTtl || 0
+						await cacheHelper.set(cacheKey, entityType, ttl || undefined)
+					}
+				}
+
+				// Fix model_names arrays if they got corrupted in cache
+				if (entityType && entityType.model_names && !Array.isArray(entityType.model_names)) {
+					// Fix corrupted model_names - convert object back to array
+					if (typeof entityType.model_names === 'object' && entityType.model_names !== null) {
+						entityType.model_names = Object.values(entityType.model_names).filter(Boolean)
+					} else {
+						entityType.model_names = []
+					}
+				}
+			} catch (cacheError) {
+				console.warn('Cache system failed for one entity type, falling back to database:', cacheError.message)
+				entityType = await entityTypeQueries.findOneEntityType(filter, tenantCodes, options)
+			}
+
+			return entityType
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
 	 * Delete All entity type and entities based on entityType value.
 	 * @method
 	 * @name delete
@@ -338,6 +716,35 @@ module.exports = class EntityHelper {
 			})
 		} catch (error) {
 			throw error
+		}
+	}
+
+	/**
+	 * Invalidate entity-type related caches after CUD operations
+	 * Following the user service pattern for entity type cache invalidation
+	 */
+	static async _invalidateEntityTypeCaches({ tenantCode, orgCode }) {
+		try {
+			// Use tenant and org based cache eviction
+			await cacheHelper.scanAndDelete(
+				`tenant:${tenantCode}:org:${orgCode}:${common.CACHE_CONFIG.namespaces.entity_types.name}:*`
+			)
+
+			// Also evict related entity caches for this tenant/org
+			await cacheHelper.scanAndDelete(
+				`tenant:${tenantCode}:org:${orgCode}:${common.CACHE_CONFIG.namespaces.entities.name}:*`
+			)
+
+			// Evict profile-related caches as entity types affect profiles
+			await cacheHelper.scanAndDelete(
+				`tenant:${tenantCode}:org:${orgCode}:${common.CACHE_CONFIG.namespaces.mentor_profile.name}:*`
+			)
+			await cacheHelper.scanAndDelete(
+				`tenant:${tenantCode}:org:${orgCode}:${common.CACHE_CONFIG.namespaces.mentee_profile.name}:*`
+			)
+		} catch (err) {
+			console.error('Entity type cache invalidation failed', err)
+			// Don't throw - cache failures should not block main operations
 		}
 	}
 }

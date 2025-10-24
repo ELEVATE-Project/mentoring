@@ -10,6 +10,8 @@ const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
+const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 
 module.exports = class MenteesHelper {
 	/**
@@ -134,9 +136,29 @@ module.exports = class MenteesHelper {
 
 	static async forms(sessionId, roles, tenantCode) {
 		try {
-			let sessioninfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-				attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
+			// First get basic session data to extract organization code
+			const basicSessionData = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+				attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set', 'organization_code'],
 			})
+			const orgCode = basicSessionData?.organization_code
+
+			let sessioninfo
+			try {
+				sessioninfo = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: `session:${sessionId}:feedback_sets`,
+					fetchFn: async () => {
+						return basicSessionData // Use the data we already fetched
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session info, falling back to database:', cacheError.message)
+				sessioninfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+					attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
+				})
+			}
 
 			if (!sessioninfo) {
 				return responses.failureResponse({
@@ -186,10 +208,30 @@ module.exports = class MenteesHelper {
 			delete updateData.feedback_as
 		}
 		try {
-			//get session details
-			let sessionInfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-				attributes: ['is_feedback_skipped', 'mentor_id'],
+			// First get basic session data to extract organization code
+			const basicSessionData = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+				attributes: ['is_feedback_skipped', 'mentor_id', 'organization_code'],
 			})
+			const orgCode = basicSessionData?.organization_code
+
+			//get session details
+			let sessionInfo
+			try {
+				sessionInfo = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: `session:${sessionId}:feedback_skip_mentor`,
+					fetchFn: async () => {
+						return basicSessionData // Use the data we already fetched
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session info, falling back to database:', cacheError.message)
+				sessionInfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
+					attributes: ['is_feedback_skipped', 'mentor_id'],
+				})
+			}
 
 			if (!sessionInfo) {
 				return responses.failureResponse({
@@ -410,7 +452,7 @@ const getFeedbackQuestions = async function (formCode, tenantCode) {
 
 const ratingCalculation = async function (ratingData, mentor_id, tenantCode) {
 	try {
-		let mentorDetails = await mentorExtensionQueries.getMentorExtension(mentor_id, tenantCode)
+		let mentorDetails = await cacheService.getMentorExtensionCached(mentor_id, [], false, tenantCode)
 		let mentorRating = mentorDetails.rating
 		let updateData
 

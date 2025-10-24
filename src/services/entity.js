@@ -5,6 +5,7 @@ const { UniqueConstraintError, ForeignKeyConstraintError } = require('sequelize'
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const cacheService = require('@helpers/cache')
 
 module.exports = class EntityHelper {
 	/**
@@ -159,7 +160,7 @@ module.exports = class EntityHelper {
 					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
 			}
-			const entities = await entityTypeQueries.findAllEntities(filter, {
+			const entities = await cacheService.findAllEntitiesCached(filter, {
 				[Op.in]: [tenantCode, defaults.tenantCode],
 			})
 
@@ -217,7 +218,7 @@ module.exports = class EntityHelper {
 					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
 			}
-			const entities = await entityTypeQueries.findAllEntities(filter, {
+			const entities = await cacheService.findAllEntitiesCached(filter, {
 				[Op.in]: [tenantCode, defaults.tenantCode],
 			})
 
@@ -311,7 +312,7 @@ module.exports = class EntityHelper {
 			}
 
 			// Optimized: Get entities with entity_type details included - eliminates N+1 queries for clients
-			const entities = await entityTypeQueries.getAllEntitiesWithEntityTypeDetails(
+			const entities = await cacheService.getAllEntitiesWithEntityTypeDetailsCached(
 				filter,
 				{ [Op.in]: [defaults.tenantCode, tenantCode] },
 				pageNo,

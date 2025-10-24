@@ -13,8 +13,10 @@ const utils = require('@generics/utils')
 const communicationHelper = require('@helpers/communications')
 const userRequests = require('@requests/user')
 const notificationQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 const kafkaCommunication = require('@generics/kafka-communication')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
+const cacheService = require('@helpers/cache')
 
 module.exports = class ConnectionHelper {
 	/**
@@ -41,7 +43,7 @@ module.exports = class ConnectionHelper {
 	static async initiate(bodyData, userId, tenantCode) {
 		try {
 			// Check if the target user exists
-			const userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id, [], false, tenantCode)
+			const userExists = await cacheService.getMenteeExtensionCached(bodyData.user_id, [], false, tenantCode)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -119,7 +121,7 @@ module.exports = class ConnectionHelper {
 
 			const [userExtensionsModelName, userDetails] = await Promise.all([
 				userExtensionQueries.getModelName(),
-				userExtensionQueries.getMenteeExtension(
+				cacheService.getMenteeExtensionCached(
 					friendId,
 					[
 						'name',
@@ -149,7 +151,7 @@ module.exports = class ConnectionHelper {
 			userDetails.image &&= (await userRequests.getDownloadableUrl(userDetails.image))?.result
 
 			// Fetch entity types associated with the user
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -157,9 +159,8 @@ module.exports = class ConnectionHelper {
 					},
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				userDetails.organization_code,
+				tenantCode
 			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_code)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
@@ -208,7 +209,7 @@ module.exports = class ConnectionHelper {
 
 			// Map friend details by user IDs
 			const friendIds = connections.rows.map((connection) => connection.friend_id)
-			let friendDetails = await userExtensionQueries.getUsersByUserIds(
+			let friendDetails = await cacheService.getUsersByUserIdsCached(
 				friendIds,
 				{
 					attributes: [
@@ -309,7 +310,7 @@ module.exports = class ConnectionHelper {
 
 			await connectionQueries.approveRequest(userId, bodyData.user_id, connectionRequest.meta, tenantCode)
 
-			const userDetails = await userExtensionQueries.getUsersByUserIds(
+			const userDetails = await cacheService.getUsersByUserIdsCached(
 				[userId, bodyData.user_id],
 				{
 					attributes: ['settings', 'user_id'],
@@ -431,13 +432,14 @@ module.exports = class ConnectionHelper {
 				})
 
 			// Fetch validation data for filtering connections (excluding roles)
-			const validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+			const validationData = await entityTypeService.readAllEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					allow_filtering: true,
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				{ [Op.in]: [defaults.tenantCode, tenantCode] }
+				orgCode,
+				tenantCode
 			)
 
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData, userExtensionsModelName)
@@ -520,24 +522,24 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get mentee details
-			const menteeDetails = await userExtensionQueries.getUsersByUserIds(
+			const menteeDetails = await cacheService.getUsersByUserIdsCached(
 				[menteeId],
 				{
 					attributes: ['name', 'email', 'user_id'],
 				},
-				false,
-				tenantCode
+				tenantCode,
+				false
 			)
 
 			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
+			const mentorDetails = await cacheService.getMentorExtensionCached(mentorId, ['name'], true, tenantCode)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return
 			}
 
 			// Get email template
-			const templateData = await notificationQueries.findOneEmailTemplate(
+			const templateData = await notificationService.findOneEmailTemplateCached(
 				templateCode,
 				orgCode.toString(),
 				tenantCode
@@ -583,24 +585,24 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get mentee details
-			const menteeDetails = await userExtensionQueries.getUsersByUserIds(
+			const menteeDetails = await cacheService.getUsersByUserIdsCached(
 				[menteeId],
 				{
 					attributes: ['name', 'email', 'user_id'],
 				},
-				false,
-				tenantCode
+				tenantCode,
+				false
 			)
 
 			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
+			const mentorDetails = await cacheService.getMentorExtensionCached(mentorId, ['name'], true, tenantCode)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return
 			}
 
 			// Get email template
-			const templateData = await notificationQueries.findOneEmailTemplate(
+			const templateData = await notificationService.findOneEmailTemplateCached(
 				templateCode,
 				orgCode.toString(),
 				tenantCode

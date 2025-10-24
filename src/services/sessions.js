@@ -16,6 +16,7 @@ const entityTypeQueries = require('@database/queries/entityType')
 const entitiesQueries = require('@database/queries/entity')
 const { Op } = require('sequelize')
 const notificationQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 
 const schedulerRequest = require('@requests/scheduler')
 const fileService = require('@services/files')
@@ -24,6 +25,7 @@ const userRequests = require('@requests/user')
 const utils = require('@generics/utils')
 const bigBlueButtonService = require('./bigBlueButton')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const organizationService = require('@services/organization')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const menteeService = require('@services/mentees')
@@ -49,6 +51,8 @@ const mentorQueries = require('@database/queries/mentorExtension')
 const emailEncryption = require('@utils/emailEncryption')
 const resourceQueries = require('@database/queries/resources')
 const feedbackService = require('@services/feedback')
+const cacheHelper = require('@generics/cacheHelper')
+const cacheService = require('@helpers/cache')
 
 module.exports = class SessionsHelper {
 	/**
@@ -234,23 +238,31 @@ module.exports = class SessionsHelper {
 				})
 
 			const sessionModelName = await sessionQueries.getModelName()
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [orgCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [sessionModelName] },
+
+			const filter = {
+				status: 'ACTIVE',
+				organization_code: {
+					[Op.in]: [orgCode, defaults.orgCode],
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				model_names: { [Op.contains]: [sessionModelName] },
+			}
+
+			const entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
+				filter,
+				orgCode,
+				tenantCode
 			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
+
+			// Filter validation data to only include entity types that actually belong to Session model
+			const sessionOnlyValidationData = validationData.filter(
+				(entityType) => entityType.model_names && entityType.model_names.includes('Session')
+			)
+
 			bodyData.status = common.PUBLISHED_STATUS
-			let res = utils.validateInput(bodyData, validationData, sessionModelName, skipValidation)
+			let res = utils.validateInput(bodyData, sessionOnlyValidationData, sessionModelName, skipValidation)
 			if (!res.success) {
 				return responses.failureResponse({
 					message: 'SESSION_CREATION_FAILED',
@@ -388,7 +400,7 @@ module.exports = class SessionsHelper {
 
 					let resourceTemplate = process.env.RESOURCE_ADD_EMAIL_TEMPLATE_CODE
 					// This is the template used to send email to session mentees when resource added
-					let templateData = await notificationQueries.findOneEmailTemplate(
+					let templateData = await notificationService.findOneEmailTemplateCached(
 						resourceTemplate,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -489,7 +501,7 @@ module.exports = class SessionsHelper {
 				}
 				console.log('📧 EMAIL DEBUG: Selected email template code:', emailTemplateCode)
 				// send mail to mentors on session creation if session created by manager
-				const templateData = await notificationQueries.findOneEmailTemplate(
+				const templateData = await notificationService.findOneEmailTemplateCached(
 					emailTemplateCode,
 					{ [Op.in]: [orgCode, defaults.orgCode] },
 					{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -525,6 +537,14 @@ module.exports = class SessionsHelper {
 					console.log('📧 EMAIL DEBUG: Kafka push result:', kafkaResult)
 				}
 			}
+
+			// Invalidate session-related caches after successful creation
+			await this._invalidateSessionCaches({
+				tenantCode,
+				orgCode,
+				mentorId: processDbResponse.mentor_id || loggedInUserId,
+				menteeId: menteeIdsToEnroll.length > 0 ? menteeIdsToEnroll[0] : null,
+			})
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -706,7 +726,7 @@ module.exports = class SessionsHelper {
 
 			const sessionModelName = await sessionQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -714,7 +734,8 @@ module.exports = class SessionsHelper {
 					},
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				orgCode,
+				tenantCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -1035,14 +1056,14 @@ module.exports = class SessionsHelper {
 					// isSessionCreatedByManager
 					// 	? (sessionDeleteEmailTemplate = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE)
 					// 	: (sessionDeleteEmailTemplate = process.env.MENTOR_SESSION_DELETE_EMAIL_TEMPLATE)
-					templateData = await notificationQueries.findOneEmailTemplate(
+					templateData = await notificationService.findOneEmailTemplateCached(
 						sessionDeleteEmailTemplate,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
 					)
 					mentorEmailTemplate = sessionDeleteEmailTemplate
 				} else if (isSessionReschedule && !isSessionCreatedByManager) {
-					templateData = await notificationQueries.findOneEmailTemplate(
+					templateData = await notificationService.findOneEmailTemplateCached(
 						process.env.MENTOR_SESSION_RESCHEDULE_EMAIL_TEMPLATE,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -1052,7 +1073,7 @@ module.exports = class SessionsHelper {
 					// if only title is changed. then a different email has to send to mentor and mentees
 					let sessionUpdateByMangerTemplate = process.env.MENTEE_SESSION_EDITED_BY_MANAGER_EMAIL_TEMPLATE
 					// This is the template used to send email to session mentees when it is edited
-					templateData = await notificationQueries.findOneEmailTemplate(
+					templateData = await notificationService.findOneEmailTemplateCached(
 						sessionUpdateByMangerTemplate,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -1063,7 +1084,7 @@ module.exports = class SessionsHelper {
 
 				if (preResourceSendEmail) {
 					let preResourceTemplate = process.env.PRE_RESOURCE_EMAIL_TEMPLATE_CODE
-					preOrPostEmailTemplate = await notificationQueries.findOneEmailTemplate(
+					preOrPostEmailTemplate = await notificationService.findOneEmailTemplateCached(
 						preResourceTemplate,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -1071,7 +1092,7 @@ module.exports = class SessionsHelper {
 				}
 				if (postResourceSendEmail) {
 					let postResourceTemplate = process.env.POST_RESOURCE_EMAIL_TEMPLATE_CODE
-					preOrPostEmailTemplate = await notificationQueries.findOneEmailTemplate(
+					preOrPostEmailTemplate = await notificationService.findOneEmailTemplateCached(
 						postResourceTemplate,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -1080,7 +1101,7 @@ module.exports = class SessionsHelper {
 
 				if (mentorUpdated) {
 					let mentorChangedTemplateName = process.env.SESSION_MENTOR_CHANGED_EMAIL_TEMPLATE
-					mentorChangedTemplate = await notificationQueries.findOneEmailTemplate(
+					mentorChangedTemplate = await notificationService.findOneEmailTemplateCached(
 						mentorChangedTemplateName,
 						{ [Op.in]: [orgCode, defaults.orgCode] },
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -1088,7 +1109,7 @@ module.exports = class SessionsHelper {
 				}
 
 				// if (triggerSessionMeetinkAddEmail) {
-				// 	templateData = await notificationQueries.findOneEmailTemplate(
+				// 	templateData = await notificationService.findOneEmailTemplateCached(
 				// 		process.env.SESSION_MEETLINK_ADDED_EMAIL_TEMPLATE,
 				// 		orgId
 				// 	)
@@ -1337,6 +1358,14 @@ module.exports = class SessionsHelper {
 				}
 			}
 
+			// Invalidate session-related caches after successful update
+			await this._invalidateSessionCaches({
+				tenantCode,
+				orgCode,
+				sessionId,
+				mentorId: sessionDetail.mentor_id,
+			})
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: message,
@@ -1365,11 +1394,27 @@ module.exports = class SessionsHelper {
 				filter.share_link = id
 			}
 
-			const sessionDetails = await sessionQueries.findOne(filter, tenantCode, {
+			let sessionDetails
+			const cacheId = filter.id ? filter.id.toString() : filter.share_link
+			const options = {
 				attributes: {
 					exclude: ['share_link', 'mentee_password', 'mentor_password'],
 				},
-			})
+			}
+			try {
+				sessionDetails = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: `details:${cacheId}`,
+					fetchFn: async () => {
+						return await sessionQueries.findOne(filter, tenantCode, options)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session details, falling back to database:', cacheError.message)
+				sessionDetails = await sessionQueries.findOne(filter, tenantCode, options)
+			}
 			if (!sessionDetails) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
@@ -1410,9 +1455,9 @@ module.exports = class SessionsHelper {
 						ruleType: common.DEFAULT_RULES.SESSION_TYPE,
 						requesterId: userId,
 						roles: roles,
-						requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
+						requesterOrganizationCode: orgCode,
 						data: sessionDetails,
-						tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+						tenantCode: tenantCode,
 					})
 				}
 				if (validateDefaultRules?.error && validateDefaultRules?.error?.missingField) {
@@ -1515,7 +1560,7 @@ module.exports = class SessionsHelper {
 				sessionAccessorDetails = mentorExtension
 			}
 			// sessionAccessorDetails
-			const orgDetails = await organisationExtensionQueries.findOne(
+			const orgDetails = await organizationService.findOneCached(
 				{ organization_id: sessionAccessorDetails.organization_id },
 				tenantCode,
 				{ attributes: ['name'] }
@@ -1543,13 +1588,14 @@ module.exports = class SessionsHelper {
 			const sessionModelName = await sessionQueries.getModelName()
 			const modelNames = [mentorExtensionsModelName, sessionModelName].filter(Boolean)
 
-			let entityTypeData = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypeData = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_id: { [Op.in]: orgIds },
 					model_names: { [Op.overlap]: modelNames },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				orgCode,
+				tenantCode
 			)
 
 			if (mentorExtension?.user_id) {
@@ -1566,7 +1612,7 @@ module.exports = class SessionsHelper {
 
 			sessionDetails['resources'] = await this.getResources(sessionDetails.id, tenantCode)
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -1574,7 +1620,8 @@ module.exports = class SessionsHelper {
 					},
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				orgCode,
+				tenantCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -1942,7 +1989,7 @@ module.exports = class SessionsHelper {
 				await sessionQueries.updateEnrollmentCount(sessionId, false, tenantCode)
 			}
 
-			const templateData = await notificationQueries.findOneEmailTemplate(
+			const templateData = await notificationService.findOneEmailTemplateCached(
 				emailTemplateCode,
 				session.mentor_organization_id,
 				tenantCode
@@ -1972,6 +2019,15 @@ module.exports = class SessionsHelper {
 				}
 				await kafkaCommunication.pushEmailToKafka(payload)
 			}
+
+			// Invalidate session-related caches after successful enrollment
+			await this._invalidateSessionCaches({
+				tenantCode,
+				orgCode,
+				sessionId,
+				mentorId: session.mentor_id,
+				menteeId: userId,
+			})
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -2055,7 +2111,7 @@ module.exports = class SessionsHelper {
 				await sessionQueries.updateEnrollmentCount(sessionId, false, tenantCode)
 			}
 
-			const templateData = await notificationQueries.findOneEmailTemplate(
+			const templateData = await notificationService.findOneEmailTemplateCached(
 				emailTemplateCode,
 				session.mentor_organization_id,
 				tenantCode
@@ -2083,6 +2139,15 @@ module.exports = class SessionsHelper {
 				}
 				await kafkaCommunication.pushEmailToKafka(payload)
 			}
+
+			// Invalidate session-related caches after successful unenrollment
+			await this._invalidateSessionCaches({
+				tenantCode,
+				orgCode: userTokenData.organization_code,
+				sessionId,
+				mentorId: session.mentor_id,
+				menteeId: userTokenData.id,
+			})
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
@@ -2164,6 +2229,14 @@ module.exports = class SessionsHelper {
 					{ share_link: shareLink },
 					tenantCode
 				)
+
+				// Invalidate session caches after share link update
+				await this._invalidateSessionCaches({
+					tenantCode,
+					orgCode: session.mentor_organization_id,
+					sessionId,
+					mentorId: session.mentor_id,
+				})
 			}
 			return responses.successResponse({
 				message: 'SESSION_LINK_GENERATED_SUCCESSFULLY',
@@ -2334,6 +2407,18 @@ module.exports = class SessionsHelper {
 				)
 			}
 
+			// Invalidate cache after session status changes from PUBLISHED to LIVE
+			try {
+				await this._invalidateSessionCaches({
+					tenantCode,
+					orgCode: userTokenData.organization_code,
+					sessionId,
+					mentorId: loggedInUserId,
+				})
+			} catch (cacheError) {
+				console.error('Cache invalidation failed in session start, continuing with operation:', cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'SESSION_START_LINK',
@@ -2439,22 +2524,59 @@ module.exports = class SessionsHelper {
 				if (sessionData && sessionData.tenant_code) {
 					tenantCode = sessionData.tenant_code
 
-					// Now get the full session details with proper tenant context
-					sessionDetails = await sessionQueries.findOne(
-						{
-							id: sessionId,
-						},
-						tenantCode
-					)
+					// First get basic session data to extract organization code
+					const basicSessionData = await sessionQueries.findOne({ id: sessionId }, tenantCode)
+					const orgCode = basicSessionData?.organization_code
+
+					// Now get the full session details with proper tenant and org context
+					try {
+						sessionDetails = await cacheHelper.getOrSet({
+							tenantCode,
+							orgCode: orgCode,
+							ns: common.CACHE_CONFIG.namespaces.sessions.name,
+							id: `session:${sessionId}:details`,
+							fetchFn: async () => {
+								return basicSessionData // Use the data we already fetched
+							},
+						})
+					} catch (cacheError) {
+						console.warn(
+							'Cache system failed for session details, falling back to database:',
+							cacheError.message
+						)
+						sessionDetails = await sessionQueries.findOne(
+							{
+								id: sessionId,
+							},
+							tenantCode
+						)
+					}
 				}
 			}
 
-			sessionDetails = await sessionQueries.findOne(
-				{
-					id: sessionId,
-				},
-				tenantCode
-			)
+			// First get basic session data to extract organization code
+			const basicSessionData = await sessionQueries.findOne({ id: sessionId }, tenantCode)
+			const orgCode = basicSessionData?.organization_code
+
+			try {
+				sessionDetails = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: `session:${sessionId}:details`,
+					fetchFn: async () => {
+						return basicSessionData // Use the data we already fetched
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session details, falling back to database:', cacheError.message)
+				sessionDetails = await sessionQueries.findOne(
+					{
+						id: sessionId,
+					},
+					tenantCode
+				)
+			}
 
 			if (!sessionDetails) {
 				return responses.failureResponse({
@@ -2489,7 +2611,7 @@ module.exports = class SessionsHelper {
 			}
 			if (resourceInfo && resourceInfo.length > 0) {
 				let postResourceTemplate = process.env.POST_RESOURCE_EMAIL_TEMPLATE_CODE
-				let templateData = await notificationQueries.findOneEmailTemplate(
+				let templateData = await notificationService.findOneEmailTemplateCached(
 					postResourceTemplate,
 					sessionDetails.mentor_organization_id,
 					{ [Op.in]: [defaults.tenantCode, tenantCode] }
@@ -3242,7 +3364,7 @@ module.exports = class SessionsHelper {
 				)
 				oldSessionDuration = duration.asMinutes()
 			}
-			const templateData = await notificationQueries.findOneEmailTemplate(
+			const templateData = await notificationService.findOneEmailTemplateCached(
 				templateCode,
 				{ [Op.in]: [orgCode, defaults.orgCode] },
 				{ [Op.in]: [tenantCode, defaults.tenantCode] }
@@ -3383,6 +3505,14 @@ module.exports = class SessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Invalidate session-related caches after successful mentee removal
+			await this._invalidateSessionCaches({
+				tenantCode,
+				orgCode: organizationId,
+				sessionId,
+				mentorId: sessionDetails.mentor_id,
+			})
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -3548,7 +3678,7 @@ module.exports = class SessionsHelper {
 				tenantCode
 			)
 
-			const orgDetails = await organisationExtensionQueries.findOne(
+			const orgDetails = await organizationService.findOneCached(
 				{ organization_code: organizationCode },
 				tenantCode,
 				{ attributes: ['name'] }
@@ -3608,7 +3738,7 @@ module.exports = class SessionsHelper {
 			}
 			let path = process.env.SAMPLE_CSV_FILE_PATH
 			if (orgCode != defaults.orgCode) {
-				const result = await organisationExtensionQueries.findOne({ organization_code: orgCode }, tenantCode, {
+				const result = await organizationService.findOneCached({ organization_code: orgCode }, tenantCode, {
 					attributes: ['uploads'],
 				})
 				if (result && result.uploads) {
@@ -3723,6 +3853,15 @@ module.exports = class SessionsHelper {
 				}
 			})
 
+			// Invalidate all session caches after bulk session deletion
+			if (successfulMentorIds.length > 0) {
+				await this._invalidateSessionCaches({
+					tenantCode,
+					orgCode: organisationCode,
+					// No specific session ID as this is bulk deletion
+				})
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'BULK_SESSIONS_REMOVED',
@@ -3753,7 +3892,28 @@ module.exports = class SessionsHelper {
 
 		return Promise.allSettled(
 			mentorIds.map(async (mentorId) => {
-				const mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
+				// First get mentor data to extract organization code
+				const mentorData = await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
+				const orgCode = mentorData?.organization_code
+
+				let mentor
+				try {
+					mentor = await cacheHelper.getOrSet({
+						tenantCode,
+						orgCode: orgCode,
+						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+						id: `mentor:${mentorId}:org_code`,
+						fetchFn: async () => {
+							return mentorData // Use the data we already fetched
+						},
+					})
+				} catch (cacheError) {
+					console.warn(
+						'Cache system failed for mentor extension, falling back to database:',
+						cacheError.message
+					)
+					mentor = mentorData // Use the data we already fetched
+				}
 				if (!mentor) throw new MentorError('Invalid Mentor Id', { mentorId })
 
 				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentorId, tenantCode)
@@ -3880,6 +4040,64 @@ module.exports = class SessionsHelper {
 			throw error
 		}
 	}
+
+	/**
+	 * Invalidate session-related caches after CUD operations
+	 * @param {Object} params - Cache invalidation parameters
+	 * @param {String} params.tenantCode - Tenant code
+	 * @param {String} params.orgCode - Organization code
+	 * @param {String} params.sessionId - Session ID (optional)
+	 * @param {String} params.mentorId - Mentor ID (optional)
+	 * @param {String} params.menteeId - Mentee ID (optional)
+	 */
+	static async _invalidateSessionCaches({ tenantCode, orgCode, sessionId, mentorId, menteeId }) {
+		try {
+			// Invalidate session namespaces
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: common.CACHE_CONFIG.namespaces.sessions.name,
+			})
+
+			// Invalidate upcoming public sessions cache (new cache for home feed)
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: 'upcoming-public-sessions',
+			})
+
+			// Invalidate sessions metadata cache
+			await cacheHelper.evictNamespace({
+				tenantCode,
+				orgCode: orgCode,
+				ns: 'sessions-metadata',
+			})
+
+			// Invalidate mentor and mentee profile caches if provided
+			if (mentorId) {
+				await cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+				})
+			}
+
+			if (menteeId) {
+				await cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.mentee_profile.name,
+				})
+			}
+		} catch (err) {
+			console.error('Session cache invalidation failed', err)
+			// Don't throw - cache failures should not block main operations
+		}
+	}
+
+	/**
+	 * Cache session details with tenant/org isolation and cache failure handling
+	 */
 }
 
 class MentorError extends Error {

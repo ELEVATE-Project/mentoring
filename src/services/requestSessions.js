@@ -7,12 +7,14 @@ const common = require('@constants/common')
 const responses = require('@helpers/responses')
 const httpStatusCode = require('@generics/http-status')
 const notificationQueries = require('@database/queries/notificationTemplate')
+const notificationService = require('@services/notification')
 const entityTypeService = require('@services/entity-type')
 const userRequests = require('@requests/user')
 const sessionService = require('@services/sessions')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const utils = require('@generics/utils')
 const kafkaCommunication = require('@generics/kafka-communication')
+const cacheHelper = require('@generics/cacheHelper')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const entityTypeQueries = require('@database/queries/entityType')
 const { Op } = require('sequelize')
@@ -42,12 +44,21 @@ module.exports = class requestSessionsHelper {
 
 	static async create(bodyData, userId, organizationCode, organizationId, SkipValidation, tenantCode) {
 		try {
-			const mentorUserExists = await mentorQueries.getMentorExtension(
-				bodyData.requestee_id,
-				[],
-				false,
-				tenantCode
-			)
+			let mentorUserExists
+			try {
+				mentorUserExists = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode: organizationCode,
+					ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+					id: `mentor:${bodyData.requestee_id}:all`,
+					fetchFn: async () => {
+						return await mentorQueries.getMentorExtension(bodyData.requestee_id, [], false, tenantCode)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for mentor extension, falling back to database:', cacheError.message)
+				mentorUserExists = await mentorQueries.getMentorExtension(bodyData.requestee_id, [], false, tenantCode)
+			}
 			if (!mentorUserExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -135,7 +146,7 @@ module.exports = class requestSessionsHelper {
 				})
 
 			const requestSessionModelName = await sessionRequestQueries.getModelName()
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			const entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -143,9 +154,8 @@ module.exports = class requestSessionsHelper {
 					},
 					model_names: { [Op.contains]: [requestSessionModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				organizationCode,
+				tenantCode
 			)
 
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
@@ -699,7 +709,7 @@ module.exports = class requestSessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			// Fetch entity types associated with the user
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -707,9 +717,8 @@ module.exports = class requestSessionsHelper {
 					},
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				userDetails.organization_code,
+				tenantCode
 			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
@@ -889,7 +898,7 @@ async function emailForAcceptAndReject(
 			responseCode: 'CLIENT_ERROR',
 		})
 	// send mail to mentors on session creation if session created by manager
-	const templateData = await notificationQueries.findOneEmailTemplate(
+	const templateData = await notificationService.findOneEmailTemplateCached(
 		emailTemplateCode,
 		{ [Op.in]: [orgCode, defaults.orgCode] },
 		{ [Op.in]: [tenantCode, defaults.tenantCode] }

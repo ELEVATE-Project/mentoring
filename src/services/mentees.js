@@ -13,7 +13,7 @@ const sessionQueries = require('@database/queries/sessions')
 const _ = require('lodash')
 const entityTypeQueries = require('@database/queries/entityType')
 const bigBlueButtonService = require('./bigBlueButton')
-const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const organizationService = require('@services/organization')
 const orgAdminService = require('@services/org-admin')
 const mentorQueries = require('@database/queries/mentorExtension')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
@@ -28,6 +28,7 @@ const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/def
 
 const defaultSearchConfig = require('@configs/search.json')
 const emailEncryption = require('@utils/emailEncryption')
+const cacheHelper = require('@generics/cacheHelper')
 const communicationHelper = require('@helpers/communications')
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const { checkIfUserIsAccessible } = require('@helpers/saasUserAccessibility')
@@ -77,7 +78,7 @@ module.exports = class MenteesHelper {
 			})
 		const userExtensionsModelName = await menteeQueries.getModelName()
 
-		let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+		let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 			{
 				status: 'ACTIVE',
 				organization_code: {
@@ -85,9 +86,8 @@ module.exports = class MenteesHelper {
 				},
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			},
-			{
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			}
+			organizationCode,
+			tenantCode
 		)
 		if (entityTypes instanceof Error) {
 			throw entityTypes
@@ -95,7 +95,13 @@ module.exports = class MenteesHelper {
 		const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
 		//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
-		const processDbResponse = utils.processDbResponse(mentee, validationData)
+		let processDbResponse = utils.processDbResponse(mentee, validationData)
+
+		const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+		let displayProperties = []
+		for (const entityType of sortedEntityType) {
+			displayProperties.push({ key: entityType.value, ...entityType.meta })
+		}
 
 		const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
 
@@ -132,7 +138,7 @@ module.exports = class MenteesHelper {
 		}
 
 		if (!menteeDetails.data.result.organization) {
-			const orgDetails = await organisationExtensionQueries.findOne(
+			const orgDetails = await organizationService.findOneCached(
 				{ organization_code: organizationCode },
 				tenantCode,
 				{ attributes: ['name'] }
@@ -149,6 +155,7 @@ module.exports = class MenteesHelper {
 				sessions_attended: totalSession,
 				...menteeDetails.data.result,
 				...processDbResponse,
+				displayProperties,
 			},
 		})
 	}
@@ -504,7 +511,7 @@ module.exports = class MenteesHelper {
 				responseCode: 'CLIENT_ERROR',
 			})
 
-		let validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+		let validationData = await entityTypeService.readAllEntityTypesAndEntitiesCached(
 			{
 				status: 'ACTIVE',
 				allow_filtering: true,
@@ -513,9 +520,8 @@ module.exports = class MenteesHelper {
 				},
 				model_names: { [Op.contains]: [sessionModelName] },
 			},
-			{
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			}
+			organizationCode,
+			tenantCode
 		)
 		let filteredQuery = utils.validateAndBuildFilters(query, validationData, sessionModelName)
 
@@ -555,25 +561,66 @@ module.exports = class MenteesHelper {
 			requesterId: userId,
 			roles: roles,
 			requesterOrganizationCode: organizationCode,
-			tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+			tenantCode: tenantCode,
 		})
 
 		if (defaultRuleFilter.error && defaultRuleFilter.error.missingField) {
 			return defaultRuleFilter
 		}
 
-		let sessions = await sessionQueries.getUpcomingSessionsFromView(
+		// Create cache key for public sessions with ALL parameters that affect results
+		const cacheKey = this._buildPublicSessionsCacheKey({
 			page,
 			limit,
 			searchFilter,
 			userId,
 			filteredQuery,
-			tenantCode,
 			saasFilter,
 			additionalProjectionString,
 			search,
-			defaultRuleFilter
-		)
+			defaultRuleFilter,
+			organizationCode,
+			tenantCode,
+			roles: roles.join(','), // Include user roles as they affect visibility
+		})
+
+		let sessions
+		try {
+			sessions = await cacheHelper.getOrSet({
+				tenantCode,
+				orgCode: organizationCode,
+				ns: 'upcoming-public-sessions',
+				id: cacheKey,
+				fetchFn: async () => {
+					return await sessionQueries.getUpcomingSessionsFromView(
+						page,
+						limit,
+						searchFilter,
+						userId,
+						filteredQuery,
+						tenantCode,
+						saasFilter,
+						additionalProjectionString,
+						search,
+						defaultRuleFilter
+					)
+				},
+			})
+		} catch (cacheError) {
+			console.warn('Cache system failed for public sessions, falling back to database:', cacheError.message)
+			sessions = await sessionQueries.getUpcomingSessionsFromView(
+				page,
+				limit,
+				searchFilter,
+				userId,
+				filteredQuery,
+				tenantCode,
+				saasFilter,
+				additionalProjectionString,
+				search,
+				defaultRuleFilter
+			)
+		}
 		if (sessions && sessions.rows && Array.isArray(sessions.rows) && sessions.rows.length > 0) {
 			const uniqueOrgIds = [...new Set(sessions.rows.map((obj) => obj?.mentor_organization_id).filter(Boolean))]
 			sessions.rows = await entityTypeService.processEntityTypesToAddValueLabels(
@@ -685,7 +732,7 @@ module.exports = class MenteesHelper {
 
 	static async getMySessions(page, limit, search, userId, startDate, endDate, tenantCode) {
 		try {
-			const upcomingSessions = await sessionQueries.getUpcomingSessions(
+			const upcomingSessions = await sessionQueries.getEnrolledSessions(
 				page,
 				limit,
 				search,
@@ -694,6 +741,7 @@ module.exports = class MenteesHelper {
 				endDate,
 				tenantCode
 			)
+
 			const upcomingSessionIds =
 				upcomingSessions && upcomingSessions.rows && Array.isArray(upcomingSessions.rows)
 					? upcomingSessions.rows.map((session) => session.id).filter((id) => id != null)
@@ -718,13 +766,44 @@ module.exports = class MenteesHelper {
 				(usersUpcomingSession) => usersUpcomingSession.session_id
 			)
 
-			const attributes = { exclude: ['mentee_password', 'mentor_password'] }
-			let sessionDetails = await sessionQueries.findAndCountAll(
-				{ id: usersUpcomingSessionIds },
-				tenantCode,
-				{ order: [['start_date', 'ASC']] },
-				{ attributes: attributes }
+			const userExtension = await menteeQueries.getMenteeExtension(
+				userId,
+				['organization_code'],
+				false,
+				tenantCode
 			)
+			const orgCode = userExtension?.organization_code
+
+			const attributes = { exclude: ['mentee_password', 'mentor_password'] }
+
+			let sessionDetails
+			const cacheId = `sessions:${JSON.stringify(usersUpcomingSessionIds)}`
+
+			try {
+				sessionDetails = await cacheHelper.getOrSet({
+					tenantCode,
+					orgCode,
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+					id: cacheId,
+					fetchFn: async () => {
+						return await sessionQueries.findAndCountAll(
+							{ id: usersUpcomingSessionIds },
+							tenantCode,
+							{ order: [['start_date', 'ASC']] },
+							{ attributes }
+						)
+					},
+				})
+			} catch (cacheError) {
+				console.warn('Cache system failed for session details, falling back to database:', cacheError.message)
+				sessionDetails = await sessionQueries.findAndCountAll(
+					{ id: usersUpcomingSessionIds },
+					tenantCode,
+					{ order: [['start_date', 'ASC']] },
+					{ attributes }
+				)
+			}
+
 			if (
 				sessionDetails &&
 				sessionDetails.rows &&
@@ -746,13 +825,11 @@ module.exports = class MenteesHelper {
 					[],
 					[tenantCode]
 				)
+				sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows)
+				sessionDetails.rows = sessionDetails.rows.map((r) => ({ ...r, is_enrolled: true }))
 			}
-			if (sessionDetails && sessionDetails.rows) {
-				sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows, tenantCode)
-				return sessionDetails
-			} else {
-				return { rows: [], count: 0 }
-			}
+
+			return sessionDetails || { rows: [], count: 0 }
 		} catch (error) {
 			throw error
 		}
@@ -837,7 +914,7 @@ module.exports = class MenteesHelper {
 			// ✅ FIX 3: Only fetch organizations if we have valid IDs
 			let organizationDetails = []
 			if (organizationIds.length > 0) {
-				organizationDetails = await organisationExtensionQueries.findAll(
+				organizationDetails = await organizationService.findAllCached(
 					{
 						organization_id: {
 							[Op.in]: [...organizationIds],
@@ -911,7 +988,7 @@ module.exports = class MenteesHelper {
 			const organization_name = userOrgDetails.data.result.name
 
 			// Find organisation policy from organisation_extension table
-			let organisationPolicy = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+			let organisationPolicy = await organizationService.findOrInsertOrganizationExtensionCached(
 				organizationId,
 				organizationCode,
 				organization_name,
@@ -937,7 +1014,7 @@ module.exports = class MenteesHelper {
 				})
 			const userExtensionsModelName = await menteeQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -945,9 +1022,8 @@ module.exports = class MenteesHelper {
 					},
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				organizationCode,
+				tenantCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -1062,9 +1138,11 @@ module.exports = class MenteesHelper {
 				organization_code: { [Op.in]: [organizationCode, defaults.orgCode] },
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			})
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
+				filter,
+				organizationCode,
+				tenantCode
+			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
 			}
@@ -1093,7 +1171,7 @@ module.exports = class MenteesHelper {
 					organizationCode: organizationCode,
 					tenantCode,
 				})
-				const orgPolicies = await organisationExtensionQueries.findOrInsertOrganizationExtension(
+				const orgPolicies = await organizationService.findOrInsertOrganizationExtensionCached(
 					data.organization_id,
 					organizationCode,
 					userOrgDetails.data.result.name,
@@ -1208,9 +1286,11 @@ module.exports = class MenteesHelper {
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			})
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
+				filter,
+				organizationCode,
+				tenantCode
+			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationId)
@@ -1223,6 +1303,57 @@ module.exports = class MenteesHelper {
 			})
 		} catch (error) {
 			return error
+		}
+	}
+
+	/**
+	 * Get mentee extension details by user ID with caching.
+	 * @method
+	 * @name getMenteeExtensionCached
+	 * @param {String} userId - User ID of the mentee.
+	 * @param {Array} attributes - Attributes to select (default: []).
+	 * @param {Boolean} unScoped - Whether to use unscoped query (default: false).
+	 * @param {String} tenantCode - Tenant code for isolation.
+	 * @returns {Promise<Object>} - Cached mentee extension details.
+	 */
+	static async getMenteeExtensionCached(userId, attributes = [], unScoped = false, tenantCode) {
+		try {
+			// Get user's organization for cache key structure
+			const userExtension = await menteeQueries.getMenteeExtension(
+				userId,
+				['organization_code'],
+				false,
+				tenantCode
+			)
+			const orgCode = userExtension?.organization_code || 'default'
+
+			// Create tenant:org structured cache key
+			const cacheKey = `tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${userId}:${attributes
+				.sort()
+				.join(',')}:${unScoped}`
+
+			try {
+				// Use direct Redis operations with tenant/org structure
+				const cached = await cacheHelper.get(cacheKey)
+				if (cached !== null && cached !== undefined) {
+					return cached
+				}
+
+				// Fetch from database if not in cache
+				const result = await menteeQueries.getMenteeExtension(userId, attributes, unScoped, tenantCode)
+				if (result !== undefined) {
+					const ttl = 300 // 5 minutes
+					await cacheHelper.set(cacheKey, result, ttl)
+				}
+
+				return result
+			} catch (cacheError) {
+				console.warn('Cache system failed for mentee extension, falling back to database:', cacheError.message)
+				return await menteeQueries.getMenteeExtension(userId, attributes, unScoped, tenantCode)
+			}
+		} catch (error) {
+			console.warn('Error in getMenteeExtensionCached, falling back to database:', error.message)
+			return await menteeQueries.getMenteeExtension(userId, attributes, unScoped, tenantCode)
 		}
 	}
 
@@ -1248,6 +1379,115 @@ module.exports = class MenteesHelper {
 			})
 		} catch (error) {
 			return error
+		}
+	}
+
+	/**
+	 * Get users by user IDs with caching for bulk operations.
+	 * @method
+	 * @name getUsersByUserIdsCached
+	 * @param {Array} ids - Array of user IDs.
+	 * @param {Object} options - Query options (default: {}).
+	 * @param {String} tenantCode - Tenant code for isolation.
+	 * @param {Boolean} unscoped - Whether to use unscoped query (default: false).
+	 * @returns {Promise<Array>} - Cached users data.
+	 */
+	static async getUsersByUserIdsCached(ids, options = {}, tenantCode, unscoped = false) {
+		if (ids.length === 0) return []
+
+		try {
+			// Get organization code for cache structure - fetch from one of the users if needed
+			let orgCode = process.env.DEFAULT_ORGANISATION_CODE
+			if (ids.length > 0) {
+				// Get first user's org code to use for cache structure
+				const firstUser = await menteeQueries.getUsersByUserIds([ids[0]], options, tenantCode, unscoped)
+				if (firstUser.length > 0 && firstUser[0].organization_code) {
+					orgCode = firstUser[0].organization_code
+				}
+			}
+
+			// Try to get cached individual users first
+			const cachedResults = []
+			const missingIds = []
+
+			// Check cache for each user individually using tenant:org structure
+			for (const id of ids) {
+				const cacheKey = `tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${id}:${unscoped}`
+				try {
+					const cached = await cacheHelper.get(cacheKey)
+					if (cached !== null && cached !== undefined) {
+						cachedResults.push(cached)
+					} else {
+						missingIds.push(id)
+					}
+				} catch (cacheErr) {
+					// If individual cache lookup fails, add to missing list
+					missingIds.push(id)
+				}
+			}
+
+			// Fetch missing users from database
+			let dbResults = []
+			if (missingIds.length > 0) {
+				dbResults = await menteeQueries.getUsersByUserIds(missingIds, options, tenantCode, unscoped)
+
+				// Cache individual results using tenant:org structure
+				for (const user of dbResults) {
+					const userOrgCode = user.organization_code || orgCode
+					const cacheKey = `tenant:${tenantCode}:org:${userOrgCode}:user_profile_cache:${user.user_id}:${unscoped}`
+					try {
+						const ttl = 300 // 5 minutes TTL
+						await cacheHelper.set(cacheKey, user, ttl)
+					} catch (cacheErr) {
+						console.warn('Failed to cache individual user:', cacheErr.message)
+					}
+				}
+			}
+
+			return [...cachedResults, ...dbResults]
+		} catch (cacheError) {
+			console.warn('Cache system failed for bulk users, falling back to database:', cacheError.message)
+			return await menteeQueries.getUsersByUserIds(ids, options, tenantCode, unscoped)
+		}
+	}
+
+	/**
+	 * Get all users by organization IDs with caching.
+	 * @method
+	 * @name getAllUsersByOrgIdCached
+	 * @param {Array} orgIds - Array of organization IDs.
+	 * @param {String} tenantCode - Tenant code for isolation.
+	 * @returns {Promise<Array>} - Cached users data by organization.
+	 */
+	static async getAllUsersByOrgIdCached(orgIds, tenantCode) {
+		if (!Array.isArray(orgIds) || orgIds.length === 0) {
+			return []
+		}
+
+		try {
+			const cacheKey = `tenant:${tenantCode}:org:all:users-by-org:${orgIds.sort().join(',')}`
+			const ttl = 300 // 5 minutes TTL
+
+			// Try to get from cache first
+			const cached = await cacheHelper.get(cacheKey)
+			if (cached) {
+				return cached
+			}
+
+			// Fallback to database query
+			const users = await menteeQueries.getAllUsersByOrgId(orgIds, tenantCode)
+
+			// Cache the result
+			try {
+				await cacheHelper.set(cacheKey, users, ttl)
+			} catch (cacheErr) {
+				console.warn('Failed to cache users by organization:', cacheErr.message)
+			}
+
+			return users
+		} catch (cacheError) {
+			console.warn('Cache system failed for users by organization, falling back to database:', cacheError.message)
+			return await menteeQueries.getAllUsersByOrgId(orgIds, tenantCode)
 		}
 	}
 
@@ -1423,11 +1663,12 @@ module.exports = class MenteesHelper {
 				}
 			}
 
-			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+			let validationData = await entityTypeService.readAllEntityTypesAndEntitiesCached(
 				{
 					status: common.ACTIVE_STATUS,
 					model_names: { [Op.overlap]: [userExtensionModelName] },
 				},
+				organizationCode,
 				tenantCode
 			)
 
@@ -1484,7 +1725,7 @@ module.exports = class MenteesHelper {
 						[Op.in]: organizationIds,
 					},
 				}
-				organizationDetails = await organisationExtensionQueries.findAll(orgFilter, tenantCode, {
+				organizationDetails = await organizationService.findAllCached(orgFilter, tenantCode, {
 					attributes: ['name', 'organization_id'],
 					raw: true,
 				})
@@ -1596,11 +1837,56 @@ module.exports = class MenteesHelper {
 			// 	? ['external_mentee_visibility', 'organization_id']
 			// 	: ['external_mentor_visibility', 'organization_id']
 
-			const userPolicyDetails = isAMentor
-				? await mentorQueries.getMentorExtension(userId, ['organization_id'], false, tenantCode)
-				: await menteeQueries.getMenteeExtension(userId, ['organization_id'], false, tenantCode)
+			let userPolicyDetails
+			if (isAMentor) {
+				try {
+					// Get user's organization for cache key structure
+					const userExtension = await mentorQueries.getMentorExtension(
+						userId,
+						['organization_code'],
+						false,
+						tenantCode
+					)
+					const orgCode = userExtension?.organization_code || 'default'
 
-			const getOrgPolicy = await organisationExtensionQueries.findOne(
+					// Use tenant:org structured cache key
+					const cacheKey = `tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${userId}:org_id`
+					const cached = await cacheHelper.get(cacheKey)
+					if (cached !== null && cached !== undefined) {
+						userPolicyDetails = cached
+					} else {
+						userPolicyDetails = await mentorQueries.getMentorExtension(
+							userId,
+							['organization_id'],
+							false,
+							tenantCode
+						)
+						if (userPolicyDetails !== undefined) {
+							await cacheHelper.set(cacheKey, userPolicyDetails, 300) // 5 minutes TTL
+						}
+					}
+				} catch (cacheError) {
+					console.warn(
+						'Cache system failed for mentor policy details, falling back to database:',
+						cacheError.message
+					)
+					userPolicyDetails = await mentorQueries.getMentorExtension(
+						userId,
+						['organization_id'],
+						false,
+						tenantCode
+					)
+				}
+			} else {
+				userPolicyDetails = await menteeQueries.getMenteeExtension(
+					userId,
+					['organization_id'],
+					false,
+					tenantCode
+				)
+			}
+
+			const getOrgPolicy = await organizationService.findOneCached(
 				{
 					organization_id: userPolicyDetails.organization_id,
 				},
@@ -1676,73 +1962,108 @@ module.exports = class MenteesHelper {
 	static async checkIfMenteeIsAccessible(userData, userId, isAMentor, tenantCode) {
 		try {
 			// user can be mentor or mentee, based on isAMentor key get policy details
-			const userPolicyDetails = isAMentor
-				? await mentorQueries.getMentorExtension(
+			let userPolicyDetails
+			if (isAMentor) {
+				try {
+					// Get user's organization for cache key structure
+					const userExtension = await mentorQueries.getMentorExtension(
 						userId,
-						['external_mentee_visibility', 'organization_id'],
+						['organization_code'],
 						false,
 						tenantCode
-				  )
-				: await menteeQueries.getMenteeExtension(
-						userId,
-						['external_mentee_visibility', 'organization_id'],
-						false,
-						tenantCode
-				  )
+					)
+					const orgCode = userExtension?.organization_code || 'default'
 
-			// Throw error if mentor/mentee extension not found
-			if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
-				return responses.failureResponse({
-					statusCode: httpStatusCode.not_found,
-					message: isAMentor ? 'MENTORS_NOT_FOUND' : 'MENTEE_EXTENSION_NOT_FOUND',
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
-
-			// check the accessibility conditions
-			const accessibleUsers = userData.map((mentee) => {
-				let isAccessible = false
-
-				if (userPolicyDetails.external_mentee_visibility && userPolicyDetails.organization_id) {
-					const { external_mentee_visibility, organization_id } = userPolicyDetails
-
-					switch (external_mentee_visibility) {
-						/**
-						 * if user external_mentee_visibility is current. He can only see his/her organizations mentee
-						 * so we will check mentee's organization_id and user organization_id are matching
-						 */
-						case common.CURRENT:
-							isAccessible = mentee.organization_id === organization_id
-							break
-						/**
-						 * If user external_mentee_visibility is associated
-						 * <<point**>> first we need to check if mentee's visible_to_organizations contain the user organization_id and verify mentee's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
-						 */
-						case common.ASSOCIATED:
-							isAccessible =
-								(mentee.visible_to_organizations.includes(organization_id) &&
-									mentee.mentee_visibility != common.CURRENT) ||
-								mentee.organization_id === organization_id
-							break
-						/**
-						 * We need to check if mentee's visible_to_organizations contain the user organization_id and verify mentee's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
-						 * OR if mentee visibility is ALL that mentee is also accessible
-						 */
-						case common.ALL:
-							isAccessible =
-								(mentee.visible_to_organizations.includes(organization_id) &&
-									mentee.mentee_visibility != common.CURRENT) ||
-								mentee.mentee_visibility === common.ALL ||
-								mentee.organization_id === organization_id
-							break
-						default:
-							break
+					// Use tenant:org structured cache key
+					const cacheKey = `tenant:${tenantCode}:org:${orgCode}:user_profile_cache:${userId}:ext_mentee_vis_org`
+					const cached = await cacheHelper.get(cacheKey)
+					if (cached !== null && cached !== undefined) {
+						userPolicyDetails = cached
+					} else {
+						userPolicyDetails = await mentorQueries.getMentorExtension(
+							userId,
+							['external_mentee_visibility', 'organization_id'],
+							false,
+							tenantCode
+						)
+						if (userPolicyDetails !== undefined) {
+							await cacheHelper.set(cacheKey, userPolicyDetails, 300) // 5 minutes TTL
+						}
 					}
+				} catch (cacheError) {
+					console.warn(
+						'Cache system failed for mentor policy details, falling back to database:',
+						cacheError.message
+					)
+					userPolicyDetails = await mentorQueries.getMentorExtension(
+						userId,
+						['external_mentee_visibility', 'organization_id'],
+						false,
+						tenantCode
+					)
 				}
-				return { mentee, isAccessible }
-			})
-			const isAccessible = accessibleUsers.some((user) => user.isAccessible)
-			return isAccessible
+			} else {
+				userPolicyDetails = await menteeQueries.getMenteeExtension(
+					userId,
+					['external_mentee_visibility', 'organization_id'],
+					false,
+					tenantCode
+				)
+
+				// Throw error if mentor/mentee extension not found
+				if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
+					return responses.failureResponse({
+						statusCode: httpStatusCode.not_found,
+						message: isAMentor ? 'MENTORS_NOT_FOUND' : 'MENTEE_EXTENSION_NOT_FOUND',
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+
+				// check the accessibility conditions
+				const accessibleUsers = userData.map((mentee) => {
+					let isAccessible = false
+
+					if (userPolicyDetails.external_mentee_visibility && userPolicyDetails.organization_id) {
+						const { external_mentee_visibility, organization_id } = userPolicyDetails
+
+						switch (external_mentee_visibility) {
+							/**
+							 * if user external_mentee_visibility is current. He can only see his/her organizations mentee
+							 * so we will check mentee's organization_id and user organization_id are matching
+							 */
+							case common.CURRENT:
+								isAccessible = mentee.organization_id === organization_id
+								break
+							/**
+							 * If user external_mentee_visibility is associated
+							 * <<point**>> first we need to check if mentee's visible_to_organizations contain the user organization_id and verify mentee's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
+							 */
+							case common.ASSOCIATED:
+								isAccessible =
+									(mentee.visible_to_organizations.includes(organization_id) &&
+										mentee.mentee_visibility != common.CURRENT) ||
+									mentee.organization_id === organization_id
+								break
+							/**
+							 * We need to check if mentee's visible_to_organizations contain the user organization_id and verify mentee's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
+							 * OR if mentee visibility is ALL that mentee is also accessible
+							 */
+							case common.ALL:
+								isAccessible =
+									(mentee.visible_to_organizations.includes(organization_id) &&
+										mentee.mentee_visibility != common.CURRENT) ||
+									mentee.mentee_visibility === common.ALL ||
+									mentee.organization_id === organization_id
+								break
+							default:
+								break
+						}
+					}
+					return { mentee, isAccessible }
+				})
+				const isAccessible = accessibleUsers.some((user) => user.isAccessible)
+				return isAccessible
+			}
 		} catch (error) {
 			return error
 		}
@@ -1923,8 +2244,31 @@ module.exports = class MenteesHelper {
 			}
 
 			let mentorExtension
-			if (requestedUserExtension) mentorExtension = requestedUserExtension
-			else mentorExtension = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+			if (requestedUserExtension) {
+				mentorExtension = requestedUserExtension
+			} else {
+				// First get mentor data to extract organization code
+				const mentorData = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+				const orgCode = mentorData?.organization_code
+
+				try {
+					mentorExtension = await cacheHelper.getOrSet({
+						tenantCode,
+						orgCode: orgCode,
+						ns: common.CACHE_CONFIG.namespaces.mentor_profile.name,
+						id: `mentor:${id}:all`,
+						fetchFn: async () => {
+							return mentorData // Use the data we already fetched
+						},
+					})
+				} catch (cacheError) {
+					console.warn(
+						'Cache system failed for mentor extension, falling back to database:',
+						cacheError.message
+					)
+					mentorExtension = await mentorQueries.getMentorExtension(id, [], false, tenantCode)
+				}
+			}
 
 			mentorExtension = utils.deleteProperties(mentorExtension, [
 				'user_id',
@@ -1952,7 +2296,7 @@ module.exports = class MenteesHelper {
 
 			const menteeExtensionsModelName = await menteeQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+			let entityTypes = await entityTypeService.readUserEntityTypesAndEntitiesCached(
 				{
 					status: 'ACTIVE',
 					organization_code: {
@@ -1960,9 +2304,8 @@ module.exports = class MenteesHelper {
 					},
 					model_names: { [Op.contains]: [menteeExtensionsModelName] },
 				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+				organizationCode,
+				tenantCode
 			)
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
@@ -1975,7 +2318,7 @@ module.exports = class MenteesHelper {
 
 			const connection = await connectionQueries.getConnection(userId, id, tenantCode)
 
-			const orgDetails = await organisationExtensionQueries.findOne(
+			const orgDetails = await organizationService.findOneCached(
 				{ organization_code: requestedUserExtension.organization_code },
 				tenantCode,
 				{ attributes: ['name', 'organization_code', 'organization_id'] }
@@ -1997,11 +2340,18 @@ module.exports = class MenteesHelper {
 				processDbResponse.connection_details = connection.meta
 			}
 
+			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+			let displayProperties = []
+			for (const entityType of sortedEntityType) {
+				displayProperties.push({ key: entityType.value, ...entityType.meta })
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'PROFILE_FTECHED_SUCCESSFULLY',
 				result: {
 					...processDbResponse,
+					displayProperties,
 				},
 			})
 		} catch (error) {
@@ -2042,6 +2392,105 @@ module.exports = class MenteesHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+		}
+	}
+
+	/**
+	 * Build cache key for public sessions with all parameters that affect results
+	 * @method
+	 * @name _buildPublicSessionsCacheKey
+	 * @param {Object} params - All parameters that affect query results
+	 * @returns {String} - Unique cache key
+	 */
+	static _buildPublicSessionsCacheKey(params) {
+		const crypto = require('crypto')
+
+		// Create a deterministic hash of all parameters that affect query results
+		const keyData = {
+			page: params.page,
+			limit: params.limit,
+			search: params.search || '',
+			organizationCode: params.organizationCode,
+			roles: params.roles || '',
+			// Hash complex objects to avoid key length issues
+			searchFilter: this._hashObject(params.searchFilter),
+			filteredQuery: this._hashObject(params.filteredQuery),
+			saasFilter: this._hashObject(params.saasFilter),
+			defaultRuleFilter: this._hashObject(params.defaultRuleFilter),
+			additionalProjectionString: params.additionalProjectionString || '',
+		}
+
+		// Create deterministic string from parameters
+		const keyString = Object.keys(keyData)
+			.sort()
+			.map((key) => `${key}:${keyData[key]}`)
+			.join('|')
+
+		// Hash the key string to create shorter, consistent cache key
+		const hash = crypto.createHash('md5').update(keyString).digest('hex').substring(0, 16)
+
+		return `page:${params.page}:limit:${params.limit}:${hash}`
+	}
+
+	/**
+	 * Create consistent hash for complex objects
+	 * @method
+	 * @name _hashObject
+	 * @param {Object} obj - Object to hash
+	 * @returns {String} - Hash string
+	 */
+	static _hashObject(obj) {
+		if (!obj || typeof obj !== 'object') return String(obj || '')
+
+		const crypto = require('crypto')
+		const jsonString = JSON.stringify(obj, Object.keys(obj).sort())
+		return crypto.createHash('md5').update(jsonString).digest('hex').substring(0, 8)
+	}
+
+	/**
+	 * Evict mentee-related caches after CUD operations
+	 * Following the entity-type service pattern for comprehensive cache invalidation
+	 */
+	static async _invalidateMenteeCaches({ tenantCode, orgCode, menteeId }) {
+		try {
+			// Evict user_extension caches (new namespace for mentor/mentee extension data)
+			if (menteeId) {
+				// Invalidate specific mentee's cache entries
+				await cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: 'user_extension',
+					patternSuffix: `mentee:${menteeId}:*`,
+				})
+			} else {
+				// Invalidate all mentee extension caches for the organization
+				await cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: 'user_extension',
+				})
+			}
+
+			// Evict mentee profile caches (if namespace exists in config)
+			if (common.CACHE_CONFIG.namespaces.mentee_profile) {
+				await cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.mentee_profile.name,
+				})
+			}
+
+			// Evict sessions caches as mentee data affects sessions
+			if (common.CACHE_CONFIG.namespaces.sessions) {
+				await cacheHelper.evictNamespace({
+					tenantCode,
+					orgCode: orgCode,
+					ns: common.CACHE_CONFIG.namespaces.sessions.name,
+				})
+			}
+		} catch (err) {
+			console.error('Mentee cache invalidation failed', err)
+			// Don't throw - cache failures should not block main operations
 		}
 	}
 }
