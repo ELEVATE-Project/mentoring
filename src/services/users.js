@@ -266,15 +266,14 @@ module.exports = class UserHelper {
 			roleChangePayload.current_roles = [common.MENTEE_ROLE]
 			roleChangePayload.new_roles = [common.MENTOR_ROLE]
 			isRoleChanged = true
-		} else if (isAMentee && menteeExtension.is_mentor) {
+		}
+		if (!isAMentor && menteeExtension.is_mentor) {
 			roleChangePayload.current_roles = [common.MENTOR_ROLE]
 			roleChangePayload.new_roles = [common.MENTEE_ROLE]
 			isRoleChanged = true
-		} else if (!isAMentee && !menteeExtension.is_mentor) {
-			roleChangePayload.current_roles = [common.MENTEE_ROLE]
-			roleChangePayload.new_roles = [common.MENTOR_ROLE]
-			isRoleChanged = true
-		} else if (targetHasMentorRole) {
+		}
+
+		if (targetHasMentorRole) {
 			roleChangePayload.current_roles = [common.MENTEE_ROLE]
 			roleChangePayload.new_roles = [common.MENTOR_ROLE]
 			isRoleChanged = true
