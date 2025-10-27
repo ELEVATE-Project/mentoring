@@ -10,6 +10,7 @@ const _ = require('lodash')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const sessionQueries = require('@database/queries/sessions')
 const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeCache = require('@helpers/entityTypeCache')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const orgAdminService = require('@services/org-admin')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
@@ -425,17 +426,10 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [orgCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [mentorExtensionsModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				mentorExtensionsModelName,
+				[orgCode, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -541,17 +535,10 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [orgCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [mentorExtensionsModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				mentorExtensionsModelName,
+				[orgCode, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -832,17 +819,10 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [mentorOrgCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [mentorExtensionsModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				mentorExtensionsModelName,
+				[mentorOrgCode, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes

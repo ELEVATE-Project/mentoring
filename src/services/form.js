@@ -9,6 +9,7 @@ const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class FormsHelper {
 	/**
@@ -31,6 +32,12 @@ module.exports = class FormsHelper {
 			await utils.internalDel('formVersion')
 
 			await KafkaProducer.clearInternalCache('formVersion')
+
+			// Invalidate related form caches after creation
+			if (bodyData.type && bodyData.sub_type) {
+				await cacheHelper.forms.delete(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
+				console.log(`Form cache invalidated after creating ${bodyData.type}:${bodyData.sub_type}`)
+			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -88,6 +95,13 @@ module.exports = class FormsHelper {
 			}
 			await utils.internalDel('formVersion')
 			await KafkaProducer.clearInternalCache('formVersion')
+
+			// Invalidate related form caches after update
+			if (bodyData.type && bodyData.sub_type) {
+				await cacheHelper.forms.delete(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
+				console.log(`Form cache invalidated after updating ${bodyData.type}:${bodyData.sub_type}`)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: 'FORM_UPDATED_SUCCESSFULLY',
@@ -114,6 +128,19 @@ module.exports = class FormsHelper {
 
 	static async read(id, bodyData, orgCode, tenantCode) {
 		try {
+			// Try to get from cache first if searching by type and subtype (not by ID)
+			if (!id && bodyData?.type && bodyData?.sub_type) {
+				const cachedData = await cacheHelper.forms.get(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
+				if (cachedData) {
+					console.log(`Form ${bodyData.type}:${bodyData.sub_type} retrieved from cache`)
+					return responses.successResponse({
+						statusCode: httpStatusCode.ok,
+						message: 'FORM_FETCHED_SUCCESSFULLY',
+						result: cachedData,
+					})
+				}
+			}
+
 			let filter = {}
 			if (id) {
 				filter = { id: id, tenant_code: tenantCode }
@@ -152,6 +179,12 @@ module.exports = class FormsHelper {
 
 			// Business logic: Prefer current tenant over default tenant
 			const form = forms.find((f) => f.tenant_code === tenantCode) || forms[0]
+
+			// Cache the result if it was searched by type and subtype
+			if (!id && bodyData?.type && bodyData?.sub_type) {
+				await cacheHelper.forms.set(tenantCode, orgCode, bodyData.type, bodyData.sub_type, form)
+				console.log(`Form ${bodyData.type}:${bodyData.sub_type} cached successfully`)
+			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,

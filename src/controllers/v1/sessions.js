@@ -188,12 +188,16 @@ module.exports = class Sessions {
 
 	async unEnroll(req) {
 		try {
+			const tenantCode = req.decodedToken.tenant_code
+			const orgCode = req.decodedToken.organization_code
 			const unEnrolledSession = await sessionService.unEnroll(
 				req.params.id,
 				req.decodedToken,
 				true,
 				{},
-				req.decodedToken.tenant_code
+				tenantCode,
+				null,
+				orgCode
 			)
 			return unEnrolledSession
 		} catch (error) {

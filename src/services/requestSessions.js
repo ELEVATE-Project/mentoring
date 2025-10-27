@@ -15,6 +15,7 @@ const utils = require('@generics/utils')
 const kafkaCommunication = require('@generics/kafka-communication')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeCache = require('@helpers/entityTypeCache')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
 const menteeServices = require('@services/mentees')
@@ -135,17 +136,10 @@ module.exports = class requestSessionsHelper {
 				})
 
 			const requestSessionModelName = await sessionRequestQueries.getModelName()
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [organizationCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [requestSessionModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			const entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				requestSessionModelName,
+				[organizationCode, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
@@ -699,17 +693,10 @@ module.exports = class requestSessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			// Fetch entity types associated with the user
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [userDetails.organization_code, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [userExtensionsModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				userExtensionsModelName,
+				[userDetails.organization_code, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)

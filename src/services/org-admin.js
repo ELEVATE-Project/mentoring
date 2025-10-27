@@ -15,6 +15,7 @@ const questionSetQueries = require('../database/queries/question-set')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class OrgAdminService {
 	/**
@@ -299,6 +300,19 @@ module.exports = class OrgAdminService {
 				// )
 			}
 
+			// Update cache with fresh data after policy update
+			try {
+				await cacheHelper.organizations.set(
+					tenantCode,
+					decodedToken.organization_code,
+					decodedToken.organization_id,
+					orgPolicies.dataValues || orgPolicies
+				)
+				console.log(`💾 Organization ${decodedToken.organization_id} cache updated after policy update`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to update organization cache after policy update:`, cacheError)
+			}
+
 			delete orgPolicies.dataValues.deleted_at
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -312,8 +326,39 @@ module.exports = class OrgAdminService {
 
 	static async getOrgPolicies(decodedToken, tenantCode) {
 		try {
-			const orgPolicies = await organisationExtensionQueries.getById(decodedToken.organization_id)
+			// Try to get from cache first
+			let orgPolicies = await cacheHelper.organizations.get(
+				tenantCode,
+				decodedToken.organization_code,
+				decodedToken.organization_id
+			)
+
 			if (orgPolicies) {
+				console.log(`Organization policies ${decodedToken.organization_id} retrieved from cache`)
+				delete orgPolicies.deleted_at
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'ORG_POLICIES_FETCHED_SUCCESSFULLY',
+					result: { ...orgPolicies },
+				})
+			}
+
+			// If not in cache, fetch from database
+			orgPolicies = await organisationExtensionQueries.getById(decodedToken.organization_id, tenantCode)
+			if (orgPolicies) {
+				// Cache the result for future use
+				try {
+					await cacheHelper.organizations.set(
+						tenantCode,
+						decodedToken.organization_code,
+						decodedToken.organization_id,
+						orgPolicies
+					)
+					console.log(`💾 Organization policies ${decodedToken.organization_id} cached after fetch`)
+				} catch (cacheError) {
+					console.error(`❌ Failed to cache organization policies:`, cacheError)
+				}
+
 				delete orgPolicies.deleted_at
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,

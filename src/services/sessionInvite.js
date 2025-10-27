@@ -16,6 +16,7 @@ const kafkaCommunication = require('@generics/kafka-communication')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const sessionQueries = require('@database/queries/sessions')
 const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeCache = require('@helpers/entityTypeCache')
 const { Op } = require('sequelize')
 const moment = require('moment')
 const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
@@ -573,17 +574,10 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [orgCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [sessionModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				sessionModelName,
+				[orgCode, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,
@@ -851,15 +845,10 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [orgCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [sessionModelName] },
-				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				sessionModelName,
+				[orgCode, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,

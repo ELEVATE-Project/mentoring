@@ -12,6 +12,7 @@ const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const sessionQueries = require('@database/queries/sessions')
 const _ = require('lodash')
 const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeCache = require('@helpers/entityTypeCache')
 const bigBlueButtonService = require('./bigBlueButton')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const orgAdminService = require('@services/org-admin')
@@ -77,17 +78,10 @@ module.exports = class MenteesHelper {
 			})
 		const userExtensionsModelName = await menteeQueries.getModelName()
 
-		let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-			{
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: [organizationCode, defaults.orgCode],
-				},
-				model_names: { [Op.contains]: [userExtensionsModelName] },
-			},
-			{
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			}
+		let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+			userExtensionsModelName,
+			[organizationCode, defaults.orgCode],
+			[tenantCode, defaults.tenantCode]
 		)
 		if (entityTypes instanceof Error) {
 			throw entityTypes
@@ -937,17 +931,10 @@ module.exports = class MenteesHelper {
 				})
 			const userExtensionsModelName = await menteeQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [organizationCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [userExtensionsModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				userExtensionsModelName,
+				[organizationCode, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -1062,7 +1049,7 @@ module.exports = class MenteesHelper {
 				organization_code: { [Op.in]: [organizationCode, defaults.orgCode] },
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(filter, {
 				[Op.in]: [tenantCode, defaults.tenantCode],
 			})
 			if (entityTypes instanceof Error) {
@@ -1208,7 +1195,7 @@ module.exports = class MenteesHelper {
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(filter, {
 				[Op.in]: [tenantCode, defaults.tenantCode],
 			})
 
@@ -1952,17 +1939,10 @@ module.exports = class MenteesHelper {
 
 			const menteeExtensionsModelName = await menteeQueries.getModelName()
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [requestedUserExtension.organization_code, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [menteeExtensionsModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				menteeExtensionsModelName,
+				[requestedUserExtension.organization_code, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))

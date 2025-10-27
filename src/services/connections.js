@@ -6,6 +6,7 @@ const { UniqueConstraintError } = require('sequelize')
 const common = require('@constants/common')
 const entityTypeService = require('@services/entity-type')
 const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeCache = require('@helpers/entityTypeCache')
 const { Op } = require('sequelize')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
@@ -149,17 +150,10 @@ module.exports = class ConnectionHelper {
 			userDetails.image &&= (await userRequests.getDownloadableUrl(userDetails.image))?.result
 
 			// Fetch entity types associated with the user
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [userDetails.organization_code, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [userExtensionsModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				userExtensionsModelName,
+				[userDetails.organization_code, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_code)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
