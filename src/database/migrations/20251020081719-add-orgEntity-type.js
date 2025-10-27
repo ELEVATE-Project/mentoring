@@ -7,9 +7,6 @@ module.exports = {
 				throw new Error('Default org ID is undefined. Please make sure it is set in sequelize options.')
 			}
 			const entitiesArray = {
-				organization: {
-					sequence: 1,
-				},
 				about: {
 					sequence: 2,
 				},
@@ -51,7 +48,7 @@ module.exports = {
 	down: async (queryInterface, Sequelize) => {
 		const transaction = await queryInterface.sequelize.transaction()
 		try {
-			await queryInterface.bulkDelete('entity_types', { value: ['organization', 'about'] }, { transaction })
+			await queryInterface.bulkDelete('entity_types', { value: ['about'] }, { transaction })
 			await transaction.commit()
 		} catch (error) {
 			await transaction.rollback()

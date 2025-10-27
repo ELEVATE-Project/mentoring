@@ -141,11 +141,11 @@ module.exports = class MenteeExtensionQueries {
 	static async removeVisibleToOrg(orgId, elementsToRemove) {
 		const organizationUpdateQuery = `
 		  UPDATE "user_extensions"
-		  SET "visible_to_organizations" = (
+		  SET "visible_to_organizations" = COALESCE((
 			SELECT array_agg(elem)
 			FROM unnest("visible_to_organizations") AS elem
 			WHERE elem NOT IN (:elementsToRemove)
-		  )
+		  ), '{}')
 		  WHERE organization_id = :orgId
 		`
 
@@ -155,11 +155,11 @@ module.exports = class MenteeExtensionQueries {
 		})
 		const relatedOrganizationUpdateQuery = `
 		  UPDATE "user_extensions"
-		  SET "visible_to_organizations" = (
+		  SET "visible_to_organizations" = COALESCE((
 			SELECT array_agg(elem)
 			FROM unnest("visible_to_organizations") AS elem
 			WHERE elem NOT IN (:orgId)
-		  )
+		  ), '{}')
 		  WHERE organization_id IN (:elementsToRemove)
 		`
 

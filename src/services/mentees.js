@@ -73,7 +73,15 @@ module.exports = class MenteesHelper {
 		let processDbResponse = utils.processDbResponse(mentee, validationData)
 
 		const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
-		let displayProperties = []
+		let displayProperties = [
+			{
+				key: 'organization',
+				label: 'Organization',
+				visible: true,
+				visibility: 'main',
+				sequence: 1,
+			},
+		]
 		for (const entityType of sortedEntityType) {
 			displayProperties.push({ key: entityType.value, ...entityType.meta })
 		}
@@ -719,7 +727,6 @@ module.exports = class MenteesHelper {
 				orgId,
 				organization_name
 			)
-
 			data.user_id = userId
 
 			const defaultOrgId = await getDefaultOrgId()
@@ -767,7 +774,6 @@ module.exports = class MenteesHelper {
 				...saasPolicyData,
 				visible_to_organizations: userOrgDetails.data.result.related_orgs,
 			}
-
 			const response = await menteeQueries.createMenteeExtension(data)
 			const processDbResponse = utils.processDbResponse(response.toJSON(), validationData)
 
@@ -1576,7 +1582,7 @@ module.exports = class MenteesHelper {
 				if (!validateDefaultRules) {
 					return responses.failureResponse({
 						message: 'USER_NOT_FOUND',
-						statusCode: httpStatusCode.not_found,
+						statusCode: httpStatusCode.forbidden,
 						responseCode: 'CLIENT_ERROR',
 					})
 				}
@@ -1654,7 +1660,15 @@ module.exports = class MenteesHelper {
 			}
 
 			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
-			let displayProperties = []
+			let displayProperties = [
+				{
+					key: 'organization',
+					label: 'Organization',
+					visible: true,
+					visibility: 'main',
+					sequence: 1,
+				},
+			]
 			for (const entityType of sortedEntityType) {
 				displayProperties.push({ key: entityType.value, ...entityType.meta })
 			}

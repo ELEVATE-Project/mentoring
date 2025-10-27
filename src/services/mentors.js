@@ -732,7 +732,15 @@ module.exports = class MentorsHelper {
 			const totalSessionHosted = await sessionQueries.countHostedSessions(id)
 
 			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
-			let displayProperties = []
+			let displayProperties = [
+				{
+					key: 'organization',
+					label: 'Organization',
+					visible: true,
+					visibility: 'main',
+					sequence: 1,
+				},
+			]
 			for (const entityType of sortedEntityType) {
 				displayProperties.push({ key: entityType.value, ...entityType.meta })
 			}
