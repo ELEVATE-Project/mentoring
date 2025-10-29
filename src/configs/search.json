@@ -31,6 +31,12 @@
 					"name": "name",
 					"label": "Mentor name",
 					"sortPriority": 1
+				},
+				{
+					"name": "area_of_expertise",
+					"label": "Area Of Expertise",
+					"sortPriority": 2,
+					"isAnEntityType": true
 				}
 			]
 		}

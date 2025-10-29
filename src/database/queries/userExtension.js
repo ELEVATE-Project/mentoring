@@ -106,53 +106,67 @@ module.exports = class MenteeExtensionQueries {
 		}
 
 		// Update user extension and concat related org to the org id
+
+		const newRelatedOrgsArray = Array.from(newRelatedOrgs.values())
+
+		const newRelatedOrgsSql = newRelatedOrgsArray.map((e) => `'${e}'`).join(',')
+
 		await MenteeExtension.update(
 			{
 				visible_to_organizations: sequelize.literal(
-					`array_cat("visible_to_organizations", ARRAY[${newRelatedOrgs}]::integer[])`
+					`array_cat(COALESCE("visible_to_organizations", ARRAY[]::varchar[]), ARRAY[${newRelatedOrgsSql}]::varchar[])`
 				),
 			},
 			{
 				where: {
-					...optionsWhere, // Allow additional where conditions
-					...whereClause1, // But tenant filtering takes priority
+					tenant_code: tenantCode,
+					organization_id: organizationId,
+					[Op.or]: [
+						{
+							[Op.not]: {
+								visible_to_organizations: {
+									[Op.contains]: newRelatedOrgsArray,
+								},
+							},
+						},
+						{
+							visible_to_organizations: {
+								[Op.is]: null,
+							},
+						},
+					],
 				},
 				...otherOptions,
 				individualHooks: true,
 			}
 		)
-		// Update user extension and append org id to all the related orgs
-		const whereClause2 = {
-			organization_id: {
-				[Op.in]: [...newRelatedOrgs],
-			},
-			[Op.or]: [
-				{
-					[Op.not]: {
-						visible_to_organizations: {
-							[Op.contains]: [organizationId],
-						},
-					},
-				},
-				{
-					visible_to_organizations: {
-						[Op.is]: null,
-					},
-				},
-			],
-			tenant_code: tenantCode,
-		}
 
 		return await MenteeExtension.update(
 			{
 				visible_to_organizations: sequelize.literal(
-					`COALESCE("visible_to_organizations", ARRAY[]::integer[]) || ARRAY[${organizationId}]::integer[]`
+					`COALESCE("visible_to_organizations", ARRAY[]::varchar[]) || ARRAY[${organizationId}]::varchar[]`
 				),
 			},
 			{
 				where: {
-					...optionsWhere, // Allow additional where conditions
-					...whereClause2, // But tenant filtering takes priority
+					tenant_code: tenantCode,
+					organization_id: {
+						[Op.in]: newRelatedOrgsArray,
+					},
+					[Op.or]: [
+						{
+							[Op.not]: {
+								visible_to_organizations: {
+									[Op.contains]: [organizationId],
+								},
+							},
+						},
+						{
+							visible_to_organizations: {
+								[Op.is]: null,
+							},
+						},
+					],
 				},
 				individualHooks: true,
 				...otherOptions,
@@ -163,30 +177,30 @@ module.exports = class MenteeExtensionQueries {
 	static async removeVisibleToOrg(orgId, elementsToRemove, tenantCode) {
 		const organizationUpdateQuery = `
 		  UPDATE "user_extensions"
-		  SET "visible_to_organizations" = (
+		  SET "visible_to_organizations" = COALESCE((
 			SELECT array_agg(elem)
 			FROM unnest("visible_to_organizations") AS elem
-			WHERE elem NOT IN (${elementsToRemove.join(',')})
-		  )
+			WHERE elem NOT IN (:elementsToRemove)
+		  ), '{}')
 		  WHERE organization_id = :orgId AND tenant_code = :tenantCode
 		`
 
 		await Sequelize.query(organizationUpdateQuery, {
-			replacements: { orgId, tenantCode },
+			replacements: { orgId, elementsToRemove, tenantCode },
 			type: Sequelize.QueryTypes.UPDATE,
 		})
 		const relatedOrganizationUpdateQuery = `
 		  UPDATE "user_extensions"
-		  SET "visible_to_organizations" = (
+		  SET "visible_to_organizations" = COALESCE((
 			SELECT array_agg(elem)
 			FROM unnest("visible_to_organizations") AS elem
-			WHERE elem NOT IN (${orgId})
-		  )
+			WHERE elem NOT IN (:orgId)
+		  ), '{}')
 		  WHERE organization_id IN (:elementsToRemove) AND tenant_code = :tenantCode
 		`
 
 		await Sequelize.query(relatedOrganizationUpdateQuery, {
-			replacements: { elementsToRemove, tenantCode },
+			replacements: { elementsToRemove, orgId, tenantCode },
 			type: Sequelize.QueryTypes.UPDATE,
 		})
 	}
@@ -692,6 +706,26 @@ module.exports = class MenteeExtensionQueries {
 		} catch (error) {
 			console.error('Error fetching distinct tenant codes:', error)
 			return []
+		}
+	}
+
+	static async getAllUsersByOrgId(orgCodes, tenantCode) {
+		try {
+			if (!Array.isArray(orgCodes) || orgCodes.length === 0) {
+				return []
+			}
+			const query = `
+			SELECT user_id
+			FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
+			WHERE organization_code IN (:orgCodes) AND tenant_code = :tenantCode
+		`
+			const results = await Sequelize.query(query, {
+				type: QueryTypes.SELECT,
+				replacements: { orgCodes, tenantCode },
+			})
+			return results
+		} catch (error) {
+			throw error
 		}
 	}
 }

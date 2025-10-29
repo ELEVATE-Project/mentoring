@@ -10,6 +10,9 @@ const httpStatusCode = require('@generics/http-status')
 const { Op } = require('sequelize')
 const { UniqueConstraintError } = require('sequelize')
 
+const connections = require('@database/queries/connection')
+const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/defaultRules')
+
 module.exports = class DefaultRuleHelper {
 	/**
 	 * Validates the target and requester fields in the body data.
@@ -145,6 +148,81 @@ module.exports = class DefaultRuleHelper {
 			}
 
 			const defaultRule = await defaultRuleQueries.create(bodyData, tenantCode)
+
+			if (bodyData.type === common.DEFAULT_RULES.MENTOR_TYPE) {
+				let userAccounts = await menteeExtensionQueries.getAllUsersByOrgId([orgCode], tenantCode)
+
+				for (const element of userAccounts) {
+					let currentUserId = element.user_id
+					let roles = [{ title: common.MENTEE_ROLE }]
+					if (element.is_mentor) roles.push({ title: common.MENTOR_ROLE })
+
+					// Check connections
+					const connectionsData = await connections.getConnectedUsers(
+						currentUserId,
+						'friend_id',
+						'user_id',
+						tenantCode
+					)
+					for (const friendId of connectionsData) {
+						const requestedUserExtension = await menteeExtensionQueries.getMenteeExtension(
+							friendId,
+							[],
+							false,
+							tenantCode
+						)
+
+						if (requestedUserExtension) {
+							const validateDefaultRules = await validateDefaultRulesFilter({
+								ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
+								requesterId: currentUserId,
+								roles: roles,
+								requesterOrganizationCode: orgCode,
+								data: requestedUserExtension,
+								tenant_code: tenantCode,
+							})
+
+							if (!validateDefaultRules) {
+								await connections.deleteConnections(currentUserId, friendId, tenantCode)
+								await connections.deleteConnections(friendId, currentUserId, tenantCode)
+							}
+						}
+					}
+
+					// Check connection requests
+					const connectionsRequests = await connections.getConnectionRequestsForUser(
+						currentUserId,
+						tenantCode
+					)
+					if (connectionsRequests.count > 0) {
+						for (const request of connectionsRequests.rows) {
+							const friendId = request.friend_id
+							const requestedUserExtension = await menteeExtensionQueries.getMenteeExtension(
+								friendId,
+								[],
+								false,
+								tenantCode
+							)
+
+							if (requestedUserExtension) {
+								const validateDefaultRules = await validateDefaultRulesFilter({
+									ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
+									requesterId: currentUserId,
+									roles: roles,
+									requesterOrganizationCode: orgCode,
+									data: requestedUserExtension,
+									tenant_code: tenantCode,
+								})
+
+								if (!validateDefaultRules) {
+									await connections.deleteConnectionsRequests(currentUserId, friendId, tenantCode)
+								}
+							}
+						}
+					}
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'DEFAULT_RULE_CREATED_SUCCESSFULLY',

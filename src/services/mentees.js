@@ -95,7 +95,21 @@ module.exports = class MenteesHelper {
 		const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
 		//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
-		const processDbResponse = utils.processDbResponse(mentee, validationData)
+		let processDbResponse = utils.processDbResponse(mentee, validationData)
+
+		const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+		let displayProperties = [
+			{
+				key: 'organization',
+				label: 'Organization',
+				visible: true,
+				visibility: 'main',
+				sequence: 1,
+			},
+		]
+		for (const entityType of sortedEntityType) {
+			displayProperties.push({ key: entityType.value, ...entityType.meta })
+		}
 
 		const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
 
@@ -149,6 +163,7 @@ module.exports = class MenteesHelper {
 				sessions_attended: totalSession,
 				...menteeDetails.data.result,
 				...processDbResponse,
+				displayProperties,
 			},
 		})
 	}
@@ -685,7 +700,7 @@ module.exports = class MenteesHelper {
 
 	static async getMySessions(page, limit, search, userId, startDate, endDate, tenantCode) {
 		try {
-			const upcomingSessions = await sessionQueries.getUpcomingSessions(
+			const sessionDetails = await sessionQueries.getEnrolledSessions(
 				page,
 				limit,
 				search,
@@ -694,49 +709,11 @@ module.exports = class MenteesHelper {
 				endDate,
 				tenantCode
 			)
-			const upcomingSessionIds =
-				upcomingSessions && upcomingSessions.rows && Array.isArray(upcomingSessions.rows)
-					? upcomingSessions.rows.map((session) => session.id).filter((id) => id != null)
-					: []
 
-			if (upcomingSessionIds.length === 0) {
+			if (!sessionDetails || typeof sessionDetails.count !== 'number' || !Array.isArray(sessionDetails.rows)) {
 				return { rows: [], count: 0 }
 			}
-
-			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
-				userId,
-				upcomingSessionIds,
-				tenantCode
-			)
-
-			let sessionAndMenteeMap = {}
-			usersUpcomingSessions.forEach((session) => {
-				sessionAndMenteeMap[session.session_id] = session.type
-			})
-
-			const usersUpcomingSessionIds = usersUpcomingSessions.map(
-				(usersUpcomingSession) => usersUpcomingSession.session_id
-			)
-
-			const attributes = { exclude: ['mentee_password', 'mentor_password'] }
-			let sessionDetails = await sessionQueries.findAndCountAll(
-				{ id: usersUpcomingSessionIds },
-				tenantCode,
-				{ order: [['start_date', 'ASC']] },
-				{ attributes: attributes }
-			)
-			if (
-				sessionDetails &&
-				sessionDetails.rows &&
-				Array.isArray(sessionDetails.rows) &&
-				sessionDetails.rows.length > 0
-			) {
-				sessionDetails.rows.forEach((session) => {
-					if (sessionAndMenteeMap.hasOwnProperty(session.id)) {
-						session.enrolled_type = sessionAndMenteeMap[session.id]
-					}
-				})
-
+			if (sessionDetails.count > 0) {
 				const uniqueOrgIds = [...new Set(sessionDetails.rows.map((obj) => obj.mentor_organization_id))]
 				sessionDetails.rows = await entityTypeService.processEntityTypesToAddValueLabels(
 					sessionDetails.rows,
@@ -746,13 +723,11 @@ module.exports = class MenteesHelper {
 					[],
 					[tenantCode]
 				)
-			}
-			if (sessionDetails && sessionDetails.rows) {
 				sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows, tenantCode)
-				return sessionDetails
-			} else {
-				return { rows: [], count: 0 }
+				sessionDetails.rows = sessionDetails.rows.map((r) => ({ ...r, is_enrolled: true }))
 			}
+
+			return sessionDetails
 		} catch (error) {
 			throw error
 		}
@@ -917,7 +892,6 @@ module.exports = class MenteesHelper {
 				organization_name,
 				tenantCode
 			)
-
 			data.user_id = userId
 			data.organization_code = organizationCode
 
@@ -1905,7 +1879,7 @@ module.exports = class MenteesHelper {
 				if (!validateDefaultRules) {
 					return responses.failureResponse({
 						message: 'USER_NOT_FOUND',
-						statusCode: httpStatusCode.not_found,
+						statusCode: httpStatusCode.forbidden,
 						responseCode: 'CLIENT_ERROR',
 					})
 				}
@@ -1997,11 +1971,26 @@ module.exports = class MenteesHelper {
 				processDbResponse.connection_details = connection.meta
 			}
 
+			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+			let displayProperties = [
+				{
+					key: 'organization',
+					label: 'Organization',
+					visible: true,
+					visibility: 'main',
+					sequence: 1,
+				},
+			]
+			for (const entityType of sortedEntityType) {
+				displayProperties.push({ key: entityType.value, ...entityType.meta })
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'PROFILE_FTECHED_SUCCESSFULLY',
 				result: {
 					...processDbResponse,
+					displayProperties,
 				},
 			})
 		} catch (error) {

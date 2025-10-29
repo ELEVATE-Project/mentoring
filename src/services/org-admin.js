@@ -275,8 +275,6 @@ module.exports = class OrgAdminService {
 					if (!policyData.visible_to_organizations.includes(decodedToken.organization_id)) {
 						policyData.visible_to_organizations.push(decodedToken.organization_id)
 					}
-				} else {
-					policyData.visible_to_organizations = []
 				}
 
 				//Update all users belonging to the org with new policies
