@@ -176,6 +176,7 @@ module.exports = class ReportsHelper {
 		groupBy,
 		filterColumns,
 		filterValues,
+		timeZone,
 		tenantCode
 	) {
 		try {
@@ -269,7 +270,7 @@ module.exports = class ReportsHelper {
 			if (reportConfig[0].report_type_title === common.BAR_CHART && groupBy) {
 				//	const listOfDates = await utils.getAllEpochDates(startDate, endDate, groupBy)
 
-				const dateRanges = await utils.generateDateRanges(startDate, endDate, groupBy)
+				const dateRanges = await utils.generateDateRanges(startDate, endDate, groupBy, timeZone)
 
 				// Initialize the array to store results
 				const dateRangeResults = []
