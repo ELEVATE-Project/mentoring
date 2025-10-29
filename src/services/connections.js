@@ -16,6 +16,8 @@ const userRequests = require('@requests/user')
 const notificationQueries = require('@database/queries/notificationTemplate')
 const kafkaCommunication = require('@generics/kafka-communication')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
+const userCacheHelper = require('@helpers/userCacheHelper')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class ConnectionHelper {
 	/**
@@ -42,7 +44,7 @@ module.exports = class ConnectionHelper {
 	static async initiate(bodyData, userId, tenantCode) {
 		try {
 			// Check if the target user exists
-			const userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id, [], false, tenantCode)
+			const userExists = await userCacheHelper.getMenteeExtensionCached(bodyData.user_id, [], false, tenantCode)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -120,7 +122,7 @@ module.exports = class ConnectionHelper {
 
 			const [userExtensionsModelName, userDetails] = await Promise.all([
 				userExtensionQueries.getModelName(),
-				userExtensionQueries.getMenteeExtension(
+				userCacheHelper.getMenteeExtensionCached(
 					friendId,
 					[
 						'name',
@@ -342,6 +344,33 @@ module.exports = class ConnectionHelper {
 
 			await this.sendConnectionAcceptNotification(bodyData.user_id, userId, orgCode, tenantCode)
 
+			// Invalidate cache for both users involved in the connection
+			try {
+				// Get user extensions to determine org codes for cache invalidation
+				const [user1Extension, user2Extension] = await Promise.all([
+					userExtensionQueries.getMenteeExtension(userId, ['organization_code'], false, tenantCode),
+					userExtensionQueries.getMenteeExtension(bodyData.user_id, ['organization_code'], false, tenantCode),
+				])
+
+				if (user1Extension) {
+					await Promise.all([
+						cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId),
+						cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId),
+					])
+				}
+
+				if (user2Extension) {
+					await Promise.all([
+						cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
+						cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
+					])
+				}
+
+				console.log(`💾 User caches invalidated for connection approval: ${userId} and ${bodyData.user_id}`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate user caches after connection approval:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'CONNECTION_REQUEST_APPROVED',
@@ -385,6 +414,33 @@ module.exports = class ConnectionHelper {
 
 			// Send notification to the mentee who requested the connection
 			await this.sendConnectionRejectionNotification(bodyData.user_id, userId, orgCode, tenantCode)
+
+			// Invalidate cache for both users involved in the connection rejection
+			try {
+				// Get user extensions to determine org codes for cache invalidation
+				const [user1Extension, user2Extension] = await Promise.all([
+					userExtensionQueries.getMenteeExtension(userId, ['organization_code'], false, tenantCode),
+					userExtensionQueries.getMenteeExtension(bodyData.user_id, ['organization_code'], false, tenantCode),
+				])
+
+				if (user1Extension) {
+					await Promise.all([
+						cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId),
+						cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId),
+					])
+				}
+
+				if (user2Extension) {
+					await Promise.all([
+						cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
+						cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
+					])
+				}
+
+				console.log(`💾 User caches invalidated for connection rejection: ${userId} and ${bodyData.user_id}`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate user caches after connection rejection:`, cacheError)
+			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -524,7 +580,7 @@ module.exports = class ConnectionHelper {
 			)
 
 			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
+			const mentorDetails = await userCacheHelper.getMentorExtensionCached(mentorId, ['name'], true, tenantCode)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return
@@ -587,7 +643,7 @@ module.exports = class ConnectionHelper {
 			)
 
 			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
+			const mentorDetails = await userCacheHelper.getMentorExtensionCached(mentorId, ['name'], true, tenantCode)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return

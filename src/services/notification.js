@@ -4,6 +4,7 @@ const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class NotificationTemplateHelper {
 	/**
@@ -31,6 +32,20 @@ module.exports = class NotificationTemplateHelper {
 			bodyData['created_by'] = tokenInformation.id
 
 			const createdNotification = await notificationTemplateQueries.create(bodyData, tenantCode)
+
+			// Cache the newly created template
+			try {
+				await cacheHelper.notificationTemplates.set(
+					tenantCode,
+					tokenInformation.organization_code,
+					bodyData.code,
+					createdNotification
+				)
+				console.log(`💾 Notification template ${bodyData.code} cached after creation`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to cache notification template after creation:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'NOTIFICATION_TEMPLATE_CREATED_SUCCESSFULLY',
@@ -76,6 +91,37 @@ module.exports = class NotificationTemplateHelper {
 				})
 			}
 
+			// Delete old cache and set updated cache
+			const templateCode = bodyData.code || filter.code
+			try {
+				// Delete old cache first
+				await cacheHelper.notificationTemplates.delete(
+					tenantCode,
+					tokenInformation.organization_code,
+					templateCode
+				)
+				console.log(`🗑️ Old notification template cache deleted for code: ${templateCode}`)
+
+				// Fetch updated template and cache it
+				const updatedTemplate = await notificationTemplateQueries.findTemplatesByFilter({
+					code: templateCode,
+					organization_code: tokenInformation.organization_code,
+					tenant_code: tenantCode,
+				})
+
+				if (updatedTemplate && updatedTemplate.length > 0) {
+					await cacheHelper.notificationTemplates.set(
+						tenantCode,
+						tokenInformation.organization_code,
+						templateCode,
+						updatedTemplate[0]
+					)
+					console.log(`💾 Updated notification template ${templateCode} cached`)
+				}
+			} catch (cacheError) {
+				console.error(`❌ Failed to update notification template cache:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: 'NOTIFICATION_TEMPLATE_UPDATED_SUCCESSFULLY',
@@ -95,6 +141,19 @@ module.exports = class NotificationTemplateHelper {
 
 	static async read(id = null, code = null, organizationCode, tenantCode) {
 		try {
+			// Try to get from cache first (only if searching by code, not ID)
+			if (!id && code) {
+				const cachedTemplate = await cacheHelper.notificationTemplates.get(tenantCode, organizationCode, code)
+				if (cachedTemplate) {
+					console.log(`Notification template ${code} retrieved from cache`)
+					return responses.successResponse({
+						statusCode: httpStatusCode.ok,
+						message: 'NOTIFICATION_TEMPLATE_FETCHED_SUCCESSFULLY',
+						result: cachedTemplate,
+					})
+				}
+			}
+
 			const defaults = await getDefaults()
 			if (!defaults.orgCode) {
 				return responses.failureResponse({
@@ -142,6 +201,16 @@ module.exports = class NotificationTemplateHelper {
 				notificationTemplates.find((t) => t.tenant_code === tenantCode) ||
 				notificationTemplates[0]
 
+			// Cache the result if searched by code
+			if (!id && code && selectedTemplate) {
+				try {
+					await cacheHelper.notificationTemplates.set(tenantCode, organizationCode, code, selectedTemplate)
+					console.log(`💾 Notification template ${code} cached after fetch`)
+				} catch (cacheError) {
+					console.error(`❌ Failed to cache notification template:`, cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'NOTIFICATION_TEMPLATE_FETCHED_SUCCESSFULLY',
@@ -177,6 +246,31 @@ module.exports = class NotificationTemplateHelper {
 
 			const notificationTemplates = await notificationTemplateQueries.findTemplatesByFilter(filter)
 
+			// Cache each individual template for future single reads
+			if (notificationTemplates && notificationTemplates.length > 0) {
+				try {
+					console.log(`Caching ${notificationTemplates.length} notification templates individually...`)
+					const cachePromises = []
+
+					for (const template of notificationTemplates) {
+						if (template.code) {
+							const cachePromise = cacheHelper.notificationTemplates.set(
+								tenantCode,
+								organizationCode,
+								template.code,
+								template
+							)
+							cachePromises.push(cachePromise)
+						}
+					}
+
+					await Promise.all(cachePromises)
+					console.log(`💾 ${notificationTemplates.length} notification templates cached individually`)
+				} catch (cacheError) {
+					console.warn('Failed to cache individual notification templates:', cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'NOTIFICATION_TEMPLATE_FETCHED_SUCCESSFULLY',
@@ -198,6 +292,12 @@ module.exports = class NotificationTemplateHelper {
 	 */
 	static async findOneEmailTemplate(code, orgCode, tenantCode) {
 		try {
+			// Check cache first
+			const cachedTemplate = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, code)
+			if (cachedTemplate) {
+				return cachedTemplate
+			}
+
 			const defaults = await getDefaults()
 			if (!defaults.orgCode) {
 				return responses.failureResponse({
@@ -249,6 +349,11 @@ module.exports = class NotificationTemplateHelper {
 				if (footer && footer.body) {
 					selectedTemplate.body += footer.body
 				}
+			}
+
+			// Cache the composed template
+			if (selectedTemplate) {
+				await cacheHelper.notificationTemplates.set(tenantCode, orgCode, code, selectedTemplate)
 			}
 
 			return selectedTemplate

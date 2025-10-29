@@ -8,6 +8,8 @@ const { getDefaults } = require('@helpers/getDefaultOrgId')
 const utils = require('@generics/utils')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
+const cacheHelper = require('@generics/cacheHelper')
+const entityTypeCache = require('@helpers/entityTypeCache')
 
 module.exports = class EntityHelper {
 	/**
@@ -20,6 +22,10 @@ module.exports = class EntityHelper {
 	 */
 
 	static async create(bodyData, id, orgId, orgCode, tenantCode, roles) {
+		console.log('🚀 [CREATE] Starting entity type creation with data:', {
+			value: bodyData.value,
+			model_names: bodyData.model_names,
+		})
 		bodyData.created_by = id
 		bodyData.updated_by = id
 		bodyData.organization_id = orgId
@@ -34,6 +40,11 @@ module.exports = class EntityHelper {
 			}
 
 			const entityType = await entityTypeQueries.createEntityType(bodyData, tenantCode)
+			console.log('✅ [CREATE] Entity type created successfully')
+
+			// CREATE operation does NOT cache - only READ operations set cache
+			// Cache will be populated when entity is first read
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_TYPE_CREATED_SUCCESSFULLY',
@@ -68,6 +79,22 @@ module.exports = class EntityHelper {
 		}
 
 		try {
+			// Get original entity before update to handle cache cleanup
+			let originalEntity = null
+			try {
+				originalEntity = await entityTypeQueries.findOneEntityType(
+					{ id, organization_code: orgCode },
+					tenantCode
+				)
+				console.log('📋 [UPDATE CACHE] Original entity:', {
+					id: originalEntity?.id,
+					value: originalEntity?.value,
+					modelNames: originalEntity?.model_names,
+				})
+			} catch (error) {
+				console.warn('⚠️ [UPDATE CACHE] Could not fetch original entity for cache cleanup:', error)
+			}
+
 			if (bodyData.allow_filtering) {
 				const isAdmin =
 					roles && Array.isArray(roles) ? roles.some((role) => role.title === common.ADMIN_ROLE) : false
@@ -92,6 +119,154 @@ module.exports = class EntityHelper {
 				})
 			}
 
+			// Update individual entity type cache with complete data
+			try {
+				console.log('🔄 [UPDATE CACHE] Fetching complete updated entity type with entities...')
+
+				const updatedEntity = updatedEntityType[0]
+
+				console.log('📋 [UPDATE CACHE] Updated entity details:', {
+					id: updatedEntity.id,
+					oldValue: originalEntity?.value,
+					newValue: updatedEntity.value,
+					modelNames: updatedEntity.model_names,
+				})
+
+				// Delete old cache entries if value or model_names changed
+				if (originalEntity) {
+					const valueChanged = originalEntity.value !== updatedEntity.value
+					const oldModelNames = originalEntity.model_names || []
+					const newModelNames = updatedEntity.model_names || []
+					const modelNamesChanged =
+						JSON.stringify(oldModelNames.sort()) !== JSON.stringify(newModelNames.sort())
+
+					console.log('🔍 [UPDATE CACHE] Analyzing changes:', {
+						valueChanged,
+						oldValue: originalEntity.value,
+						newValue: updatedEntity.value,
+						modelNamesChanged,
+						oldModelNames,
+						newModelNames,
+					})
+
+					if (valueChanged || modelNamesChanged) {
+						console.log('🗑️ [UPDATE CACHE] Entity changed, deleting old cache entries...')
+
+						// Strategy: Delete all old cache entries, then create new ones
+						// This handles both value changes and model removals
+
+						// 1. Delete from all old model_names with old value
+						for (const modelName of oldModelNames) {
+							try {
+								console.log(
+									`🗑️ [UPDATE CACHE] Deleting old cache: tenant:${tenantCode}:org:${orgCode}:entityTypes:model:${modelName}:${originalEntity.value}`
+								)
+								await cacheHelper.entityTypes.delete(
+									tenantCode,
+									orgCode,
+									modelName,
+									originalEntity.value
+								)
+								console.log(
+									`✅ [UPDATE CACHE] Successfully deleted old cache: ${modelName}:${originalEntity.value}`
+								)
+							} catch (delError) {
+								console.error(
+									`❌ [UPDATE CACHE] Failed to delete old cache ${modelName}:${originalEntity.value}:`,
+									delError
+								)
+							}
+						}
+
+						// 2. If only model names changed (not value), also delete from removed models with current value
+						if (!valueChanged && modelNamesChanged) {
+							const removedModels = oldModelNames.filter((model) => !newModelNames.includes(model))
+							console.log(`🗑️ [UPDATE CACHE] Models removed: ${removedModels.join(', ')}`)
+
+							for (const removedModel of removedModels) {
+								try {
+									console.log(
+										`🗑️ [UPDATE CACHE] Deleting removed model cache: tenant:${tenantCode}:org:${orgCode}:entityTypes:model:${removedModel}:${updatedEntity.value}`
+									)
+									await cacheHelper.entityTypes.delete(
+										tenantCode,
+										orgCode,
+										removedModel,
+										updatedEntity.value
+									)
+									console.log(
+										`✅ [UPDATE CACHE] Successfully deleted removed model cache: ${removedModel}:${updatedEntity.value}`
+									)
+								} catch (delError) {
+									console.error(
+										`❌ [UPDATE CACHE] Failed to delete removed model cache ${removedModel}:${updatedEntity.value}:`,
+										delError
+									)
+								}
+							}
+						}
+					} else {
+						console.log('ℹ️ [UPDATE CACHE] No cache cleanup needed - no value or model name changes')
+					}
+				} else {
+					console.warn('⚠️ [UPDATE CACHE] No original entity found - skipping cache cleanup')
+				}
+
+				// Fetch complete entity type with entities from database
+				const completeUpdatedEntity = await entityTypeQueries.findUserEntityTypesAndEntities(
+					{ id: updatedEntity.id, organization_code: orgCode, tenant_code: tenantCode },
+					{ [Op.in]: [tenantCode] }
+				)
+
+				let entityWithEntities = null
+				if (completeUpdatedEntity && completeUpdatedEntity.length > 0) {
+					entityWithEntities = completeUpdatedEntity[0]
+					console.log('✅ [UPDATE CACHE] Found complete entity with entities')
+				} else {
+					// Fallback: use basic updated entity with empty entities array
+					entityWithEntities = {
+						...updatedEntity,
+						entities: [], // Consistent structure
+					}
+					console.log('⚠️ [UPDATE CACHE] Using basic entity data with empty entities')
+				}
+
+				// For each model this entity belongs to, cache individually
+				if (updatedEntity.model_names && Array.isArray(updatedEntity.model_names)) {
+					for (const modelName of updatedEntity.model_names) {
+						console.log(`🔄 [UPDATE CACHE] Caching for model: ${modelName}`)
+
+						// Cache complete entity type with entities (Reset/SetOrGet operation)
+						await cacheHelper.entityTypes.set(
+							tenantCode,
+							orgCode,
+							modelName,
+							updatedEntity.value,
+							entityWithEntities
+						)
+						console.log(`✅ [UPDATE CACHE] Updated cached entity type: ${modelName}:${updatedEntity.value}`)
+					}
+				}
+
+				console.log('✅ [UPDATE CACHE] Entity type cache updated successfully')
+			} catch (cacheError) {
+				console.error('❌ [UPDATE CACHE ERROR] Failed to perform selective cache update:', cacheError)
+				console.log('🔄 [UPDATE CACHE] Clearing cache for this specific entity value only...')
+
+				// Fallback: clear cache only for this specific entity value
+				const updatedEntity = updatedEntityType[0]
+				if (updatedEntity.model_names && Array.isArray(updatedEntity.model_names)) {
+					for (const modelName of updatedEntity.model_names) {
+						try {
+							await cacheHelper.entityTypes.delete(tenantCode, orgCode, modelName, updatedEntity.value)
+							console.log(`🗑️ [UPDATE FALLBACK] Cleared cache for: ${modelName}:${updatedEntity.value}`)
+						} catch (delError) {
+							console.error(`Failed to clear cache for ${modelName}:${updatedEntity.value}:`, delError)
+						}
+					}
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: 'ENTITY_TYPE_UPDATED_SUCCESSFULLY',
@@ -111,7 +286,9 @@ module.exports = class EntityHelper {
 
 	static async readAllSystemEntityTypes(orgCode, tenantCode) {
 		try {
-			const attributes = ['value', 'label', 'id']
+			console.log('📖 [CACHE READ] Fetching entity types from database (no bulk cache for readAll)...')
+
+			const attributes = ['value', 'label', 'id', 'model_names']
 			const defaults = await getDefaults()
 			if (!defaults.orgCode)
 				return responses.failureResponse({
@@ -125,6 +302,8 @@ module.exports = class EntityHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+
+			// Fetch all entity types with model_names
 			const entities = await entityTypeQueries.findAllEntityTypes(
 				{ [Op.or]: [orgCode, defaults.orgCode] },
 				{ [Op.in]: [tenantCode, defaults.tenantCode] },
@@ -138,10 +317,85 @@ module.exports = class EntityHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Group entity types by model names
+			const freshGroupedByModel = {}
+			const allDistinctModels = new Set()
+
+			entities.forEach((entity) => {
+				// Get model names for this entity (could be multiple models)
+				const modelNames = entity.model_names || ['unknown']
+
+				modelNames.forEach((modelName) => {
+					allDistinctModels.add(modelName)
+
+					if (!freshGroupedByModel[modelName]) {
+						freshGroupedByModel[modelName] = []
+					}
+
+					// Add entity to this model group (including model_names for validation)
+					freshGroupedByModel[modelName].push({
+						value: entity.value,
+						label: entity.label,
+						id: entity.id,
+						model_names: entity.model_names,
+					})
+				})
+			})
+
+			// Cache individual entity types with complete data (including entities)
+			console.log('💾 [CACHE WRITE] Fetching and caching complete entity types with entities...')
+			for (const [modelName, entityTypesInModel] of Object.entries(freshGroupedByModel)) {
+				for (const entityType of entityTypesInModel) {
+					try {
+						// Fetch complete entity type with entities for consistent caching
+						const completeEntityType = await entityTypeQueries.findUserEntityTypesAndEntities(
+							{
+								id: entityType.id,
+								value: entityType.value,
+								organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
+								tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
+							},
+							{ [Op.in]: [tenantCode, defaults.tenantCode] }
+						)
+
+						let entityToCache = entityType
+						if (completeEntityType && completeEntityType.length > 0) {
+							// Use complete entity with entities
+							entityToCache = completeEntityType[0]
+							console.log(
+								`💾 [CACHE WRITE] Found complete entity with ${
+									entityToCache.entities?.length || 0
+								} entities`
+							)
+						} else {
+							// Fallback: add empty entities array for consistency
+							entityToCache = {
+								...entityType,
+								entities: [],
+							}
+							console.log(`⚠️ [CACHE WRITE] Using basic entity with empty entities array`)
+						}
+
+						await cacheHelper.entityTypes.set(
+							tenantCode,
+							orgCode,
+							modelName,
+							entityType.value,
+							entityToCache
+						)
+						console.log(`💾 [CACHE WRITE] Cached complete entity type: ${modelName}:${entityType.value}`)
+					} catch (cacheError) {
+						console.error(`Failed to cache entity type '${modelName}:${entityType.value}':`, cacheError)
+					}
+				}
+			}
+			console.log('✅ [CACHE WRITE] Individual entity types with complete data cached')
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
-				result: entities,
+				result: freshGroupedByModel,
 			})
 		} catch (error) {
 			throw error
@@ -150,6 +404,33 @@ module.exports = class EntityHelper {
 
 	static async readUserEntityTypes(body, orgCode, tenantCode) {
 		try {
+			// Try to get from cache first
+			const entityValue = body.value
+			const modelName = body.model_name
+
+			if (!modelName) {
+				return responses.failureResponse({
+					message: 'MODEL_NAME_REQUIRED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			console.log(`📖 [CACHE READ] Checking cache for entity type: ${modelName}:${entityValue}`)
+			const cachedEntityType = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName, entityValue)
+			if (cachedEntityType) {
+				console.log(`✅ [CACHE HIT] Found cached entity type: ${modelName}:${entityValue}`)
+				// The cached data should be the complete entity type with entities
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
+					result: { entity_types: [cachedEntityType] },
+				})
+			}
+			console.log(
+				`❌ [CACHE MISS] Entity type not in cache: ${modelName}:${entityValue}, fetching from database...`
+			)
+
 			const defaults = await getDefaults()
 			if (!defaults.orgCode)
 				return responses.failureResponse({
@@ -164,7 +445,7 @@ module.exports = class EntityHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			const filter = {
-				value: body.value,
+				value: entityValue,
 				status: 'ACTIVE',
 				organization_code: {
 					[Op.in]: [orgCode, defaults.orgCode],
@@ -183,6 +464,14 @@ module.exports = class EntityHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			}
+
+			// Cache the complete entity type with entities (your preferred format)
+			if (prunedEntities.length > 0) {
+				const entityTypeToCache = prunedEntities[0] // Should be the complete entity type with entities
+				console.log(`💾 [CACHE WRITE] Caching complete entity type with entities: ${modelName}:${entityValue}`)
+				await cacheHelper.entityTypes.set(tenantCode, orgCode, modelName, entityValue, entityTypeToCache)
+				console.log(`✅ [CACHE WRITE] Cached entity type: ${modelName}:${entityValue}`)
 			}
 
 			return responses.successResponse({
@@ -204,6 +493,28 @@ module.exports = class EntityHelper {
 
 	static async delete(id, organizationCode, tenantCode) {
 		try {
+			// FIRST: Get the entity details before deleting it
+			console.log('🔍 [DELETE CACHE] Getting entity details before deletion...')
+			const entityToDelete = await entityTypeQueries.findOneEntityType(
+				{ id, organization_code: organizationCode, tenant_code: tenantCode },
+				tenantCode
+			)
+
+			if (!entityToDelete) {
+				return responses.failureResponse({
+					message: 'ENTITY_TYPE_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			console.log('📋 [DELETE CACHE] Entity to delete:', {
+				id: entityToDelete.id,
+				value: entityToDelete.value,
+				modelNames: entityToDelete.model_names,
+			})
+
+			// SECOND: Delete from database
 			const deleteCount = await entityTypeQueries.deleteOneEntityType(id, organizationCode, tenantCode)
 			if (deleteCount === 0) {
 				return responses.failureResponse({
@@ -211,6 +522,54 @@ module.exports = class EntityHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			}
+
+			// THIRD: Remove individual entity type from cache
+			try {
+				console.log('🗑️ [DELETE CACHE] Removing individual entity type from cache...')
+
+				// For each model this entity belonged to
+				if (entityToDelete.model_names && Array.isArray(entityToDelete.model_names)) {
+					for (const modelName of entityToDelete.model_names) {
+						console.log(`🗑️ [DELETE CACHE] Processing model: ${modelName}`)
+
+						// Remove the specific entity type cache
+						await cacheHelper.entityTypes.delete(
+							tenantCode,
+							organizationCode,
+							modelName,
+							entityToDelete.value
+						)
+						console.log(
+							`✅ [DELETE CACHE] Removed cached entity type: ${modelName}:${entityToDelete.value}`
+						)
+					}
+				}
+
+				console.log('✅ [DELETE CACHE] Entity type cache removal completed')
+			} catch (cacheError) {
+				console.error('❌ [DELETE CACHE ERROR] Failed to perform selective cache removal:', cacheError)
+				console.log('🔄 [DELETE CACHE] Retrying individual cache removal...')
+
+				// Fallback: retry removing only this specific entity's cache
+				if (entityToDelete.model_names && Array.isArray(entityToDelete.model_names)) {
+					for (const modelName of entityToDelete.model_names) {
+						try {
+							await cacheHelper.entityTypes.delete(
+								tenantCode,
+								organizationCode,
+								modelName,
+								entityToDelete.value
+							)
+							console.log(`🗑️ [DELETE FALLBACK] Cleared cache for: ${modelName}:${entityToDelete.value}`)
+						} catch (retryError) {
+							console.error(
+								`Failed to retry clear cache for ${modelName}:${entityToDelete.value}:`,
+								retryError
+							)
+						}
+					}
+				}
 			}
 
 			return responses.successResponse({
@@ -278,8 +637,8 @@ module.exports = class EntityHelper {
 				},
 			}
 			if (entityType) filter.value = entityType
-			// get entityTypes with entities data
-			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodes)
+			// get entityTypes with entities data using cached helper
+			let entityTypesWithEntities = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(filter, tenantCodes)
 			entityTypesWithEntities = JSON.parse(JSON.stringify(entityTypesWithEntities))
 			if (!entityTypesWithEntities.length > 0) {
 				return responseData
@@ -337,6 +696,86 @@ module.exports = class EntityHelper {
 				message: 'ENTITY_TYPE_AND_ENTITES_DELETED_SUCCESSFULLY',
 			})
 		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Get grouped entity types from cache by reading individual model caches
+	 * This avoids data duplication by formatting raw cached data
+	 */
+	static async _getGroupedEntityTypesFromCache(tenantCode, orgCode) {
+		try {
+			console.log('📋 [CACHE FORMAT] Attempting to get all model caches...')
+
+			// We need to know which models to check - get from database once to know models
+			const defaults = await getDefaults()
+			const allEntityTypes = await entityTypeQueries.findAllEntityTypes(
+				{ [Op.or]: [orgCode, defaults.orgCode] },
+				{ [Op.in]: [tenantCode, defaults.tenantCode] },
+				['model_names']
+			)
+
+			// Get unique model names
+			const allModels = new Set()
+			allEntityTypes.forEach((entity) => {
+				const modelNames = entity.model_names || []
+				modelNames.forEach((modelName) => allModels.add(modelName))
+			})
+
+			console.log('📋 [CACHE FORMAT] Found models to check:', Array.from(allModels))
+
+			const groupedByModel = {}
+			let foundAnyCache = false
+
+			// Check cache for each model
+			for (const modelName of allModels) {
+				console.log(`📖 [CACHE FORMAT] Checking cache for model: ${modelName}`)
+				const modelEntityTypes = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName)
+
+				if (modelEntityTypes && Array.isArray(modelEntityTypes)) {
+					console.log(
+						`✅ [CACHE FORMAT] Found cache for model ${modelName} with ${modelEntityTypes.length} entities`
+					)
+					groupedByModel[modelName] = modelEntityTypes
+					foundAnyCache = true
+				} else {
+					console.log(`❌ [CACHE FORMAT] No cache found for model: ${modelName}`)
+					// If any model is missing from cache, we need to rebuild all
+					return null
+				}
+			}
+
+			if (foundAnyCache) {
+				console.log('✅ [CACHE FORMAT] Successfully formatted grouped data from cache')
+				return groupedByModel
+			}
+
+			console.log('❌ [CACHE FORMAT] No cached data found')
+			return null
+		} catch (error) {
+			console.error('❌ [CACHE FORMAT] Error getting grouped data from cache:', error)
+			return null
+		}
+	}
+
+	/**
+	 * Clear all entity type caches and force rebuild with new format
+	 * This should be called after updating cache structure
+	 */
+	static async clearAndRebuildCache(tenantCode, orgCode) {
+		try {
+			console.log('🧹 [CACHE CLEAR] Clearing all entity type caches...')
+			await cacheHelper.evictNamespace('entityTypes', tenantCode, orgCode)
+			console.log('✅ [CACHE CLEAR] All entity type caches cleared')
+
+			console.log('🔄 [CACHE REBUILD] Rebuilding cache with new format...')
+			const result = await this.readAllSystemEntityTypes(orgCode, tenantCode)
+			console.log('✅ [CACHE REBUILD] Cache rebuilt successfully')
+
+			return result
+		} catch (error) {
+			console.error('❌ [CACHE CLEAR] Error clearing and rebuilding cache:', error)
 			throw error
 		}
 	}

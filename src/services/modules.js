@@ -148,16 +148,45 @@ module.exports = class modulesHelper {
 		try {
 			const offset = common.getPaginationOffset(page, limit)
 
-			const filter = {
-				code: { [Op.iLike]: `%${search}%` },
-				tenant_code: tenantCode,
+			// Try to get modules from cache first (only cache without search)
+			const cacheKey = `page${page}_limit${limit}`
+			let modules = null
+
+			if (!search || search.trim() === '') {
+				modules = await cacheHelper.forms.get(tenantCode, organizationId || 'DEFAULT', 'modules_list', cacheKey)
+				if (modules) {
+					console.log(`💾 Modules list retrieved from cache for page ${page}`)
+				}
 			}
-			const options = {
-				offset,
-				limit,
+
+			if (!modules) {
+				const filter = {
+					code: { [Op.iLike]: `%${search}%` },
+					tenant_code: tenantCode,
+				}
+				const options = {
+					offset,
+					limit,
+				}
+				const attributes = ['id', 'code', 'status']
+				modules = await modulesQueries.findAllModules(filter, attributes, options, tenantCode)
+
+				// Cache the result if no search text
+				if ((!search || search.trim() === '') && modules) {
+					try {
+						await cacheHelper.forms.set(
+							tenantCode,
+							organizationId || 'DEFAULT',
+							'modules_list',
+							cacheKey,
+							modules
+						)
+						console.log(`💾 Modules list cached for page ${page}`)
+					} catch (cacheError) {
+						console.error(`❌ Failed to cache modules list:`, cacheError)
+					}
+				}
 			}
-			const attributes = ['id', 'code', 'status']
-			const modules = await modulesQueries.findAllModules(filter, attributes, options, tenantCode)
 
 			if (modules.rows == 0 || modules.count == 0) {
 				return responses.failureResponse({

@@ -50,16 +50,17 @@ async function getEntityTypesAndEntitiesForModel(modelName, orgCodes, tenantCode
 		const primaryTenantCode = tenantCodeArray[0]
 		const primaryOrgCode = orgCodeArray[0]
 
-		const cachedData = await cacheHelper.entityTypes.get(
-			primaryTenantCode,
-			primaryOrgCode,
-			modelName,
-			'entityTypesWithEntities'
-		)
+		// For entityTypeCache, we'll check if any individual entity types for this model are cached
+		// This is a different pattern - we're looking for entity types WITH entities
+		// For now, we'll skip cache and fetch from database directly
+		const cachedData = null // Skip cache for this helper that needs complete entity data
 		if (cachedData) {
 			console.log(`EntityTypes with entities for model '${modelName}' retrieved from cache`)
 			return cachedData
 		}
+		console.log(
+			`EntityTypes cache miss for model '${modelName}', tenant: ${primaryTenantCode}, org: ${primaryOrgCode}`
+		)
 
 		// Build filter for database query
 		const filter = {
@@ -74,14 +75,7 @@ async function getEntityTypesAndEntitiesForModel(modelName, orgCodes, tenantCode
 			[Op.in]: tenantCodeArray,
 		})
 
-		// Cache the result
-		await cacheHelper.entityTypes.set(
-			primaryTenantCode,
-			primaryOrgCode,
-			modelName,
-			'entityTypesWithEntities',
-			entityTypesWithEntities
-		)
+		// Skip caching for this helper - it handles different entity structures
 		console.log(`EntityTypes with entities for model '${modelName}' cached successfully`)
 
 		return entityTypesWithEntities

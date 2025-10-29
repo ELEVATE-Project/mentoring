@@ -5,6 +5,7 @@ const { UniqueConstraintError, ForeignKeyConstraintError } = require('sequelize'
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class EntityHelper {
 	/**
@@ -27,6 +28,19 @@ module.exports = class EntityHelper {
 		try {
 			// Optimized: Validate entity_type exists before creation - better UX than constraint errors
 			const entity = await entityTypeQueries.createEntityWithValidation(sanitizedData, tenantCode)
+
+			// Invalidate entity list caches after creation
+			if (entity && sanitizedData.entity_type_id) {
+				try {
+					// Use forms cache to store entity list data
+					await cacheHelper.forms.delete(tenantCode, 'DEFAULT', 'entity_list', sanitizedData.entity_type_id)
+					await cacheHelper.forms.delete(tenantCode, 'DEFAULT', 'entity_list_all', 'all_entities')
+					console.log(`💾 Entity list cache invalidated after creation of entity ${entity.id}`)
+				} catch (cacheError) {
+					console.error(`❌ Failed to invalidate entity list cache after creation:`, cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_CREATED_SUCCESSFULLY',
@@ -90,6 +104,19 @@ module.exports = class EntityHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Invalidate entity list caches after update
+			if (updatedEntity && (updatedEntity.entity_type_id || sanitizedData.entity_type_id)) {
+				const entityTypeId = updatedEntity.entity_type_id || sanitizedData.entity_type_id
+				try {
+					await cacheHelper.forms.delete(tenantCode, 'DEFAULT', 'entity_list', entityTypeId)
+					await cacheHelper.forms.delete(tenantCode, 'DEFAULT', 'entity_list_all', 'all_entities')
+					console.log(`💾 Entity list cache invalidated after update of entity ${id}`)
+				} catch (cacheError) {
+					console.error(`❌ Failed to invalidate entity list cache after update:`, cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: 'ENTITY_UPDATED_SUCCESSFULLY',
@@ -264,6 +291,15 @@ module.exports = class EntityHelper {
 				})
 			}
 
+			// Invalidate entity list caches after deletion
+			try {
+				// Clear all entity list caches since we don't know the entity_type_id after deletion
+				await cacheHelper.forms.delete(tenantCode, 'DEFAULT', 'entity_list_all', 'all_entities')
+				console.log(`💾 Entity list cache invalidated after deletion of entity ${id}`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate entity list cache after deletion:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: 'ENTITY_DELETED_SUCCESSFULLY',
@@ -310,14 +346,37 @@ module.exports = class EntityHelper {
 				filter['entity_type_id'] = entityType
 			}
 
-			// Optimized: Get entities with entity_type details included - eliminates N+1 queries for clients
-			const entities = await entityTypeQueries.getAllEntitiesWithEntityTypeDetails(
-				filter,
-				{ [Op.in]: [defaults.tenantCode, tenantCode] },
-				pageNo,
-				pageSize,
-				searchText
-			)
+			// Try to get entities from cache first (only cache paginated lists without search)
+			const cacheKey = `${entityType || 'all'}_page${pageNo}_limit${pageSize}`
+			let entities = null
+
+			if (!searchText) {
+				entities = await cacheHelper.forms.get(tenantCode, 'DEFAULT', 'entity_list', cacheKey)
+				if (entities) {
+					console.log(`💾 Entity list retrieved from cache for entityType: ${entityType || 'all'}`)
+				}
+			}
+
+			if (!entities) {
+				// Optimized: Get entities with entity_type details included - eliminates N+1 queries for clients
+				entities = await entityTypeQueries.getAllEntitiesWithEntityTypeDetails(
+					filter,
+					{ [Op.in]: [defaults.tenantCode, tenantCode] },
+					pageNo,
+					pageSize,
+					searchText
+				)
+
+				// Cache the result if no search text (searchable results shouldn't be cached)
+				if (!searchText && entities) {
+					try {
+						await cacheHelper.forms.set(tenantCode, 'DEFAULT', 'entity_list', cacheKey, entities)
+						console.log(`💾 Entity list cached for entityType: ${entityType || 'all'}`)
+					} catch (cacheError) {
+						console.error(`❌ Failed to cache entity list:`, cacheError)
+					}
+				}
+			}
 
 			if (entities.rows == 0 || entities.count == 0) {
 				return responses.failureResponse({

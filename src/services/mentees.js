@@ -28,6 +28,7 @@ const { buildSearchFilter } = require('@helpers/search')
 const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/defaultRules')
 
 const defaultSearchConfig = require('@configs/search.json')
+const cacheHelper = require('@generics/cacheHelper')
 const emailEncryption = require('@utils/emailEncryption')
 const communicationHelper = require('@helpers/communications')
 const menteeExtensionQueries = require('@database/queries/userExtension')
@@ -93,7 +94,7 @@ module.exports = class MenteesHelper {
 
 		const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
 
-		const menteePermissions = await permissions.getPermissions(roles)
+		const menteePermissions = await permissions.getPermissions(roles, tenantCode, organizationCode)
 		if (!Array.isArray(menteeDetails.data.result.permissions)) {
 			menteeDetails.data.result.permissions = []
 		}
@@ -972,6 +973,16 @@ module.exports = class MenteesHelper {
 			const response = await menteeQueries.createMenteeExtension(data, tenantCode)
 			const processDbResponse = utils.processDbResponse(response.toJSON(), validationData)
 
+			// Cache the newly created mentee extension
+			if (processDbResponse && userId && organizationCode) {
+				try {
+					await cacheHelper.mentee.set(tenantCode, organizationCode, userId, processDbResponse)
+					console.log(`💾 Mentee extension cached after creation for user ${userId}`)
+				} catch (cacheError) {
+					console.error(`❌ Failed to cache mentee extension after creation:`, cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTEE_EXTENSION_CREATED',
@@ -1146,6 +1157,17 @@ module.exports = class MenteesHelper {
 
 			// Return updated data
 			const processDbResponse = utils.processDbResponse(updatedUser[0], validationData)
+
+			// Invalidate mentee cache after update
+			if (userId && organizationCode) {
+				try {
+					await cacheHelper.mentee.delete(tenantCode, organizationCode, userId)
+					console.log(`💾 Mentee cache invalidated after update for user ${userId}`)
+				} catch (cacheError) {
+					console.error(`❌ Failed to invalidate mentee cache after update:`, cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTEE_EXTENSION_UPDATED',

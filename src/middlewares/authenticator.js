@@ -10,6 +10,7 @@ const fs = require('fs')
 const MenteeExtensionQueries = require('@database/queries/userExtension')
 const utils = require('@generics/utils')
 const path = require('path')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = async function (req, res, next) {
 	try {
@@ -268,9 +269,29 @@ function getApiPaths(parts) {
 
 async function fetchPermissions(roleTitle, apiPath, module) {
 	if (Array.isArray(roleTitle) && !roleTitle.includes(common.PUBLIC_ROLE)) roleTitle.push(common.PUBLIC_ROLE)
-	const filter = { role_title: roleTitle, module, api_path: { [Op.in]: apiPath } }
-	const attributes = ['request_type', 'api_path', 'module']
-	return await rolePermissionMappingQueries.findAll(filter, attributes)
+
+	const roles = Array.isArray(roleTitle) ? roleTitle : [roleTitle]
+	const apiPaths = Array.isArray(apiPath) ? apiPath : [apiPath]
+
+	// Try to get cached permissions for all role-path combinations (global cache)
+	const cachedPermissions = await cacheHelper.apiPermissions.getMultipleRoles(roles, module, apiPaths)
+
+	// If we have any cached data, return it (partial cache hits are okay)
+	if (cachedPermissions && cachedPermissions.length > 0) {
+		return cachedPermissions
+	}
+
+	// Fetch from database if cache miss
+	const filter = { role_title: roles, module, api_path: { [Op.in]: apiPaths } }
+	const attributes = ['request_type', 'api_path', 'module', 'role_title']
+	const permissions = await rolePermissionMappingQueries.findAll(filter, attributes)
+
+	// Cache the results using individual role-based keys (global cache)
+	if (permissions && permissions.length > 0) {
+		await cacheHelper.apiPermissions.setFromDatabaseResults(module, apiPaths, permissions)
+	}
+
+	return permissions
 }
 
 async function verifyToken(token) {

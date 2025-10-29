@@ -104,56 +104,85 @@ function getRedisClient() {
 	}
 }
 
-/** Base ops (Internal cache opt-in via config or caller) */
+/** Base ops (Exclusive cache usage based on useInternal flag) */
 async function get(key, { useInternal = false } = {}) {
 	if (!ENABLE_CACHE) return null
-	// Try Redis first
-	try {
-		const val = await RedisCache.getKey(key)
-		if (val !== null && val !== undefined) return val
-	} catch (e) {
-		console.error('redis get error', e)
-	}
-	// Only hit InternalCache if explicitly requested
-	if (useInternal && InternalCache && InternalCache.getKey) {
-		try {
-			return InternalCache.getKey(key)
-		} catch (e) {
-			/* ignore internal errors */
+
+	if (useInternal) {
+		// Use ONLY InternalCache when useInternal=true
+		console.log(`📋 [CACHE GET] Using ONLY InternalCache for key: ${key}`)
+		if (InternalCache && InternalCache.getKey) {
+			try {
+				return InternalCache.getKey(key)
+			} catch (e) {
+				console.error('InternalCache get error', e)
+			}
 		}
+		return null
+	} else {
+		// Use ONLY Redis when useInternal=false
+		console.log(`📋 [CACHE GET] Using ONLY Redis for key: ${key}`)
+		try {
+			const val = await RedisCache.getKey(key)
+			if (val !== null && val !== undefined) return val
+		} catch (e) {
+			console.error('redis get error', e)
+		}
+		return null
 	}
-	return null
 }
 
 async function set(key, value, ttlSeconds, { useInternal = false } = {}) {
 	if (!ENABLE_CACHE) return false
-	let wroteRedis = false
-	try {
-		if (ttlSeconds) await RedisCache.setKey(key, value, ttlSeconds)
-		else await RedisCache.setKey(key, value)
-		wroteRedis = true
-	} catch (e) {
-		console.error('redis set error', e)
-	}
-	// Only write to InternalCache if opted in
-	if (useInternal && InternalCache && InternalCache.setKey) {
+
+	if (useInternal) {
+		// Use ONLY InternalCache when useInternal=true
+		console.log(`💾 [CACHE SET] Using ONLY InternalCache for key: ${key}`)
+		if (InternalCache && InternalCache.setKey) {
+			try {
+				InternalCache.setKey(key, value)
+				return true
+			} catch (e) {
+				console.error('InternalCache set error', e)
+				return false
+			}
+		}
+		return false
+	} else {
+		// Use ONLY Redis when useInternal=false
+		console.log(`💾 [CACHE SET] Using ONLY Redis for key: ${key}`)
 		try {
-			InternalCache.setKey(key, value)
-		} catch (e) {}
+			if (ttlSeconds) await RedisCache.setKey(key, value, ttlSeconds)
+			else await RedisCache.setKey(key, value)
+			return true
+		} catch (e) {
+			console.error('redis set error', e)
+			return false
+		}
 	}
-	return wroteRedis
 }
 
 async function del(key, { useInternal = false } = {}) {
-	try {
-		await RedisCache.deleteKey(key)
-	} catch (e) {
-		console.error('redis del error', e)
-	}
-	if (useInternal && InternalCache && InternalCache.delKey) {
+	if (useInternal) {
+		// Use ONLY InternalCache when useInternal=true
+		console.log(`🗑️ [CACHE DEL] Using ONLY InternalCache for key: ${key}`)
+		if (InternalCache && InternalCache.delKey) {
+			try {
+				InternalCache.delKey(key)
+				console.log(`✅ [CACHE DEL] Successfully deleted InternalCache key: ${key}`)
+			} catch (e) {
+				console.error('❌ [CACHE DEL] InternalCache del error for key:', key, e)
+			}
+		}
+	} else {
+		// Use ONLY Redis when useInternal=false
+		console.log(`🗑️ [CACHE DEL] Using ONLY Redis for key: ${key}`)
 		try {
-			InternalCache.delKey(key)
-		} catch (e) {}
+			await RedisCache.deleteKey(key)
+			console.log(`✅ [CACHE DEL] Successfully deleted Redis key: ${key}`)
+		} catch (e) {
+			console.error('❌ [CACHE DEL] Redis del error for key:', key, e)
+		}
 	}
 }
 
@@ -317,41 +346,56 @@ const sessions = {
 
 /**
  * EntityTypes Cache Helpers
- * Pattern: tenant:${tenantCode}:org:${orgCode}:model:${modelName}:entityTypes:value
+ * Pattern: tenant:${tenantCode}:org:${orgCode}:entityTypes:model:${modelName}:${entityValue}
+ * Stores individual entity types WITH their entities, TTL: 1 day
  */
 const entityTypes = {
-	async get(tenantCode, orgId, modelName, value) {
-		const compositeId = `model:${modelName}:entityTypes:${value}`
-		return get(await buildKey({ tenantCode, orgId, ns: 'entityTypes', id: compositeId }))
+	async get(tenantCode, orgId, modelName, entityValue) {
+		const compositeId = `model:${modelName}:${entityValue}`
+		const key = await buildKey({ tenantCode, orgId, ns: 'entityTypes', id: compositeId })
+		return get(key)
 	},
 
-	async set(tenantCode, orgId, modelName, value, entityTypeData) {
-		const compositeId = `model:${modelName}:entityTypes:${value}`
+	async set(tenantCode, orgId, modelName, entityValue, entityTypeData) {
+		const compositeId = `model:${modelName}:${entityValue}`
 		return setScoped({
 			tenantCode,
 			orgId,
 			ns: 'entityTypes',
 			id: compositeId,
 			value: entityTypeData,
+			ttl: 86400, // 1 day TTL
 		})
 	},
 
-	async delete(tenantCode, orgId, modelName, value) {
-		const compositeId = `model:${modelName}:entityTypes:${value}`
+	async delete(tenantCode, orgId, modelName, entityValue) {
+		const compositeId = `model:${modelName}:${entityValue}`
 		return delScoped({ tenantCode, orgId, ns: 'entityTypes', id: compositeId })
+	},
+
+	// Clear all entityTypes cache for a tenant/org (useful after cache key format changes)
+	async clearAll(tenantCode, orgId) {
+		return await evictNamespace({ tenantCode, orgId, ns: 'entityTypes' })
 	},
 }
 
 /**
  * Forms Cache Helpers
- * Pattern: tenant:${tenantCode}:org:${orgCode}:forms:type:subtype
+ * Unified Pattern: tenant:${tenantCode}:org:${orgCode}:forms:${type}:${subtype}
+ * Single cache pattern for all form operations
  */
 const forms = {
+	/**
+	 * Get specific form by type and subtype
+	 */
 	async get(tenantCode, orgId, type, subtype) {
 		const compositeId = `${type}:${subtype}`
 		return get(await buildKey({ tenantCode, orgId, ns: 'forms', id: compositeId }))
 	},
 
+	/**
+	 * Set specific form with 1-day TTL
+	 */
 	async set(tenantCode, orgId, type, subtype, formData) {
 		const compositeId = `${type}:${subtype}`
 		return setScoped({
@@ -360,12 +404,23 @@ const forms = {
 			ns: 'forms',
 			id: compositeId,
 			value: formData,
+			ttl: 86400, // 1 day TTL
 		})
 	},
 
+	/**
+	 * Delete specific form cache
+	 */
 	async delete(tenantCode, orgId, type, subtype) {
 		const compositeId = `${type}:${subtype}`
 		return delScoped({ tenantCode, orgId, ns: 'forms', id: compositeId })
+	},
+
+	/**
+	 * Invalidate all form-related cache for a tenant/org
+	 */
+	async evictAll(tenantCode, orgId) {
+		return await evictNamespace({ tenantCode, orgId, ns: 'forms' })
 	},
 }
 
@@ -538,25 +593,224 @@ const displayProperties = {
 
 /**
  * Permissions Cache Helpers
- * Pattern: tenant:${tenantCode}:org:${orgCode}:permissions:role
+ * Pattern: permissions:role:${role}
+ * Global permissions (no tenant/org context) - Individual role-based caching
  */
 const permissions = {
-	async get(tenantCode, orgId, role) {
-		return get(await buildKey({ tenantCode, orgId, ns: 'permissions', id: role }))
+	async get(role) {
+		const key = `permissions:role:${role}`
+		return get(key)
 	},
 
-	async set(tenantCode, orgId, role, permissionsData) {
+	async set(role, permissionsData) {
+		const key = `permissions:role:${role}`
+		return set(key, permissionsData)
+	},
+
+	async delete(role) {
+		const key = `permissions:role:${role}`
+		return del(key)
+	},
+
+	/**
+	 * Evict all permissions for a specific role
+	 */
+	async evictRole(role) {
+		const pattern = `permissions:role:${role}`
+		await scanAndDelete(pattern)
+	},
+
+	/**
+	 * Evict all permissions cache
+	 */
+	async evictAll() {
+		const pattern = `permissions:*`
+		await scanAndDelete(pattern)
+	},
+}
+
+/**
+ * API Permissions Cache Helpers
+ * Pattern: apiPermissions:role:${role}:module:${module}:api_path:${api_path}
+ * Global permissions (no tenant/org context) - Individual role-based caching
+ */
+const apiPermissions = {
+	/**
+	 * Get permissions for a single role-module-path combination
+	 */
+	async getSingleRole(role, module, apiPath) {
+		const key = `apiPermissions:role:${role}:module:${module}:api_path:${apiPath}`
+		return get(key)
+	},
+
+	/**
+	 * Set permissions for a single role-module-path combination
+	 * Data format: { "request_type": ["GET", "POST", "DELETE", "PUT", "PATCH"] }
+	 */
+	async setSingleRole(role, module, apiPath, requestTypes) {
+		const key = `apiPermissions:role:${role}:module:${module}:api_path:${apiPath}`
+		const permissionData = { request_type: requestTypes }
+		return set(key, permissionData)
+	},
+
+	/**
+	 * Delete permissions for a single role-module-path combination
+	 */
+	async deleteSingleRole(role, module, apiPath) {
+		const key = `apiPermissions:role:${role}:module:${module}:api_path:${apiPath}`
+		return del(key)
+	},
+
+	/**
+	 * Get permissions for multiple roles and combine them
+	 * Returns array of permission objects for backwards compatibility
+	 */
+	async getMultipleRoles(roles, module, apiPaths) {
+		const permissions = []
+
+		for (const role of roles) {
+			for (const apiPath of apiPaths) {
+				const cachedData = await this.getSingleRole(role, module, apiPath)
+				if (cachedData && cachedData.request_type) {
+					permissions.push({
+						request_type: cachedData.request_type,
+						api_path: apiPath,
+						module: module,
+						role_title: role,
+					})
+				}
+			}
+		}
+
+		return permissions
+	},
+
+	/**
+	 * Set permissions for multiple role-module-path combinations from database results
+	 */
+	async setFromDatabaseResults(module, apiPaths, dbPermissions) {
+		const cachePromises = []
+
+		// Group permissions by role and api_path
+		const groupedPermissions = {}
+		for (const permission of dbPermissions) {
+			const key = `${permission.role_title}:${permission.api_path}`
+			if (!groupedPermissions[key]) {
+				groupedPermissions[key] = []
+			}
+			groupedPermissions[key] = permission.request_type
+		}
+
+		// Cache each role-api_path combination
+		for (const [key, requestTypes] of Object.entries(groupedPermissions)) {
+			const [role, apiPath] = key.split(':')
+			cachePromises.push(this.setSingleRole(role, module, apiPath, requestTypes))
+		}
+
+		await Promise.all(cachePromises)
+	},
+
+	/**
+	 * Evict all permissions for a specific role across all modules and paths
+	 */
+	async evictRole(role) {
+		const pattern = `apiPermissions:role:${role}:*`
+		await scanAndDelete(pattern)
+	},
+
+	/**
+	 * Evict all permissions for a specific module across all roles and paths
+	 */
+	async evictModule(module) {
+		const pattern = `apiPermissions:*:module:${module}:*`
+		await scanAndDelete(pattern)
+	},
+
+	/**
+	 * Evict all API permissions cache
+	 */
+	async evictAll() {
+		const pattern = `apiPermissions:*`
+		await scanAndDelete(pattern)
+	},
+
+	// Legacy methods for backwards compatibility (DEPRECATED - use individual role methods)
+	async get(tenantCode, orgId, roleTitle, module, apiPath) {
+		console.warn('apiPermissions.get() is deprecated. Use getMultipleRoles() instead.')
+		const roles = Array.isArray(roleTitle) ? roleTitle : [roleTitle]
+		const paths = Array.isArray(apiPath) ? apiPath : [apiPath]
+		return this.getMultipleRoles(roles, module, paths)
+	},
+
+	async set(tenantCode, orgId, roleTitle, module, apiPath, permissionsData) {
+		console.warn('apiPermissions.set() is deprecated. Use setFromDatabaseResults() instead.')
+		return this.setFromDatabaseResults(module, apiPath, permissionsData)
+	},
+
+	async delete(tenantCode, orgId, roleTitle, module, apiPath) {
+		console.warn('apiPermissions.delete() is deprecated. Use deleteSingleRole() instead.')
+		const roles = Array.isArray(roleTitle) ? roleTitle : [roleTitle]
+		const paths = Array.isArray(apiPath) ? apiPath : [apiPath]
+		const deletePromises = []
+
+		for (const role of roles) {
+			for (const path of paths) {
+				deletePromises.push(this.deleteSingleRole(role, module, path))
+			}
+		}
+
+		await Promise.all(deletePromises)
+	},
+}
+
+/**
+ * User Existence Cache Helpers
+ * Pattern: tenant:${tenantCode}:userExistence:${userId}
+ */
+const userExistence = {
+	async get(tenantCode, userId) {
+		return get(await buildKey({ tenantCode, ns: 'userExistence', id: userId }))
+	},
+
+	async set(tenantCode, userId, exists) {
 		return setScoped({
 			tenantCode,
-			orgId,
-			ns: 'permissions',
-			id: role,
-			value: permissionsData,
+			ns: 'userExistence',
+			id: userId,
+			value: { exists, timestamp: Date.now() },
 		})
 	},
 
-	async delete(tenantCode, orgId, role) {
-		return delScoped({ tenantCode, orgId, ns: 'permissions', id: role })
+	async delete(tenantCode, userId) {
+		return delScoped({ tenantCode, ns: 'userExistence', id: userId })
+	},
+}
+
+/**
+ * User Extensions Cache Helpers
+ * Pattern: tenant:${tenantCode}:org:${orgId}:userExtensions:${userId}
+ */
+const userExtensions = {
+	async get(tenantCode, orgId, userId) {
+		return get(await buildKey({ tenantCode, orgId, ns: 'userExtensions', id: userId }))
+	},
+
+	async set(tenantCode, orgId, userId, extensionData) {
+		// Don't cache sensitive data like email
+		const sanitizedData = { ...extensionData }
+		if (sanitizedData.email) delete sanitizedData.email
+
+		return setScoped({
+			tenantCode,
+			orgId,
+			ns: 'userExtensions',
+			id: userId,
+			value: sanitizedData,
+		})
+	},
+
+	async delete(tenantCode, orgId, userId) {
+		return delScoped({ tenantCode, orgId, ns: 'userExtensions', id: userId })
 	},
 }
 
@@ -592,6 +846,7 @@ module.exports = {
 	notificationTemplates,
 	displayProperties,
 	permissions,
+	apiPermissions,
 
 	// Introspection
 	_internal: {

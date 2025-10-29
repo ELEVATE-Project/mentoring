@@ -13,6 +13,7 @@ const sessionService = require('@services/sessions')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const utils = require('@generics/utils')
 const kafkaCommunication = require('@generics/kafka-communication')
+const userCacheHelper = require('@helpers/userCacheHelper')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const entityTypeQueries = require('@database/queries/entityType')
 const entityTypeCache = require('@helpers/entityTypeCache')
@@ -43,7 +44,7 @@ module.exports = class requestSessionsHelper {
 
 	static async create(bodyData, userId, organizationCode, organizationId, SkipValidation, tenantCode) {
 		try {
-			const mentorUserExists = await mentorQueries.getMentorExtension(
+			const mentorUserExists = await userCacheHelper.getMentorExtensionCached(
 				bodyData.requestee_id,
 				[],
 				false,

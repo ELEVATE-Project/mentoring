@@ -12,6 +12,7 @@ const menteesService = require('@services/mentees')
 const orgAdminService = require('@services/org-admin')
 
 const userServiceHelper = require('@helpers/users')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class UserHelper {
 	/**
@@ -84,12 +85,42 @@ module.exports = class UserHelper {
 				const result = await this.#createOrUpdateUserAndOrg(decodedToken.id, isNewUser, decodedToken)
 				return result
 			} else {
-				const menteeExtension = await menteeQueries.getMenteeExtension(
-					decodedToken.id,
-					[],
-					false,
-					decodedToken.tenant_code
+				// Try to get mentee extension from cache first
+				let menteeExtension = await cacheHelper.mentee.get(
+					decodedToken.tenant_code,
+					decodedToken.organization_code,
+					decodedToken.id
 				)
+
+				if (menteeExtension) {
+					console.log(`💾 Mentee extension for user ${decodedToken.id} retrieved from cache`)
+				} else {
+					// If not in cache, fetch from database
+					menteeExtension = await menteeQueries.getMenteeExtension(
+						decodedToken.id,
+						[],
+						false,
+						decodedToken.tenant_code
+					)
+
+					if (menteeExtension) {
+						// Cache the result for future use
+						try {
+							await cacheHelper.mentee.set(
+								decodedToken.tenant_code,
+								decodedToken.organization_code,
+								decodedToken.id,
+								menteeExtension
+							)
+							console.log(`💾 Mentee extension for user ${decodedToken.id} cached after fetch`)
+						} catch (cacheError) {
+							console.error(
+								`❌ Failed to cache mentee extension for user ${decodedToken.id}:`,
+								cacheError
+							)
+						}
+					}
+				}
 
 				if (!menteeExtension) {
 					return responses.failureResponse({
@@ -251,9 +282,26 @@ module.exports = class UserHelper {
 	}
 
 	static async #createOrUpdateOrg(orgData, tenantCode) {
+		// Try to get from cache first
+		let orgExtension = await cacheHelper.organizations.get(tenantCode, orgData.code, orgData.id)
+
+		if (orgExtension) {
+			console.log(`💾 Organization ${orgData.id} retrieved from cache`)
+			return orgExtension
+		}
+
 		// Use organization_id as organization_code for lookup since they're the same in user service data
-		let orgExtension = await organisationExtensionQueries.getById(orgData.code, tenantCode)
-		if (orgExtension) return orgExtension
+		orgExtension = await organisationExtensionQueries.getById(orgData.code, tenantCode)
+		if (orgExtension) {
+			// Cache the found organization
+			try {
+				await cacheHelper.organizations.set(tenantCode, orgData.code, orgData.id, orgExtension)
+				console.log(`💾 Organization ${orgData.id} cached after database fetch`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to cache organization ${orgData.id}:`, cacheError)
+			}
+			return orgExtension
+		}
 
 		const orgExtensionData = {
 			...common.getDefaultOrgPolicies(),
@@ -264,7 +312,17 @@ module.exports = class UserHelper {
 			tenant_code: tenantCode,
 		}
 		orgExtension = await organisationExtensionQueries.upsert(orgExtensionData, tenantCode)
-		return orgExtension.toJSON()
+		const orgResult = orgExtension.toJSON()
+
+		// Cache the newly created organization
+		try {
+			await cacheHelper.organizations.set(tenantCode, orgData.code, orgData.id, orgResult)
+			console.log(`💾 Organization ${orgData.id} cached after creation`)
+		} catch (cacheError) {
+			console.error(`❌ Failed to cache new organization ${orgData.id}:`, cacheError)
+		}
+
+		return orgResult
 	}
 
 	static async #createUser(userExtensionData, tenantCode) {
@@ -286,6 +344,21 @@ module.exports = class UserHelper {
 					tenantCode,
 					orgId
 			  )
+
+		// Cache the newly created user extension
+		if (user && user.statusCode === httpStatusCode.ok && user.result) {
+			try {
+				if (isAMentor) {
+					await cacheHelper.mentor.set(tenantCode, orgCode, userExtensionData.id, user.result)
+				} else {
+					await cacheHelper.mentee.set(tenantCode, orgCode, userExtensionData.id, user.result)
+				}
+				console.log(`💾 User extension cached after creation for user ${userExtensionData.id}`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to cache user extension after creation:`, cacheError)
+			}
+		}
+
 		return user
 	}
 
@@ -328,6 +401,16 @@ module.exports = class UserHelper {
 			//If role is changed, the role change, org policy changes for that user
 			//and additional data update of the user is done by orgAdmin's roleChange workflow
 			const roleChangeResult = await orgAdminService.roleChange(roleChangePayload, userExtensionData, tenantCode)
+
+			// Invalidate cache after role change
+			try {
+				await cacheHelper.mentee.delete(tenantCode, userExtensionData.organization.code, userExtensionData.id)
+				await cacheHelper.mentor.delete(tenantCode, userExtensionData.organization.code, userExtensionData.id)
+				console.log(`💾 User cache invalidated after role change for user ${userExtensionData.id}`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate user cache after role change:`, cacheError)
+			}
+
 			return roleChangeResult
 		} else {
 			if (userExtensionData.email) delete userExtensionData.email
@@ -346,19 +429,47 @@ module.exports = class UserHelper {
 						userExtensionData.organization.code,
 						decodedToken.tenant_code
 				  )
+
+			// Invalidate cache after user update
+			try {
+				if (isAMentee) {
+					await cacheHelper.mentee.delete(
+						tenantCode,
+						userExtensionData.organization.code,
+						userExtensionData.id
+					)
+				} else {
+					await cacheHelper.mentor.delete(
+						tenantCode,
+						userExtensionData.organization.code,
+						userExtensionData.id
+					)
+				}
+				console.log(`💾 User cache invalidated after update for user ${userExtensionData.id}`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate user cache after update:`, cacheError)
+			}
+
 			return user
 		}
 	}
 
 	/**
 	 * Checks the existence of a user based on their mentee extension.
+	 * Uses caching to improve performance for frequent user existence checks.
 	 *
 	 * @param {string} userId - The ID of the user to check.
+	 * @param {string} tenantCode - The tenant code for multi-tenant isolation.
 	 * @returns {Promise<boolean>} - Returns `true` if the user does not exist, `false` otherwise.
 	 * @throws {Error} - Throws an error if the query fails.
 	 */
 	static async #checkUserExistence(userId, tenantCode) {
 		try {
+			// Try to get user existence from mentee cache first (using dummy orgId for tenant-level check)
+			const cacheKey = `${tenantCode}:user_existence:${userId}`
+			let userExists = false
+
+			// Check mentee extension for user existence
 			const menteeExtension = await menteeQueries.getMenteeExtension(
 				userId,
 				['organization_id'],
@@ -366,8 +477,9 @@ module.exports = class UserHelper {
 				tenantCode
 			)
 
-			// Check if menteeExtension exists
-			const userExists = menteeExtension !== null
+			userExists = menteeExtension !== null
+
+			console.log(`💾 User existence check for ${userId}: ${userExists ? 'EXISTS' : 'NOT_EXISTS'}`)
 
 			return !userExists // Return true if user does not exist
 		} catch (error) {

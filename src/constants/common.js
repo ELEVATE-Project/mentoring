@@ -308,6 +308,12 @@ module.exports = {
 				defaultTtl: 86400, // 1 day
 				useInternal: false,
 			},
+			apiPermissions: {
+				name: 'apiPermissions',
+				enabled: true,
+				defaultTtl: 86400, // 1 day
+				useInternal: false,
+			},
 		},
 	},
 }

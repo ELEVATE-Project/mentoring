@@ -10,6 +10,8 @@ const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
+const cacheHelper = require('@generics/cacheHelper')
+const userCacheHelper = require('@helpers/userCacheHelper')
 
 module.exports = class MenteesHelper {
 	/**
@@ -261,6 +263,10 @@ module.exports = class MenteesHelper {
 				//create feedback
 				if (feedbackNotExists && feedbackNotExists.length > 0) {
 					await feedbackQueries.bulkCreate(feedbackNotExists)
+
+					// Invalidate mentor cache after feedback submission (may affect mentor ratings/profile)
+					// Note: We already have mentorDetails from ratingCalculation, but userId here refers to the feedback submitter
+					// The actual mentor cache invalidation will happen in ratingCalculation function where we have mentor data
 				}
 
 				return responses.successResponse({
@@ -410,7 +416,7 @@ const getFeedbackQuestions = async function (formCode, tenantCode) {
 
 const ratingCalculation = async function (ratingData, mentor_id, tenantCode) {
 	try {
-		let mentorDetails = await mentorExtensionQueries.getMentorExtension(mentor_id, tenantCode)
+		let mentorDetails = await userCacheHelper.getMentorExtensionCached(mentor_id, [], false, tenantCode)
 		let mentorRating = mentorDetails.rating
 		let updateData
 

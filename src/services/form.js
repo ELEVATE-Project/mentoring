@@ -33,10 +33,14 @@ module.exports = class FormsHelper {
 
 			await KafkaProducer.clearInternalCache('formVersion')
 
-			// Invalidate related form caches after creation
+			// Invalidate specific form cache after creation (no "all forms" cache)
 			if (bodyData.type && bodyData.sub_type) {
-				await cacheHelper.forms.delete(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
-				console.log(`Form cache invalidated after creating ${bodyData.type}:${bodyData.sub_type}`)
+				try {
+					await cacheHelper.forms.delete(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
+					console.log(`Form cache invalidated: ${bodyData.type}:${bodyData.sub_type}`)
+				} catch (error) {
+					console.warn('Failed to invalidate form cache:', error)
+				}
 			}
 
 			return responses.successResponse({
@@ -78,6 +82,19 @@ module.exports = class FormsHelper {
 				}
 			}
 
+			// Fetch original form data before update to handle cache cleanup
+			let originalForm = null
+			try {
+				if (id) {
+					originalForm = await formQueries.findOne({ id: id }, tenantCode)
+				} else {
+					const originalForms = await formQueries.findFormsByFilter(filter, [tenantCode])
+					originalForm = originalForms && originalForms.length > 0 ? originalForms[0] : null
+				}
+			} catch (error) {
+				console.warn('Failed to fetch original form for cache cleanup:', error)
+			}
+
 			const result = await formQueries.updateOneForm(filter, bodyData, tenantCode, orgCode)
 
 			if (result === 'ENTITY_ALREADY_EXISTS') {
@@ -96,10 +113,34 @@ module.exports = class FormsHelper {
 			await utils.internalDel('formVersion')
 			await KafkaProducer.clearInternalCache('formVersion')
 
-			// Invalidate related form caches after update
-			if (bodyData.type && bodyData.sub_type) {
-				await cacheHelper.forms.delete(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
-				console.log(`Form cache invalidated after updating ${bodyData.type}:${bodyData.sub_type}`)
+			// Handle cache invalidation after successful update
+			try {
+				// Delete old cache entry if original form had different type/subtype
+				if (originalForm && originalForm.type && originalForm.sub_type) {
+					await cacheHelper.forms.delete(tenantCode, orgCode, originalForm.type, originalForm.sub_type)
+					console.log(`Old form cache deleted: ${originalForm.type}:${originalForm.sub_type}`)
+				}
+
+				// Cache new form if type/subtype provided in update
+				if (bodyData.type && bodyData.sub_type) {
+					// Fetch updated form and cache it
+					const updatedForm = await formQueries.findFormsByFilter(
+						{ type: bodyData.type, sub_type: bodyData.sub_type },
+						[tenantCode]
+					)
+					if (updatedForm && updatedForm.length > 0) {
+						await cacheHelper.forms.set(
+							tenantCode,
+							orgCode,
+							bodyData.type,
+							bodyData.sub_type,
+							updatedForm[0]
+						)
+						console.log(`New form cache set: ${bodyData.type}:${bodyData.sub_type}`)
+					}
+				}
+			} catch (error) {
+				console.warn('Failed to handle form cache invalidation:', error)
 			}
 
 			return responses.successResponse({
@@ -211,10 +252,62 @@ module.exports = class FormsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
+			// Fetch all forms from database (no "all forms" cache to avoid duplication)
+			const formsVersionData =
+				(await form.getAllFormsVersion({ [Op.in]: [defaults.tenantCode, tenantCode] })) || {}
+
+			// Cache each individual form for future individual reads
+			try {
+				if (Array.isArray(formsVersionData) && formsVersionData.length > 0) {
+					console.log(`Populating individual form caches for ${formsVersionData.length} forms...`)
+					const cachePromises = []
+
+					// For each form in the version data, fetch complete form and cache it
+					for (const formVersion of formsVersionData) {
+						if (formVersion.type) {
+							// Create a promise to fetch and cache the complete form
+							const cachePromise = (async () => {
+								try {
+									// Fetch complete form data by type (this should include sub_type)
+									const completeFormData = await formQueries.findFormsByFilter(
+										{ type: formVersion.type },
+										[tenantCode]
+									)
+
+									if (completeFormData && completeFormData.length > 0) {
+										const formData = completeFormData[0]
+										if (formData.sub_type) {
+											await cacheHelper.forms.set(
+												tenantCode,
+												defaults.orgCode,
+												formData.type,
+												formData.sub_type,
+												formData
+											)
+											console.log(`Individual form cached: ${formData.type}:${formData.sub_type}`)
+										}
+									}
+								} catch (error) {
+									console.warn(`Failed to cache individual form for type ${formVersion.type}:`, error)
+								}
+							})()
+
+							cachePromises.push(cachePromise)
+						}
+					}
+
+					// Execute all individual cache operations in parallel
+					await Promise.all(cachePromises)
+					console.log(`Individual forms cache population completed for tenant: ${tenantCode}`)
+				}
+			} catch (individualCacheError) {
+				console.warn('Failed to populate individual forms cache:', individualCacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'FORM_VERSION_FETCHED_SUCCESSFULLY',
-				result: (await form.getAllFormsVersion({ [Op.in]: [defaults.tenantCode, tenantCode] })) || {},
+				result: formsVersionData,
 			})
 		} catch (error) {
 			return error

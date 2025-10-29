@@ -28,6 +28,7 @@ const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/def
 const connectionQueries = require('@database/queries/connection')
 const communicationHelper = require('@helpers/communications')
 const searchConfig = require('@root/config.json')
+const cacheHelper = require('@generics/cacheHelper')
 module.exports = class MentorsHelper {
 	/**
 	 * upcomingSessions.
@@ -465,6 +466,16 @@ module.exports = class MentorsHelper {
 
 			const processDbResponse = utils.processDbResponse(response.toJSON(), validationData)
 
+			// Cache the newly created mentor extension
+			if (processDbResponse && userId && orgCode) {
+				try {
+					await cacheHelper.mentor.set(tenantCode, orgCode, userId, processDbResponse)
+					console.log(`💾 Mentor extension cached after creation for user ${userId}`)
+				} catch (cacheError) {
+					console.error(`❌ Failed to cache mentor extension after creation:`, cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTOR_EXTENSION_CREATED',
@@ -630,6 +641,17 @@ module.exports = class MentorsHelper {
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
 			const processDbResponse = utils.processDbResponse(updatedMentor[0], validationData)
+
+			// Invalidate mentor cache after update
+			if (userId && orgCode) {
+				try {
+					await cacheHelper.mentor.delete(tenantCode, orgCode, userId)
+					console.log(`💾 Mentor cache invalidated after update for user ${userId}`)
+				} catch (cacheError) {
+					console.error(`❌ Failed to invalidate mentor cache after update:`, cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTOR_EXTENSION_UPDATED',
@@ -649,6 +671,7 @@ module.exports = class MentorsHelper {
 	 */
 	static async getMentorExtension(userId, tenantCode) {
 		try {
+			// Get user extension from database first to determine role and org code
 			const mentor = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
 			if (!mentor) {
 				return responses.failureResponse({
@@ -656,6 +679,71 @@ module.exports = class MentorsHelper {
 					message: 'MENTOR_EXTENSION_NOT_FOUND',
 				})
 			}
+
+			const orgCode = mentor.organization_code
+			let cachedUser = null
+
+			// Try mentor cache first (if user is a mentor)
+			if (mentor.is_mentor) {
+				try {
+					cachedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+					if (cachedUser) {
+						console.log(`💾 Mentor retrieved from mentor cache for user ${userId}`)
+						return responses.successResponse({
+							statusCode: httpStatusCode.ok,
+							message: 'MENTOR_EXTENSION_FETCHED',
+							result: cachedUser,
+						})
+					}
+				} catch (cacheError) {
+					console.error(`❌ Mentor cache retrieval failed for user ${userId}:`, cacheError)
+				}
+			}
+
+			// Try mentee cache as fallback (user might have both roles)
+			try {
+				cachedUser = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+				if (cachedUser) {
+					console.log(`💾 User retrieved from mentee cache for mentor extension lookup ${userId}`)
+					return responses.successResponse({
+						statusCode: httpStatusCode.ok,
+						message: 'MENTOR_EXTENSION_FETCHED',
+						result: cachedUser,
+					})
+				}
+			} catch (cacheError) {
+				console.error(`❌ Mentee cache retrieval failed for user ${userId}:`, cacheError)
+			}
+
+			// Cache miss - get full profile from user service
+			const user = await userRequests.getProfileDetails({ tenantCode, userId })
+			if (user.statusCode === httpStatusCode.ok && user.result) {
+				const userResponse = {
+					...user.result,
+					...mentor,
+				}
+
+				// Cache in appropriate cache based on primary role
+				try {
+					if (mentor.is_mentor) {
+						await cacheHelper.mentor.set(tenantCode, orgCode, userId, userResponse)
+						console.log(`💾 User cached in mentor cache after database fetch for user ${userId}`)
+					} else {
+						await cacheHelper.mentee.set(tenantCode, orgCode, userId, userResponse)
+						console.log(`💾 User cached in mentee cache after database fetch for user ${userId}`)
+					}
+				} catch (cacheError) {
+					console.error(`❌ Failed to cache user after fetch:`, cacheError)
+				}
+
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'MENTOR_EXTENSION_FETCHED',
+					result: userResponse,
+				})
+			}
+
+			// Fallback to just extension data if user service fails
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTOR_EXTENSION_FETCHED',
@@ -838,7 +926,7 @@ module.exports = class MentorsHelper {
 			const totalSessionHosted = await sessionQueries.countHostedSessions(id, tenantCode)
 
 			const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
-			const mentorPermissions = await permissions.getPermissions(roles)
+			const mentorPermissions = await permissions.getPermissions(roles, tenantCode, orgCode)
 			if (!Array.isArray(mentorProfile.permissions)) {
 				mentorProfile.permissions = []
 			}

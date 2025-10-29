@@ -50,6 +50,7 @@ const mentorQueries = require('@database/queries/mentorExtension')
 const emailEncryption = require('@utils/emailEncryption')
 const resourceQueries = require('@database/queries/resources')
 const cacheHelper = require('@generics/cacheHelper')
+const userCacheHelper = require('@helpers/userCacheHelper')
 const feedbackService = require('@services/feedback')
 
 module.exports = class SessionsHelper {
@@ -664,7 +665,7 @@ module.exports = class SessionsHelper {
 				userId = bodyData.mentor_id
 			}
 
-			let mentorExtension = await mentorExtensionQueries.getMentorExtension(userId, [], false, tenantCode)
+			let mentorExtension = await userCacheHelper.getMentorExtensionCached(userId, [], false, tenantCode)
 			if (!mentorExtension) {
 				return responses.failureResponse({
 					message: 'INVALID_PERMISSION',
@@ -2466,7 +2467,7 @@ module.exports = class SessionsHelper {
 		const loggedInUserId = userTokenData.id
 		const mentorName = userTokenData.name
 		try {
-			const mentor = await mentorExtensionQueries.getMentorExtension(loggedInUserId, [], false, tenantCode)
+			const mentor = await userCacheHelper.getMentorExtensionCached(loggedInUserId, [], false, tenantCode)
 			if (!mentor) {
 				return responses.failureResponse({
 					message: 'NOT_A_MENTOR',
@@ -4190,7 +4191,7 @@ module.exports = class SessionsHelper {
 	static async feedback(sessionId, bodyData, userId, organizationCode, tenantCode) {
 		try {
 			// Check if user is a mentor by querying mentor extension
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(userId, [], false, tenantCode)
+			const mentorDetails = await userCacheHelper.getMentorExtensionCached(userId, [], false, tenantCode)
 			const isAMentor = !!mentorDetails
 
 			// Transform ratings data to feedback format expected by feedbackService

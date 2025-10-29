@@ -20,6 +20,7 @@ const { Op, QueryTypes } = require('sequelize')
 const { sequelize, Session, SessionAttendee, Connection, RequestSession } = require('@database/models/index')
 const { literal } = require('sequelize')
 const sessionRequestMappingQueries = require('@database/queries/requestSessionMapping')
+const cacheHelper = require('@generics/cacheHelper')
 // sessionOwnership removed - functionality replaced by direct Session queries
 
 // Generic notification helper class
@@ -1537,5 +1538,394 @@ module.exports = class AdminService {
 			console.error('Error notifying attendees about session deletion:', error)
 			return false
 		}
+	}
+
+	/**
+	 * Cache Administration Methods
+	 */
+
+	/**
+	 * Get cache statistics and monitoring information
+	 * @method
+	 * @name getCacheStatistics
+	 * @param {String} tenantCode - Tenant code for stats
+	 * @param {String} organizationId - Organization ID for stats
+	 * @returns {JSON} - Cache statistics response
+	 */
+	static async getCacheStatistics(tenantCode, organizationId) {
+		try {
+			const redisClient = cacheHelper._internal.getRedisClient()
+			if (!redisClient) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.service_unavailable,
+					message: 'CACHE_SERVICE_UNAVAILABLE',
+					responseCode: 'SERVICE_ERROR',
+				})
+			}
+
+			// Get Redis info
+			const redisInfo = await redisClient.info()
+			const redisMemory = await redisClient.info('memory')
+			const keyspaceInfo = await redisClient.info('keyspace')
+
+			// Get key counts by namespace for the tenant
+			const namespaces = [
+				'sessions',
+				'entityTypes',
+				'forms',
+				'organizations',
+				'mentor',
+				'mentee',
+				'platformConfig',
+				'notificationTemplates',
+				'displayProperties',
+				'permissions',
+				'apiPermissions',
+				'userExistence',
+				'userExtensions',
+			]
+
+			const namespaceCounts = {}
+			for (const namespace of namespaces) {
+				try {
+					const pattern = `tenant:${tenantCode}:org:${organizationId}:${namespace}:*`
+					const keys = await redisClient.scan(0, 'MATCH', pattern, 'COUNT', 1000)
+					namespaceCounts[namespace] = Array.isArray(keys[1]) ? keys[1].length : 0
+				} catch (error) {
+					namespaceCounts[namespace] = 0
+				}
+			}
+
+			// Parse Redis info
+			const memoryUsed = this.parseRedisInfo(redisMemory, 'used_memory_human')
+			const memoryPeak = this.parseRedisInfo(redisMemory, 'used_memory_peak_human')
+			const connectedClients = this.parseRedisInfo(redisInfo, 'connected_clients')
+			const totalCommands = this.parseRedisInfo(redisInfo, 'total_commands_processed')
+			const keyspaceHits = this.parseRedisInfo(redisInfo, 'keyspace_hits')
+			const keyspaceMisses = this.parseRedisInfo(redisInfo, 'keyspace_misses')
+
+			const hitRate =
+				keyspaceHits + keyspaceMisses > 0
+					? ((keyspaceHits / (keyspaceHits + keyspaceMisses)) * 100).toFixed(2)
+					: '0'
+
+			const statistics = {
+				cacheEnabled: cacheHelper._internal.ENABLE_CACHE,
+				redisStats: {
+					memoryUsed,
+					memoryPeak,
+					connectedClients,
+					totalCommands,
+					keyspaceHits,
+					keyspaceMisses,
+					hitRate: `${hitRate}%`,
+				},
+				tenantStats: {
+					tenantCode,
+					organizationId,
+					namespaceCounts,
+					totalKeys: Object.values(namespaceCounts).reduce((sum, count) => sum + count, 0),
+				},
+				configuration: {
+					shards: cacheHelper._internal.SHARDS,
+					batchSize: cacheHelper._internal.BATCH,
+					cacheConfig: cacheHelper._internal.CACHE_CONFIG,
+				},
+				timestamp: new Date().toISOString(),
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CACHE_STATS_FETCHED_SUCCESSFULLY',
+				result: statistics,
+			})
+		} catch (error) {
+			console.error('Error getting cache statistics:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_STATS_FETCH_FAILED',
+				responseCode: 'SERVER_ERROR',
+				result: { error: error.message },
+			})
+		}
+	}
+
+	/**
+	 * Clear cache for specific namespace, tenant, or organization
+	 * @method
+	 * @name clearCache
+	 * @param {Object} options - Clear cache options
+	 * @returns {JSON} - Cache clear response
+	 */
+	static async clearCache({ namespace, tenantCode, orgId, adminTenantCode, adminOrgId }) {
+		try {
+			const redisClient = cacheHelper._internal.getRedisClient()
+			if (!redisClient) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.service_unavailable,
+					message: 'CACHE_SERVICE_UNAVAILABLE',
+					responseCode: 'SERVICE_ERROR',
+				})
+			}
+
+			let clearedKeys = 0
+			let patterns = []
+
+			if (namespace && namespace !== 'all') {
+				// Clear specific namespace
+				if (orgId && orgId !== 'all') {
+					patterns.push(`tenant:${tenantCode}:org:${orgId}:${namespace}:*`)
+				} else {
+					patterns.push(`tenant:${tenantCode}:*:${namespace}:*`)
+				}
+			} else if (orgId && orgId !== 'all') {
+				// Clear all cache for specific org
+				patterns.push(`tenant:${tenantCode}:org:${orgId}:*`)
+			} else {
+				// Clear all cache for tenant
+				patterns.push(`tenant:${tenantCode}:*`)
+			}
+
+			// Execute cache clearing
+			for (const pattern of patterns) {
+				const keys = await this.scanKeys(redisClient, pattern)
+				if (keys.length > 0) {
+					await redisClient.del(...keys)
+					clearedKeys += keys.length
+				}
+			}
+
+			console.log(`💾 Admin cache clear: ${clearedKeys} keys cleared for patterns: ${patterns.join(', ')}`)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CACHE_CLEARED_SUCCESSFULLY',
+				result: {
+					clearedKeys,
+					patterns,
+					tenantCode,
+					orgId,
+					namespace,
+					timestamp: new Date().toISOString(),
+				},
+			})
+		} catch (error) {
+			console.error('Error clearing cache:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_CLEAR_FAILED',
+				responseCode: 'SERVER_ERROR',
+				result: { error: error.message },
+			})
+		}
+	}
+
+	/**
+	 * Warm up cache for tenant/organization
+	 * @method
+	 * @name warmUpCache
+	 * @param {Object} options - Warm up options
+	 * @returns {JSON} - Cache warm up response
+	 */
+	static async warmUpCache({ tenantCode, orgId, adminTenantCode, adminOrgId }) {
+		try {
+			const warmupResults = {
+				entityTypes: 0,
+				organizations: 0,
+				platformConfig: 0,
+				permissions: 0,
+				forms: 0,
+			}
+
+			// Warm up EntityTypes cache
+			try {
+				const entityTypeHelper = require('@helpers/entityTypeCache')
+				await entityTypeHelper.warmUpEntityTypesCache(tenantCode, orgId)
+				warmupResults.entityTypes = 1
+			} catch (error) {
+				console.error('EntityTypes cache warmup failed:', error)
+			}
+
+			// Warm up Organizations cache
+			try {
+				const orgQueries = require('@database/queries/organisationExtension')
+				const orgData = await orgQueries.findOne({ organization_id: orgId }, tenantCode)
+				if (orgData) {
+					await cacheHelper.organizations.set(tenantCode, orgId, orgId, orgData)
+					warmupResults.organizations = 1
+				}
+			} catch (error) {
+				console.error('Organizations cache warmup failed:', error)
+			}
+
+			// Warm up Platform Config cache
+			try {
+				const formQueries = require('@database/queries/form')
+				const configData = await formQueries.findOneForm({ code: 'platformConfig' }, tenantCode)
+				if (configData) {
+					await cacheHelper.platformConfig.set(tenantCode, orgId, configData)
+					warmupResults.platformConfig = 1
+				}
+			} catch (error) {
+				console.error('Platform Config cache warmup failed:', error)
+			}
+
+			// Warm up Permissions cache
+			try {
+				const permissionsQueries = require('@database/queries/permissions')
+				const roles = ['mentee', 'mentor', 'org_admin', 'session_manager']
+				for (const role of roles) {
+					const perms = await permissionsQueries.findAll({ role }, tenantCode)
+					if (perms && perms.length > 0) {
+						await cacheHelper.permissions.set(role, perms)
+						warmupResults.permissions++
+					}
+				}
+			} catch (error) {
+				console.error('Permissions cache warmup failed:', error)
+			}
+
+			// Warm up Forms cache (most commonly used forms)
+			try {
+				const formQueries = require('@database/queries/form')
+				const commonForms = [
+					{ type: 'editProfile', subtype: 'mentorForm' },
+					{ type: 'editProfile', subtype: 'menteeForm' },
+					{ type: 'session', subtype: 'sessionForm' },
+				]
+
+				for (const { type, subtype } of commonForms) {
+					const formData = await formQueries.findOneForm({ type, sub_type: subtype }, tenantCode)
+					if (formData) {
+						await cacheHelper.forms.set(tenantCode, orgId, type, subtype, formData)
+						warmupResults.forms++
+					}
+				}
+			} catch (error) {
+				console.error('Forms cache warmup failed:', error)
+			}
+
+			const totalWarmedUp = Object.values(warmupResults).reduce((sum, count) => sum + count, 0)
+
+			console.log(`💾 Cache warmup completed for tenant:${tenantCode}, org:${orgId} - ${totalWarmedUp} items`)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CACHE_WARMED_UP_SUCCESSFULLY',
+				result: {
+					tenantCode,
+					orgId,
+					warmupResults,
+					totalWarmedUp,
+					timestamp: new Date().toISOString(),
+				},
+			})
+		} catch (error) {
+			console.error('Error warming up cache:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_WARMUP_FAILED',
+				responseCode: 'SERVER_ERROR',
+				result: { error: error.message },
+			})
+		}
+	}
+
+	/**
+	 * Get cache health and configuration
+	 * @method
+	 * @name getCacheHealth
+	 * @returns {JSON} - Cache health response
+	 */
+	static async getCacheHealth() {
+		try {
+			const redisClient = cacheHelper._internal.getRedisClient()
+			const health = {
+				cacheEnabled: cacheHelper._internal.ENABLE_CACHE,
+				redisConnected: false,
+				redisVersion: null,
+				uptime: null,
+				configuration: {
+					shards: cacheHelper._internal.SHARDS,
+					batchSize: cacheHelper._internal.BATCH,
+					enableCache: cacheHelper._internal.ENABLE_CACHE,
+					cacheConfig: cacheHelper._internal.CACHE_CONFIG,
+				},
+				namespaces: {},
+				status: 'unhealthy',
+			}
+
+			if (redisClient) {
+				try {
+					const redisInfo = await redisClient.info()
+					const redisVersion = this.parseRedisInfo(redisInfo, 'redis_version')
+					const uptime = this.parseRedisInfo(redisInfo, 'uptime_in_seconds')
+
+					health.redisConnected = true
+					health.redisVersion = redisVersion
+					health.uptime = `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`
+					health.status = 'healthy'
+
+					// Check namespace configurations
+					const namespaceConfig = cacheHelper._internal.CACHE_CONFIG.namespaces || {}
+					Object.keys(namespaceConfig).forEach((ns) => {
+						health.namespaces[ns] = {
+							enabled: namespaceConfig[ns].enabled !== false,
+							defaultTtl: namespaceConfig[ns].defaultTtl,
+							useInternal: namespaceConfig[ns].useInternal,
+						}
+					})
+				} catch (redisError) {
+					console.error('Redis health check failed:', redisError)
+					health.status = 'redis_error'
+				}
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CACHE_HEALTH_CHECK_COMPLETED',
+				result: {
+					...health,
+					timestamp: new Date().toISOString(),
+				},
+			})
+		} catch (error) {
+			console.error('Error checking cache health:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_HEALTH_CHECK_FAILED',
+				responseCode: 'SERVER_ERROR',
+				result: { error: error.message },
+			})
+		}
+	}
+
+	/**
+	 * Helper method to scan Redis keys by pattern
+	 * @private
+	 */
+	static async scanKeys(redisClient, pattern) {
+		const keys = []
+		let cursor = '0'
+
+		do {
+			const result = await redisClient.scan(cursor, 'MATCH', pattern, 'COUNT', 1000)
+			cursor = result[0]
+			if (result[1] && result[1].length > 0) {
+				keys.push(...result[1])
+			}
+		} while (cursor !== '0')
+
+		return keys
+	}
+
+	/**
+	 * Helper method to parse Redis info strings
+	 * @private
+	 */
+	static parseRedisInfo(infoString, key) {
+		const lines = infoString.split('\r\n')
+		const line = lines.find((l) => l.startsWith(`${key}:`))
+		return line ? line.split(':')[1] : '0'
 	}
 }
