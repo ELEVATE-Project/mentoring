@@ -132,7 +132,7 @@ module.exports = class Notifications {
 				let emailBody = emailTemplate.body
 				if (
 					process.env.DEFAULT_MEETING_SERVICE.toUpperCase() != common.BBB_VALUE &&
-					!session.meeting_info?.link
+					!session.meetingInfo?.link
 				) {
 					emailBody = utils.extractEmailTemplate(emailBody, ['default', 'linkWarning'])
 				} else {
