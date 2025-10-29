@@ -1211,23 +1211,8 @@
 							"targetField": "user.user_updated_at"
 						}
 					]
-				},
-				{
-					"service": "mentoring",
-					"basePackageName": "mentoring",
-					"packageName": "elevate-mentoring",
-					"targetBody": [],
-					"responseBody": [
-						{
-							"sourceField": "created_at",
-							"targetField": "profile_created_at"
-						},
-						{
-							"sourceField": "updated_at",
-							"targetField": "profile_updated_at"
-						}
-					]
 				}
+				
 			]
 		},
 		{
@@ -1261,31 +1246,8 @@
 							"targetField": "user_deleted_at"
 						}
 					]
-				},
-				{
-					"service": "mentoring",
-					"basePackageName": "mentoring",
-					"packageName": "elevate-mentoring",
-					"targetBody": [],
-					"responseBody": [
-						{
-							"sourceField": "created_at",
-							"targetField": "profile_created_at"
-						},
-						{
-							"sourceField": "updated_at",
-							"targetField": "profile_updated_at"
-						},
-						{
-							"sourceField": "meta",
-							"targetField": "profile_meta"
-						},
-						{
-							"sourceField": "deleted_at",
-							"targetField": "profile_deleted_at"
-						}
-					]
 				}
+				
 			]
 		},
 		{
