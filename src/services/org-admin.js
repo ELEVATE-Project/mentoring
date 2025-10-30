@@ -143,6 +143,14 @@ module.exports = class OrgAdminService {
 				orgCode
 			)
 
+			// Invalidate mentor cache after role change (mentor -> mentee)
+			try {
+				await cacheHelper.mentor.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
+				console.log(`💾 Mentor cache invalidated after role change for user ${bodyData.user_id}`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate mentor cache after role change:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'USER_ROLE_UPDATED',
@@ -231,6 +239,15 @@ module.exports = class OrgAdminService {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Invalidate mentee cache after role change (mentee -> mentor)
+			try {
+				await cacheHelper.mentee.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
+				console.log(`💾 Mentee cache invalidated after role change for user ${bodyData.user_id}`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate mentee cache after role change:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'USER_ROLE_UPDATED',
@@ -591,7 +608,15 @@ module.exports = class OrgAdminService {
 				})
 			for (let key in userIds) {
 				const userId = userIds[key]
-				const mentorDetails = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+				// Try cache first using logged-in user's organization context
+				let mentorDetails = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+				if (!mentorDetails) {
+					mentorDetails = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+					// Cache the result under logged-in user's organization context
+					if (mentorDetails) {
+						await cacheHelper.mentor.set(tenantCode, orgCode, userId, mentorDetails)
+					}
+				}
 				if (mentorDetails?.user_id) {
 					// Deactivate upcoming sessions of user as mentor
 					const removedSessionsDetail = await sessionQueries.deactivateAndReturnMentorSessions(
@@ -609,7 +634,15 @@ module.exports = class OrgAdminService {
 				}
 
 				//unenroll from upcoming session
-				const menteeDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+				// Try cache first using logged-in user's organization context
+				let menteeDetails = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+				if (!menteeDetails) {
+					menteeDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+					// Cache the result under logged-in user's organization context
+					if (menteeDetails) {
+						await cacheHelper.mentee.set(tenantCode, orgCode, userId, menteeDetails)
+					}
+				}
 				if (menteeDetails?.user_id) {
 					await adminService.unenrollFromUpcomingSessions(userId, tenantCode)
 					deactivatedIdsList.push(userId)

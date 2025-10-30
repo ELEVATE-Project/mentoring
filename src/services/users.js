@@ -375,12 +375,29 @@ module.exports = class UserHelper {
 
 		let isRoleChanged = false
 
-		const menteeExtension = await menteeQueries.getMenteeExtension(
-			userExtensionData.id,
-			['organization_id', 'is_mentor', 'organization_code', 'tenant_code'],
-			false,
-			decodedToken.tenant_code
+		// Try cache first using logged-in user's organization context
+		let menteeExtension = await cacheHelper.mentee.get(
+			decodedToken.tenant_code,
+			decodedToken.organization_code,
+			userExtensionData.id
 		)
+		if (!menteeExtension) {
+			menteeExtension = await menteeQueries.getMenteeExtension(
+				userExtensionData.id,
+				['organization_id', 'is_mentor', 'organization_code', 'tenant_code'],
+				false,
+				decodedToken.tenant_code
+			)
+			// Cache the result under logged-in user's organization context
+			if (menteeExtension) {
+				await cacheHelper.mentee.set(
+					decodedToken.tenant_code,
+					decodedToken.organization_code,
+					userExtensionData.id,
+					menteeExtension
+				)
+			}
+		}
 
 		if (!menteeExtension) throw new Error('User Not Found')
 

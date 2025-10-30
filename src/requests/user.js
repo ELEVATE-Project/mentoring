@@ -17,6 +17,7 @@ const { Op } = require('sequelize')
 
 const menteeQueries = require('@database/queries/userExtension')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const cacheHelper = require('@generics/cacheHelper')
 
 const emailEncryption = require('@utils/emailEncryption')
 
@@ -679,7 +680,29 @@ const listOrganization = function (organizationIds = []) {
 const organizationList = function (organizationCodes = [], tenantCodes = []) {
 	return new Promise(async (resolve, reject) => {
 		try {
-			// Fetch organization details
+			// Try to get cached organizations first
+			const cachedOrgs = []
+			const missingOrgCodes = []
+
+			// Check cache for each org code and tenant code combination
+			for (const orgCode of organizationCodes) {
+				for (const tenantCode of tenantCodes) {
+					let foundInCache = false
+					try {
+						// We need organizationId to get from cache, but we only have orgCode
+						// So we'll fetch from database and cache the results
+						foundInCache = false
+					} catch (cacheError) {
+						foundInCache = false
+					}
+
+					if (!foundInCache) {
+						missingOrgCodes.push({ orgCode, tenantCode })
+					}
+				}
+			}
+
+			// Fetch organization details from database
 			const filter = {
 				organization_code: {
 					[Op.in]: Array.from(organizationCodes),
@@ -693,10 +716,29 @@ const organizationList = function (organizationCodes = [], tenantCodes = []) {
 				attributes: ['name', 'organization_id', 'organization_code', 'tenant_code'],
 			})
 
+			// Cache the fetched organizations for future use
 			if (organizationDetails && organizationDetails.length > 0) {
-				organizationDetails.map((orgInfo) => {
+				const cachePromises = []
+
+				organizationDetails.forEach((orgInfo) => {
 					orgInfo.id = orgInfo.organization_code
+
+					// Cache each organization
+					const cachePromise = cacheHelper.organizations
+						.set(orgInfo.tenant_code, orgInfo.organization_code, orgInfo.organization_id, orgInfo)
+						.catch((cacheError) => {
+							console.error(`❌ Failed to cache organization ${orgInfo.organization_id}:`, cacheError)
+						})
+
+					cachePromises.push(cachePromise)
 				})
+
+				try {
+					await Promise.all(cachePromises)
+					console.log(`💾 Cached ${organizationDetails.length} organizations from organizationList`)
+				} catch (cacheError) {
+					console.error(`❌ Some organizations failed to cache in organizationList:`, cacheError)
+				}
 			}
 
 			return resolve({
@@ -818,10 +860,36 @@ const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false,
 				attributes: ['name', 'organization_id', 'organization_code'],
 			})
 
-			// Map organization details for quick access
+			// Cache organization details for future use and map for quick access
+			const cachePromises = []
 			organizationDetails.forEach((org) => {
 				orgDetails[org.organization_id] = org
+
+				// Cache each organization for future lookups
+				if (org.organization_code) {
+					const cachePromise = cacheHelper.organizations
+						.set(tenantCode, org.organization_code, org.organization_id, org)
+						.catch((cacheError) => {
+							console.error(
+								`❌ Failed to cache organization ${org.organization_id} in getUserDetailedList:`,
+								cacheError
+							)
+						})
+
+					cachePromises.push(cachePromise)
+				}
 			})
+
+			// Cache organizations in parallel without blocking the main response
+			if (cachePromises.length > 0) {
+				Promise.all(cachePromises)
+					.then(() => {
+						console.log(`💾 Cached ${cachePromises.length} organizations from getUserDetailedList`)
+					})
+					.catch((cacheError) => {
+						console.error(`❌ Some organizations failed to cache in getUserDetailedList:`, cacheError)
+					})
+			}
 
 			// Enrich user details with roles and organization info
 			await Promise.all(

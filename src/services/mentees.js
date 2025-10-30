@@ -48,6 +48,32 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - profile details
 	 */
 	static async read(id, organizationId, organizationCode, roles, tenantCode) {
+		// Try to get complete profile from cache first
+		const cachedProfile = await cacheHelper.mentee.get(tenantCode, organizationCode, id)
+		if (cachedProfile) {
+			console.log(`💾 Using cached mentee profile for ${id}`)
+
+			// Get displayProperties and permissions from their respective caches
+			const displayProperties = await cacheHelper.displayProperties.get(tenantCode, organizationCode)
+			const menteePermissions = await permissions.getPermissions(roles, tenantCode, organizationCode)
+
+			// Merge cached profile with dynamic data
+			const profileWithDynamicData = {
+				...cachedProfile,
+				displayProperties,
+				Permissions: menteePermissions,
+				// Note: connectedUsers will be added when implemented
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'PROFILE_FETCHED_SUCCESSFULLY',
+				result: profileWithDynamicData,
+			})
+		}
+
+		console.log(`🔨 Cache miss - building mentee profile for ${id}`)
+
 		const menteeDetails = await userRequests.getUserDetails(id, tenantCode)
 		const mentee = menteeDetails.data.result
 
@@ -92,18 +118,34 @@ module.exports = class MenteesHelper {
 
 		let processDbResponse = utils.processDbResponse(mentee, validationData)
 
-		const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
-		let displayProperties = [
-			{
-				key: 'organization',
-				label: 'Organization',
-				visible: true,
-				visibility: 'main',
-				sequence: 1,
-			},
-		]
-		for (const entityType of sortedEntityType) {
-			displayProperties.push({ key: entityType.value, ...entityType.meta })
+		// Try to get display properties from cache (with tenant/org fallback)
+		let displayProperties = await cacheHelper.displayProperties.get(tenantCode, organizationCode)
+
+		if (!displayProperties) {
+			console.log(
+				`🔨 Building display properties from entity types for tenant:${tenantCode} org:${organizationCode}`
+			)
+			// Build display properties from entity types
+			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+			displayProperties = [
+				{
+					key: 'organization',
+					label: 'Organization',
+					visible: true,
+					visibility: 'main',
+					sequence: 1,
+				},
+			]
+			for (const entityType of sortedEntityType) {
+				displayProperties.push({ key: entityType.value, ...entityType.meta })
+			}
+
+			// Cache at both org and tenant levels for better hit rates
+			try {
+				await cacheHelper.displayProperties.set(tenantCode, organizationCode, displayProperties)
+			} catch (cacheError) {
+				console.error(`❌ Failed to cache display properties:`, cacheError)
+			}
 		}
 
 		const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
@@ -151,15 +193,26 @@ module.exports = class MenteesHelper {
 				name: orgDetails.name,
 			}
 		}
+		// Construct the final profile response
+		const finalProfile = {
+			sessions_attended: totalSession,
+			...menteeDetails.data.result,
+			...processDbResponse,
+			displayProperties,
+			Permissions: menteePermissions,
+		}
+
+		// Cache the profile (sanitized version will be stored)
+		try {
+			await cacheHelper.mentee.set(tenantCode, organizationCode, id, finalProfile)
+		} catch (cacheError) {
+			console.error(`❌ Failed to cache mentee profile ${id}:`, cacheError)
+		}
+
 		return responses.successResponse({
 			statusCode: httpStatusCode.ok,
 			message: 'PROFILE_FTECHED_SUCCESSFULLY',
-			result: {
-				sessions_attended: totalSession,
-				...menteeDetails.data.result,
-				...processDbResponse,
-				displayProperties,
-			},
+			result: finalProfile,
 		})
 	}
 
@@ -514,7 +567,7 @@ module.exports = class MenteesHelper {
 				responseCode: 'CLIENT_ERROR',
 			})
 
-		let validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+		let validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
 			{
 				status: 'ACTIVE',
 				allow_filtering: true,
@@ -523,9 +576,7 @@ module.exports = class MenteesHelper {
 				},
 				model_names: { [Op.contains]: [sessionModelName] },
 			},
-			{
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			}
+			[tenantCode, defaults.tenantCode]
 		)
 		let filteredQuery = utils.validateAndBuildFilters(query, validationData, sessionModelName)
 
@@ -1002,8 +1053,15 @@ module.exports = class MenteesHelper {
 			]
 			dataToRemove.forEach((key) => delete data[key])
 
-			// Fetch current mentee extension data
-			const currentUser = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+			// Try cache first for current mentee data
+			let currentUser = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
+			if (!currentUser) {
+				currentUser = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+				// Cache the result under logged-in user's organization context
+				if (currentUser) {
+					await cacheHelper.mentee.set(tenantCode, organizationCode, userId, currentUser)
+				}
+			}
 			if (!currentUser) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -1113,7 +1171,15 @@ module.exports = class MenteesHelper {
 			}
 
 			if (updateCount === 0) {
-				const fallbackUpdatedUser = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+				// Try cache first for fallback data
+				let fallbackUpdatedUser = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
+				if (!fallbackUpdatedUser) {
+					fallbackUpdatedUser = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+					// Cache the result under logged-in user's organization context
+					if (fallbackUpdatedUser) {
+						await cacheHelper.mentee.set(tenantCode, organizationCode, userId, fallbackUpdatedUser)
+					}
+				}
 				if (!fallbackUpdatedUser) {
 					return responses.failureResponse({
 						statusCode: httpStatusCode.not_found,
@@ -1132,13 +1198,16 @@ module.exports = class MenteesHelper {
 			// Return updated data
 			const processDbResponse = utils.processDbResponse(updatedUser[0], validationData)
 
-			// Invalidate mentee cache after update
+			// Delete old cache and cache the new updated data
 			if (userId && organizationCode) {
 				try {
+					// Delete old cache first
 					await cacheHelper.mentee.delete(tenantCode, organizationCode, userId)
-					console.log(`💾 Mentee cache invalidated after update for user ${userId}`)
+					// Cache the new updated data
+					await cacheHelper.mentee.set(tenantCode, organizationCode, userId, updatedUser[0])
+					console.log(`💾 Mentee cache updated with new data for user ${userId}`)
 				} catch (cacheError) {
-					console.error(`❌ Failed to invalidate mentee cache after update:`, cacheError)
+					console.error(`❌ Failed to update mentee cache after update:`, cacheError)
 				}
 			}
 
@@ -1159,9 +1228,17 @@ module.exports = class MenteesHelper {
 	 * @param {String} userId - User ID of the mentee.
 	 * @returns {Promise<Object>} - Mentee extension details.
 	 */
-	static async getMenteeExtension(userId, organizationId, tenantCode) {
+	static async getMenteeExtension(userId, organizationCode, tenantCode) {
 		try {
-			const mentee = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+			// Try cache first using logged-in user's organization context
+			let mentee = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
+			if (!mentee) {
+				mentee = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+				// Cache the result under logged-in user's organization context
+				if (mentee) {
+					await cacheHelper.mentee.set(tenantCode, organizationCode, userId, mentee)
+				}
+			}
 			if (!mentee) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -1406,7 +1483,7 @@ module.exports = class MenteesHelper {
 				}
 			}
 
-			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+			let validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
 				{
 					status: common.ACTIVE_STATUS,
 					model_names: { [Op.overlap]: [userExtensionModelName] },
@@ -1859,7 +1936,15 @@ module.exports = class MenteesHelper {
 
 	static async details(id, organizationCode, userId = '', isAMentor = '', roles = '', tenantCode) {
 		try {
-			let requestedUserExtension = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
+			// Try cache first using logged-in user's organization context
+			let requestedUserExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, id)
+			if (!requestedUserExtension) {
+				requestedUserExtension = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
+				// Cache the result under logged-in user's organization context
+				if (requestedUserExtension) {
+					await cacheHelper.mentee.set(tenantCode, organizationCode, id, requestedUserExtension)
+				}
+			}
 			if (!requestedUserExtension || (!isAMentor && requestedUserExtension.is_mentor == false)) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -1973,18 +2058,34 @@ module.exports = class MenteesHelper {
 				processDbResponse.connection_details = connection.meta
 			}
 
-			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
-			let displayProperties = [
-				{
-					key: 'organization',
-					label: 'Organization',
-					visible: true,
-					visibility: 'main',
-					sequence: 1,
-				},
-			]
-			for (const entityType of sortedEntityType) {
-				displayProperties.push({ key: entityType.value, ...entityType.meta })
+			// Try to get display properties from cache (with tenant/org fallback)
+			let displayProperties = await cacheHelper.displayProperties.get(tenantCode, organizationCode)
+
+			if (!displayProperties) {
+				console.log(
+					`🔨 Building display properties from entity types for tenant:${tenantCode} org:${organizationCode}`
+				)
+				// Build display properties from entity types
+				const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+				displayProperties = [
+					{
+						key: 'organization',
+						label: 'Organization',
+						visible: true,
+						visibility: 'main',
+						sequence: 1,
+					},
+				]
+				for (const entityType of sortedEntityType) {
+					displayProperties.push({ key: entityType.value, ...entityType.meta })
+				}
+
+				// Cache at both org and tenant levels for better hit rates
+				try {
+					await cacheHelper.displayProperties.set(tenantCode, organizationCode, displayProperties)
+				} catch (cacheError) {
+					console.error(`❌ Failed to cache display properties:`, cacheError)
+				}
 			}
 
 			return responses.successResponse({

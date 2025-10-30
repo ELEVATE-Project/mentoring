@@ -1056,13 +1056,20 @@ module.exports = class AdminService {
 
 	static async notifyMentorAboutPrivateSessionCancellation(mentorId, sessionDetails, orgCodes, tenantCodes) {
 		try {
-			// Get mentor details
-			const mentorDetails = await mentorQueries.getMentorExtension(
-				mentorId,
-				['name', 'email'],
-				true,
-				tenantCodes[0] // Use primary tenant for database query
-			)
+			// Get mentor details - try cache first with primary organization
+			let mentorDetails = await cacheHelper.mentor.get(tenantCodes[0], orgCodes[0], mentorId)
+			if (!mentorDetails) {
+				mentorDetails = await mentorQueries.getMentorExtension(
+					mentorId,
+					['name', 'email'],
+					true,
+					tenantCodes[0] // Use primary tenant for database query
+				)
+				// Cache the result under primary organization context
+				if (mentorDetails) {
+					await cacheHelper.mentor.set(tenantCodes[0], orgCodes[0], mentorId, mentorDetails)
+				}
+			}
 			if (!mentorDetails) {
 				console.log('Mentor details not found for notification')
 				return false

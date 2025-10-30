@@ -45,6 +45,14 @@ module.exports = class EntityHelper {
 			// CREATE operation does NOT cache - only READ operations set cache
 			// Cache will be populated when entity is first read
 
+			// Invalidate display properties cache since entity types changed
+			try {
+				await cacheHelper.displayProperties.delete(tenantCode, orgCode)
+				console.log(`🗑️ Display properties cache invalidated after entity type creation`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate display properties cache:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_TYPE_CREATED_SUCCESSFULLY',
@@ -212,10 +220,10 @@ module.exports = class EntityHelper {
 					console.warn('⚠️ [UPDATE CACHE] No original entity found - skipping cache cleanup')
 				}
 
-				// Fetch complete entity type with entities from database
-				const completeUpdatedEntity = await entityTypeQueries.findUserEntityTypesAndEntities(
+				// Fetch complete entity type with entities using cache
+				const completeUpdatedEntity = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
 					{ id: updatedEntity.id, organization_code: orgCode, tenant_code: tenantCode },
-					{ [Op.in]: [tenantCode] }
+					[tenantCode]
 				)
 
 				let entityWithEntities = null
@@ -265,6 +273,14 @@ module.exports = class EntityHelper {
 						}
 					}
 				}
+			}
+
+			// Invalidate display properties cache since entity types changed
+			try {
+				await cacheHelper.displayProperties.delete(tenantCode, orgCode)
+				console.log(`🗑️ Display properties cache invalidated after entity type update`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate display properties cache:`, cacheError)
 			}
 
 			return responses.successResponse({
@@ -349,14 +365,14 @@ module.exports = class EntityHelper {
 				for (const entityType of entityTypesInModel) {
 					try {
 						// Fetch complete entity type with entities for consistent caching
-						const completeEntityType = await entityTypeQueries.findUserEntityTypesAndEntities(
+						const completeEntityType = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
 							{
 								id: entityType.id,
 								value: entityType.value,
 								organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
 								tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 							},
-							{ [Op.in]: [tenantCode, defaults.tenantCode] }
+							[tenantCode, defaults.tenantCode]
 						)
 
 						let entityToCache = entityType
@@ -452,9 +468,10 @@ module.exports = class EntityHelper {
 				},
 				tenant_code: { [Op.in]: [defaults.tenantCode, tenantCode] },
 			}
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: [defaults.tenantCode, tenantCode],
-			})
+			const entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(filter, [
+				defaults.tenantCode,
+				tenantCode,
+			])
 
 			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 
@@ -570,6 +587,14 @@ module.exports = class EntityHelper {
 						}
 					}
 				}
+			}
+
+			// Invalidate display properties cache since entity types changed
+			try {
+				await cacheHelper.displayProperties.delete(tenantCode, organizationCode)
+				console.log(`🗑️ Display properties cache invalidated after entity type deletion`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate display properties cache:`, cacheError)
 			}
 
 			return responses.successResponse({

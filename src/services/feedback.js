@@ -473,6 +473,15 @@ const ratingCalculation = async function (ratingData, mentor_id, tenantCode) {
 			}
 		}
 		await mentorExtensionQueries.updateMentorExtension(mentor_id, updateData, tenantCode)
+
+		// Invalidate mentor profile cache after rating update
+		try {
+			await cacheHelper.mentor.delete(tenantCode, mentorDetails.organization_code, mentor_id)
+			console.log(`💾 Mentor cache invalidated after rating update for mentor ${mentor_id}`)
+		} catch (cacheError) {
+			console.error(`❌ Failed to invalidate mentor cache after rating update:`, cacheError)
+		}
+
 		return
 	} catch (error) {
 		return error

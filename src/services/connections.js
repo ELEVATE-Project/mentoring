@@ -75,6 +75,34 @@ module.exports = class ConnectionHelper {
 				bodyData.message,
 				tenantCode
 			)
+
+			// Invalidate cache for both users involved in the connection request
+			try {
+				// Get user extensions to determine org codes for cache invalidation
+				const [user1Extension, user2Extension] = await Promise.all([
+					userExtensionQueries.getMenteeExtension(userId, ['organization_code'], false, tenantCode),
+					userExtensionQueries.getMenteeExtension(bodyData.user_id, ['organization_code'], false, tenantCode),
+				])
+
+				if (user1Extension) {
+					await Promise.all([
+						cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId),
+						cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId),
+					])
+				}
+
+				if (user2Extension) {
+					await Promise.all([
+						cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
+						cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
+					])
+				}
+
+				console.log(`💾 User caches invalidated for connection request: ${userId} and ${bodyData.user_id}`)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate user caches after connection request:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'CONNECTION_REQUEST_SEND_SUCCESSFULLY',
@@ -480,14 +508,14 @@ module.exports = class ConnectionHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			// Fetch validation data for filtering connections (excluding roles)
-			const validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+			// Fetch validation data for filtering connections (excluding roles) - using cache
+			const validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
 				{
 					status: 'ACTIVE',
 					allow_filtering: true,
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				{ [Op.in]: [defaults.tenantCode, tenantCode] }
+				[defaults.tenantCode, tenantCode]
 			)
 
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData, userExtensionsModelName)

@@ -3,6 +3,7 @@ const menteeExtensionQueries = require('@database/queries/userExtension')
 const userRequests = require('@requests/user')
 const entityTypeService = require('@services/entity-type')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const cacheHelper = require('@generics/cacheHelper')
 const { Parser } = require('@json2csv/plainjs')
 const { Op } = require('sequelize')
 
@@ -107,10 +108,36 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 				},
 				tenantCode,
 				{
-					attributes: ['name', 'organization_id'],
+					attributes: ['name', 'organization_id', 'organization_code'],
 					raw: true,
 				}
 			)
+
+			// Cache organizations for future use (async, don't wait)
+			if (organizationDetails.length > 0) {
+				const cachePromises = organizationDetails
+					.map((org) => {
+						if (org.organization_code) {
+							return cacheHelper.organizations
+								.set(tenantCode, org.organization_code, org.organization_id, org)
+								.catch((cacheError) => {
+									console.error(
+										`❌ Failed to cache organization ${org.organization_id} in getEnrolledMentees:`,
+										cacheError
+									)
+								})
+						}
+					})
+					.filter(Boolean)
+
+				Promise.all(cachePromises)
+					.then(() => {
+						console.log(`💾 Cached ${cachePromises.length} organizations from getEnrolledMentees`)
+					})
+					.catch((cacheError) => {
+						console.error(`❌ Some organizations failed to cache in getEnrolledMentees:`, cacheError)
+					})
+			}
 		}
 
 		// Map organization details to users

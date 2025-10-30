@@ -417,13 +417,20 @@ module.exports = class requestSessionsHelper {
 				})
 			}
 
-			// Check if mentee user exists
-			const userExists = await userExtensionQueries.getMenteeExtension(
-				getRequestSessionDetails.requestor_id,
-				[],
-				false,
-				tenantCode
-			)
+			// Check if mentee user exists - try cache first
+			let userExists = await cacheHelper.mentee.get(tenantCode, orgCode, getRequestSessionDetails.requestor_id)
+			if (!userExists) {
+				userExists = await userExtensionQueries.getMenteeExtension(
+					getRequestSessionDetails.requestor_id,
+					[],
+					false,
+					tenantCode
+				)
+				// Cache the result under requesting user's organization context
+				if (userExists) {
+					await cacheHelper.mentee.set(tenantCode, orgCode, getRequestSessionDetails.requestor_id, userExists)
+				}
+			}
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,

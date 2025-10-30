@@ -4099,7 +4099,19 @@ module.exports = class SessionsHelper {
 
 		return Promise.allSettled(
 			mentorIds.map(async (mentorId) => {
-				const mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
+				// Try to get mentor profile from cache (any organization context)
+				// Since we need organization_code, we'll use a pattern-based cache check
+				let mentor = null
+				try {
+					// Try cache with default organization context first
+					mentor = await cacheHelper.mentor.get(tenantCode, defaults.orgCode, mentorId)
+				} catch (cacheError) {
+					console.log(`Cache lookup failed for mentor ${mentorId}, falling back to database`)
+				}
+
+				if (!mentor) {
+					mentor = await mentorQueries.getMentorExtension(mentorId, ['organization_code'], tenantCode)
+				}
 				if (!mentor) throw new MentorError('Invalid Mentor Id', { mentorId })
 
 				const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentorId, tenantCode)

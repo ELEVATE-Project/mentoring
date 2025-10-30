@@ -4,6 +4,14 @@ const { RedisCache, InternalCache } = require('elevate-node-cache')
 const md5 = require('md5')
 const common = require('@constants/common')
 
+// Import database queries for fallback
+const { Op } = require('sequelize')
+const mentorQueries = require('@database/queries/mentorExtension')
+const userQueries = require('@database/queries/userExtension')
+const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const entityTypeQueries = require('@database/queries/entityType')
+const notificationTemplateQueries = require('@database/queries/notificationTemplate')
+
 /** CONFIG */
 const CACHE_CONFIG = (() => {
 	try {
@@ -350,17 +358,52 @@ const sessions = {
  * Stores individual entity types WITH their entities, TTL: 1 day
  */
 const entityTypes = {
-	async get(tenantCode, orgId, modelName, entityValue) {
-		const compositeId = `model:${modelName}:${entityValue}`
-		const key = await buildKey({ tenantCode, orgId, ns: 'entityTypes', id: compositeId })
-		return get(key)
+	async get(tenantCode, orgCode, modelName, entityValue) {
+		try {
+			const compositeId = `model:${modelName}:${entityValue}`
+			const key = await buildKey({ tenantCode, orgId: orgCode, ns: 'entityTypes', id: compositeId })
+			const cachedEntityType = await get(key)
+			if (cachedEntityType) {
+				console.log(
+					`💾 EntityType ${modelName}:${entityValue} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`
+				)
+				return cachedEntityType
+			}
+
+			// Cache miss - fallback to database query
+			console.log(
+				`💾 EntityType ${modelName}:${entityValue} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
+			)
+			const filter = {
+				status: 'ACTIVE',
+				organization_code: orgCode,
+				model_names: { [Op.contains]: [modelName] },
+				value: entityValue,
+			}
+			const entityTypeFromDb = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
+				[Op.in]: [tenantCode],
+			})
+
+			if (entityTypeFromDb) {
+				// Cache the fetched data for future requests
+				await this.set(tenantCode, orgCode, modelName, entityValue, entityTypeFromDb)
+				console.log(
+					`💾 EntityType ${modelName}:${entityValue} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
+				)
+			}
+
+			return entityTypeFromDb
+		} catch (error) {
+			console.error(`❌ Failed to get entityType ${modelName}:${entityValue} from cache/database:`, error)
+			return null
+		}
 	},
 
-	async set(tenantCode, orgId, modelName, entityValue, entityTypeData) {
+	async set(tenantCode, orgCode, modelName, entityValue, entityTypeData) {
 		const compositeId = `model:${modelName}:${entityValue}`
 		return setScoped({
 			tenantCode,
-			orgId,
+			orgId: orgCode,
 			ns: 'entityTypes',
 			id: compositeId,
 			value: entityTypeData,
@@ -368,14 +411,14 @@ const entityTypes = {
 		})
 	},
 
-	async delete(tenantCode, orgId, modelName, entityValue) {
+	async delete(tenantCode, orgCode, modelName, entityValue) {
 		const compositeId = `model:${modelName}:${entityValue}`
-		return delScoped({ tenantCode, orgId, ns: 'entityTypes', id: compositeId })
+		return delScoped({ tenantCode, orgId: orgCode, ns: 'entityTypes', id: compositeId })
 	},
 
 	// Clear all entityTypes cache for a tenant/org (useful after cache key format changes)
-	async clearAll(tenantCode, orgId) {
-		return await evictNamespace({ tenantCode, orgId, ns: 'entityTypes' })
+	async clearAll(tenantCode, orgCode) {
+		return await evictNamespace({ tenantCode, orgId: orgCode, ns: 'entityTypes' })
 	},
 }
 
@@ -388,19 +431,19 @@ const forms = {
 	/**
 	 * Get specific form by type and subtype
 	 */
-	async get(tenantCode, orgId, type, subtype) {
+	async get(tenantCode, orgCode, type, subtype) {
 		const compositeId = `${type}:${subtype}`
-		return get(await buildKey({ tenantCode, orgId, ns: 'forms', id: compositeId }))
+		return get(await buildKey({ tenantCode, orgId: orgCode, ns: 'forms', id: compositeId }))
 	},
 
 	/**
 	 * Set specific form with 1-day TTL
 	 */
-	async set(tenantCode, orgId, type, subtype, formData) {
+	async set(tenantCode, orgCode, type, subtype, formData) {
 		const compositeId = `${type}:${subtype}`
 		return setScoped({
 			tenantCode,
-			orgId,
+			orgId: orgCode,
 			ns: 'forms',
 			id: compositeId,
 			value: formData,
@@ -411,16 +454,16 @@ const forms = {
 	/**
 	 * Delete specific form cache
 	 */
-	async delete(tenantCode, orgId, type, subtype) {
+	async delete(tenantCode, orgCode, type, subtype) {
 		const compositeId = `${type}:${subtype}`
-		return delScoped({ tenantCode, orgId, ns: 'forms', id: compositeId })
+		return delScoped({ tenantCode, orgId: orgCode, ns: 'forms', id: compositeId })
 	},
 
 	/**
 	 * Invalidate all form-related cache for a tenant/org
 	 */
-	async evictAll(tenantCode, orgId) {
-		return await evictNamespace({ tenantCode, orgId, ns: 'forms' })
+	async evictAll(tenantCode, orgCode) {
+		return await evictNamespace({ tenantCode, orgId: orgCode, ns: 'forms' })
 	},
 }
 
@@ -429,90 +472,209 @@ const forms = {
  * Pattern: tenant:${tenantCode}:org:${orgCode}:organizations:id
  */
 const organizations = {
-	async get(tenantCode, orgId, organizationId) {
-		return get(await buildKey({ tenantCode, orgId, ns: 'organizations', id: organizationId }))
+	async get(tenantCode, orgCode, organizationId) {
+		try {
+			const cacheKey = await buildKey({ tenantCode, orgId: orgCode, ns: 'organizations', id: organizationId })
+			const cachedOrg = await get(cacheKey)
+			if (cachedOrg) {
+				console.log(
+					`💾 Organization ${organizationId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`
+				)
+				return cachedOrg
+			}
+
+			// Cache miss - fallback to database query
+			console.log(
+				`💾 Organization ${organizationId} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
+			)
+			const orgFromDb = await organisationExtensionQueries.findOne(
+				{ organization_id: organizationId },
+				tenantCode
+			)
+
+			if (orgFromDb) {
+				// Cache the fetched data for future requests
+				await this.set(tenantCode, orgCode, organizationId, orgFromDb)
+				console.log(
+					`💾 Organization ${organizationId} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
+				)
+			}
+
+			return orgFromDb
+		} catch (error) {
+			console.error(`❌ Failed to get organization ${organizationId} from cache/database:`, error)
+			return null
+		}
 	},
 
-	async set(tenantCode, orgId, organizationId, orgData) {
+	async set(tenantCode, orgCode, organizationId, orgData) {
 		return setScoped({
 			tenantCode,
-			orgId,
+			orgId: orgCode,
 			ns: 'organizations',
 			id: organizationId,
 			value: orgData,
 		})
 	},
 
-	async delete(tenantCode, orgId, organizationId) {
-		return delScoped({ tenantCode, orgId, ns: 'organizations', id: organizationId })
+	async delete(tenantCode, orgCode, organizationId) {
+		return delScoped({ tenantCode, orgId: orgCode, ns: 'organizations', id: organizationId })
 	},
 }
 
 /**
- * Mentor Cache Helpers
- * Pattern: tenant:${tenantCode}:org:${orgCode}:mentor:id
+ * Mentor Profile Cache Helpers
+ * Pattern: tenant:${tenantCode}:org:${orgCode}:mentor:${id}
+ * TTL: 1 day (86400 seconds)
  */
 const mentor = {
-	async get(tenantCode, orgId, mentorId) {
-		return get(await buildKey({ tenantCode, orgId, ns: 'mentor', id: mentorId }))
+	async get(tenantCode, orgCode, mentorId) {
+		try {
+			const cacheKey = await buildKey({ tenantCode, orgId: orgCode, ns: 'mentor', id: mentorId })
+			const cachedProfile = await get(cacheKey)
+			if (cachedProfile) {
+				console.log(`💾 Mentor profile ${mentorId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`)
+				return cachedProfile
+			}
+
+			// Cache miss - fallback to database query
+			console.log(
+				`💾 Mentor profile ${mentorId} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
+			)
+			const profileFromDb = await mentorQueries.getMentorExtension(mentorId, [], false, tenantCode)
+
+			if (profileFromDb) {
+				// Cache the fetched data for future requests
+				await this.set(tenantCode, orgCode, mentorId, profileFromDb)
+				console.log(
+					`💾 Mentor profile ${mentorId} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
+				)
+			}
+
+			return profileFromDb
+		} catch (error) {
+			console.error(`❌ Failed to get mentor profile ${mentorId} from cache/database:`, error)
+			return null
+		}
 	},
 
-	async set(tenantCode, orgId, mentorId, mentorData) {
-		// Remove displayProperties and Permissions before caching
-		const sanitizedData = { ...mentorData }
-		delete sanitizedData.displayProperties
-		delete sanitizedData.Permissions
+	async set(tenantCode, orgCode, mentorId, profileData) {
+		try {
+			// Sanitize profile data - remove fields that are cached separately
+			const sanitizedData = this._sanitizeProfileData(profileData)
 
-		// Don't cache downloadable image URLs
-		if (sanitizedData.image && typeof sanitizedData.image === 'string' && sanitizedData.image.includes('http')) {
-			delete sanitizedData.image
+			const cacheKey = await buildKey({ tenantCode, orgId: orgCode, ns: 'mentor', id: mentorId })
+			await set(cacheKey, sanitizedData, 86400) // 1 day TTL
+			console.log(`💾 Mentor profile ${mentorId} cached: tenant:${tenantCode}:org:${orgCode}`)
+		} catch (error) {
+			console.error(`❌ Failed to cache mentor profile ${mentorId}:`, error)
+		}
+	},
+
+	async delete(tenantCode, orgCode, mentorId) {
+		try {
+			const cacheKey = await buildKey({ tenantCode, orgId: orgCode, ns: 'mentor', id: mentorId })
+			await del(cacheKey)
+			console.log(`🗑️ Mentor profile ${mentorId} cache deleted: tenant:${tenantCode}:org:${orgCode}`)
+		} catch (error) {
+			console.error(`❌ Failed to delete mentor profile ${mentorId} cache:`, error)
+		}
+	},
+
+	_sanitizeProfileData(profileData) {
+		const sanitized = { ...profileData }
+
+		// Remove fields that are cached separately - get from existing caches
+		delete sanitized.displayProperties // Get from displayProperties cache
+		delete sanitized.Permissions // Get from permissions cache
+		delete sanitized.connectedUsers // Will implement separate cache
+		delete sanitized.email // Security: don't cache email
+		delete sanitized.email_verified // Security: don't cache email verification
+
+		// Handle image URL - don't cache downloadable URLs
+		if (sanitized.image && typeof sanitized.image === 'string' && sanitized.image.includes('download')) {
+			delete sanitized.image
 		}
 
-		return setScoped({
-			tenantCode,
-			orgId,
-			ns: 'mentor',
-			id: mentorId,
-			value: sanitizedData,
-		})
-	},
-
-	async delete(tenantCode, orgId, mentorId) {
-		return delScoped({ tenantCode, orgId, ns: 'mentor', id: mentorId })
+		return sanitized
 	},
 }
 
 /**
- * Mentee Cache Helpers
- * Pattern: tenant:${tenantCode}:org:${orgCode}:mentee:id
+ * Mentee Profile Cache Helpers
+ * Pattern: tenant:${tenantCode}:org:${orgCode}:mentee:${id}
+ * TTL: 1 day (86400 seconds)
  */
 const mentee = {
-	async get(tenantCode, orgId, menteeId) {
-		return get(await buildKey({ tenantCode, orgId, ns: 'mentee', id: menteeId }))
+	async get(tenantCode, orgCode, menteeId) {
+		try {
+			const cacheKey = await buildKey({ tenantCode, orgId: orgCode, ns: 'mentee', id: menteeId })
+			const cachedProfile = await get(cacheKey)
+			if (cachedProfile) {
+				console.log(`💾 Mentee profile ${menteeId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`)
+				return cachedProfile
+			}
+
+			// Cache miss - fallback to database query
+			console.log(
+				`💾 Mentee profile ${menteeId} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
+			)
+			const profileFromDb = await userQueries.getUserExtensionByUserId(menteeId, tenantCode)
+
+			if (profileFromDb) {
+				// Cache the fetched data for future requests
+				await this.set(tenantCode, orgCode, menteeId, profileFromDb)
+				console.log(
+					`💾 Mentee profile ${menteeId} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
+				)
+			}
+
+			return profileFromDb
+		} catch (error) {
+			console.error(`❌ Failed to get mentee profile ${menteeId} from cache/database:`, error)
+			return null
+		}
 	},
 
-	async set(tenantCode, orgId, menteeId, menteeData) {
-		// Remove displayProperties and Permissions before caching
-		const sanitizedData = { ...menteeData }
-		delete sanitizedData.displayProperties
-		delete sanitizedData.Permissions
+	async set(tenantCode, orgCode, menteeId, profileData) {
+		try {
+			// Sanitize profile data - remove fields that are cached separately
+			const sanitizedData = this._sanitizeProfileData(profileData)
 
-		// Don't cache downloadable image URLs
-		if (sanitizedData.image && typeof sanitizedData.image === 'string' && sanitizedData.image.includes('http')) {
-			delete sanitizedData.image
+			const cacheKey = await buildKey({ tenantCode, orgId: orgCode, ns: 'mentee', id: menteeId })
+			await set(cacheKey, sanitizedData, 86400) // 1 day TTL
+			console.log(`💾 Mentee profile ${menteeId} cached: tenant:${tenantCode}:org:${orgCode}`)
+		} catch (error) {
+			console.error(`❌ Failed to cache mentee profile ${menteeId}:`, error)
+		}
+	},
+
+	async delete(tenantCode, orgCode, menteeId) {
+		try {
+			const cacheKey = await buildKey({ tenantCode, orgId: orgCode, ns: 'mentee', id: menteeId })
+			await del(cacheKey)
+			console.log(`🗑️ Mentee profile ${menteeId} cache deleted: tenant:${tenantCode}:org:${orgCode}`)
+		} catch (error) {
+			console.error(`❌ Failed to delete mentee profile ${menteeId} cache:`, error)
+		}
+	},
+
+	_sanitizeProfileData(profileData) {
+		const sanitized = { ...profileData }
+
+		// Remove fields that are cached separately - get from existing caches
+		delete sanitized.displayProperties // Get from displayProperties cache
+		delete sanitized.Permissions // Get from permissions cache
+		delete sanitized.connectedUsers // Will implement separate cache
+		delete sanitized.email // Security: don't cache email
+		delete sanitized.email_verified // Security: don't cache email verification
+
+		// Handle image URL - don't cache downloadable URLs
+		if (sanitized.image && typeof sanitized.image === 'string' && sanitized.image.includes('download')) {
+			delete sanitized.image
 		}
 
-		return setScoped({
-			tenantCode,
-			orgId,
-			ns: 'mentee',
-			id: menteeId,
-			value: sanitizedData,
-		})
-	},
-
-	async delete(tenantCode, orgId, menteeId) {
-		return delScoped({ tenantCode, orgId, ns: 'mentee', id: menteeId })
+		return sanitized
 	},
 }
 
@@ -521,22 +683,22 @@ const mentee = {
  * Pattern: tenant:${tenantCode}:org:${orgCode}:platformConfig
  */
 const platformConfig = {
-	async get(tenantCode, orgId) {
-		return get(await buildKey({ tenantCode, orgId, ns: 'platformConfig', id: '' }))
+	async get(tenantCode, orgCode) {
+		return get(await buildKey({ tenantCode, orgId: orgCode, ns: 'platformConfig', id: '' }))
 	},
 
-	async set(tenantCode, orgId, configData) {
+	async set(tenantCode, orgCode, configData) {
 		return setScoped({
 			tenantCode,
-			orgId,
+			orgId: orgCode,
 			ns: 'platformConfig',
 			id: '',
 			value: configData,
 		})
 	},
 
-	async delete(tenantCode, orgId) {
-		return delScoped({ tenantCode, orgId, ns: 'platformConfig', id: '' })
+	async delete(tenantCode, orgCode) {
+		return delScoped({ tenantCode, orgId: orgCode, ns: 'platformConfig', id: '' })
 	},
 }
 
@@ -545,49 +707,123 @@ const platformConfig = {
  * Pattern: tenant:${tenantCode}:org:${orgCode}:templateCode:code
  */
 const notificationTemplates = {
-	async get(tenantCode, orgId, templateCode) {
-		const compositeId = `templateCode:${templateCode}`
-		return get(await buildKey({ tenantCode, orgId, ns: 'notificationTemplates', id: compositeId }))
+	async get(tenantCode, orgCode, templateCode) {
+		try {
+			const compositeId = `templateCode:${templateCode}`
+			const cacheKey = await buildKey({
+				tenantCode,
+				orgId: orgCode,
+				ns: 'notificationTemplates',
+				id: compositeId,
+			})
+			const cachedTemplate = await get(cacheKey)
+			if (cachedTemplate) {
+				console.log(
+					`💾 NotificationTemplate ${templateCode} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`
+				)
+				return cachedTemplate
+			}
+
+			// Cache miss - fallback to database query
+			console.log(
+				`💾 NotificationTemplate ${templateCode} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
+			)
+			const filter = {
+				code: templateCode,
+				organization_code: orgCode,
+				type: 'email',
+				status: 'active',
+			}
+			const templateFromDb = await notificationTemplateQueries.findOne(filter, tenantCode)
+
+			if (templateFromDb) {
+				// Cache the fetched data for future requests
+				await this.set(tenantCode, orgCode, templateCode, templateFromDb)
+				console.log(
+					`💾 NotificationTemplate ${templateCode} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
+				)
+			}
+
+			return templateFromDb
+		} catch (error) {
+			console.error(`❌ Failed to get notificationTemplate ${templateCode} from cache/database:`, error)
+			return null
+		}
 	},
 
-	async set(tenantCode, orgId, templateCode, templateData) {
+	async set(tenantCode, orgCode, templateCode, templateData) {
 		const compositeId = `templateCode:${templateCode}`
 		return setScoped({
 			tenantCode,
-			orgId,
+			orgId: orgCode,
 			ns: 'notificationTemplates',
 			id: compositeId,
 			value: templateData,
 		})
 	},
 
-	async delete(tenantCode, orgId, templateCode) {
+	async delete(tenantCode, orgCode, templateCode) {
 		const compositeId = `templateCode:${templateCode}`
-		return delScoped({ tenantCode, orgId, ns: 'notificationTemplates', id: compositeId })
+		return delScoped({ tenantCode, orgId: orgCode, ns: 'notificationTemplates', id: compositeId })
 	},
 }
 
 /**
  * Display Properties Cache Helpers
  * Pattern: tenant:${tenantCode}:org:${orgCode}:displayProperties
+ * Fallback Pattern: tenant:${tenantCode}:displayProperties
  */
 const displayProperties = {
-	async get(tenantCode, orgId) {
-		return get(await buildKey({ tenantCode, orgId, ns: 'displayProperties', id: '' }))
+	async get(tenantCode, orgCode) {
+		// Try org-specific cache first
+		const orgSpecific = await get(await buildKey({ tenantCode, orgId: orgCode, ns: 'displayProperties', id: '' }))
+		if (orgSpecific) {
+			console.log(`💾 Display properties found in org-specific cache: tenant:${tenantCode}:org:${orgCode}`)
+			return orgSpecific
+		}
+
+		// Fallback to tenant-only cache
+		const tenantOnly = await get(await buildKey({ tenantCode, orgId: '', ns: 'displayProperties', id: '' }))
+		if (tenantOnly) {
+			console.log(`💾 Display properties found in tenant-only cache: tenant:${tenantCode}`)
+			return tenantOnly
+		}
+
+		console.log(`❌ Display properties cache miss for tenant:${tenantCode} org:${orgCode}`)
+		return null
 	},
 
-	async set(tenantCode, orgId, propertiesData) {
-		return setScoped({
+	async set(tenantCode, orgCode, propertiesData) {
+		// Cache at org-specific level
+		await setScoped({
 			tenantCode,
-			orgId,
+			orgId: orgCode,
 			ns: 'displayProperties',
 			id: '',
 			value: propertiesData,
 		})
+
+		// Also cache at tenant-only level as fallback
+		await setScoped({
+			tenantCode,
+			orgId: '',
+			ns: 'displayProperties',
+			id: '',
+			value: propertiesData,
+		})
+
+		console.log(
+			`💾 Display properties cached at both levels: tenant:${tenantCode}:org:${orgCode} and tenant:${tenantCode}`
+		)
 	},
 
-	async delete(tenantCode, orgId) {
-		return delScoped({ tenantCode, orgId, ns: 'displayProperties', id: '' })
+	async delete(tenantCode, orgCode) {
+		// Delete both org-specific and tenant-only caches
+		await delScoped({ tenantCode, orgId: orgCode, ns: 'displayProperties', id: '' })
+		await delScoped({ tenantCode, orgId: '', ns: 'displayProperties', id: '' })
+		console.log(
+			`🗑️ Display properties cache deleted at both levels: tenant:${tenantCode}:org:${orgCode} and tenant:${tenantCode}`
+		)
 	},
 }
 
@@ -788,29 +1024,29 @@ const userExistence = {
 
 /**
  * User Extensions Cache Helpers
- * Pattern: tenant:${tenantCode}:org:${orgId}:userExtensions:${userId}
+ * Pattern: tenant:${tenantCode}:org:${orgCode}:userExtensions:${userId}
  */
 const userExtensions = {
-	async get(tenantCode, orgId, userId) {
-		return get(await buildKey({ tenantCode, orgId, ns: 'userExtensions', id: userId }))
+	async get(tenantCode, orgCode, userId) {
+		return get(await buildKey({ tenantCode, orgId: orgCode, ns: 'userExtensions', id: userId }))
 	},
 
-	async set(tenantCode, orgId, userId, extensionData) {
+	async set(tenantCode, orgCode, userId, extensionData) {
 		// Don't cache sensitive data like email
 		const sanitizedData = { ...extensionData }
 		if (sanitizedData.email) delete sanitizedData.email
 
 		return setScoped({
 			tenantCode,
-			orgId,
+			orgId: orgCode,
 			ns: 'userExtensions',
 			id: userId,
 			value: sanitizedData,
 		})
 	},
 
-	async delete(tenantCode, orgId, userId) {
-		return delScoped({ tenantCode, orgId, ns: 'userExtensions', id: userId })
+	async delete(tenantCode, orgCode, userId) {
+		return delScoped({ tenantCode, orgId: orgCode, ns: 'userExtensions', id: userId })
 	},
 }
 

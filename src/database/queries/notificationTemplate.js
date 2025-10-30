@@ -3,16 +3,34 @@ const { Op } = require('sequelize')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class NotificationTemplateData {
 	static async findOne(filter, tenantCode, options = {}) {
 		try {
+			// Try cache first if we have code and can determine org context
+			if (filter.code && filter.organization_code && typeof filter.organization_code === 'string') {
+				try {
+					const cachedTemplate = await cacheHelper.notificationTemplates.get(
+						tenantCode,
+						filter.organization_code,
+						filter.code
+					)
+					if (cachedTemplate) {
+						console.log(`💾 Template ${filter.code} retrieved from cache via findOne`)
+						return cachedTemplate
+					}
+				} catch (cacheError) {
+					console.log(`Cache lookup failed for template ${filter.code}, continuing with database query`)
+				}
+			}
+
 			filter.tenant_code = tenantCode
 
 			// Safe merge: tenant filtering cannot be overridden by options.where
 			const { where: optionsWhere, ...otherOptions } = options
 
-			return await NotificationTemplate.findOne({
+			const result = await NotificationTemplate.findOne({
 				where: {
 					...optionsWhere, // Allow additional where conditions
 					...filter, // But tenant filtering takes priority
@@ -20,6 +38,23 @@ module.exports = class NotificationTemplateData {
 				...otherOptions,
 				raw: true,
 			})
+
+			// Cache the result if we have the required parameters
+			if (result && filter.code && filter.organization_code && typeof filter.organization_code === 'string') {
+				try {
+					await cacheHelper.notificationTemplates.set(
+						tenantCode,
+						filter.organization_code,
+						filter.code,
+						result
+					)
+					console.log(`💾 Template ${filter.code} cached via findOne`)
+				} catch (cacheError) {
+					console.log(`Failed to cache template ${filter.code}:`, cacheError)
+				}
+			}
+
+			return result
 		} catch (error) {
 			return error
 		}
@@ -88,6 +123,25 @@ module.exports = class NotificationTemplateData {
 
 	static async findOneEmailTemplate(code, orgCodeParam, tenantCodeParam) {
 		try {
+			// Quick cache check for simple cases (single org/tenant codes)
+			if (typeof orgCodeParam === 'string' && typeof tenantCodeParam === 'string') {
+				try {
+					const cachedTemplate = await cacheHelper.notificationTemplates.get(
+						tenantCodeParam,
+						orgCodeParam,
+						code
+					)
+					if (cachedTemplate) {
+						console.log(
+							`💾 Template ${code} retrieved from cache: tenant:${tenantCodeParam}:org:${orgCodeParam}`
+						)
+						return cachedTemplate
+					}
+				} catch (cacheError) {
+					console.log(`Cache lookup failed for template ${code}, continuing with database query`)
+				}
+			}
+
 			const defaults = await getDefaults()
 			if (!defaults.orgCode) {
 				return responses.failureResponse({
@@ -197,6 +251,16 @@ module.exports = class NotificationTemplateData {
 				const footer = await this.getEmailFooter(selectedTemplate.email_footer)
 				if (footer && footer.body) {
 					selectedTemplate.body += footer.body
+				}
+			}
+
+			// Cache the result for simple cases (single org/tenant codes)
+			if (selectedTemplate && typeof orgCodeParam === 'string' && typeof tenantCodeParam === 'string') {
+				try {
+					await cacheHelper.notificationTemplates.set(tenantCodeParam, orgCodeParam, code, selectedTemplate)
+					console.log(`💾 Template ${code} cached: tenant:${tenantCodeParam}:org:${orgCodeParam}`)
+				} catch (cacheError) {
+					console.log(`Failed to cache template ${code}:`, cacheError)
 				}
 			}
 

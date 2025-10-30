@@ -22,11 +22,24 @@ module.exports = class issuesHelper {
 
 	static async create(bodyData, decodedToken, tenantCode) {
 		try {
-			const userDetails = await menteeExtensionQueries.getMenteeExtension(
-				decodedToken.id,
-				['name', 'user_id', 'email'],
-				tenantCode
-			)
+			// Try cache first using logged-in user's organization context
+			let userDetails = await cacheHelper.mentee.get(tenantCode, decodedToken.organization_code, decodedToken.id)
+			if (!userDetails) {
+				userDetails = await menteeExtensionQueries.getMenteeExtension(
+					decodedToken.id,
+					['name', 'user_id', 'email'],
+					tenantCode
+				)
+				// Cache the result under logged-in user's organization context
+				if (userDetails) {
+					await cacheHelper.mentee.set(
+						tenantCode,
+						decodedToken.organization_code,
+						decodedToken.id,
+						userDetails
+					)
+				}
+			}
 			if (!userDetails) throw createUnauthorizedResponse('USER_NOT_FOUND')
 
 			const name = userDetails.name
