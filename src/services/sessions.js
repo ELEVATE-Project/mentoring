@@ -14,6 +14,7 @@ const menteeExtensionQueries = require('@database/queries/userExtension')
 const postSessionQueries = require('@database/queries/postSessionDetail')
 const entityTypeQueries = require('@database/queries/entityType')
 const entityTypeCache = require('@helpers/entityTypeCache')
+const cacheHelper = require('@generics/cacheHelper')
 const entitiesQueries = require('@database/queries/entity')
 const { Op } = require('sequelize')
 const notificationQueries = require('@database/queries/notificationTemplate')
@@ -573,7 +574,16 @@ module.exports = class SessionsHelper {
 			// To determine the session is created by manager or mentor we need to fetch the session details first
 			// Then compare mentor_id and created_by information
 			// If manager is the session creator then no need to check Mentor extension data
-			let sessionDetail = await sessionQueries.findById(sessionId, tenantCode)
+
+			// Try cache first for session details
+			let sessionDetail = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
+			if (!sessionDetail) {
+				sessionDetail = await sessionQueries.findById(sessionId, tenantCode)
+				// Cache the session for future requests
+				if (sessionDetail) {
+					await cacheHelper.sessions.set(tenantCode, orgCode, sessionId, sessionDetail)
+				}
+			}
 			if (!sessionDetail) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
@@ -804,6 +814,14 @@ module.exports = class SessionsHelper {
 					)
 					message = 'SESSION_DELETED_SUCCESSFULLY'
 
+					// Cache invalidation: Remove deleted session from cache
+					try {
+						await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
+						console.log(`🗑️ Session ${sessionId} cache deleted after session deletion`)
+					} catch (cacheError) {
+						console.error(`❌ Failed to delete session cache after deletion:`, cacheError)
+					}
+
 					// Delete scheduled jobs associated with deleted session
 					for (let jobIndex = 0; jobIndex < sessionRelatedJobIds.length; jobIndex++) {
 						// Remove scheduled notification jobs using the jobIds
@@ -941,6 +959,15 @@ module.exports = class SessionsHelper {
 				}
 				message = 'SESSION_UPDATED_SUCCESSFULLY'
 				updatedSessionData = updatedRows[0].dataValues
+
+				// Cache invalidation: Delete old cache and set new updated session data
+				try {
+					await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
+					await cacheHelper.sessions.set(tenantCode, orgCode, sessionId, updatedSessionData)
+					console.log(`🔄 Session ${sessionId} cache updated after session modification`)
+				} catch (cacheError) {
+					console.error(`❌ Failed to update session cache after update:`, cacheError)
+				}
 				// check what are the values changed only if session is updated/deleted by manager
 				// This is to decide on which email to trigger
 				if (isSessionCreatedByManager) {
@@ -1977,7 +2004,15 @@ module.exports = class SessionsHelper {
 			}
 			// search for session only if session data not passed
 			if (!session || Object.keys(session).length === 0) {
-				session = await sessionQueries.findById(sessionId, tenantCode)
+				// Try cache first for session details
+				session = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
+				if (!session) {
+					session = await sessionQueries.findById(sessionId, tenantCode)
+					// Cache the session for future requests
+					if (session) {
+						await cacheHelper.sessions.set(tenantCode, orgCode, sessionId, session)
+					}
+				}
 			}
 			if (!session) {
 				return responses.failureResponse({
@@ -2404,7 +2439,14 @@ module.exports = class SessionsHelper {
 
 	static async share(sessionId, tenantCode) {
 		try {
-			const session = await sessionQueries.findById(sessionId, tenantCode)
+			// Try cache first for session details
+			let session = await cacheHelper.sessions.get(tenantCode, null, sessionId)
+			if (!session) {
+				session = await sessionQueries.findById(sessionId, tenantCode)
+				if (session) {
+					await cacheHelper.sessions.set(tenantCode, null, sessionId, session)
+				}
+			}
 			if (!session) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
@@ -2422,6 +2464,16 @@ module.exports = class SessionsHelper {
 					{ share_link: shareLink },
 					tenantCode
 				)
+
+				// Cache invalidation: Update cache with new share_link
+				try {
+					await cacheHelper.sessions.delete(tenantCode, null, sessionId)
+					session.share_link = shareLink
+					await cacheHelper.sessions.set(tenantCode, null, sessionId, session)
+					console.log(`🔄 Session ${sessionId} cache updated with new share_link`)
+				} catch (cacheError) {
+					console.error(`❌ Failed to update session cache after share_link update:`, cacheError)
+				}
 			}
 			return responses.successResponse({
 				message: 'SESSION_LINK_GENERATED_SUCCESSFULLY',
@@ -2857,7 +2909,14 @@ module.exports = class SessionsHelper {
 
 	static async getRecording(sessionId, tenantCode) {
 		try {
-			const session = await sessionQueries.findById(sessionId, tenantCode)
+			// Try cache first for session details
+			let session = await cacheHelper.sessions.get(tenantCode, null, sessionId)
+			if (!session) {
+				session = await sessionQueries.findById(sessionId, tenantCode)
+				if (session) {
+					await cacheHelper.sessions.set(tenantCode, null, sessionId, session)
+				}
+			}
 			if (!session) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',

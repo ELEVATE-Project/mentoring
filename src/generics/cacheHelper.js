@@ -11,6 +11,8 @@ const userQueries = require('@database/queries/userExtension')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const entityTypeQueries = require('@database/queries/entityType')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
+const sessionQueries = require('@database/queries/sessions')
+const permissionQueries = require('@database/queries/permissions')
 
 /** CONFIG */
 const CACHE_CONFIG = (() => {
@@ -312,17 +314,37 @@ async function evictTenantByPattern(tenantCode, { patternSuffix = '*' } = {}) {
  * Pattern: tenant:${tenantCode}:org:${orgCode}:sessions:id
  */
 const sessions = {
-	async get(tenantCode, orgId, sessionId) {
-		return getOrSet({
-			tenantCode,
-			orgId,
-			ns: 'sessions',
-			id: sessionId,
-			fetchFn: () => null, // Return null if not in cache, caller handles DB fetch
-		})
+	async get(tenantCode, orgCode, sessionId) {
+		try {
+			const cacheKey = await buildKey({ tenantCode, orgId: orgCode, ns: 'sessions', id: sessionId })
+			const cachedSession = await get(cacheKey)
+			if (cachedSession) {
+				console.log(`💾 Session ${sessionId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`)
+				return cachedSession
+			}
+
+			// Cache miss - fallback to database query
+			console.log(
+				`💾 Session ${sessionId} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
+			)
+			const sessionFromDb = await sessionQueries.findById(sessionId, tenantCode)
+
+			if (sessionFromDb) {
+				// Cache the fetched data for future requests
+				await this.set(tenantCode, orgCode, sessionId, sessionFromDb)
+				console.log(
+					`💾 Session ${sessionId} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
+				)
+			}
+
+			return sessionFromDb
+		} catch (error) {
+			console.error(`❌ Failed to get session ${sessionId} from cache/database:`, error)
+			return null
+		}
 	},
 
-	async set(tenantCode, orgId, sessionId, sessionData, customTtl = null) {
+	async set(tenantCode, orgCode, sessionId, sessionData, customTtl = null) {
 		// Calculate special TTL for sessions based on end_date + 1 day
 		let ttl = customTtl
 		if (!ttl && sessionData.end_date) {
@@ -335,7 +357,7 @@ const sessions = {
 
 		return setScoped({
 			tenantCode,
-			orgId,
+			orgId: orgCode,
 			ns: 'sessions',
 			id: sessionId,
 			value: sessionData,
@@ -343,12 +365,12 @@ const sessions = {
 		})
 	},
 
-	async delete(tenantCode, orgId, sessionId) {
-		return delScoped({ tenantCode, orgId, ns: 'sessions', id: sessionId })
+	async delete(tenantCode, orgCode, sessionId) {
+		return delScoped({ tenantCode, orgId: orgCode, ns: 'sessions', id: sessionId })
 	},
 
-	async reset(tenantCode, orgId, sessionId, sessionData, customTtl = null) {
-		return this.set(tenantCode, orgId, sessionId, sessionData, customTtl)
+	async reset(tenantCode, orgCode, sessionId, sessionData, customTtl = null) {
+		return this.set(tenantCode, orgCode, sessionId, sessionData, customTtl)
 	},
 }
 
@@ -775,22 +797,39 @@ const notificationTemplates = {
  */
 const displayProperties = {
 	async get(tenantCode, orgCode) {
-		// Try org-specific cache first
-		const orgSpecific = await get(await buildKey({ tenantCode, orgId: orgCode, ns: 'displayProperties', id: '' }))
-		if (orgSpecific) {
-			console.log(`💾 Display properties found in org-specific cache: tenant:${tenantCode}:org:${orgCode}`)
-			return orgSpecific
-		}
+		try {
+			// Try org-specific cache first
+			const orgSpecific = await get(
+				await buildKey({ tenantCode, orgId: orgCode, ns: 'displayProperties', id: '' })
+			)
+			if (orgSpecific) {
+				console.log(`💾 Display properties found in org-specific cache: tenant:${tenantCode}:org:${orgCode}`)
+				return orgSpecific
+			}
 
-		// Fallback to tenant-only cache
-		const tenantOnly = await get(await buildKey({ tenantCode, orgId: '', ns: 'displayProperties', id: '' }))
-		if (tenantOnly) {
-			console.log(`💾 Display properties found in tenant-only cache: tenant:${tenantCode}`)
-			return tenantOnly
-		}
+			// Fallback to tenant-only cache
+			const tenantOnly = await get(await buildKey({ tenantCode, orgId: '', ns: 'displayProperties', id: '' }))
+			if (tenantOnly) {
+				console.log(`💾 Display properties found in tenant-only cache: tenant:${tenantCode}`)
+				return tenantOnly
+			}
 
-		console.log(`❌ Display properties cache miss for tenant:${tenantCode} org:${orgCode}`)
-		return null
+			// Cache miss - fallback to building display properties from entity types
+			console.log(
+				`💾 Display properties cache miss for tenant:${tenantCode} org:${orgCode}, building from entity types`
+			)
+
+			// This is a complex fallback - display properties are typically built from entity types
+			// We'll return null here and let the calling service handle the fallback
+			// This ensures we don't duplicate the complex entity type processing logic
+			console.log(
+				`❌ Display properties cache miss for tenant:${tenantCode} org:${orgCode} - caller should handle fallback`
+			)
+			return null
+		} catch (error) {
+			console.error(`❌ Failed to get display properties from cache:`, error)
+			return null
+		}
 	},
 
 	async set(tenantCode, orgCode, propertiesData) {
@@ -834,8 +873,29 @@ const displayProperties = {
  */
 const permissions = {
 	async get(role) {
-		const key = `permissions:role:${role}`
-		return get(key)
+		try {
+			const key = `permissions:role:${role}`
+			const cachedPermissions = await get(key)
+			if (cachedPermissions) {
+				console.log(`💾 Permissions for role ${role} retrieved from cache`)
+				return cachedPermissions
+			}
+
+			// Cache miss - fallback to database query
+			console.log(`💾 Permissions for role ${role} cache miss, fetching from database`)
+			const permissionsFromDb = await permissionQueries.findAllPermissions({ role_title: role })
+
+			if (permissionsFromDb && permissionsFromDb.length > 0) {
+				// Cache the fetched data for future requests
+				await this.set(role, permissionsFromDb)
+				console.log(`💾 Permissions for role ${role} fetched from database and cached`)
+			}
+
+			return permissionsFromDb || []
+		} catch (error) {
+			console.error(`❌ Failed to get permissions for role ${role} from cache/database:`, error)
+			return []
+		}
 	},
 
 	async set(role, permissionsData) {
