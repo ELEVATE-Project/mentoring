@@ -276,15 +276,15 @@ exports.getConnectionsDetails = async (
 	searchText = '',
 	userId,
 	organizationIds = [],
-	roles = []
+	roles = [],
+	sortBy = 'ASC',           // Add this parameter with default
+	sortField = 'mv.name'     // Add this parameter with default
 ) => {
 	try {
 		let additionalFilter = ''
 		let orgFilter = ''
 		let filterClause = ''
 		let rolesFilter = ''
-		let sortBy = 'ASC'
-		let sortField = 'mv.name'
 		let sortClause = `ORDER BY LOWER(${sortField}) ${sortBy}`
 
 		if (searchText) {
