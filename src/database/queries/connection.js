@@ -285,6 +285,12 @@ exports.getConnectionsDetails = async (
 		let orgFilter = ''
 		let filterClause = ''
 		let rolesFilter = ''
+		
+		const validSortOrders = [common.SORT_ORDER.ASCENDING, common.SORT_ORDER.DESCENDING]
+		sortBy = validSortOrders.includes(sortBy.toUpperCase()) ? sortBy.toUpperCase() : common.SORT_ORDER.ASCENDING
+		const validSortFields = ['mv.name', 'mv.designation', 'mv.experience', 'mv.created_at']
+		sortField = validSortFields.includes(sortField) ? sortField : 'mv.name'
+		
 		let sortClause = `ORDER BY LOWER(${sortField}) ${sortBy}`
 
 		if (searchText) {
