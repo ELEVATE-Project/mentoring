@@ -1022,7 +1022,7 @@ exports.getUpcomingSessionsOfMentee = async (menteeUserId, sessionType) => {
 		const query = `
 			SELECT s.id, s.title, s.mentor_id, s.start_date, s.end_date, s.type, s.created_by
 			FROM sessions s
-			INNER JOIN  session_attendees sa ON s.id = sa.session_id
+			LEFT JOIN  session_attendees sa ON s.id = sa.session_id
 			WHERE sa.mentee_id = :menteeUserId
 			AND s.type = :sessionType
 			AND s.start_date > :currentTime
@@ -1071,7 +1071,7 @@ exports.getSessionsCreatedByMentor = async (mentorUserId) => {
 		const query = `
 				SELECT s.*, sa.mentee_id
 				FROM ${Session.tableName} s
-				INNER JOIN session_attendees sa ON s.id = sa.session_id
+				LEFT JOIN session_attendees sa ON s.id = sa.session_id
 				WHERE s.mentor_id = :mentorUserId 
 				AND s.start_date > :currentTime
 				AND s.deleted_at IS NULL
@@ -1097,7 +1097,7 @@ exports.getSessionsAssignedToMentor = async (mentorUserId) => {
 		const query = `
 				SELECT s.*, sa.mentee_id
 				FROM ${Session.tableName} s
-				INNER JOIN session_attendees sa ON s.id = sa.session_id
+				LEFT JOIN session_attendees sa ON s.id = sa.session_id
 				WHERE s.mentor_id = :mentorUserId 
 				AND s.start_date > :currentTime
 				AND s.deleted_at IS NULL

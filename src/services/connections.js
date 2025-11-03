@@ -412,7 +412,9 @@ module.exports = class ConnectionHelper {
 				searchText,
 				userId,
 				organizationIds,
-				roles
+				roles,
+				'ASC',
+				'mv.name'
 			)
 
 			if (extensionDetails.count === 0 || extensionDetails.data.length === 0) {
