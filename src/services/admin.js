@@ -50,6 +50,12 @@ class NotificationHelper {
 						body: utils.composeEmailBody(template.body, { ...templateData, recipientName: recipient.name }),
 					},
 				}
+				console.log('*********************email***************')
+				console.log('Sending generic notification email:')
+				console.log('Template Code:', templateCode)
+				console.log('Recipient:', recipient.name, '-', recipient.email)
+				console.log('Payload:', JSON.stringify(payload, null, 2))
+				console.log('*********************email***************')
 				await kafkaCommunication.pushEmailToKafka(payload)
 			})
 
@@ -104,6 +110,13 @@ class NotificationHelper {
 							body: utils.composeEmailBody(template.body, templateData),
 						},
 					}
+					console.log('*********************email***************')
+					console.log('Sending session notification email:')
+					console.log('Template Code:', templateCode)
+					console.log('Session:', session.title)
+					console.log('Recipient:', recipient.name, '-', recipient.email)
+					console.log('Payload:', JSON.stringify(payload, null, 2))
+					console.log('*********************email***************')
 					await kafkaCommunication.pushEmailToKafka(payload)
 				})
 
@@ -231,6 +244,15 @@ module.exports = class AdminService {
 
 				// Notify connected mentors about mentee deletion
 				if (connectedMentors.length > 0) {
+					console.log('*********************email***************')
+					console.log('USER DELETE - Notifying connected mentors about mentee deletion')
+					console.log('Mentee Name:', userInfo.name || 'User')
+					console.log('Connected Mentors Count:', connectedMentors.length)
+					console.log(
+						'Connected Mentors:',
+						connectedMentors.map((m) => `${m.name} (${m.email})`)
+					)
+					console.log('*********************email***************')
 					result.isMentorNotifiedAboutMenteeDeletion = await this.notifyMentorsAboutMenteeDeletion(
 						connectedMentors,
 						userInfo.name || 'User',
@@ -264,6 +286,11 @@ module.exports = class AdminService {
 
 			if (isMentor) {
 				// Handle mentor-specific deletion tasks
+				console.log('*********************email***************')
+				console.log('USER DELETE - Processing mentor deletion')
+				console.log('Mentor ID:', userId)
+				console.log('Mentor Name:', userInfo.name)
+				console.log('*********************email***************')
 				await this.handleMentorDeletion(userId, userInfo, result)
 				mentorDetailsRemoved = result.mentorDetailsRemoved
 			}
@@ -280,6 +307,14 @@ module.exports = class AdminService {
 				) // allSessionRequestIds = ["1", "2"]
 
 				if (requestedSessions.length > 0) {
+					console.log('*********************email***************')
+					console.log('USER DELETE - Notifying mentors about requested session deletions')
+					console.log('Requested Sessions Count:', requestedSessions.length)
+					console.log(
+						'Sessions:',
+						requestedSessions.map((s) => s.title)
+					)
+					console.log('*********************email***************')
 					result.isRequestedSessionMentorNotified = await this.NotifySessionRequestedUsers(
 						requestedSessions,
 						false,
@@ -289,6 +324,14 @@ module.exports = class AdminService {
 				}
 
 				if (isMentor && receivedSessions.length > 0) {
+					console.log('*********************email***************')
+					console.log('USER DELETE - Notifying mentees about received session deletions')
+					console.log('Received Sessions Count:', receivedSessions.length)
+					console.log(
+						'Sessions:',
+						receivedSessions.map((s) => s.title)
+					)
+					console.log('*********************email***************')
 					result.isRequestedSessionMenteeNotified = await this.NotifySessionRequestedUsers(
 						receivedSessions,
 						true,
@@ -299,6 +342,11 @@ module.exports = class AdminService {
 			}
 
 			// send email to SM when mentee is deleted from the private sessions if it is upcoming
+			console.log('*********************email***************')
+			console.log('USER DELETE - Checking for session manager notifications')
+			console.log('User ID:', userId)
+			console.log('User Name:', userInfo.name)
+			console.log('*********************email***************')
 			await this.notifySessionManagerIfMenteeDeleted(userId, userInfo, result)
 
 			// Always check and remove mentee extension (user can be both mentor and mentee)
@@ -340,6 +388,14 @@ module.exports = class AdminService {
 			// Step 7: Handle private session cancellations and notifications
 			try {
 				if (privateSessions.length > 0) {
+					console.log('*********************email***************')
+					console.log('USER DELETE - Notifying about private session cancellations')
+					console.log('Private Sessions Count:', privateSessions.length)
+					console.log(
+						'Private Sessions:',
+						privateSessions.map((s) => `${s.title} (ID: ${s.id})`)
+					)
+					console.log('*********************email***************')
 					result.isPrivateSessionsCancelled = await this.notifyAndCancelPrivateSessions(
 						privateSessions,
 						userInfo.organization_id || ''
@@ -372,6 +428,15 @@ module.exports = class AdminService {
 				result.isSessionRequestsRejected !== false &&
 				result.isSessionManagerNotified !== false &&
 				result.isAssignedSessionsUpdated !== false
+
+			console.log('*********************email***************')
+			console.log('USER DELETE - SUMMARY OF EMAIL OPERATIONS')
+			console.log('User ID:', userId)
+			console.log('User Name:', userInfo.name)
+			console.log('Is Mentor:', isMentor)
+			console.log('All Operations Successful:', allOperationsSuccessful)
+			console.log('Final Result:', JSON.stringify(result, null, 2))
+			console.log('*********************email***************')
 
 			if (allOperationsSuccessful) {
 				return responses.successResponse({
