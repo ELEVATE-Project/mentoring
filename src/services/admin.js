@@ -324,14 +324,11 @@ module.exports = class AdminService {
 					userId,
 					common.SESSION_TYPE.PUBLIC
 				)
-				// Deduplicate sessions to prevent double seat increment
-				const allSessionIds = [
-					...new Set([...privateSessions.map((s) => s.id), ...upcomingPublicSessions.map((s) => s.id)]),
-				]
-				for (const sessionId of allSessionIds) {
+				const allUpcomingSessions = [...privateSessions, ...upcomingPublicSessions]
+				for (const session of allUpcomingSessions) {
 					await sessionQueries.updateRecords(
 						{ seats_remaining: literal('seats_remaining + 1') },
-						{ where: { id: sessionId } }
+						{ where: { id: session.id } }
 					)
 				}
 				result.isSeatsUpdate = true

@@ -458,7 +458,7 @@ module.exports = class OrgAdminService {
 				//unenroll from upcoming session
 				const menteeDetails = await menteeQueries.getMenteeExtension(userId)
 				if (menteeDetails?.user_id) {
-					await adminService.unenrollFromUpcomingSessions(userId)
+					//await adminService.unenrollFromUpcomingSessions(userId)
 					deactivatedIdsList.push(userId)
 				}
 
