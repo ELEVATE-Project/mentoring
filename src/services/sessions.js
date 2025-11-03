@@ -64,7 +64,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 						- Create session data.
 	 */
 
-	static async create(bodyData, loggedInUserId, orgId, isAMentor, notifyUser) {
+	static async create(bodyData, loggedInUserId, orgId, isAMentor, notifyUser, tenantCode) {
 		try {
 			let skipValidation = bodyData.type == common.SESSION_TYPE.PRIVATE ? true : false
 			// check if session mentor is added in the mentee list
@@ -322,6 +322,20 @@ module.exports = class SessionsHelper {
 					// This is the template used to send email to session mentees when resource added
 					let templateData = await notificationQueries.findOneEmailTemplate(resourceTemplate, orgId)
 
+					const tenantInfo = await userRequests.getTenantDetails(tenantCode)
+
+					const domains = tenantInfo?.data?.result?.domains
+					const tenantDomain =
+						Array.isArray(domains) && domains.length > 0
+							? domains.find((d) => d.is_primary)?.domain || domains[0].domain
+							: null
+					if (!tenantDomain) {
+						return responses.failureResponse({
+							message: 'TENANT_DOMAIN_NOT_FOUND',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
 					sessionAttendees.forEach(async (attendee) => {
 						const payload = {
 							type: 'email',
@@ -331,7 +345,7 @@ module.exports = class SessionsHelper {
 								body: utils.composeEmailBody(templateData.body, {
 									mentorName: data.mentor_name,
 									sessionTitle: data.title,
-									sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + data.id,
+									sessionLink: 'https://' + tenantDomain + '/session-detail/' + data.id,
 									startDate: utils.getTimeZone(data.start_date, common.dateFormat, data.time_zone),
 									startTime: utils.getTimeZone(data.start_date, common.timeFormat, data.time_zone),
 								}),
@@ -448,7 +462,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - Update session data.
 	 */
 
-	static async update(sessionId, bodyData, userId, method, orgId, notifyUser) {
+	static async update(sessionId, bodyData, userId, method, orgId, notifyUser, tenantCode) {
 		let isSessionReschedule = false
 		let isSessionCreatedByManager = false
 		let skipValidation = true
@@ -915,6 +929,24 @@ module.exports = class SessionsHelper {
 				// 	)
 				// }
 
+				let tenantDomain
+				if (preResourceSendEmail || postResourceSendEmail) {
+					const tenantInfo = await userRequests.getTenantDetails(tenantCode)
+
+					const domains = tenantInfo?.data?.result?.domains
+					tenantDomain =
+						Array.isArray(domains) && domains.length > 0
+							? domains.find((d) => d.is_primary)?.domain || domains[0].domain
+							: null
+					if (!tenantDomain) {
+						return responses.failureResponse({
+							message: 'TENANT_DOMAIN_NOT_FOUND',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+				}
+
 				// send mail associated with action to session mentees
 				sessionAttendees.forEach(async (attendee) => {
 					if (method == common.DELETE_METHOD) {
@@ -1063,7 +1095,7 @@ module.exports = class SessionsHelper {
 								body: utils.composeEmailBody(preOrPostEmailTemplate.body, {
 									mentorName: sessionDetail.mentor_name,
 									sessionTitle: sessionDetail.title,
-									sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetail.id,
+									sessionLink: 'https://' + tenantDomain + '/session-detail/' + sessionDetail.id,
 									startDate: utils.getTimeZone(
 										sessionDetail.start_date,
 										common.dateFormat,
@@ -3025,7 +3057,7 @@ module.exports = class SessionsHelper {
 
 	static async bulkSessionCreate(filePath, tokenInformation) {
 		try {
-			const { id, organization_id } = tokenInformation
+			const { id, organization_id, tenant_code } = tokenInformation
 			const downloadCsv = await this.downloadCSV(filePath)
 			const csvData = await csv().fromFile(downloadCsv.result.downloadPath)
 
@@ -3138,6 +3170,7 @@ module.exports = class SessionsHelper {
 						email: userDetail.email,
 						organization_id,
 						org_name: orgDetails.name,
+						tenant_code: tenant_code,
 					},
 				},
 				{

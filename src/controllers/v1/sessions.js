@@ -40,7 +40,8 @@ module.exports = class Sessions {
 					req.decodedToken.id,
 					req.method,
 					req.decodedToken.organization_id,
-					notifyUser
+					notifyUser,
+					req.decodedToken.tenant_code
 				)
 
 				return sessionUpdated
@@ -48,12 +49,14 @@ module.exports = class Sessions {
 				if (req.headers.timezone) {
 					req.body['time_zone'] = req.headers.timezone
 				}
+
 				const sessionCreated = await sessionService.create(
 					req.body,
 					req.decodedToken.id,
 					req.decodedToken.organization_id,
 					isAMentor(req.decodedToken.roles),
-					notifyUser
+					notifyUser,
+					req.decodedToken.tenant_code
 				)
 
 				return sessionCreated
@@ -380,7 +383,11 @@ module.exports = class Sessions {
 	 */
 	async bulkSessionCreate(req) {
 		try {
-			const sessionUploadRes = await sessionService.bulkSessionCreate(req.body.file_path, req.decodedToken)
+			const sessionUploadRes = await sessionService.bulkSessionCreate(
+				req.body.file_path,
+				req.decodedToken,
+				req.decodedToken.tenant_code
+			)
 			return sessionUploadRes
 		} catch (error) {
 			return error
