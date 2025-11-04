@@ -345,7 +345,7 @@ module.exports = class SessionsHelper {
 								body: utils.composeEmailBody(templateData.body, {
 									mentorName: data.mentor_name,
 									sessionTitle: data.title,
-									sessionLink: 'https://' + tenantDomain + '/session-detail/' + data.id,
+									sessionLink: 'https://' + tenantDomain + '/mentoring/session-detail/' + data.id,
 									startDate: utils.getTimeZone(data.start_date, common.dateFormat, data.time_zone),
 									startTime: utils.getTimeZone(data.start_date, common.timeFormat, data.time_zone),
 								}),
@@ -1095,7 +1095,8 @@ module.exports = class SessionsHelper {
 								body: utils.composeEmailBody(preOrPostEmailTemplate.body, {
 									mentorName: sessionDetail.mentor_name,
 									sessionTitle: sessionDetail.title,
-									sessionLink: 'https://' + tenantDomain + '/session-detail/' + sessionDetail.id,
+									sessionLink:
+										'https://' + tenantDomain + '/mentoring/session-detail/' + sessionDetail.id,
 									startDate: utils.getTimeZone(
 										sessionDetail.start_date,
 										common.dateFormat,
