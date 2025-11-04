@@ -613,7 +613,6 @@ module.exports = class ConnectionHelper {
 			})
 		} catch (error) {
 			console.error('Error checking connection existence:', error)
-			// Don't throw error to avoid breaking the main rejection flow
 			throw error
 		}
 	}
