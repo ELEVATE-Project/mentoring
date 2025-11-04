@@ -239,11 +239,14 @@ module.exports = class AdminService {
 						result.isMenteeNotifiedAboutMentorDeletion = await this.notifyMenteesAboutMentorDeletion(
 							connectedMentees,
 							userInfo.name || 'Mentor',
-							orgId
+							userInfo.organization_id || ''
 						)
 					} else {
 						result.isMenteeNotifiedAboutMentorDeletion = true
 					}
+				} else {
+					// User is not a mentor, so no mentees to notify
+					result.isMenteeNotifiedAboutMentorDeletion = true
 				}
 
 				// Delete user connections and requests from DB
@@ -268,6 +271,7 @@ module.exports = class AdminService {
 				result.isRemoveChatAvatar = true
 				result.isConnectionsAndRequestsRemoved = true
 				result.isMentorNotifiedAboutMenteeDeletion = true
+				result.isMenteeNotifiedAboutMentorDeletion = true
 			}
 
 			const defaultOrgId = await getDefaultOrgId()
