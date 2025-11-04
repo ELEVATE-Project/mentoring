@@ -28,7 +28,7 @@ module.exports = {
 			{
 				code: 'mentor_deletion_notification_email',
 				subject: 'Connection Removed',
-				body: `<p>Hi {menteeName},</p><p>Your connected mentor <strong>{mentorName}</strong> has been removed from the platform.</p><p>The connection history will remain available in your chat, but the mentor will no longer be accessible for new conversations or sessions.</p><p>You can continue to search for other mentors on the platform.</p>`,
+				body: `<p>Hi,</p><p>Your connected mentor <strong>{mentorName}</strong> has been removed from the platform.</p><p>The connection history will remain available in your chat, but the mentor will no longer be accessible for new conversations or sessions.</p><p>You can continue to search for other mentors on the platform.</p>`,
 			},
 			{
 				code: 'session_request_rejected_mentor_deletion_email',
