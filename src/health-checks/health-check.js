@@ -18,7 +18,7 @@ let health_check = async function (req, res) {
 		console.error('Health config validation failed:', err.message || err)
 		res.status(400).json({
 			id: 'mentoringService.Health.API',
-			ver: '1.0',
+			ver: '3.2',
 			ts: new Date(),
 			params: {
 				resmsgid: uuidv1(),
@@ -41,7 +41,7 @@ let healthCheckStatus = function (req, res) {
 let response = function (req, result) {
 	return {
 		id: 'mentoringService.Health.API',
-		ver: '1.0',
+		ver: '3.2',
 		ts: new Date(),
 		params: {
 			resmsgid: uuidv1(),
