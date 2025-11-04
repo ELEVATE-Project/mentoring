@@ -1678,12 +1678,16 @@ module.exports = class SessionsHelper {
 				creatorName = sessionCreatorName.name
 			}
 
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(
-				mentorId ? mentorId : session.mentor_id,
-				['name'],
-				true
-			)
-			session.mentor_name = mentorDetails.name
+			if (mentorId || session.mentor_id) {
+				const mentorDetails = await mentorExtensionQueries.getMentorExtension(
+					mentorId ? mentorId : session.mentor_id,
+					['name'],
+					true
+				)
+				session.mentor_name = mentorDetails.name
+			} else {
+				session.mentor_name = common.USER_NOT_FOUND
+			}
 
 			// check if the session is accessible to the user
 			let isAccessible = await this.checkIfSessionIsAccessible(session, userId, isAMentor)
@@ -1816,13 +1820,16 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(
-				mentorId ? mentorId : session.mentor_id,
-				['name'],
-				true
-			)
-
-			session.mentor_name = mentorDetails.name
+			if (mentorId || session.mentor_id) {
+				const mentorDetails = await mentorExtensionQueries.getMentorExtension(
+					mentorId ? mentorId : session.mentor_id,
+					['name'],
+					true
+				)
+				session.mentor_name = mentorDetails.name
+			} else {
+				session.mentor_name = common.USER_NOT_FOUND
+			}
 
 			const deletedRows = await sessionAttendeesQueries.unEnrollFromSession(sessionId, userId)
 			if (deletedRows === 0) {
