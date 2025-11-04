@@ -325,11 +325,14 @@ module.exports = class AdminService {
 					common.SESSION_TYPE.PUBLIC
 				)
 				const allUpcomingSessions = [...privateSessions, ...upcomingPublicSessions]
+				console.log('All Upcomming sessions', allUpcomingSessions)
 				for (const session of allUpcomingSessions) {
-					await sessionQueries.updateRecords(
+					const countResult = await sessionQueries.updateRecords(
 						{ seats_remaining: literal('seats_remaining + 1') },
 						{ where: { id: session.id } }
 					)
+					console.log('==============count result ', countResult)
+					return countResult
 				}
 				result.isSeatsUpdate = true
 			} catch (error) {
@@ -520,7 +523,7 @@ module.exports = class AdminService {
 	static async unenrollFromUpcomingSessions(userId) {
 		try {
 			const upcomingSessions = await sessionQueries.getAllUpcomingSessions(false)
-
+			console.log('-------------------orgadmin upcoming session', upcomingSessions)
 			const upcomingSessionsId = upcomingSessions.map((session) => session.id)
 			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
 				userId,
@@ -531,7 +534,9 @@ module.exports = class AdminService {
 			}
 			await Promise.all(
 				usersUpcomingSessions.map(async (session) => {
-					await sessionQueries.updateEnrollmentCount(session.session_id, true)
+					const resultcountOrg = await sessionQueries.updateEnrollmentCount(session.session_id, true)
+					console.log('-------------------orgadmin resultcountOrg', resultcountOrg)
+					return resultcountOrg
 				})
 			)
 
@@ -539,6 +544,7 @@ module.exports = class AdminService {
 				userId,
 				upcomingSessionsId
 			)
+			console.log('-------------------orgadmin unenrollFromUpcomingSessions', upcomingSessionsId)
 			return true
 		} catch (error) {
 			console.error('An error occurred in unenrollFromUpcomingSessions:', error)
