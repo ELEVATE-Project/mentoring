@@ -88,12 +88,15 @@ class NotificationHelper {
 
 				const emailPromises = recipients.map(async (recipient) => {
 					const templateData = {
+						...addionalData,
 						sessionName: session.title,
 						sessionDate: session.start_date ? moment.unix(session.start_date).format('DD-MM-YYYY') : '',
 						sessionTime: session.start_date ? moment.unix(session.start_date).format('hh:mm A') : '',
+						Date: session.start_date ? moment.unix(session.start_date).format('DD-MM-YYYY') : '',
+						Time: session.start_date ? moment.unix(session.start_date).format('hh:mm A') : '',
 						recipientName: recipient.name,
 						attendeeName: recipient.name,
-						...addionalData,
+						nameOfTheSession: session.title,
 					}
 
 					const payload = {
