@@ -580,4 +580,41 @@ module.exports = class ConnectionHelper {
 			// Don't throw error to avoid breaking the main rejection flow
 		}
 	}
+	/**
+	 * Check if a connection exists between the authenticated user and another user.
+	 * @param {string} user_id - The ID of the authenticated user initiating the check.
+	 * @param {Object} body - The request body containing connection-related data.
+	 * @param {string} body.friend_id - The ID of the user to check the connection against.
+	 * @returns {Promise<Object>} A success response indicating whether the connection exists.
+	 * @throws Will throw an error if an unexpected issue occurs during the check.
+	 */
+	static async checkConnectionIfExists(user_id, body) {
+		try {
+			const { friend_id } = body
+			let connectionExists = false
+			if (!friend_id) {
+				return responses.failureResponse({
+					responseCode: 'CLIENT_ERROR',
+					statusCode: httpStatusCode.bad_request,
+					message: 'FRIEND_ID_MISSING',
+				})
+			}
+
+			const connectionCheck = await connectionQueries.getConnection(user_id, friend_id)
+
+			if (connectionCheck) {
+				connectionExists = true
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CONNECTED_STATUS_FETCHED',
+				result: connectionExists,
+			})
+		} catch (error) {
+			console.error('Error checking connection existence:', error)
+			// Don't throw error to avoid breaking the main rejection flow
+			throw error
+		}
+	}
 }
