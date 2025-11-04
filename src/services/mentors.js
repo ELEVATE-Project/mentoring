@@ -89,7 +89,8 @@ module.exports = class MentorsHelper {
 				id,
 				filteredQuery,
 				saasFilter,
-				defaultRuleFilter
+				defaultRuleFilter,
+				menteeUserId
 			)
 
 			if (!upcomingSessions.data.length) {
@@ -101,10 +102,6 @@ module.exports = class MentorsHelper {
 						count: upcomingSessions.count,
 					},
 				})
-			}
-
-			if (menteeUserId && id != menteeUserId) {
-				upcomingSessions.data = await this.menteeSessionDetails(upcomingSessions.data, menteeUserId)
 			}
 
 			// Process entity types to add value labels.
