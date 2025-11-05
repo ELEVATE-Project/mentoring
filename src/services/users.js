@@ -91,50 +91,19 @@ module.exports = class UserHelper {
 					decodedToken.organization_code,
 					decodedToken.id
 				)
-
-				if (menteeExtension) {
-					console.log(`💾 Mentee extension for user ${decodedToken.id} retrieved from cache`)
-				} else {
-					// If not in cache, fetch from database
-					menteeExtension = await menteeQueries.getMenteeExtension(
-						decodedToken.id,
-						[],
-						false,
-						decodedToken.tenant_code
-					)
-
-					if (menteeExtension) {
-						// Cache the result for future use
-						try {
-							await cacheHelper.mentee.set(
-								decodedToken.tenant_code,
-								decodedToken.organization_code,
-								decodedToken.id,
-								menteeExtension
-							)
-							console.log(`💾 Mentee extension for user ${decodedToken.id} cached after fetch`)
-						} catch (cacheError) {
-							console.error(
-								`❌ Failed to cache mentee extension for user ${decodedToken.id}:`,
-								cacheError
-							)
-						}
-					}
-				}
-
-				if (!menteeExtension) {
-					return responses.failureResponse({
-						statusCode: httpStatusCode.not_found,
-						message: 'USER_NOT_FOUND',
-					})
-				}
-
-				return responses.successResponse({
-					statusCode: httpStatusCode.ok,
-					message: 'USER_DETAILS_FETCHED_SUCCESSFULLY',
-					result: menteeExtension,
+			}
+			if (!menteeExtension) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'USER_NOT_FOUND',
 				})
 			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'USER_DETAILS_FETCHED_SUCCESSFULLY',
+				result: menteeExtension,
+			})
 		} catch (error) {
 			throw error
 		}
@@ -381,23 +350,6 @@ module.exports = class UserHelper {
 			decodedToken.organization_code,
 			userExtensionData.id
 		)
-		if (!menteeExtension) {
-			menteeExtension = await menteeQueries.getMenteeExtension(
-				userExtensionData.id,
-				['organization_id', 'is_mentor', 'organization_code', 'tenant_code'],
-				false,
-				decodedToken.tenant_code
-			)
-			// Cache the result under logged-in user's organization context
-			if (menteeExtension) {
-				await cacheHelper.mentee.set(
-					decodedToken.tenant_code,
-					decodedToken.organization_code,
-					userExtensionData.id,
-					menteeExtension
-				)
-			}
-		}
 
 		if (!menteeExtension) throw new Error('User Not Found')
 
@@ -486,10 +438,6 @@ module.exports = class UserHelper {
 	 */
 	static async #checkUserExistence(userId, tenantCode) {
 		try {
-			// Try to get user existence from mentee cache first (using dummy orgId for tenant-level check)
-			const cacheKey = `${tenantCode}:user_existence:${userId}`
-			let userExists = false
-
 			// Check mentee extension for user existence
 			const menteeExtension = await menteeQueries.getMenteeExtension(
 				userId,
@@ -499,9 +447,6 @@ module.exports = class UserHelper {
 			)
 
 			userExists = menteeExtension !== null
-
-			console.log(`💾 User existence check for ${userId}: ${userExists ? 'EXISTS' : 'NOT_EXISTS'}`)
-
 			return !userExists // Return true if user does not exist
 		} catch (error) {
 			throw error

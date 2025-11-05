@@ -320,35 +320,13 @@ module.exports = class OrgAdminService {
 			}
 
 			// Proper cache invalidation and update for set policy
-			try {
-				// Check if cache already exists
-				const existingCache = await cacheHelper.organizations.get(
-					tenantCode,
-					decodedToken.organization_code,
-					decodedToken.organization_id
-				)
 
-				if (existingCache) {
-					// Delete old cache first if it exists
-					await cacheHelper.organizations.delete(
-						tenantCode,
-						decodedToken.organization_code,
-						decodedToken.organization_id
-					)
-					console.log(`🗑️ Old organization policy cache deleted for org ${decodedToken.organization_id}`)
-				}
-
-				// Set new policy cache
-				await cacheHelper.organizations.set(
-					tenantCode,
-					decodedToken.organization_code,
-					decodedToken.organization_id,
-					orgPolicies.dataValues || orgPolicies
-				)
-				console.log(`💾 Organization ${decodedToken.organization_id} cache updated with new policy`)
-			} catch (cacheError) {
-				console.error(`❌ Failed to update organization cache after policy update:`, cacheError)
-			}
+			// Delete old cache first if it exists
+			await cacheHelper.organizations.delete(
+				tenantCode,
+				decodedToken.organization_code,
+				decodedToken.organization_id
+			)
 
 			delete orgPolicies.dataValues.deleted_at
 			return responses.successResponse({
@@ -382,29 +360,13 @@ module.exports = class OrgAdminService {
 
 			// If not in cache, fetch from database
 			orgPolicies = await organisationExtensionQueries.getById(decodedToken.organization_code, tenantCode)
-			if (orgPolicies) {
-				// Cache the result for future use
-				try {
-					await cacheHelper.organizations.set(
-						tenantCode,
-						decodedToken.organization_code,
-						decodedToken.organization_id,
-						orgPolicies
-					)
-					console.log(`💾 Organization policies ${decodedToken.organization_id} cached after fetch`)
-				} catch (cacheError) {
-					console.error(`❌ Failed to cache organization policies:`, cacheError)
-				}
 
-				delete orgPolicies.deleted_at
-				return responses.successResponse({
-					statusCode: httpStatusCode.ok,
-					message: 'ORG_POLICIES_FETCHED_SUCCESSFULLY',
-					result: { ...orgPolicies },
-				})
-			} else {
-				throw new Error(`No organisation extension found for organization_id ${decodedToken.organization_id}`)
-			}
+			delete orgPolicies.deleted_at
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'ORG_POLICIES_FETCHED_SUCCESSFULLY',
+				result: { ...orgPolicies },
+			})
 		} catch (error) {
 			throw new Error(`Error reading organisation policies: ${error.message}`)
 		}
@@ -569,9 +531,28 @@ module.exports = class OrgAdminService {
 				updateData.visible_to_organizations.push(orgId)
 			}
 
-			if (utils.validateRoleAccess(bodyData.roles, common.MENTOR_ROLE))
+			if (utils.validateRoleAccess(bodyData.roles, common.MENTOR_ROLE)) {
 				await mentorQueries.updateMentorExtension(bodyData.user_id, updateData, {}, {}, false, tenantCode)
-			else await menteeQueries.updateMenteeExtension(bodyData.user_id, updateData, {}, {}, tenantCode)
+
+				// Cache invalidation: Clear mentor cache after organization update
+				try {
+					await cacheHelper.mentor.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
+					console.log(`🔄 Mentor ${bodyData.user_id} cache cleared after organization update`)
+				} catch (cacheError) {
+					console.error(`Cache deletion failed for mentor ${bodyData.user_id} after org update:`, cacheError)
+				}
+			} else {
+				await menteeQueries.updateMenteeExtension(bodyData.user_id, updateData, {}, {}, tenantCode)
+
+				// Cache invalidation: Clear mentee cache after organization update
+				try {
+					await cacheHelper.mentee.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
+					console.log(`🔄 Mentee ${bodyData.user_id} cache cleared after organization update`)
+				} catch (cacheError) {
+					console.error(`Cache deletion failed for mentee ${bodyData.user_id} after org update:`, cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'UPDATE_ORG_SUCCESSFULLY',
@@ -610,13 +591,6 @@ module.exports = class OrgAdminService {
 				const userId = userIds[key]
 				// Try cache first using logged-in user's organization context
 				let mentorDetails = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
-				if (!mentorDetails) {
-					mentorDetails = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
-					// Cache the result under logged-in user's organization context
-					if (mentorDetails) {
-						await cacheHelper.mentor.set(tenantCode, orgCode, userId, mentorDetails)
-					}
-				}
 				if (mentorDetails?.user_id) {
 					// Deactivate upcoming sessions of user as mentor
 					const removedSessionsDetail = await sessionQueries.deactivateAndReturnMentorSessions(
@@ -636,13 +610,6 @@ module.exports = class OrgAdminService {
 				//unenroll from upcoming session
 				// Try cache first using logged-in user's organization context
 				let menteeDetails = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
-				if (!menteeDetails) {
-					menteeDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
-					// Cache the result under logged-in user's organization context
-					if (menteeDetails) {
-						await cacheHelper.mentee.set(tenantCode, orgCode, userId, menteeDetails)
-					}
-				}
 				if (menteeDetails?.user_id) {
 					await adminService.unenrollFromUpcomingSessions(userId, tenantCode)
 					deactivatedIdsList.push(userId)

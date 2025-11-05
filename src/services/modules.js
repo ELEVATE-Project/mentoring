@@ -6,6 +6,7 @@ const permissionsQueries = require('@database/queries/permissions')
 const { UniqueConstraintError, ForeignKeyConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class modulesHelper {
 	/**
@@ -70,10 +71,20 @@ module.exports = class modulesHelper {
 				bodyData,
 				tenantCode
 			)
-			const updatePermissions = permissionsQueries.updatePermissions(
+			const updatePermissions = await permissionsQueries.updatePermissions(
 				{ module: modules.code, tenant_code: tenantCode },
 				{ module: updatedModules.code }
 			)
+
+			// Cache invalidation: Clear permissions cache after permissions update
+			if (updatePermissions) {
+				try {
+					await cacheHelper.permissions.evictAll()
+					console.log(`🔄 Permissions cache cleared after module ${updatedModules.code} permissions update`)
+				} catch (cacheError) {
+					console.error(`Cache deletion failed for permissions after module update:`, cacheError)
+				}
+			}
 
 			if (!updatedModules && !updatePermissions) {
 				return responses.failureResponse({

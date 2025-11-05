@@ -17,7 +17,11 @@ module.exports = class NotificationTemplateHelper {
 
 	static async create(bodyData, tokenInformation, tenantCode) {
 		try {
-			const template = await notificationTemplateQueries.findOne({ code: bodyData.code, tenant_code: tenantCode })
+			const template = await cacheHelper.notificationTemplates.get(
+				tenantCode,
+				tokenInformation.organization_code,
+				bodyData.code
+			)
 			if (template) {
 				return responses.failureResponse({
 					message: 'NOTIFICATION_TEMPLATE_ALREADY_EXISTS',
@@ -32,19 +36,6 @@ module.exports = class NotificationTemplateHelper {
 			bodyData['created_by'] = tokenInformation.id
 
 			const createdNotification = await notificationTemplateQueries.create(bodyData, tenantCode)
-
-			// Cache the newly created template
-			try {
-				await cacheHelper.notificationTemplates.set(
-					tenantCode,
-					tokenInformation.organization_code,
-					bodyData.code,
-					createdNotification
-				)
-				console.log(`💾 Notification template ${bodyData.code} cached after creation`)
-			} catch (cacheError) {
-				console.error(`❌ Failed to cache notification template after creation:`, cacheError)
-			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -91,7 +82,7 @@ module.exports = class NotificationTemplateHelper {
 				})
 			}
 
-			// Delete old cache and set updated cache
+			// Delete old cache
 			const templateCode = bodyData.code || filter.code
 			try {
 				// Delete old cache first
@@ -100,24 +91,6 @@ module.exports = class NotificationTemplateHelper {
 					tokenInformation.organization_code,
 					templateCode
 				)
-				console.log(`🗑️ Old notification template cache deleted for code: ${templateCode}`)
-
-				// Fetch updated template and cache it
-				const updatedTemplate = await notificationTemplateQueries.findTemplatesByFilter({
-					code: templateCode,
-					organization_code: tokenInformation.organization_code,
-					tenant_code: tenantCode,
-				})
-
-				if (updatedTemplate && updatedTemplate.length > 0) {
-					await cacheHelper.notificationTemplates.set(
-						tenantCode,
-						tokenInformation.organization_code,
-						templateCode,
-						updatedTemplate[0]
-					)
-					console.log(`💾 Updated notification template ${templateCode} cached`)
-				}
 			} catch (cacheError) {
 				console.error(`❌ Failed to update notification template cache:`, cacheError)
 			}

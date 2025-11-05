@@ -22,6 +22,7 @@ const moment = require('moment')
 const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const uploadToCloud = require('@helpers/uploadFileToCloud')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class UserInviteHelper {
 	static async uploadSession(data) {
@@ -36,7 +37,7 @@ module.exports = class UserInviteHelper {
 				const defaultOrgCode = data.user.defaultOrganiztionCode
 				const defaultTenantCode = data.user.defaultTenantCode
 
-				const mentor = await menteeExtensionQueries.getMenteeExtension(userId, ['is_mentor'], false, tenantCode)
+				const mentor = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
 				if (!mentor) throw createUnauthorizedResponse('USER_NOT_FOUND')
 
 				const isMentor = mentor.is_mentor
@@ -88,10 +89,26 @@ module.exports = class UserInviteHelper {
 				const templateCode = process.env.SESSION_UPLOAD_EMAIL_TEMPLATE_CODE
 				if (templateCode) {
 					const defaults = await getDefaults()
-					const templateData = await notificationTemplateQueries.findOneEmailTemplate(
-						templateCode,
-						data.user.organization_code,
-						defaults.tenantCode
+					if (!defaults.orgCode)
+						return responses.failureResponse({
+							message: 'DEFAULT_ORG_CODE_NOT_SET',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					if (!defaults.tenantCode)
+						return responses.failureResponse({
+							message: 'DEFAULT_TENANT_CODE_NOT_SET',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+
+					const orgCodes = [data.user.organization_code, defaults.orgCode]
+					const tenantCodes = [tenantCode, defaults.tenantCode]
+					// send mail to mentors on session creation if session created by manager
+					const templateData = await cacheHelper.notificationTemplates.get(
+						tenantCodes,
+						orgCodes,
+						templateCode
 					)
 
 					if (templateData) {

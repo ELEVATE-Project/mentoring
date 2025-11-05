@@ -146,14 +146,6 @@ module.exports = class OrganizationService {
 				})
 			}
 
-			// Cache the result for future use
-			try {
-				await cacheHelper.organizations.set(tenantCode, organizationCode, organizationId, orgExtension)
-				console.log(`💾 Organization ${organizationId} cached after fetch`)
-			} catch (cacheError) {
-				console.error(`❌ Failed to cache organization after fetch:`, cacheError)
-			}
-
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'ORG_EXTENSION_FETCHED_SUCCESSFULLY',

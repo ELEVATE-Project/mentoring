@@ -114,7 +114,8 @@ module.exports = class SessionsHelper {
 				[mentorDetails],
 				loggedInUserId,
 				isAMentor,
-				tenantCode
+				tenantCode,
+				orgCode
 			)
 			// update mentor Id in session creation data
 			if (!bodyData.mentor_id) {

@@ -24,6 +24,7 @@ const mentorService = require('@services/mentors')
 const mentorQueries = require('@database/queries/mentorExtension')
 const schedulerRequest = require('@requests/scheduler')
 const communicationHelper = require('@helpers/communications')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class requestSessionsHelper {
 	static async checkConnectionRequestExists(userId, targetUserId, tenantCode) {
@@ -44,12 +45,7 @@ module.exports = class requestSessionsHelper {
 
 	static async create(bodyData, userId, organizationCode, organizationId, SkipValidation, tenantCode) {
 		try {
-			const mentorUserExists = await userCacheHelper.getMentorExtensionCached(
-				bodyData.requestee_id,
-				[],
-				false,
-				tenantCode
-			)
+			const mentorUserExists = await cacheHelper.mentor.get(tenantCode, organizationCode, bodyData.requestee_id)
 			if (!mentorUserExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -419,18 +415,6 @@ module.exports = class requestSessionsHelper {
 
 			// Check if mentee user exists - try cache first
 			let userExists = await cacheHelper.mentee.get(tenantCode, orgCode, getRequestSessionDetails.requestor_id)
-			if (!userExists) {
-				userExists = await userExtensionQueries.getMenteeExtension(
-					getRequestSessionDetails.requestor_id,
-					[],
-					false,
-					tenantCode
-				)
-				// Cache the result under requesting user's organization context
-				if (userExists) {
-					await cacheHelper.mentee.set(tenantCode, orgCode, getRequestSessionDetails.requestor_id, userExists)
-				}
-			}
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -883,12 +867,11 @@ async function emailForAcceptAndReject(
 			statusCode: httpStatusCode.bad_request,
 			responseCode: 'CLIENT_ERROR',
 		})
+
+	const orgCodes = [orgCode, defaults.orgCode]
+	const tenantCodes = [tenantCode, defaults.tenantCode]
 	// send mail to mentors on session creation if session created by manager
-	const templateData = await notificationQueries.findOneEmailTemplate(
-		emailTemplateCode,
-		{ [Op.in]: [orgCode, defaults.orgCode] },
-		{ [Op.in]: [tenantCode, defaults.tenantCode] }
-	)
+	const templateData = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, emailTemplateCode)
 
 	// If template data is available. create mail data and push to kafka
 	if (templateData) {
