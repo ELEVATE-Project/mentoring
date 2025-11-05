@@ -609,7 +609,7 @@ module.exports = class ConnectionHelper {
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'CONNECTED_STATUS_FETCHED',
-				result: connectionExists,
+				result: { data: { connection: connectionExists } },
 			})
 		} catch (error) {
 			console.error('Error checking connection existence:', error)

@@ -308,15 +308,6 @@ module.exports = class AdminService {
 					allSessionRequestIds
 				) // allSessionRequestIds = ["1", "2"]
 
-				if (requestedSessions.length > 0) {
-					result.isRequestedSessionMentorNotified = await this.NotifySessionRequestedUsers(
-						requestedSessions,
-						false,
-						true,
-						defaultOrgId
-					) // (sessionsDetails, received = true or false, sent = true or false , orgId = "1")
-				}
-
 				if (isMentor && receivedSessions.length > 0) {
 					result.isRequestedSessionMenteeNotified = await this.NotifySessionRequestedUsers(
 						receivedSessions,
