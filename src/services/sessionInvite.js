@@ -29,6 +29,7 @@ module.exports = class UserInviteHelper {
 				const filePath = data.fileDetails.input_path
 				const userId = data.user.userId
 				const orgId = data.user.organization_id
+				const tenant_code = data.user.tenant_code
 				const notifyUser = true
 				const tenantCode = data.user.tenant_code
 				const orgCode = String(data.user.organization_code)

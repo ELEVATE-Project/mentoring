@@ -50,6 +50,7 @@ module.exports = class Sessions {
 				if (req.headers.timezone) {
 					req.body['time_zone'] = req.headers.timezone
 				}
+
 				const sessionCreated = await sessionService.create(
 					req.body,
 					req.decodedToken.id,
@@ -443,7 +444,8 @@ module.exports = class Sessions {
 				req.decodedToken.id,
 				organizationCode,
 				req.decodedToken.tenant_code,
-				req.decodedToken.organizations[0].id
+				req.decodedToken.organizations[0].id,
+				req.decodedToken
 			)
 			return sessionUploadRes
 		} catch (error) {

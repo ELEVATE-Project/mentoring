@@ -394,6 +394,20 @@ module.exports = class SessionsHelper {
 						{ [Op.in]: [tenantCode, defaults.tenantCode] }
 					)
 
+					const tenantInfo = await userRequests.getTenantDetails(tenantCode)
+
+					const domains = tenantInfo?.data?.result?.domains
+					const tenantDomain =
+						Array.isArray(domains) && domains.length > 0
+							? domains.find((d) => d.is_primary)?.domain || domains[0].domain
+							: null
+					if (!tenantDomain) {
+						return responses.failureResponse({
+							message: 'TENANT_DOMAIN_NOT_FOUND',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
 					sessionAttendees.forEach(async (attendee) => {
 						const payload = {
 							type: 'email',
@@ -403,7 +417,7 @@ module.exports = class SessionsHelper {
 								body: utils.composeEmailBody(templateData.body, {
 									mentorName: data.mentor_name,
 									sessionTitle: data.title,
-									sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + data.id,
+									sessionLink: 'https://' + tenantDomain + '/mentoring/session-detail/' + data.id,
 									startDate: utils.getTimeZone(data.start_date, common.dateFormat, data.time_zone),
 									startTime: utils.getTimeZone(data.start_date, common.timeFormat, data.time_zone),
 								}),
@@ -1094,6 +1108,24 @@ module.exports = class SessionsHelper {
 				// 	)
 				// }
 
+				let tenantDomain
+				if (preResourceSendEmail || postResourceSendEmail) {
+					const tenantInfo = await userRequests.getTenantDetails(tenantCode)
+
+					const domains = tenantInfo?.data?.result?.domains
+					tenantDomain =
+						Array.isArray(domains) && domains.length > 0
+							? domains.find((d) => d.is_primary)?.domain || domains[0].domain
+							: null
+					if (!tenantDomain) {
+						return responses.failureResponse({
+							message: 'TENANT_DOMAIN_NOT_FOUND',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+				}
+
 				// send mail associated with action to session mentees
 				sessionAttendees.forEach(async (attendee) => {
 					if (method == common.DELETE_METHOD) {
@@ -1242,7 +1274,8 @@ module.exports = class SessionsHelper {
 								body: utils.composeEmailBody(preOrPostEmailTemplate.body, {
 									mentorName: sessionDetail.mentor_name,
 									sessionTitle: sessionDetail.title,
-									sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetail.id,
+									sessionLink:
+										'https://' + tenantDomain + '/mentoring/session-detail/' + sessionDetail.id,
 									startDate: utils.getTimeZone(
 										sessionDetail.start_date,
 										common.dateFormat,
@@ -1881,13 +1914,17 @@ module.exports = class SessionsHelper {
 				creatorName = sessionCreatorName.name
 			}
 
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(
-				mentorId ? mentorId : session.mentor_id,
-				['name'],
-				true,
-				tenantCode
-			)
-			session.mentor_name = mentorDetails.name
+			if (mentorId || session.mentor_id) {
+				const mentorDetails = await mentorExtensionQueries.getMentorExtension(
+					mentorId ? mentorId : session.mentor_id,
+					['name'],
+					true,
+					tenantCode
+				)
+				session.mentor_name = mentorDetails.name
+			} else {
+				session.mentor_name = common.USER_NOT_FOUND
+			}
 
 			// check if the session is accessible to the user
 			let isAccessible = await this.checkIfSessionIsAccessible(session, userId, isAMentor, tenantCode)
@@ -2039,8 +2076,17 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			// Extract mentor name from included association instead of separate query
-			session.mentor_name = session.mentor_extension?.name || 'Unknown'
+			if (mentorId || session.mentor_id) {
+				const mentorDetails = await mentorExtensionQueries.getMentorExtension(
+					mentorId ? mentorId : session.mentor_id,
+					['name'],
+					true,
+					tenantCode
+				)
+				session.mentor_name = mentorDetails.name
+			} else {
+				session.mentor_name = common.USER_NOT_FOUND
+			}
 
 			const deletedRows = await sessionAttendeesQueries.unEnrollFromSession(sessionId, userId, tenantCode)
 			if (deletedRows === 0) {
@@ -3427,8 +3473,9 @@ module.exports = class SessionsHelper {
 	 * @returns {CSV} - created users.
 	 */
 
-	static async bulkSessionCreate(filePath, userId, organizationCode, tenantCode, organizationId) {
+	static async bulkSessionCreate(filePath, userId, organizationCode, tenantCode, organizationId, tokenInformation) {
 		try {
+			const { id, organization_id, tenant_code } = tokenInformation
 			const downloadCsv = await this.downloadCSV(filePath)
 			const csvData = await csv().fromFile(downloadCsv.result.downloadPath)
 

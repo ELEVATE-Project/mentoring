@@ -131,4 +131,20 @@ module.exports = class Connection {
 			throw error
 		}
 	}
+	/**
+	 * Check if a connection already exists for the authenticated user.
+	 * @param {Object} req - The request object.
+	 * @param {Object} req.body - The request body containing connection details to check.
+	 * @param {Object} req.decodedToken - The decoded token containing authenticated user info.
+	 * @param {string} req.decodedToken.id - The ID of the authenticated user.
+	 * @returns {Promise<Object>} The result of the connection existence check.
+	 * @throws Will throw an error if the request fails.
+	 */
+	async checkConnection(req) {
+		try {
+			return await connectionsService.checkConnectionIfExists(req.decodedToken.id, req.body)
+		} catch (error) {
+			throw error
+		}
+	}
 }
