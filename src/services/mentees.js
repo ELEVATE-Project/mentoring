@@ -406,12 +406,7 @@ module.exports = class MenteesHelper {
 
 	static async joinSession(sessionId, userId, organizationCode, tenantCode) {
 		try {
-			const mentee = await menteeExtensionQueries.getMenteeExtension(
-				userId,
-				['name', 'user_id'],
-				false,
-				tenantCode
-			)
+			const mentee = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
 			if (!mentee) throw createUnauthorizedResponse('USER_NOT_FOUND')
 
 			// Optimized: Single query with JOIN to get session and attendee data together
@@ -567,21 +562,16 @@ module.exports = class MenteesHelper {
 				responseCode: 'CLIENT_ERROR',
 			})
 
-		let validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
-			{
-				status: 'ACTIVE',
-				allow_filtering: true,
-				organization_code: {
-					[Op.in]: [organizationCode, defaults.orgCode],
-				},
-				model_names: { [Op.contains]: [sessionModelName] },
-			},
+		let validationData = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+			sessionModelName,
+			[organizationCode, defaults.orgCode],
 			[tenantCode, defaults.tenantCode]
 		)
+
 		let filteredQuery = utils.validateAndBuildFilters(query, validationData, sessionModelName)
 
 		// Create saas filter for view query
-		const saasFilter = await this.filterSessionsBasedOnSaasPolicy(userId, isAMentor, tenantCode)
+		const saasFilter = await this.filterSessionsBasedOnSaasPolicy(userId, isAMentor, tenantCode, organizationCode)
 
 		let search_config = defaultSearchConfig
 		if (searchConfig.search) {
@@ -668,14 +658,9 @@ module.exports = class MenteesHelper {
 	 * @param {Boolean} isAMentor 				- user mentor or not.
 	 * @returns {JSON} 							- List of filtered sessions
 	 */
-	static async filterSessionsBasedOnSaasPolicy(userId, isAMentor, tenantCode) {
+	static async filterSessionsBasedOnSaasPolicy(userId, isAMentor, tenantCode, orgCode) {
 		try {
-			const menteeExtension = await menteeQueries.getMenteeExtension(
-				userId,
-				['external_session_visibility', 'organization_id', 'is_mentor'],
-				false,
-				tenantCode
-			)
+			const menteeExtension = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
 
 			if (!menteeExtension) {
 				throw responses.failureResponse({
@@ -1233,13 +1218,6 @@ module.exports = class MenteesHelper {
 			// Try cache first using logged-in user's organization context
 			let mentee = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
 			if (!mentee) {
-				mentee = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
-				// Cache the result under logged-in user's organization context
-				if (mentee) {
-					await cacheHelper.mentee.set(tenantCode, organizationCode, userId, mentee)
-				}
-			}
-			if (!mentee) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
 					message: 'MENTEE_EXTENSION_NOT_FOUND',
@@ -1483,12 +1461,20 @@ module.exports = class MenteesHelper {
 				}
 			}
 
+			const defaults = await getDefaults()
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
 			let validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
 				{
 					status: common.ACTIVE_STATUS,
 					model_names: { [Op.overlap]: [userExtensionModelName] },
 				},
-				tenantCode
+				[tenantCode, defaultRulesFilter.tenantCode]
 			)
 
 			let filteredQuery = utils.validateAndBuildFilters(
@@ -1511,7 +1497,8 @@ module.exports = class MenteesHelper {
 				userId,
 				isAMentor,
 				organization_ids,
-				tenantCode
+				tenantCode,
+				organizationCode
 			)
 			let extensionDetails = await menteeQueries.getAllUsers(
 				connectedMenteeIds ? connectedMenteeIds : [],
@@ -1648,7 +1635,7 @@ module.exports = class MenteesHelper {
 			throw error
 		}
 	}
-	static async filterMenteeListBasedOnSaasPolicy(userId, isAMentor, organization_ids = [], tenantCode) {
+	static async filterMenteeListBasedOnSaasPolicy(userId, isAMentor, organization_ids = [], tenantCode, orgCode) {
 		try {
 			// let extensionColumns = isAMentor ? await mentorQueries.getColumns() : await menteeQueries.getColumns()
 			// // check for external_mentee_visibility else fetch external_mentor_visibility
@@ -1657,8 +1644,8 @@ module.exports = class MenteesHelper {
 			// 	: ['external_mentor_visibility', 'organization_id']
 
 			const userPolicyDetails = isAMentor
-				? await mentorQueries.getMentorExtension(userId, ['organization_id'], false, tenantCode)
-				: await menteeQueries.getMenteeExtension(userId, ['organization_id'], false, tenantCode)
+				? await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+				: await cacheHelper.mentee.get(tenantCode, orgCode, userId)
 
 			const getOrgPolicy = await organisationExtensionQueries.findOne(
 				{
@@ -1737,18 +1724,8 @@ module.exports = class MenteesHelper {
 		try {
 			// user can be mentor or mentee, based on isAMentor key get policy details
 			const userPolicyDetails = isAMentor
-				? await mentorQueries.getMentorExtension(
-						userId,
-						['external_mentee_visibility', 'organization_id'],
-						false,
-						tenantCode
-				  )
-				: await menteeQueries.getMenteeExtension(
-						userId,
-						['external_mentee_visibility', 'organization_id'],
-						false,
-						tenantCode
-				  )
+				? await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+				: await cacheHelper.mentee.get(tenantCode, orgCode, userId)
 
 			// Throw error if mentor/mentee extension not found
 			if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
@@ -1938,13 +1915,7 @@ module.exports = class MenteesHelper {
 		try {
 			// Try cache first using logged-in user's organization context
 			let requestedUserExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, id)
-			if (!requestedUserExtension) {
-				requestedUserExtension = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
-				// Cache the result under logged-in user's organization context
-				if (requestedUserExtension) {
-					await cacheHelper.mentee.set(tenantCode, organizationCode, id, requestedUserExtension)
-				}
-			}
+
 			if (!requestedUserExtension || (!isAMentor && requestedUserExtension.is_mentor == false)) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -1980,7 +1951,12 @@ module.exports = class MenteesHelper {
 				totalSessionHosted = await sessionQueries.countHostedSessions(id, tenantCode)
 			}
 			// Check for accessibility for reading shared mentor profile
-			const isAccessible = await checkIfUserIsAccessible(userId, requestedUserExtension, tenantCode)
+			const isAccessible = await checkIfUserIsAccessible(
+				userId,
+				requestedUserExtension,
+				tenantCode,
+				organizationCode
+			)
 
 			// Throw access error
 			if (!isAccessible) {

@@ -133,13 +133,6 @@ module.exports = class EntityHelper {
 
 				const updatedEntity = updatedEntityType[0]
 
-				console.log('📋 [UPDATE CACHE] Updated entity details:', {
-					id: updatedEntity.id,
-					oldValue: originalEntity?.value,
-					newValue: updatedEntity.value,
-					modelNames: updatedEntity.model_names,
-				})
-
 				// Delete old cache entries if value or model_names changed
 				if (originalEntity) {
 					const valueChanged = originalEntity.value !== updatedEntity.value
@@ -147,15 +140,6 @@ module.exports = class EntityHelper {
 					const newModelNames = updatedEntity.model_names || []
 					const modelNamesChanged =
 						JSON.stringify(oldModelNames.sort()) !== JSON.stringify(newModelNames.sort())
-
-					console.log('🔍 [UPDATE CACHE] Analyzing changes:', {
-						valueChanged,
-						oldValue: originalEntity.value,
-						newValue: updatedEntity.value,
-						modelNamesChanged,
-						oldModelNames,
-						newModelNames,
-					})
 
 					if (valueChanged || modelNamesChanged) {
 						console.log('🗑️ [UPDATE CACHE] Entity changed, deleting old cache entries...')
@@ -166,9 +150,6 @@ module.exports = class EntityHelper {
 						// 1. Delete from all old model_names with old value
 						for (const modelName of oldModelNames) {
 							try {
-								console.log(
-									`🗑️ [UPDATE CACHE] Deleting old cache: tenant:${tenantCode}:org:${orgCode}:entityTypes:model:${modelName}:${originalEntity.value}`
-								)
 								await cacheHelper.entityTypes.delete(
 									tenantCode,
 									orgCode,
@@ -193,9 +174,6 @@ module.exports = class EntityHelper {
 
 							for (const removedModel of removedModels) {
 								try {
-									console.log(
-										`🗑️ [UPDATE CACHE] Deleting removed model cache: tenant:${tenantCode}:org:${orgCode}:entityTypes:model:${removedModel}:${updatedEntity.value}`
-									)
 									await cacheHelper.entityTypes.delete(
 										tenantCode,
 										orgCode,

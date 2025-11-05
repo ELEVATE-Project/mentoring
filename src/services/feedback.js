@@ -134,11 +134,9 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Feedback forms.
 	 */
 
-	static async forms(sessionId, roles, tenantCode) {
+	static async forms(sessionId, roles, tenantCode, orgCode) {
 		try {
-			let sessioninfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-				attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
-			})
+			let sessioninfo = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
 
 			if (!sessioninfo) {
 				return responses.failureResponse({
@@ -181,7 +179,7 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Feedback submission.
 	 */
 
-	static async submit(sessionId, updateData, userId, isAMentor, tenantCode) {
+	static async submit(sessionId, updateData, userId, isAMentor, tenantCode, orgCode) {
 		let feedback_as
 		if (isAMentor) {
 			feedback_as = updateData.feedback_as
@@ -189,9 +187,7 @@ module.exports = class MenteesHelper {
 		}
 		try {
 			//get session details
-			let sessionInfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-				attributes: ['is_feedback_skipped', 'mentor_id'],
-			})
+			let sessionInfo = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
 
 			if (!sessionInfo) {
 				return responses.failureResponse({
@@ -257,6 +253,12 @@ module.exports = class MenteesHelper {
 							statusCode: httpStatusCode.bad_request,
 							responseCode: 'CLIENT_ERROR',
 						})
+					}
+					try {
+						await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
+						console.log(`🗑️ Session ${sessionId} cache deleted after session deletion`)
+					} catch (cacheError) {
+						console.error(`❌ Failed to delete session cache after deletion:`, cacheError)
 					}
 				}
 
@@ -326,7 +328,7 @@ module.exports = class MenteesHelper {
 								questionData.category &&
 								questionData.category.evaluating == common.MENTOR_EVALUATING
 							) {
-								await ratingCalculation(feedbackInfo, sessionInfo.mentor_id, tenantCode)
+								await ratingCalculation(feedbackInfo, sessionInfo.mentor_id, tenantCode, orgCode)
 							}
 						}
 					}
@@ -414,9 +416,9 @@ const getFeedbackQuestions = async function (formCode, tenantCode) {
  * @returns {JSON} - mentor data.
  */
 
-const ratingCalculation = async function (ratingData, mentor_id, tenantCode) {
+const ratingCalculation = async function (ratingData, mentor_id, tenantCode, orgCode) {
 	try {
-		let mentorDetails = await userCacheHelper.getMentorExtensionCached(mentor_id, [], false, tenantCode)
+		let mentorDetails = await cacheHelper.mentor.get(tenantCode, orgCode, mentor_id)
 		let mentorRating = mentorDetails.rating
 		let updateData
 

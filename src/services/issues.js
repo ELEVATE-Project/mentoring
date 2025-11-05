@@ -50,11 +50,32 @@ module.exports = class issuesHelper {
 			bodyData.tenant_code = tenantCode
 			bodyData.organization_code = decodedToken.organization_code
 
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			const tenantCodes = [tenantCode, defaults.tenantCode]
+			const orgCodes = [orgCode, defaults.orgCode]
+
+			// Get email template
+
 			if (process.env.ENABLE_EMAIL_FOR_REPORT_ISSUE === 'true') {
-				const templateData = await notificationTemplateQueries.findOneEmailTemplate(
-					process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE,
-					decodedToken.organization_code,
-					tenantCode
+				const templateData = await cacheHelper.notificationTemplates.get(
+					tenantCodes,
+					orgCodes,
+					process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE
 				)
 
 				let metaItems = ''

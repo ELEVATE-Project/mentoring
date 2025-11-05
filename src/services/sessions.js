@@ -149,7 +149,8 @@ module.exports = class SessionsHelper {
 					allValidMenteesDetails,
 					loggedInUserId,
 					isAMentor,
-					tenantCode
+					tenantCode,
+					orgCode
 				)
 				if (!isMenteeAccessible && bodyData.type === common.SESSION_TYPE.PRIVATE) {
 					return responses.failureResponse({

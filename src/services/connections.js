@@ -41,10 +41,10 @@ module.exports = class ConnectionHelper {
 	 * @param {string} userId - The ID of the user initiating the request.
 	 * @returns {Promise<Object>} A success or failure response.
 	 */
-	static async initiate(bodyData, userId, tenantCode) {
+	static async initiate(bodyData, userId, tenantCode, orgCode) {
 		try {
 			// Check if the target user exists
-			const userExists = await userCacheHelper.getMenteeExtensionCached(bodyData.user_id, [], false, tenantCode)
+			const userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id, [], false, tenantCode)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -615,11 +615,27 @@ module.exports = class ConnectionHelper {
 			}
 
 			// Get email template
-			const templateData = await notificationQueries.findOneEmailTemplate(
-				templateCode,
-				orgCode.toString(),
-				tenantCode
-			)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			const tenantCodes = [tenantCode, defaults.tenantCode]
+			const orgCodes = [orgCode, defaults.orgCode]
+
+			// Get email template
+			const templateData = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, templateCode)
 
 			if (templateData) {
 				const menteeName = menteeDetails[0].name
@@ -671,18 +687,33 @@ module.exports = class ConnectionHelper {
 			)
 
 			// Get mentor details
-			const mentorDetails = await userCacheHelper.getMentorExtensionCached(mentorId, ['name'], true, tenantCode)
+			const mentorDetails = await cacheHelper.mentor.get(tenantCode, orgCode, mentorId)
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return
 			}
 
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			const tenantCodes = [tenantCode, defaults.tenantCode]
+			const orgCodes = [orgCode, defaults.orgCode]
+
 			// Get email template
-			const templateData = await notificationQueries.findOneEmailTemplate(
-				templateCode,
-				orgCode.toString(),
-				tenantCode
-			)
+			const templateData = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, templateCode)
 
 			if (templateData) {
 				const menteeName = menteeDetails[0].name

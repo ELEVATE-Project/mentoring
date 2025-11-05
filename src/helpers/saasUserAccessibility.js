@@ -11,18 +11,13 @@ const httpStatusCode = require('@generics/http-status')
  * @param {Object|Array} userData           - User data (single object or array).
  * @returns {Boolean|Array}                 - Boolean (for a single user) or array of objects with user_id and isAccessible flag (for multiple users).
  */
-async function checkIfUserIsAccessible(userId, userData, tenantCode) {
+async function checkIfUserIsAccessible(userId, userData, tenantCode, orgCode) {
 	try {
 		// Ensure userData is always processed as an array
 		const users = Array.isArray(userData) ? userData : [userData]
 
 		// Fetch policy details
-		const userPolicyDetails = await menteeQueries.getMenteeExtension(
-			userId,
-			['external_mentor_visibility', 'external_mentee_visibility', 'organization_id'],
-			false,
-			tenantCode
-		)
+		const userPolicyDetails = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
 		if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
 			return false // If no user policy details found, return false for accessibility
 		}
