@@ -287,13 +287,22 @@ exports.getConnectionsDetails = async (
 	userId,
 	organizationCodes = [],
 	roles = [],
-	tenantCode
+	tenantCode,
+	sortBy = 'ASC', // Add this parameter with default
+	sortField = 'mv.name' // Add this parameter with default
 ) => {
 	try {
 		let additionalFilter = ''
 		let orgFilter = ''
 		let filterClause = ''
 		let rolesFilter = ''
+
+		const validSortOrders = [common.SORT_ORDER.ASCENDING, common.SORT_ORDER.DESCENDING]
+		sortBy = validSortOrders.includes(sortBy.toUpperCase()) ? sortBy.toUpperCase() : common.SORT_ORDER.ASCENDING
+		const validSortFields = ['mv.name', 'mv.designation', 'mv.experience', 'mv.created_at']
+		sortField = validSortFields.includes(sortField) ? sortField : 'mv.name'
+
+		let sortClause = `ORDER BY LOWER(${sortField}) ${sortBy}`
 
 		if (searchText) {
 			additionalFilter = `AND name ILIKE :search`
@@ -347,6 +356,7 @@ exports.getConnectionsDetails = async (
             ${filterClause}
             ${rolesFilter}
             ${additionalFilter}
+			${sortClause}
         `
 
 		const replacements = {

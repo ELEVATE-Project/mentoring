@@ -316,4 +316,9 @@ module.exports = {
 			},
 		},
 	},
+
+	SORT_ORDER: {
+		ASCENDING: 'ASC',
+		DESCENDING: 'DESC',
+	},
 }

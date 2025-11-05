@@ -98,12 +98,15 @@ class NotificationHelper {
 
 				const emailPromises = recipients.map(async (recipient) => {
 					const templateData = {
+						...addionalData,
 						sessionName: session.title,
 						sessionDate: session.start_date ? moment.unix(session.start_date).format('DD-MM-YYYY') : '',
 						sessionTime: session.start_date ? moment.unix(session.start_date).format('hh:mm A') : '',
+						Date: session.start_date ? moment.unix(session.start_date).format('DD-MM-YYYY') : '',
+						Time: session.start_date ? moment.unix(session.start_date).format('hh:mm A') : '',
 						recipientName: recipient.name,
 						attendeeName: recipient.name,
-						...addionalData,
+						nameOfTheSession: session.title,
 					}
 
 					const payload = {
@@ -249,6 +252,31 @@ module.exports = class AdminService {
 				result.isRemoveChatAvatar = removeChatAvatar?.result?.success === true
 				result.isChatNameUpdated = updateChatUserName?.result?.success === true
 
+				if (isMentor) {
+					// 1. Notify connected mentees about mentor deletion
+					const menteeIds = await connectionQueries.getConnectedUsers(userId, 'friend_id', 'user_id')
+					const connectedMentees = await userExtensionQueries.getUsersByUserIds(
+						menteeIds,
+						{
+							attributes: ['user_id', 'name', 'email'],
+						},
+						true
+					)
+
+					if (connectedMentees.length > 0) {
+						result.isMenteeNotifiedAboutMentorDeletion = await this.notifyMenteesAboutMentorDeletion(
+							connectedMentees,
+							userInfo.name || 'Mentor',
+							userInfo.organization_id || ''
+						)
+					} else {
+						result.isMenteeNotifiedAboutMentorDeletion = true
+					}
+				} else {
+					// User is not a mentor, so no mentees to notify
+					result.isMenteeNotifiedAboutMentorDeletion = true
+				}
+
 				// Delete user connections and requests from DB
 				result.isConnectionsAndRequestsRemoved = await connectionQueries.deleteUserConnectionsAndRequests(
 					userId,
@@ -256,7 +284,7 @@ module.exports = class AdminService {
 				) // userId = "1"
 
 				// Notify connected mentors about mentee deletion
-				if (connectedMentors.length > 0) {
+				if (connectedMentors.length > 0 && !isMentor) {
 					const orgCodes = [userInfo.organization_code, defaults.orgCode].filter(Boolean)
 					const tenantCodes = [tenantCode, defaults.tenantCode].filter(Boolean)
 
@@ -276,6 +304,19 @@ module.exports = class AdminService {
 				result.isRemoveChatAvatar = true
 				result.isConnectionsAndRequestsRemoved = true
 				result.isMentorNotifiedAboutMenteeDeletion = true
+				result.isMenteeNotifiedAboutMentorDeletion = true
+			}
+
+			// Step 6: Remove user and sessions
+			let removedUserDetails = 0
+
+			let mentorDetailsRemoved = 0
+			let menteeDetailsRemoved = 0
+
+			if (isMentor) {
+				// Handle mentor-specific deletion tasks
+				await this.handleMentorDeletion(userId, userInfo, result, tenantCode)
+				mentorDetailsRemoved = result.mentorDetailsRemoved
 			}
 
 			// Step 5: Session Request Deletion & Notifications
@@ -333,19 +374,6 @@ module.exports = class AdminService {
 				}
 			}
 
-			// Step 6: Remove user and sessions
-			let removedUserDetails = 0
-
-			let mentorDetailsRemoved = 0
-			let menteeDetailsRemoved = 0
-
-			if (isMentor) {
-				// Handle mentor-specific deletion tasks
-				await this.handleMentorDeletion(userId, userInfo, result, tenantCode)
-				mentorDetailsRemoved = result.mentorDetailsRemoved
-			}
-
-			// send email to SM when mentee is deleted from the private sessions if it is upcoming
 			await this.notifySessionManagerIfMenteeDeleted(userId, userInfo, result, tenantCode)
 
 			// Always check and remove mentee extension (user can be both mentor and mentee)
@@ -1155,33 +1183,6 @@ module.exports = class AdminService {
 			const userOrgCode = mentorInfo.organization_code
 			const orgCodes = [userOrgCode, defaults.orgCode].filter(Boolean)
 			const tenantCodes = [tenantCode, defaults.tenantCode].filter(Boolean)
-
-			// 1. Notify connected mentees about mentor deletion - use user tenant for DB query
-			const menteeIds = await connectionQueries.getConnectedUsers(
-				mentorUserId,
-				'friend_id',
-				'user_id',
-				tenantCode
-			)
-			const connectedMentees = await userExtensionQueries.getUsersByUserIds(
-				menteeIds,
-				{
-					attributes: ['user_id', 'name', 'email'],
-				},
-				tenantCode,
-				false
-			)
-
-			if (connectedMentees.length > 0) {
-				result.isMenteeNotifiedAboutMentorDeletion = await this.notifyMenteesAboutMentorDeletion(
-					connectedMentees,
-					mentorInfo.name || 'Mentor',
-					orgCodes,
-					tenantCodes
-				)
-			} else {
-				result.isMenteeNotifiedAboutMentorDeletion = true
-			}
 
 			// 2. Handle session requests - auto-reject pending requests
 			const pendingSessionRequests = await this.getPendingSessionRequestsForMentor(mentorUserId, tenantCode)
