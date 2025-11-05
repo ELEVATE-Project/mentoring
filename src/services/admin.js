@@ -39,7 +39,7 @@ class NotificationHelper {
 				return true
 			}
 
-			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCode, tenantCodes)
+			const template = await cacheHelper.notificationTemplates.get(tenantCodes, orgCode, templateCode)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -82,7 +82,7 @@ class NotificationHelper {
 		try {
 			if (!sessions?.length || !templateCode) return true
 
-			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCodes, tenantCodes)
+			const template = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, templateCode)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -351,6 +351,16 @@ module.exports = class AdminService {
 			// Always check and remove mentee extension (user can be both mentor and mentee)
 			try {
 				menteeDetailsRemoved = await menteeQueries.deleteMenteeExtension(userId, tenantCode) // userId = "1"
+
+				// Cache invalidation: Clear mentee cache after removal
+				if (menteeDetailsRemoved > 0) {
+					try {
+						await cacheHelper.mentee.delete(tenantCode, userInfo.organization_code, userId)
+						console.log(`🗑️ Mentee ${userId} cache deleted after mentee extension removal`)
+					} catch (cacheError) {
+						console.error(`Cache deletion failed for mentee ${userId}:`, cacheError)
+					}
+				}
 			} catch (error) {
 				console.log('No mentee extension found or already removed:', error.message)
 			}
@@ -382,6 +392,14 @@ module.exports = class AdminService {
 						{ seats_remaining: literal('seats_remaining + 1') },
 						{ where: { id: session.id, tenant_code: tenantCode } }
 					)
+
+					// Cache invalidation: Clear session cache after seats_remaining update
+					try {
+						await cacheHelper.sessions.delete(tenantCode, organizationCode, session.id)
+						console.log(`🔄 Session ${session.id} cache cleared after seats_remaining update`)
+					} catch (cacheError) {
+						console.error(`Cache deletion failed for session ${session.id}:`, cacheError)
+					}
 				}
 				result.isSeatsUpdate = true
 			} catch (error) {
@@ -620,6 +638,21 @@ module.exports = class AdminService {
 			await Promise.all(
 				usersUpcomingSessions.map(async (session) => {
 					await sessionQueries.updateEnrollmentCount(session.session_id, true, tenantCode)
+
+					// Cache invalidation: Clear session cache after enrollment count update
+					const sessionDetail = upcomingSessions.find((s) => s.id === session.session_id)
+					if (sessionDetail) {
+						try {
+							await cacheHelper.sessions.delete(
+								tenantCode,
+								sessionDetail.mentor_organization_id,
+								session.session_id
+							)
+							console.log(`🔄 Session ${session.session_id} cache cleared after enrollment count update`)
+						} catch (cacheError) {
+							console.error(`Cache deletion failed for session ${session.session_id}:`, cacheError)
+						}
+					}
 				})
 			)
 
@@ -1056,24 +1089,12 @@ module.exports = class AdminService {
 
 	static async notifyMentorAboutPrivateSessionCancellation(mentorId, sessionDetails, orgCodes, tenantCodes) {
 		try {
-			// Get mentor details - try cache first with primary organization
-			let mentorDetails = await cacheHelper.mentor.get(tenantCodes[0], orgCodes[0], mentorId)
-			if (!mentorDetails) {
-				mentorDetails = await mentorQueries.getMentorExtension(
-					mentorId,
-					['name', 'email'],
-					true,
-					tenantCodes[0] // Use primary tenant for database query
-				)
-				// Cache the result under primary organization context
-				if (mentorDetails) {
-					await cacheHelper.mentor.set(tenantCodes[0], orgCodes[0], mentorId, mentorDetails)
-				}
-			}
-			if (!mentorDetails) {
-				console.log('Mentor details not found for notification')
-				return false
-			}
+			mentorDetails = await mentorQueries.getMentorExtension(
+				mentorId,
+				['name', 'email'],
+				true,
+				tenantCodes[0] // Use primary tenant for database query
+			)
 
 			const sessionDateTime = moment.unix(sessionDetails.start_date)
 
@@ -1131,7 +1152,7 @@ module.exports = class AdminService {
 		try {
 			// Get defaults for combined notification codes
 			const defaults = await getDefaults()
-			const userOrgCode = mentorInfo.organization_code || ''
+			const userOrgCode = mentorInfo.organization_code
 			const orgCodes = [userOrgCode, defaults.orgCode].filter(Boolean)
 			const tenantCodes = [tenantCode, defaults.tenantCode].filter(Boolean)
 
@@ -1192,6 +1213,19 @@ module.exports = class AdminService {
 
 			// 5. Handle sessions created by mentor - unenroll and notify attendees
 			const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentorUserId, tenantCode)
+
+			// Cache invalidation: Clear cache for removed sessions based on session id
+			if (removedSessionsDetail && removedSessionsDetail.length > 0) {
+				for (const session of removedSessionsDetail) {
+					try {
+						await cacheHelper.sessions.delete(tenantCode, userOrgCode, session.id)
+						console.log(`🗑️ Session ${session.id} cache deleted after mentor session removal`)
+					} catch (cacheError) {
+						console.error(`Cache deletion failed for session ${session.id}:`, cacheError)
+					}
+				}
+			}
+
 			result.isAttendeesNotified = await this.unenrollAndNotifySessionAttendees(
 				removedSessionsDetail,
 				orgCodes,
@@ -1212,6 +1246,14 @@ module.exports = class AdminService {
 			// 7. Remove mentor from DB
 			result.mentorDetailsRemoved = await mentorQueries.removeMentorDetails(mentorUserId, tenantCode)
 
+			// Cache invalidation: Clear mentor cache after removal
+			try {
+				await cacheHelper.mentor.delete(tenantCode, userOrgCode, mentorUserId)
+				console.log(`🗑️ Mentor ${mentorUserId} cache deleted after mentor removal`)
+			} catch (cacheError) {
+				console.error(`Cache deletion failed for mentor ${mentorUserId}:`, cacheError)
+			}
+
 			// 8. Mark created sessions as deleted
 			if (upcomingSessions.length > 0) {
 				const sessionIds = [...new Set(upcomingSessions.map((s) => s.id))]
@@ -1219,6 +1261,16 @@ module.exports = class AdminService {
 					{ deleted_at: new Date() },
 					{ where: { id: sessionIds, created_by: mentorUserId, tenant_code: tenantCode } }
 				)
+
+				// Cache invalidation: Clear session cache for deleted sessions
+				for (const sessionId of sessionIds) {
+					try {
+						await cacheHelper.sessions.delete(tenantCode, userOrgCode, sessionId)
+						console.log(`🗑️ Session ${sessionId} cache deleted after session deletion`)
+					} catch (cacheError) {
+						console.error(`Cache deletion failed for session ${sessionId}:`, cacheError)
+					}
+				}
 			}
 		} catch (error) {
 			console.error('Error in handleMentorDeletion:', error)
@@ -1280,7 +1332,7 @@ module.exports = class AdminService {
 			}
 
 			// Use combined codes for notifications (user + defaults)
-			await this.notifyAttendeesAboutSessionDeletion(sessionsToUpdate, orgCodes[0], tenantCodes[0])
+			await this.notifyAttendeesAboutSessionDeletion(sessionsToUpdate, orgCodes, tenantCodes)
 
 			// Use user's tenant code for database updates
 			const sessionIds = [...new Set(sessionsToUpdate.map((s) => s.id))]
@@ -1288,6 +1340,15 @@ module.exports = class AdminService {
 				{ mentor_name: common.USER_NOT_FOUND, mentor_id: null },
 				{ where: { id: sessionIds, tenant_code: userTenantCode } }
 			)
+
+			for (const sessionId of sessionIds) {
+				try {
+					await cacheHelper.sessions.delete(userTenantCode, userOrgCode, sessionId)
+					console.log(`🗑️ Session ${sessionId} cache deleted after session deletion`)
+				} catch (cacheError) {
+					console.error(`Cache deletion failed for session ${sessionId}:`, cacheError)
+				}
+			}
 
 			console.log(`Updated ${sessionIds.length} sessions with mentor removal`)
 			return true
@@ -1521,7 +1582,7 @@ module.exports = class AdminService {
 						attributes: ['name', 'email'],
 					},
 					false,
-					tenantCode
+					tenantCode[0]
 				)
 
 				if (attendeeDetails.length > 0) {
@@ -1588,8 +1649,6 @@ module.exports = class AdminService {
 				'displayProperties',
 				'permissions',
 				'apiPermissions',
-				'userExistence',
-				'userExtensions',
 			]
 
 			const namespaceCounts = {}

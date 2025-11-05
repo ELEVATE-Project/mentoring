@@ -240,7 +240,7 @@ module.exports = class Sessions {
 	async completed(req) {
 		try {
 			let tenantCode = req.decodedToken?.tenant_code
-
+			let orgCode = req.decodedToken?.organization_code
 			// Enhanced: Check query parameters first (from BBB callback with enhanced isolation)
 			if (!tenantCode && req.query.tenantCode) {
 				tenantCode = req.query.tenantCode
@@ -253,7 +253,7 @@ module.exports = class Sessions {
 			}
 
 			const isBBB = req.query.source == common.BBB_VALUE ? true : false
-			const sessionsCompleted = await sessionService.completed(req.params.id, isBBB, tenantCode)
+			const sessionsCompleted = await sessionService.completed(req.params.id, isBBB, tenantCode, orgCode)
 
 			return sessionsCompleted
 		} catch (error) {
@@ -272,7 +272,11 @@ module.exports = class Sessions {
 
 	async getRecording(req) {
 		try {
-			const recording = await sessionService.getRecording(req.params.id, req.decodedToken.tenant_code)
+			const recording = await sessionService.getRecording(
+				req.params.id,
+				req.decodedToken.tenant_code,
+				req.decodedToken.organization_code
+			)
 			return recording
 		} catch (error) {
 			return error
