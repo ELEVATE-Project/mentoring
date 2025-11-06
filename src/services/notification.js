@@ -83,14 +83,24 @@ module.exports = class NotificationTemplateHelper {
 			}
 
 			// Delete old cache
-			const templateCode = bodyData.code || filter.code
+			const existingTemplates = await notificationTemplateQueries.findTemplatesByFilter(filter)
+			const existingTemplate = existingTemplates?.[0]
+			const templateCode = bodyData.code || existingTemplate?.code || filter.code
 			try {
-				// Delete old cache first
-				await cacheHelper.notificationTemplates.delete(
-					tenantCode,
-					tokenInformation.organization_code,
-					templateCode
-				)
+				if (templateCode) {
+					await cacheHelper.notificationTemplates.delete(
+						tenantCode,
+						tokenInformation.organization_code,
+						templateCode
+					)
+				}
+				if (existingTemplate?.code && existingTemplate.code !== templateCode) {
+					await cacheHelper.notificationTemplates.delete(
+						tenantCode,
+						tokenInformation.organization_code,
+						existingTemplate.code
+					)
+				}
 			} catch (cacheError) {
 				console.error(`❌ Failed to update notification template cache:`, cacheError)
 			}

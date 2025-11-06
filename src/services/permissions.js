@@ -22,8 +22,12 @@ module.exports = class PermissionsHelper {
 			const permissions = await permissionsQueries.createPermission(bodyData)
 
 			// Invalidate all permissions caches since new permission might affect role mappings
-			await cacheHelper.evictNamespace({ ns: 'permissions' })
-			await cacheHelper.evictNamespace({ ns: 'apiPermissions' })
+			try {
+				await cacheHelper.evictNamespace({ ns: 'permissions' })
+				await cacheHelper.evictNamespace({ ns: 'apiPermissions' })
+			} catch (cacheError) {
+				console.warn('Cache invalidation failed for permission creation:', cacheError)
+			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -82,8 +86,12 @@ module.exports = class PermissionsHelper {
 				})
 			} else {
 				// Invalidate all permissions caches since permission update might affect role mappings
-				await cacheHelper.evictNamespace({ ns: 'permissions' })
-				await cacheHelper.evictNamespace({ ns: 'apiPermissions' })
+				try {
+					await cacheHelper.evictNamespace({ ns: 'permissions' })
+					await cacheHelper.evictNamespace({ ns: 'apiPermissions' })
+				} catch (cacheError) {
+					console.warn('Cache invalidation failed for permission update:', cacheError)
+				}
 
 				return responses.successResponse({
 					statusCode: httpStatusCode.created,
@@ -126,8 +134,12 @@ module.exports = class PermissionsHelper {
 			}
 
 			// Invalidate all permissions caches since permission deletion might affect role mappings
-			await cacheHelper.evictNamespace({ ns: 'permissions' })
-			await cacheHelper.evictNamespace({ ns: 'apiPermissions' })
+			try {
+				await cacheHelper.evictNamespace({ ns: 'permissions' })
+				await cacheHelper.evictNamespace({ ns: 'apiPermissions' })
+			} catch (cacheError) {
+				console.warn('Cache invalidation failed for permission deletion:', cacheError)
+			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,

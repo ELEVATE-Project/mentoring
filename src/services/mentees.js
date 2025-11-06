@@ -1474,7 +1474,7 @@ module.exports = class MenteesHelper {
 					status: common.ACTIVE_STATUS,
 					model_names: { [Op.overlap]: [userExtensionModelName] },
 				},
-				[tenantCode, defaultRulesFilter.tenantCode]
+				[tenantCode, defaults.tenantCode]
 			)
 
 			let filteredQuery = utils.validateAndBuildFilters(

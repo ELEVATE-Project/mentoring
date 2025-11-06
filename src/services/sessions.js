@@ -3520,8 +3520,7 @@ module.exports = class SessionsHelper {
 			// Refresh session cache after adding mentees (seats_remaining changed)
 			try {
 				// Fetch updated session with correct seats_remaining
-				const updatedSession = await cacheHelper.sessions.get(tenantCode, organizationCode, sessionId)
-				sessionQueries.findOne({ id: sessionId }, tenantCode, {
+				const updatedSession = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
 					attributes: {
 						exclude: ['share_link', 'mentee_password', 'mentor_password'],
 					},
@@ -3530,7 +3529,7 @@ module.exports = class SessionsHelper {
 				if (updatedSession) {
 					// Remove user-specific data before caching
 					const cacheData = {
-						...updatedSession,
+						...(updatedSession.dataValues || updatedSession),
 						share_link: undefined,
 						mentee_password: undefined,
 						mentor_password: undefined,

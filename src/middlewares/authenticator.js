@@ -276,22 +276,45 @@ async function fetchPermissions(roleTitle, apiPath, module) {
 	// Try to get cached permissions for all role-path combinations (global cache)
 	const cachedPermissions = await cacheHelper.apiPermissions.getMultipleRoles(roles, module, apiPaths)
 
-	// If we have any cached data, return it (partial cache hits are okay)
-	if (cachedPermissions && cachedPermissions.length > 0) {
-		return cachedPermissions
+	// Check if we have all required role/path combinations cached
+	const requiredKeys = new Set()
+	roles.forEach((role) => {
+		apiPaths.forEach((path) => requiredKeys.add(`${role}::${path}`))
+	})
+
+	const permissionsFromCache = cachedPermissions || []
+	permissionsFromCache.forEach((permission) =>
+		requiredKeys.delete(`${permission.role_title}::${permission.api_path}`)
+	)
+
+	// If all combinations are cached, return them
+	if (requiredKeys.size === 0) {
+		return permissionsFromCache
 	}
 
-	// Fetch from database if cache miss
-	const filter = { role_title: roles, module, api_path: { [Op.in]: apiPaths } }
+	// Extract missing role/path combinations for database query
+	const missingRoles = []
+	const missingApiPaths = []
+
+	requiredKeys.forEach((key) => {
+		const [role, apiPath] = key.split('::')
+		if (!missingRoles.includes(role)) missingRoles.push(role)
+		if (!missingApiPaths.includes(apiPath)) missingApiPaths.push(apiPath)
+	})
+
+	// Fetch only missing combinations from database
+	const filter = { role_title: missingRoles, module, api_path: { [Op.in]: missingApiPaths } }
 	const attributes = ['request_type', 'api_path', 'module', 'role_title']
-	const permissions = await rolePermissionMappingQueries.findAll(filter, attributes)
+	const dbPermissions = await rolePermissionMappingQueries.findAll(filter, attributes)
 
-	// Cache the results using individual role-based keys (global cache)
-	if (permissions && permissions.length > 0) {
-		await cacheHelper.apiPermissions.setFromDatabaseResults(module, apiPaths, permissions)
+	// Cache the newly fetched results
+	if (dbPermissions && dbPermissions.length > 0) {
+		await cacheHelper.apiPermissions.setFromDatabaseResults(module, missingApiPaths, dbPermissions)
 	}
 
-	return permissions
+	// Merge cached and database results
+	const allPermissions = [...permissionsFromCache, ...(dbPermissions || [])]
+	return allPermissions
 }
 
 async function verifyToken(token) {

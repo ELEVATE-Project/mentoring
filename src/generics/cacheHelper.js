@@ -319,7 +319,8 @@ const sessions = {
 	async get(tenantCode, orgCode, sessionId) {
 		try {
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'sessions', id: sessionId })
-			const cachedSession = await get(cacheKey)
+			const useInternal = nsUseInternal('sessions')
+			const cachedSession = await get(cacheKey, { useInternal })
 			if (cachedSession) {
 				console.log(`💾 Session ${sessionId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`)
 				return cachedSession
@@ -368,7 +369,9 @@ const sessions = {
 	},
 
 	async delete(tenantCode, orgCode, sessionId) {
-		return delScoped({ tenantCode, orgCode: orgCode, ns: 'sessions', id: sessionId })
+		const useInternal = nsUseInternal('sessions')
+		const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'sessions', id: sessionId })
+		return del(cacheKey, { useInternal })
 	},
 
 	async reset(tenantCode, orgCode, sessionId, sessionData, customTtl = null) {
@@ -386,7 +389,8 @@ const entityTypes = {
 		try {
 			const compositeId = `model:${modelName}:${entityValue}`
 			const key = await buildKey({ tenantCode, orgCode: orgCode, ns: 'entityTypes', id: compositeId })
-			const cachedEntityType = await get(key)
+			const useInternal = nsUseInternal('entityTypes')
+			const cachedEntityType = await get(key, { useInternal })
 			if (cachedEntityType) {
 				console.log(
 					`💾 EntityType ${modelName}:${entityValue} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`
@@ -437,7 +441,9 @@ const entityTypes = {
 
 	async delete(tenantCode, orgCode, modelName, entityValue) {
 		const compositeId = `model:${modelName}:${entityValue}`
-		return delScoped({ tenantCode, orgCode: orgCode, ns: 'entityTypes', id: compositeId })
+		const useInternal = nsUseInternal('entityTypes')
+		const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'entityTypes', id: compositeId })
+		return del(cacheKey, { useInternal })
 	},
 
 	// Clear all entityTypes cache for a tenant/org (useful after cache key format changes)
@@ -457,7 +463,8 @@ const forms = {
 	 */
 	async get(tenantCode, orgCode, type, subtype) {
 		const compositeId = `${type}:${subtype}`
-		return get(await buildKey({ tenantCode, orgCode: orgCode, ns: 'forms', id: compositeId }))
+		const useInternal = nsUseInternal('forms')
+		return get(await buildKey({ tenantCode, orgCode: orgCode, ns: 'forms', id: compositeId }), { useInternal })
 	},
 
 	/**
@@ -480,7 +487,9 @@ const forms = {
 	 */
 	async delete(tenantCode, orgCode, type, subtype) {
 		const compositeId = `${type}:${subtype}`
-		return delScoped({ tenantCode, orgCode: orgCode, ns: 'forms', id: compositeId })
+		const useInternal = nsUseInternal('forms')
+		const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'forms', id: compositeId })
+		return del(cacheKey, { useInternal })
 	},
 
 	/**
@@ -499,7 +508,8 @@ const organizations = {
 	async get(tenantCode, orgCode, organizationId) {
 		try {
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'organizations', id: organizationId })
-			const cachedOrg = await get(cacheKey)
+			const useInternal = nsUseInternal('organizations')
+			const cachedOrg = await get(cacheKey, { useInternal })
 			if (cachedOrg) {
 				console.log(
 					`💾 Organization ${organizationId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`
@@ -542,7 +552,9 @@ const organizations = {
 	},
 
 	async delete(tenantCode, orgCode, organizationId) {
-		return delScoped({ tenantCode, orgCode: orgCode, ns: 'organizations', id: organizationId })
+		const useInternal = nsUseInternal('organizations')
+		const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'organizations', id: organizationId })
+		return del(cacheKey, { useInternal })
 	},
 }
 
@@ -555,7 +567,8 @@ const mentor = {
 	async get(tenantCode, orgCode, mentorId) {
 		try {
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentor', id: mentorId })
-			const cachedProfile = await get(cacheKey)
+			const useInternal = nsUseInternal('mentor')
+			const cachedProfile = await get(cacheKey, { useInternal })
 			if (cachedProfile) {
 				console.log(`💾 Mentor profile ${mentorId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`)
 				return cachedProfile
@@ -588,7 +601,8 @@ const mentor = {
 			const sanitizedData = this._sanitizeProfileData(profileData)
 
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentor', id: mentorId })
-			await set(cacheKey, sanitizedData, 86400) // 1 day TTL
+			const useInternal = nsUseInternal('mentor')
+			await set(cacheKey, sanitizedData, 86400, { useInternal }) // 1 day TTL
 			console.log(`💾 Mentor profile ${mentorId} cached: tenant:${tenantCode}:org:${orgCode}`)
 		} catch (error) {
 			console.error(`❌ Failed to cache mentor profile ${mentorId}:`, error)
@@ -598,7 +612,8 @@ const mentor = {
 	async delete(tenantCode, orgCode, mentorId) {
 		try {
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentor', id: mentorId })
-			await del(cacheKey)
+			const useInternal = nsUseInternal('mentor')
+			await del(cacheKey, { useInternal })
 			console.log(`🗑️ Mentor profile ${mentorId} cache deleted: tenant:${tenantCode}:org:${orgCode}`)
 		} catch (error) {
 			console.error(`❌ Failed to delete mentor profile ${mentorId} cache:`, error)
@@ -633,7 +648,8 @@ const mentee = {
 	async get(tenantCode, orgCode, menteeId) {
 		try {
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentee', id: menteeId })
-			const cachedProfile = await get(cacheKey)
+			const useInternal = nsUseInternal('mentee')
+			const cachedProfile = await get(cacheKey, { useInternal })
 			if (cachedProfile) {
 				console.log(`💾 Mentee profile ${menteeId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`)
 				return cachedProfile
@@ -666,7 +682,8 @@ const mentee = {
 			const sanitizedData = this._sanitizeProfileData(profileData)
 
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentee', id: menteeId })
-			await set(cacheKey, sanitizedData, 86400) // 1 day TTL
+			const useInternal = nsUseInternal('mentee')
+			await set(cacheKey, sanitizedData, 86400, { useInternal }) // 1 day TTL
 			console.log(`💾 Mentee profile ${menteeId} cached: tenant:${tenantCode}:org:${orgCode}`)
 		} catch (error) {
 			console.error(`❌ Failed to cache mentee profile ${menteeId}:`, error)
@@ -676,7 +693,8 @@ const mentee = {
 	async delete(tenantCode, orgCode, menteeId) {
 		try {
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentee', id: menteeId })
-			await del(cacheKey)
+			const useInternal = nsUseInternal('mentee')
+			await del(cacheKey, { useInternal })
 			console.log(`🗑️ Mentee profile ${menteeId} cache deleted: tenant:${tenantCode}:org:${orgCode}`)
 		} catch (error) {
 			console.error(`❌ Failed to delete mentee profile ${menteeId} cache:`, error)
@@ -708,7 +726,8 @@ const mentee = {
  */
 const platformConfig = {
 	async get(tenantCode, orgCode) {
-		return get(await buildKey({ tenantCode, orgCode: orgCode, ns: 'platformConfig', id: '' }))
+		const useInternal = nsUseInternal('platformConfig')
+		return get(await buildKey({ tenantCode, orgCode: orgCode, ns: 'platformConfig', id: '' }), { useInternal })
 	},
 
 	async set(tenantCode, orgCode, configData) {
@@ -722,7 +741,9 @@ const platformConfig = {
 	},
 
 	async delete(tenantCode, orgCode) {
-		return delScoped({ tenantCode, orgCode: orgCode, ns: 'platformConfig', id: '' })
+		const useInternal = nsUseInternal('platformConfig')
+		const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'platformConfig', id: '' })
+		return del(cacheKey, { useInternal })
 	},
 }
 
@@ -740,6 +761,7 @@ const notificationTemplates = {
 			const orgCodesArray = Array.isArray(orgCodes) ? orgCodes : [orgCodes]
 
 			// First check user-specific cache combinations
+			const useInternal = nsUseInternal('notificationTemplates')
 			for (const tenantCode of tenantCodesArray) {
 				for (const orgCode of orgCodesArray) {
 					const userCacheKey = await buildKey({
@@ -748,7 +770,7 @@ const notificationTemplates = {
 						ns: 'notificationTemplates',
 						id: compositeId,
 					})
-					const cachedTemplate = await get(userCacheKey)
+					const cachedTemplate = await get(userCacheKey, { useInternal })
 					if (cachedTemplate) {
 						console.log(
 							`💾 NotificationTemplate ${templateCode} retrieved from user cache: tenant:${tenantCode}:org:${orgCode}`
@@ -769,7 +791,7 @@ const notificationTemplates = {
 					ns: 'notificationTemplates',
 					id: compositeId,
 				})
-				const defaultCachedTemplate = await get(defaultCacheKey)
+				const defaultCachedTemplate = await get(defaultCacheKey, { useInternal })
 				if (defaultCachedTemplate) {
 					console.log(
 						`💾 NotificationTemplate ${templateCode} retrieved from default cache: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
@@ -838,7 +860,9 @@ const notificationTemplates = {
 
 	async delete(tenantCode, orgCode, templateCode) {
 		const compositeId = `templateCode:${templateCode}`
-		return delScoped({ tenantCode, orgCode: orgCode, ns: 'notificationTemplates', id: compositeId })
+		const useInternal = nsUseInternal('notificationTemplates')
+		const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'notificationTemplates', id: compositeId })
+		return del(cacheKey, { useInternal })
 	},
 }
 
@@ -850,9 +874,12 @@ const notificationTemplates = {
 const displayProperties = {
 	async get(tenantCode, orgCode) {
 		try {
+			const useInternal = nsUseInternal('displayProperties')
+
 			// Try org-specific cache first
 			const orgSpecific = await get(
-				await buildKey({ tenantCode, orgCode: orgCode, ns: 'displayProperties', id: '' })
+				await buildKey({ tenantCode, orgCode: orgCode, ns: 'displayProperties', id: '' }),
+				{ useInternal }
 			)
 			if (orgSpecific) {
 				console.log(`💾 Display properties found in org-specific cache: tenant:${tenantCode}:org:${orgCode}`)
@@ -860,7 +887,9 @@ const displayProperties = {
 			}
 
 			// Fallback to tenant-only cache
-			const tenantOnly = await get(await buildKey({ tenantCode, orgCode: '', ns: 'displayProperties', id: '' }))
+			const tenantOnly = await get(await buildKey({ tenantCode, orgCode: '', ns: 'displayProperties', id: '' }), {
+				useInternal,
+			})
 			if (tenantOnly) {
 				console.log(`💾 Display properties found in tenant-only cache: tenant:${tenantCode}`)
 				return tenantOnly
@@ -909,9 +938,15 @@ const displayProperties = {
 	},
 
 	async delete(tenantCode, orgCode) {
+		const useInternal = nsUseInternal('displayProperties')
+
 		// Delete both org-specific and tenant-only caches
-		await delScoped({ tenantCode, orgCode: orgCode, ns: 'displayProperties', id: '' })
-		await delScoped({ tenantCode, orgCode: '', ns: 'displayProperties', id: '' })
+		const orgKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'displayProperties', id: '' })
+		const tenantKey = await buildKey({ tenantCode, orgCode: '', ns: 'displayProperties', id: '' })
+
+		await del(orgKey, { useInternal })
+		await del(tenantKey, { useInternal })
+
 		console.log(
 			`🗑️ Display properties cache deleted at both levels: tenant:${tenantCode}:org:${orgCode} and tenant:${tenantCode}`
 		)
@@ -927,7 +962,8 @@ const permissions = {
 	async get(role) {
 		try {
 			const key = `permissions:role:${role}`
-			const cachedPermissions = await get(key)
+			const useInternal = nsUseInternal('permissions')
+			const cachedPermissions = await get(key, { useInternal })
 			if (cachedPermissions) {
 				console.log(`💾 Permissions for role ${role} retrieved from cache`)
 				return cachedPermissions
@@ -961,12 +997,14 @@ const permissions = {
 
 	async set(role, permissionsData) {
 		const key = `permissions:role:${role}`
-		return set(key, permissionsData)
+		const useInternal = nsUseInternal('permissions')
+		return set(key, permissionsData, undefined, { useInternal })
 	},
 
 	async delete(role) {
 		const key = `permissions:role:${role}`
-		return del(key)
+		const useInternal = nsUseInternal('permissions')
+		return del(key, { useInternal })
 	},
 
 	/**
@@ -997,7 +1035,8 @@ const apiPermissions = {
 	 */
 	async getSingleRole(role, module, apiPath) {
 		const key = `apiPermissions:role:${role}:module:${module}:api_path:${apiPath}`
-		return get(key)
+		const useInternal = nsUseInternal('apiPermissions')
+		return get(key, { useInternal })
 	},
 
 	/**
@@ -1007,7 +1046,8 @@ const apiPermissions = {
 	async setSingleRole(role, module, apiPath, requestTypes) {
 		const key = `apiPermissions:role:${role}:module:${module}:api_path:${apiPath}`
 		const permissionData = { request_type: requestTypes }
-		return set(key, permissionData)
+		const useInternal = nsUseInternal('apiPermissions')
+		return set(key, permissionData, undefined, { useInternal })
 	},
 
 	/**
@@ -1015,7 +1055,8 @@ const apiPermissions = {
 	 */
 	async deleteSingleRole(role, module, apiPath) {
 		const key = `apiPermissions:role:${role}:module:${module}:api_path:${apiPath}`
-		return del(key)
+		const useInternal = nsUseInternal('apiPermissions')
+		return del(key, { useInternal })
 	},
 
 	/**

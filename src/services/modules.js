@@ -172,8 +172,10 @@ module.exports = class modulesHelper {
 
 			if (!modules) {
 				const filter = {
-					code: { [Op.iLike]: `%${search}%` },
 					tenant_code: tenantCode,
+				}
+				if (search && search.trim() !== '') {
+					filter.code = { [Op.iLike]: `%${search.trim()}%` }
 				}
 				const options = {
 					offset,

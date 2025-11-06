@@ -27,20 +27,17 @@ module.exports = {
 				'displayProperties',
 				'permissions',
 				'apiPermissions',
-				'userExistence',
-				'userExtensions',
-				'all',
 			])
 			.withMessage('INVALID_NAMESPACE')
 
-		req.checkQuery('tenantCode').optional().isLength({ min: 1, max: 255 }).withMessage('INVALID_TENANT_CODE')
-		req.checkQuery('orgId').optional().isLength({ min: 1, max: 255 }).withMessage('INVALID_ORG_ID')
+		req.checkQuery('tenant_code').optional().isLength({ min: 1, max: 255 }).withMessage('INVALID_TENANT_CODE')
+		req.checkQuery('org_id').optional().isLength({ min: 1, max: 255 }).withMessage('INVALID_ORG_ID')
 	},
 
 	warmUpCache: (req) => {
 		// Optional query parameters for cache warm up
-		req.checkQuery('tenantCode').optional().isLength({ min: 1, max: 255 }).withMessage('INVALID_TENANT_CODE')
-		req.checkQuery('orgId').optional().isLength({ min: 1, max: 255 }).withMessage('INVALID_ORG_ID')
+		req.checkQuery('tenant_code').optional().isLength({ min: 1, max: 255 }).withMessage('INVALID_TENANT_CODE')
+		req.checkQuery('org_id').optional().isLength({ min: 1, max: 255 }).withMessage('INVALID_ORG_ID')
 	},
 
 	getCacheHealth: (req) => {

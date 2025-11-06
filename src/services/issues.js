@@ -7,6 +7,8 @@ const notificationTemplateQueries = require('@database/queries/notificationTempl
 const issueQueries = require('../database/queries/issue')
 const userRequests = require('@requests/user')
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 const menteeExtensionQueries = require('@database/queries/userExtension')
 
@@ -67,7 +69,7 @@ module.exports = class issuesHelper {
 			}
 
 			const tenantCodes = [tenantCode, defaults.tenantCode]
-			const orgCodes = [orgCode, defaults.orgCode]
+			const orgCodes = [decodedToken.organization_code, defaults.orgCode]
 
 			// Get email template
 

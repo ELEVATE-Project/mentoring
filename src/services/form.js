@@ -117,7 +117,12 @@ module.exports = class FormsHelper {
 			try {
 				// Delete old cache entry if original form had different type/subtype
 				if (originalForm && originalForm.type && originalForm.sub_type) {
-					await cacheHelper.forms.delete(tenantCode, orgCode, originalForm.type, originalForm.sub_type)
+					await cacheHelper.forms.delete(
+						tenantCode,
+						originalForm.organization_code || orgCode,
+						originalForm.type,
+						originalForm.sub_type
+					)
 					console.log(`Old form cache deleted: ${originalForm.type}:${originalForm.sub_type}`)
 				}
 
@@ -131,7 +136,7 @@ module.exports = class FormsHelper {
 					if (updatedForm && updatedForm.length > 0) {
 						await cacheHelper.forms.set(
 							tenantCode,
-							orgCode,
+							updatedForm[0].organization_code || orgCode,
 							bodyData.type,
 							bodyData.sub_type,
 							updatedForm[0]
@@ -279,7 +284,7 @@ module.exports = class FormsHelper {
 										if (formData.sub_type) {
 											await cacheHelper.forms.set(
 												tenantCode,
-												defaults.orgCode,
+												formData.organization_code || defaults.orgCode,
 												formData.type,
 												formData.sub_type,
 												formData

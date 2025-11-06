@@ -769,7 +769,7 @@ module.exports = class EntityHelper {
 	static async clearAndRebuildCache(tenantCode, orgCode) {
 		try {
 			console.log('🧹 [CACHE CLEAR] Clearing all entity type caches...')
-			await cacheHelper.evictNamespace('entityTypes', tenantCode, orgCode)
+			await cacheHelper.evictNamespace({ tenantCode, orgCode, ns: 'entityTypes' })
 			console.log('✅ [CACHE CLEAR] All entity type caches cleared')
 
 			console.log('🔄 [CACHE REBUILD] Rebuilding cache with new format...')

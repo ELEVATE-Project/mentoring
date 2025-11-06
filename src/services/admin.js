@@ -1117,7 +1117,7 @@ module.exports = class AdminService {
 
 	static async notifyMentorAboutPrivateSessionCancellation(mentorId, sessionDetails, orgCodes, tenantCodes) {
 		try {
-			mentorDetails = await mentorQueries.getMentorExtension(
+			const mentorDetails = await mentorQueries.getMentorExtension(
 				mentorId,
 				['name', 'email'],
 				true,
