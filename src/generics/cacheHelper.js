@@ -13,6 +13,7 @@ const entityTypeQueries = require('@database/queries/entityType')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
 const sessionQueries = require('@database/queries/sessions')
 const permissionQueries = require('@database/queries/permissions')
+const rolePermissionMappingQueries = require('@database/queries/role-permission-mapping')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 /** CONFIG */
@@ -934,7 +935,16 @@ const permissions = {
 
 			// Cache miss - fallback to database query
 			console.log(`💾 Permissions for role ${role} cache miss, fetching from database`)
-			const permissionsFromDb = await permissionQueries.findAllPermissions({ role_title: role })
+			const filter = { role_title: [role] }
+			const attributes = ['module', 'request_type', 'api_path']
+			const rolePermissionsData = await rolePermissionMappingQueries.findAll(filter, attributes)
+
+			// Format to match expected structure with service field
+			const permissionsFromDb = rolePermissionsData.map((permission) => ({
+				module: permission.module,
+				request_type: permission.request_type,
+				service: common.MENTORING_SERVICE,
+			}))
 
 			if (permissionsFromDb && permissionsFromDb.length > 0) {
 				// Cache the fetched data for future requests

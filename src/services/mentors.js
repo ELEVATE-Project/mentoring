@@ -1003,10 +1003,19 @@ module.exports = class MentorsHelper {
 
 			const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
 			const mentorPermissions = await permissions.getPermissions(roles, tenantCode, orgCode)
+
 			if (!Array.isArray(mentorProfile.permissions)) {
 				mentorProfile.permissions = []
 			}
-			mentorProfile.permissions.push(...mentorPermissions)
+
+			// Handle both array response (success) and response object (error)
+			if (Array.isArray(mentorPermissions)) {
+				mentorProfile.permissions.push(...mentorPermissions)
+			} else {
+				// It's the error response object, extract the permissions array
+				const permissionsArray = mentorPermissions.result?.permissions || []
+				mentorProfile.permissions.push(...permissionsArray)
+			}
 
 			const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
 			mentorProfile.profile_mandatory_fields = profileMandatoryFields

@@ -42,14 +42,6 @@ const generateFormKey = (tenantCode, orgCode, type, subtype) => {
 }
 
 /**
- * Generate session request cache key
- * Pattern: tenant:${tenantCode}:org:${orgCode}:sessionRequests:${id}
- */
-const generateSessionRequestKey = (tenantCode, orgCode, requestId) => {
-	return `${generateBaseKey(tenantCode, orgCode, 'sessionRequests')}:${requestId}`
-}
-
-/**
  * Generate organization cache key
  * Pattern: tenant:${tenantCode}:org:${orgCode}:organizations:${id}
  */

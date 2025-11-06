@@ -260,12 +260,6 @@ module.exports = {
 				defaultTtl: 86400, // 1 day
 				useInternal: false,
 			},
-			sessionRequests: {
-				name: 'sessionRequests',
-				enabled: true,
-				defaultTtl: 86400, // 1 day
-				useInternal: false,
-			},
 			organizations: {
 				name: 'organizations',
 				enabled: true,

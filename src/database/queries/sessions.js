@@ -171,6 +171,31 @@ exports.findAll = async (filter, tenantCode, options = {}) => {
 	}
 }
 
+exports.updateEnrollmentCount = async (sessionId, increment = true, tenantCode) => {
+	try {
+		const options = increment ? { by: 1 } : { by: -1 }
+		const result = this.incrementOrDecrement(
+			{
+				where: { id: sessionId, tenant_code: tenantCode },
+				...options,
+			},
+			'seats_remaining'
+		)
+		return result
+	} catch (error) {
+		return error
+	}
+}
+
+exports.incrementOrDecrement = async (filterWithOptions, incrementFields = []) => {
+	try {
+		// Note: tenant_code filtering should already be included in filterWithOptions.where
+		return await Session.increment(incrementFields, filterWithOptions)
+	} catch (error) {
+		return error
+	}
+}
+
 exports.getSessionByUserIdAndTime = async (userId, startDate, endDate, sessionId, tenantCode) => {
 	try {
 		let startDateResponse, endDateResponse
