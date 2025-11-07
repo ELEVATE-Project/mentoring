@@ -194,10 +194,10 @@ module.exports = class Sessions {
 			const unEnrolledSession = await sessionService.unEnroll(
 				req.params.id,
 				req.decodedToken,
-				true,
-				{},
+				true, // isSelfUnenrollment
+				{}, // session
 				tenantCode,
-				null,
+				null, // mentorId
 				orgCode
 			)
 			return unEnrolledSession

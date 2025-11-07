@@ -3,7 +3,6 @@ const common = require('@constants/common')
 const entityTypeQueries = require('@database/queries/entityType')
 const entityTypeCache = require('@helpers/entityTypeCache')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
-const cacheHelper = require('@generics/cacheHelper')
 const { Op } = require('sequelize')
 
 module.exports = class OrganizationAndEntityTypePolicyHelper {
@@ -46,18 +45,6 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 					attributes: attributes,
 				}
 			)
-
-			// Cache the organization extension if we have both organization_code and organization_id
-			if (orgExtension && orgExtension.organization_code && orgExtension.organization_id) {
-				cacheHelper.organizations
-					.set(tenantCode, orgExtension.organization_code, orgExtension.organization_id, orgExtension)
-					.catch((cacheError) => {
-						console.error(
-							`❌ Failed to cache organization ${orgExtension.organization_id} in getOrgIdAndEntityTypewithEntitiesBasedOnPolicy:`,
-							cacheError
-						)
-					})
-			}
 
 			if (orgExtension?.organization_code) {
 				const orgPolicyMap = {

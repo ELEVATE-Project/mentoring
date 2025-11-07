@@ -1986,8 +1986,7 @@ module.exports = class SessionsHelper {
 		roles,
 		orgId,
 		orgCode,
-		tenantCode,
-		effectiveMentorId
+		tenantCode
 	) {
 		try {
 			let email
@@ -3476,7 +3475,6 @@ module.exports = class SessionsHelper {
 			// Enroll mentees
 			const successIds = []
 			const failedIds = []
-			const effectiveMentorId = mentorId ?? sessionDetails.mentor_id
 			const enrollPromises = mentees.map((menteeData) =>
 				this.enroll(
 					sessionId,
@@ -3488,8 +3486,7 @@ module.exports = class SessionsHelper {
 					[],
 					organizationId,
 					organizationCode,
-					tenantCode,
-					effectiveMentorId
+					tenantCode
 				)
 					.then((response) => ({
 						id: menteeData.user_id,
