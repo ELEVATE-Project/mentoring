@@ -564,8 +564,17 @@ const organizations = {
  * TTL: 1 day (86400 seconds)
  */
 const mentor = {
-	async get(tenantCode, orgCode, mentorId) {
+	async get(tenantCode, orgCode, mentorId, raw = true) {
 		try {
+			// If raw is true, skip cache and return direct database query
+			if (raw) {
+				console.log(
+					`🔄 Raw mode: Fetching fresh mentor profile ${mentorId} from database: tenant:${tenantCode}:org:${orgCode}`
+				)
+				return await mentorQueries.getMentorExtension(mentorId, [], false, tenantCode)
+			}
+
+			// Cache mode: Check cache first
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentor', id: mentorId })
 			const useInternal = nsUseInternal('mentor')
 			const cachedProfile = await get(cacheKey, { useInternal })
@@ -574,21 +583,11 @@ const mentor = {
 				return cachedProfile
 			}
 
-			// Cache miss - fallback to database query
+			// Cache miss - will be handled by service layer to cache complete response
 			console.log(
-				`💾 Mentor profile ${mentorId} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
+				`💾 Mentor profile ${mentorId} cache miss, returning null for service layer handling: tenant:${tenantCode}:org:${orgCode}`
 			)
-			const profileFromDb = await mentorQueries.getMentorExtension(mentorId, [], false, tenantCode)
-
-			if (profileFromDb) {
-				// Cache the fetched data for future requests
-				await this.set(tenantCode, orgCode, mentorId, profileFromDb)
-				console.log(
-					`💾 Mentor profile ${mentorId} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
-				)
-			}
-
-			return profileFromDb
+			return null
 		} catch (error) {
 			console.error(`❌ Failed to get mentor profile ${mentorId} from cache/database:`, error)
 			return null
@@ -645,8 +644,17 @@ const mentor = {
  * TTL: 1 day (86400 seconds)
  */
 const mentee = {
-	async get(tenantCode, orgCode, menteeId) {
+	async get(tenantCode, orgCode, menteeId, raw = true) {
 		try {
+			// If raw is true, skip cache and return direct database query
+			if (raw) {
+				console.log(
+					`🔄 Raw mode: Fetching fresh mentee profile ${menteeId} from database: tenant:${tenantCode}:org:${orgCode}`
+				)
+				return await userQueries.getMenteeExtension(menteeId, [], false, tenantCode)
+			}
+
+			// Cache mode: Check cache first
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentee', id: menteeId })
 			const useInternal = nsUseInternal('mentee')
 			const cachedProfile = await get(cacheKey, { useInternal })
@@ -655,21 +663,11 @@ const mentee = {
 				return cachedProfile
 			}
 
-			// Cache miss - fallback to database query
+			// Cache miss - will be handled by service layer to cache complete response
 			console.log(
-				`💾 Mentee profile ${menteeId} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
+				`💾 Mentee profile ${menteeId} cache miss, returning null for service layer handling: tenant:${tenantCode}:org:${orgCode}`
 			)
-			const profileFromDb = await userQueries.getMenteeExtension(menteeId, tenantCode)
-
-			if (profileFromDb) {
-				// Cache the fetched data for future requests
-				await this.set(tenantCode, orgCode, menteeId, profileFromDb)
-				console.log(
-					`💾 Mentee profile ${menteeId} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
-				)
-			}
-
-			return profileFromDb
+			return null
 		} catch (error) {
 			console.error(`❌ Failed to get mentee profile ${menteeId} from cache/database:`, error)
 			return null

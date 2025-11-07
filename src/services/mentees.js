@@ -48,31 +48,25 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - profile details
 	 */
 	static async read(id, organizationId, organizationCode, roles, tenantCode) {
-		// Try to get complete profile from cache first
-		const cachedProfile = await cacheHelper.mentee.get(tenantCode, organizationCode, id)
-		if (cachedProfile) {
-			console.log(`💾 Using cached mentee profile for ${id}`)
+		// Try to get complete profile from cache first (only when raw = false)
+		const cachedProfile = await cacheHelper.mentee.get(tenantCode, organizationCode, id, false)
 
-			// Get displayProperties and permissions from their respective caches
-			const displayProperties = await cacheHelper.displayProperties.get(tenantCode, organizationCode)
-			const menteePermissions = await permissions.getPermissions(roles, tenantCode, organizationCode)
-
-			// Merge cached profile with dynamic data
-			const profileWithDynamicData = {
-				...cachedProfile,
-				displayProperties,
-				Permissions: menteePermissions,
-				// Note: connectedUsers will be added when implemented
-			}
-
+		// If we have cached data and not in raw mode, return complete response immediately
+		if (cachedProfile && !raw) {
+			console.log(`💾 Using complete cached mentee profile response for ${id}`)
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'PROFILE_FETCHED_SUCCESSFULLY',
-				result: profileWithDynamicData,
+				result: cachedProfile,
 			})
 		}
 
-		console.log(`🔨 Cache miss - building mentee profile for ${id}`)
+		// Continue with normal processing for raw mode or cache miss
+		console.log(
+			raw
+				? `🔄 Raw mode: Building fresh mentee profile for ${id}`
+				: `💾 Cache miss: Building mentee profile for ${id}`
+		)
 
 		const menteeDetails = await userRequests.getUserDetails(id, tenantCode)
 		const mentee = menteeDetails.data.result
@@ -148,8 +142,6 @@ module.exports = class MenteesHelper {
 			}
 		}
 
-		const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
-
 		const menteePermissions = await permissions.getPermissions(roles, tenantCode, organizationCode)
 		if (!Array.isArray(menteeDetails.data.result.permissions)) {
 			menteeDetails.data.result.permissions = []
@@ -164,7 +156,6 @@ module.exports = class MenteesHelper {
 		}
 
 		const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
-		menteeDetails.data.result.profile_mandatory_fields = profileMandatoryFields
 
 		let communications = null
 
@@ -182,31 +173,56 @@ module.exports = class MenteesHelper {
 			communications,
 		}
 
-		if (!menteeDetails.data.result.organization) {
-			const orgDetails = await organisationExtensionQueries.findOne(
-				{ organization_code: organizationCode },
-				tenantCode,
-				{ attributes: ['name'] }
-			)
-			menteeDetails.data.result['organization'] = {
-				id: organizationCode,
-				name: orgDetails.name,
-			}
+		// Add missing computed fields to processDbResponse
+		processDbResponse.profile_mandatory_fields = profileMandatoryFields
+
+		// Add organization object
+		const orgDetails = await organisationExtensionQueries.findOne(
+			{ organization_code: organizationCode },
+			tenantCode,
+			{ attributes: ['name', 'organization_code', 'organization_id'] }
+		)
+		processDbResponse.organization = {
+			id: orgDetails.organization_code,
+			name: orgDetails.name,
 		}
-		// Construct the final profile response
+
+		// Add sessions_attended (both mentees and mentors can attend sessions)
+		const totalSessionsAttendedRead = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
+		processDbResponse.sessions_attended = totalSessionsAttendedRead
+
+		// Add sessions_hosted for mentors
+		if (mentee.is_mentor) {
+			const totalSessionHosted = await sessionQueries.countHostedSessions(id, tenantCode)
+			processDbResponse.sessions_hosted = totalSessionHosted
+		}
+
+		// Add is_connected (false for own profile read)
+		processDbResponse.is_connected = false
+
+		// Remove sensitive fields from menteeDetails
+		const sanitizedMenteeData = utils.deleteProperties(menteeDetails.data.result, ['phone'])
+
+		// Construct the final profile response (INCLUDE sessions_attended for read endpoint)
 		const finalProfile = {
-			sessions_attended: totalSession,
-			...menteeDetails.data.result,
+			user_id: id, // Add user_id to match mentor read response
+			...sanitizedMenteeData,
 			...processDbResponse,
+			visible_to_organizations: mentee.visible_to_organizations, // Add to match mentor read
+			settings: mentee.settings, // Add settings to match mentor read
+			image: mentee.image, // Add image to match mentor read
 			displayProperties,
 			Permissions: menteePermissions,
 		}
 
-		// Cache the profile (sanitized version will be stored)
-		try {
-			await cacheHelper.mentee.set(tenantCode, organizationCode, id, finalProfile)
-		} catch (cacheError) {
-			console.error(`❌ Failed to cache mentee profile ${id}:`, cacheError)
+		// Cache the complete profile response only when not in raw mode
+		if (!raw) {
+			try {
+				console.log(`💾 Caching complete mentee profile response for ${id}`)
+				await cacheHelper.mentee.set(tenantCode, organizationCode, id, finalProfile)
+			} catch (cacheError) {
+				console.error(`❌ Failed to cache mentee profile ${id}:`, cacheError)
+			}
 		}
 
 		return responses.successResponse({
@@ -983,16 +999,6 @@ module.exports = class MenteesHelper {
 			const response = await menteeQueries.createMenteeExtension(data, tenantCode)
 			const processDbResponse = utils.processDbResponse(response.toJSON(), validationData)
 
-			// Cache the newly created mentee extension
-			if (processDbResponse && userId && organizationCode) {
-				try {
-					await cacheHelper.mentee.set(tenantCode, organizationCode, userId, processDbResponse)
-					console.log(`💾 Mentee extension cached after creation for user ${userId}`)
-				} catch (cacheError) {
-					console.error(`❌ Failed to cache mentee extension after creation:`, cacheError)
-				}
-			}
-
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTEE_EXTENSION_CREATED',
@@ -1042,10 +1048,6 @@ module.exports = class MenteesHelper {
 			let currentUser = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
 			if (!currentUser) {
 				currentUser = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
-				// Cache the result under logged-in user's organization context
-				if (currentUser) {
-					await cacheHelper.mentee.set(tenantCode, organizationCode, userId, currentUser)
-				}
 			}
 			if (!currentUser) {
 				return responses.failureResponse({
@@ -1160,10 +1162,6 @@ module.exports = class MenteesHelper {
 				let fallbackUpdatedUser = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
 				if (!fallbackUpdatedUser) {
 					fallbackUpdatedUser = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
-					// Cache the result under logged-in user's organization context
-					if (fallbackUpdatedUser) {
-						await cacheHelper.mentee.set(tenantCode, organizationCode, userId, fallbackUpdatedUser)
-					}
 				}
 				if (!fallbackUpdatedUser) {
 					return responses.failureResponse({
@@ -1188,9 +1186,6 @@ module.exports = class MenteesHelper {
 				try {
 					// Delete old cache first
 					await cacheHelper.mentee.delete(tenantCode, organizationCode, userId)
-					// Cache the new updated data
-					await cacheHelper.mentee.set(tenantCode, organizationCode, userId, updatedUser[0])
-					console.log(`💾 Mentee cache updated with new data for user ${userId}`)
 				} catch (cacheError) {
 					console.error(`❌ Failed to update mentee cache after update:`, cacheError)
 				}
@@ -1914,7 +1909,76 @@ module.exports = class MenteesHelper {
 	static async details(id, organizationCode, userId = '', isAMentor = '', roles = '', tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let requestedUserExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, id)
+			let requestedUserExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, id, false)
+
+			// If we have cached complete response and not in raw mode, return it immediately
+			if (
+				requestedUserExtension &&
+				!raw &&
+				requestedUserExtension.displayProperties &&
+				requestedUserExtension.Permissions
+			) {
+				let totalSessionHosted
+				if (requestedUserExtension.is_mentor == true) {
+					// Get mentor visibility and org id
+					const validateDefaultRules = await validateDefaultRulesFilter({
+						ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
+						requesterId: userId,
+						roles: roles,
+						requesterOrganizationCode: organizationCode,
+						data: requestedUserExtension,
+						tenantCode: tenantCode,
+					})
+					if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
+						return responses.failureResponse({
+							message: 'PROFILE_NOT_UPDATED',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+					if (!validateDefaultRules) {
+						return responses.failureResponse({
+							message: 'USER_NOT_FOUND',
+							statusCode: httpStatusCode.forbidden,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+					totalSessionHosted = await sessionQueries.countHostedSessions(id, tenantCode)
+				}
+				// Check for accessibility for reading shared mentor profile
+				const isAccessible = await checkIfUserIsAccessible(
+					userId,
+					requestedUserExtension,
+					tenantCode,
+					organizationCode
+				)
+
+				// Throw access error
+				if (!isAccessible) {
+					return responses.failureResponse({
+						statusCode: httpStatusCode.forbidden,
+						message: 'PROFILE_RESTRICTED',
+					})
+				}
+				console.log(`💾 Using complete cached mentee details response for ${id}`)
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'PROFILE_FTECHED_SUCCESSFULLY',
+					result: requestedUserExtension,
+				})
+			}
+
+			// Continue with normal processing for raw mode or cache miss
+			console.log(
+				raw
+					? `🔄 Raw mode: Building fresh mentee details for ${id}`
+					: `💾 Cache miss: Building mentee details for ${id}`
+			)
+
+			// If we don't have cached data, fetch it from database
+			if (!requestedUserExtension) {
+				requestedUserExtension = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
+			}
 
 			if (!requestedUserExtension || (!isAMentor && requestedUserExtension.is_mentor == false)) {
 				return responses.failureResponse({
@@ -2023,9 +2087,9 @@ module.exports = class MenteesHelper {
 				name: orgDetails.name,
 			}
 
-			const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
+			const totalSessionsAttendedDetails = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
 
-			processDbResponse.sessions_attended = totalSession
+			processDbResponse.sessions_attended = totalSessionsAttendedDetails
 			processDbResponse.sessions_hosted = totalSessionHosted
 
 			processDbResponse.is_connected = Boolean(connection)
@@ -2064,13 +2128,34 @@ module.exports = class MenteesHelper {
 				}
 			}
 
+			// Get permissions for the details response
+			const userPermissions = await permissions.getPermissions(roles, tenantCode, organizationCode)
+
+			// Construct the final details response
+			const finalDetailsResponse = {
+				user_id: id, // Add user_id to match mentor read
+				...processDbResponse,
+				visible_to_organizations: requestedUserExtension.visible_to_organizations, // Add to match mentor read
+				settings: requestedUserExtension.settings, // Add settings to match mentor read
+				image: requestedUserExtension.image, // Add image to match mentor read
+				displayProperties,
+				Permissions: userPermissions,
+			}
+
+			// Cache the complete details response only when not in raw mode
+			if (!raw) {
+				try {
+					console.log(`💾 Caching complete mentee details response for ${id}`)
+					await cacheHelper.mentee.set(tenantCode, organizationCode, id, finalDetailsResponse)
+				} catch (cacheError) {
+					console.error(`❌ Failed to cache mentee details ${id}:`, cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'PROFILE_FTECHED_SUCCESSFULLY',
-				result: {
-					...processDbResponse,
-					displayProperties,
-				},
+				result: finalDetailsResponse,
 			})
 		} catch (error) {
 			return error

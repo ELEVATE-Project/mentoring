@@ -816,31 +816,77 @@ module.exports = class MentorsHelper {
 				orgCode = mentorProfile.data.result.organization_code
 			}
 
-			// Try to get complete profile from cache first
-			const cachedProfile = await cacheHelper.mentor.get(tenantCode, orgCode, id)
-			if (cachedProfile) {
-				console.log(`💾 Using cached mentor profile for ${id}`)
+			// Try to get complete profile from cache first (only when raw = false)
+			const cachedProfile = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
 
-				// Get displayProperties and permissions from their respective caches
-				const displayProperties = await cacheHelper.displayProperties.get(tenantCode, orgCode)
-				const mentorPermissions = await permissions.getPermissions(roles, tenantCode, orgCode)
+			// If we have cached data and not in raw mode, return complete response immediately
+			if (cachedProfile && !raw) {
+				let requestedMentorExtension = false
+				if (userId !== '' && isAMentor !== '' && roles !== '') {
+					// Try cache first using logged-in user's organization context
+					requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
 
-				// Merge cached profile with dynamic data
-				const profileWithDynamicData = {
-					...cachedProfile,
-					displayProperties,
-					Permissions: mentorPermissions,
-					// Note: connectedUsers will be added when implemented
+					const validateDefaultRules = await validateDefaultRulesFilter({
+						ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
+						requesterId: userId,
+						roles: roles,
+						requesterOrganizationCode: orgCode,
+						data: requestedMentorExtension,
+						tenantCode: tenantCode,
+					})
+					if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
+						return responses.failureResponse({
+							message: 'PROFILE_NOT_UPDATED',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+					if (!validateDefaultRules) {
+						return responses.failureResponse({
+							message: 'MENTORS_NOT_FOUND',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+					// Throw error if extension not found
+					if (!requestedMentorExtension || Object.keys(requestedMentorExtension).length === 0) {
+						return responses.failureResponse({
+							statusCode: httpStatusCode.not_found,
+							message: 'MENTORS_NOT_FOUND',
+						})
+					}
+
+					// Check for accessibility for reading shared mentor profile
+					const isAccessible = await this.checkIfMentorIsAccessible(
+						[requestedMentorExtension],
+						userId,
+						isAMentor,
+						tenantCode,
+						orgCode
+					)
+
+					// Throw access error
+					if (!isAccessible) {
+						return responses.failureResponse({
+							statusCode: httpStatusCode.forbidden,
+							message: 'PROFILE_RESTRICTED',
+						})
+					}
 				}
-
+				console.log(`💾 Using complete cached mentor profile response for ${id}`)
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'PROFILE_FETCHED_SUCCESSFULLY',
-					result: profileWithDynamicData,
+					result: cachedProfile,
 				})
 			}
 
-			console.log(`🔨 Cache miss - building mentor profile for ${id}`)
+			// Continue with normal processing for raw mode or cache miss
+			console.log(
+				raw
+					? `🔄 Raw mode: Building fresh mentor profile for ${id}`
+					: `💾 Cache miss: Building mentor profile for ${id}`
+			)
 
 			let requestedMentorExtension = false
 			if (userId !== '' && isAMentor !== '' && roles !== '') {
@@ -938,7 +984,7 @@ module.exports = class MentorsHelper {
 			}
 			mentorProfile = utils.deleteProperties(mentorProfile.data.result, ['created_at', 'updated_at'])
 
-			mentorExtension = utils.deleteProperties(mentorExtension, ['user_id', 'visible_to_organizations'])
+			mentorExtension = utils.deleteProperties(mentorExtension, ['phone'])
 
 			const defaults = await getDefaults()
 			if (!defaults.orgCode)
@@ -962,10 +1008,6 @@ module.exports = class MentorsHelper {
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
-			}
-
-			if (mentorExtension.image) {
-				delete mentorExtension.image
 			}
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
@@ -1001,8 +1043,10 @@ module.exports = class MentorsHelper {
 				}
 			}
 
-			const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
 			const mentorPermissions = await permissions.getPermissions(roles, tenantCode, orgCode)
+
+			// Add is_connected field (false for own profile read)
+			processDbResponse.is_connected = false
 
 			if (!Array.isArray(mentorProfile.permissions)) {
 				mentorProfile.permissions = []
@@ -1055,10 +1099,15 @@ module.exports = class MentorsHelper {
 				}
 
 				mentorProfile['organization'] = {
-					code: mentorOrgCode,
+					id: mentorOrgCode,
 					name: orgDetails?.name,
 				}
 			}
+
+			// Add profile_mandatory_fields
+			const profileMandatoryFieldsRead = await utils.validateProfileData(processDbResponse, validationData)
+			processDbResponse.profile_mandatory_fields = profileMandatoryFieldsRead
+
 			// Conditionally fetch profile details if token exists
 			let userProfile = {}
 			if (tenantCode && id) {
@@ -1069,22 +1118,32 @@ module.exports = class MentorsHelper {
 				}
 				// No failure response; proceed with available data
 			}
-			// Construct the final profile response
+			// Construct the final profile response (INCLUDE sessions_attended for read endpoint)
+			const totalSessionsAttended = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
 			const finalProfile = {
-				sessions_attended: totalSession,
-				sessions_hosted: totalSessionHosted,
+				user_id: id, // Add user_id to match mentee read response
 				...mentorProfile,
 				...processDbResponse,
 				...userProfile, // Include userProfile only if token was provided
+				sessions_hosted: totalSessionHosted,
+				visible_to_organizations: mentorExtension.visible_to_organizations, // Add to match mentee read
+				settings: mentorExtension.settings, // Add settings to match mentee read
+				image: mentorExtension.image, // Add image to match mentee read
+				sessions_attended: totalSessionsAttended, // Add sessions_attended
+				profile_mandatory_fields: processDbResponse.profile_mandatory_fields, // Ensure not overwritten
+				organization: mentorProfile.organization, // Ensure not overwritten
 				displayProperties,
 				Permissions: mentorPermissions,
 			}
 
-			// Cache the profile (sanitized version will be stored)
-			try {
-				await cacheHelper.mentor.set(tenantCode, orgCode, id, finalProfile)
-			} catch (cacheError) {
-				console.error(`❌ Failed to cache mentor profile ${id}:`, cacheError)
+			// Cache the complete profile response only when not in raw mode
+			if (!raw) {
+				try {
+					console.log(`💾 Caching complete mentor profile response for ${id}`)
+					await cacheHelper.mentor.set(tenantCode, orgCode, id, finalProfile)
+				} catch (cacheError) {
+					console.error(`❌ Failed to cache mentor profile ${id}:`, cacheError)
+				}
 			}
 
 			return responses.successResponse({

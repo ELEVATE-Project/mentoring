@@ -314,20 +314,6 @@ module.exports = class UserHelper {
 					orgId
 			  )
 
-		// Cache the newly created user extension
-		if (user && user.statusCode === httpStatusCode.ok && user.result) {
-			try {
-				if (isAMentor) {
-					await cacheHelper.mentor.set(tenantCode, orgCode, userExtensionData.id, user.result)
-				} else {
-					await cacheHelper.mentee.set(tenantCode, orgCode, userExtensionData.id, user.result)
-				}
-				console.log(`💾 User extension cached after creation for user ${userExtensionData.id}`)
-			} catch (cacheError) {
-				console.error(`❌ Failed to cache user extension after creation:`, cacheError)
-			}
-		}
-
 		return user
 	}
 

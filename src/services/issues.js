@@ -32,15 +32,6 @@ module.exports = class issuesHelper {
 					['name', 'user_id', 'email'],
 					tenantCode
 				)
-				// Cache the result under logged-in user's organization context
-				if (userDetails) {
-					await cacheHelper.mentee.set(
-						tenantCode,
-						decodedToken.organization_code,
-						decodedToken.id,
-						userDetails
-					)
-				}
 			}
 			if (!userDetails) throw createUnauthorizedResponse('USER_NOT_FOUND')
 

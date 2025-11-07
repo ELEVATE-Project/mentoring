@@ -2,6 +2,7 @@ const menteeQueries = require('@database/queries/userExtension')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
+const cacheHelper = require('@generics/cacheHelper')
 
 /**
  * @description                             - Check if users are accessible based on the SaaS policy.

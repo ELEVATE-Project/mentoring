@@ -62,23 +62,7 @@ async function getUserExtensionCached(userId, tenantCode, preferredRole = 'mente
 				...user.result,
 				...userExtension,
 			}
-
-			// Cache in appropriate role cache
-			try {
-				if (userExtension.is_mentor) {
-					await cacheHelper.mentor.set(tenantCode, orgCode, userId, userResponse)
-				} else {
-					await cacheHelper.mentee.set(tenantCode, orgCode, userId, userResponse)
-				}
-				console.log(`💾 User ${userId} cached after database fetch`)
-			} catch (cacheError) {
-				console.error(`❌ Failed to cache user ${userId}:`, cacheError)
-			}
-
-			return userResponse
-		}
-
-		// Fallback to just extension data
+		} // Fallback to just extension data
 		return userExtension
 	} catch (error) {
 		console.error(`Error getting user extension for ${userId}:`, error)
@@ -198,8 +182,6 @@ async function getMenteeExtensionCached(userId, attributes = [], unScoped = fals
 						...user.result,
 						...mentee,
 					}
-					await cacheHelper.mentee.set(tenantCode, orgCode, userId, userResponse)
-					console.log(`💾 Mentee ${userId} cached after database fetch`)
 					return userResponse
 				}
 			} catch (cacheError) {
