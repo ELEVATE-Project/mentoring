@@ -7,7 +7,6 @@
 
 module.exports = {
 	name: process.env.SERVICE_NAME,
-	version: '3.2',
 	enableAdvancedCheck: true,
 	checks: {
 		kafka: {
