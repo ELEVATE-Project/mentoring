@@ -40,4 +40,11 @@ module.exports = {
 			.isString()
 			.withMessage('user_id must be a string')
 	},
+	checkConnection: (req) => {
+		req.checkBody('friend_id')
+			.notEmpty()
+			.withMessage('friend_id is required')
+			.isString()
+			.withMessage('friend_id must be a string')
+	},
 }

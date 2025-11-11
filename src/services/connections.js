@@ -412,7 +412,9 @@ module.exports = class ConnectionHelper {
 				searchText,
 				userId,
 				organizationIds,
-				roles
+				roles,
+				'ASC',
+				'mv.name'
 			)
 
 			if (extensionDetails.count === 0 || extensionDetails.data.length === 0) {
@@ -576,6 +578,52 @@ module.exports = class ConnectionHelper {
 		} catch (error) {
 			console.error('Error sending connection accept notification:', error)
 			// Don't throw error to avoid breaking the main rejection flow
+		}
+	}
+	/**
+	 * Check if a connection exists between the authenticated user and another user.
+	 * @param {string} user_id - The ID of the authenticated user initiating the check.
+	 * @param {Object} body - The request body containing connection-related data.
+	 * @param {string} body.friend_id - The ID of the user to check the connection against.
+	 * @returns {Promise<Object>} A success response indicating whether the connection exists.
+	 * @throws Will throw an error if an unexpected issue occurs during the check.
+	 */
+	static async checkConnectionIfExists(user_id, body) {
+		try {
+			const { friend_id } = body
+
+			let connectionExists = false
+			if (!friend_id) {
+				return responses.failureResponse({
+					responseCode: 'CLIENT_ERROR',
+					statusCode: httpStatusCode.bad_request,
+					message: 'FRIEND_ID_MISSING',
+				})
+			}
+
+			const userInfo = await communicationHelper.resolve(friend_id)
+			if (!userInfo) {
+				return responses.failureResponse({
+					responseCode: 'CLIENT_ERROR',
+					statusCode: httpStatusCode.not_found,
+					message: USER_NOT_FOUND,
+				})
+			}
+
+			const connectionCheck = await connectionQueries.getConnection(user_id, userInfo.user_id)
+
+			if (connectionCheck) {
+				connectionExists = true
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CONNECTED_STATUS_FETCHED',
+				result: { data: { connection: connectionExists } },
+			})
+		} catch (error) {
+			console.error('Error checking connection existence:', error)
+			throw error
 		}
 	}
 }

@@ -885,7 +885,8 @@ exports.getMentorsUpcomingSessionsFromView = async (
 	mentorId,
 	filter,
 	saasFilter = '',
-	defaultFilter = ''
+	defaultFilter = '',
+	menteeUserId
 ) => {
 	try {
 		const currentEpochTime = Math.floor(Date.now() / 1000)
@@ -898,33 +899,42 @@ exports.getMentorsUpcomingSessionsFromView = async (
 
 		const query = `
 		SELECT
-			id,
-			title,
-			description,
-			start_date,
-			end_date,
-			status,
-			image,
-			mentor_id,
-			meeting_info,
-			visibility,
-			mentor_organization_id,
-			type
+		Sessions.id,
+		Sessions.title,
+		Sessions.description,
+			Sessions.start_date,
+			Sessions.end_date,
+			Sessions.status,
+			Sessions.image,
+			Sessions.mentor_id,
+			Sessions.meeting_info,
+			Sessions.visibility,
+			Sessions.mentor_organization_id,
+			Sessions.type,
+			CASE WHEN sa.id IS NOT NULL THEN true ELSE false END AS is_enrolled,
+			COALESCE(sa.type, NULL) AS enrolment_type
 		FROM
-				${common.materializedViewsPrefix + Session.tableName}
+				${common.materializedViewsPrefix + Session.tableName} as Sessions 
+			LEFT JOIN session_attendees AS sa
+				ON Sessions.id = sa.session_id AND sa.mentee_id = :menteeUserId
 		WHERE
-			mentor_id = :mentorId
-			AND status = 'PUBLISHED'
-			AND start_date > :currentEpochTime
-			AND started_at IS NULL
+		Sessions.mentor_id = :mentorId
+			AND Sessions.status = 'PUBLISHED'
+			AND Sessions.start_date > :currentEpochTime
+			AND Sessions.started_at IS NULL
 			AND (
 				LOWER(title) LIKE :search
+			)
+			AND (
+				Sessions.type = 'PUBLIC'
+				OR (Sessions.type = 'PRIVATE' AND sa.id IS NOT NULL)
 			)
 			${filterClause}
 			${saasFilterClause}
 			${defaultFilterClause}
+			
 		ORDER BY
-			start_date ASC
+			Sessions.start_date ASC
 		OFFSET
 			:offset
 		LIMIT
@@ -937,6 +947,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			search: `%${search.toLowerCase()}%`,
 			offset: limit * (page - 1),
 			limit: limit,
+			menteeUserId,
 			...filter.replacements, // Add filter parameters to replacements
 		}
 
@@ -944,17 +955,24 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			type: QueryTypes.SELECT,
 			replacements: replacements,
 		})
+
 		const countQuery = `
 		SELECT count(*) AS "count"
 		FROM
-		${common.materializedViewsPrefix + Session.tableName}
+		${common.materializedViewsPrefix + Session.tableName} as Sessions
+		LEFT JOIN session_attendees AS sa
+				ON Sessions.id = sa.session_id AND sa.mentee_id = :menteeUserId
 		WHERE
 			mentor_id = :mentorId
-			AND status = 'PUBLISHED'
-			AND start_date > :currentEpochTime
-			AND started_at IS NULL
+			AND Sessions.status = 'PUBLISHED'
+			AND Sessions.start_date > :currentEpochTime
+			AND Sessions.started_at IS NULL
 			AND (
 				LOWER(title) LIKE :search
+			)
+			AND (
+				Sessions.type = 'PUBLIC'
+				OR (Sessions.type = 'PRIVATE' AND sa.id IS NOT NULL)
 			)
 			${filterClause}
 			${saasFilterClause}
@@ -1022,7 +1040,7 @@ exports.getUpcomingSessionsOfMentee = async (menteeUserId, sessionType) => {
 		const query = `
 			SELECT s.id, s.title, s.mentor_id, s.start_date, s.end_date, s.type, s.created_by
 			FROM sessions s
-			INNER JOIN  session_attendees sa ON s.id = sa.session_id
+			LEFT JOIN  session_attendees sa ON s.id = sa.session_id
 			WHERE sa.mentee_id = :menteeUserId
 			AND s.type = :sessionType
 			AND s.start_date > :currentTime
@@ -1071,7 +1089,7 @@ exports.getSessionsCreatedByMentor = async (mentorUserId) => {
 		const query = `
 				SELECT s.*, sa.mentee_id
 				FROM ${Session.tableName} s
-				INNER JOIN session_attendees sa ON s.id = sa.session_id
+				LEFT JOIN session_attendees sa ON s.id = sa.session_id
 				WHERE s.mentor_id = :mentorUserId 
 				AND s.start_date > :currentTime
 				AND s.deleted_at IS NULL
@@ -1097,7 +1115,7 @@ exports.getSessionsAssignedToMentor = async (mentorUserId) => {
 		const query = `
 				SELECT s.*, sa.mentee_id
 				FROM ${Session.tableName} s
-				INNER JOIN session_attendees sa ON s.id = sa.session_id
+				LEFT JOIN session_attendees sa ON s.id = sa.session_id
 				WHERE s.mentor_id = :mentorUserId 
 				AND s.start_date > :currentTime
 				AND s.deleted_at IS NULL

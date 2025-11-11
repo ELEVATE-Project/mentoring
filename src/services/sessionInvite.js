@@ -32,6 +32,7 @@ module.exports = class UserInviteHelper {
 				const filePath = data.fileDetails.input_path
 				const userId = data.user.id
 				const orgId = data.user.organization_id
+				const tenant_code = data.user.tenant_code
 				const notifyUser = true
 
 				const mentor = await menteeExtensionQueries.getMenteeExtension(userId, ['is_mentor'])
@@ -55,7 +56,8 @@ module.exports = class UserInviteHelper {
 					userId,
 					orgId,
 					notifyUser,
-					isMentor
+					isMentor,
+					tenant_code
 				)
 				if (createResponse.success == false) console.log(':::::::::', createResponse.message)
 				const outputFilename = path.basename(createResponse.result.outputFilePath)
@@ -699,7 +701,7 @@ module.exports = class UserInviteHelper {
 		}
 	}
 
-	static async processSessionDetails(csvData, sessionFileDir, userId, orgId, notifyUser, isMentor) {
+	static async processSessionDetails(csvData, sessionFileDir, userId, orgId, notifyUser, isMentor, tenant_code) {
 		try {
 			const outputFileName = utils.generateFileName(common.sessionOutputFile, common.csvExtension)
 			let rowsWithStatus = []
@@ -779,7 +781,8 @@ module.exports = class UserInviteHelper {
 				userId,
 				orgId,
 				isMentor,
-				notifyUser
+				notifyUser,
+				tenant_code
 			)
 
 			await this.fetchMentorIds(sessionCreationOutput)
@@ -911,7 +914,7 @@ module.exports = class UserInviteHelper {
 		}
 	}
 
-	static async processCreateData(SessionsArray, userId, orgId, isMentor, notifyUser) {
+	static async processCreateData(SessionsArray, userId, orgId, isMentor, notifyUser, tenant_code) {
 		const output = []
 		for (const data of SessionsArray) {
 			if (data.status != 'Invalid') {
@@ -931,7 +934,8 @@ module.exports = class UserInviteHelper {
 						userId,
 						orgId,
 						isMentor,
-						notifyUser
+						notifyUser,
+						tenant_code
 					)
 					if (sessionCreation.statusCode === httpStatusCode.created) {
 						data.statusMessage = this.appendWithComma(data.statusMessage, sessionCreation.message)
@@ -973,7 +977,8 @@ module.exports = class UserInviteHelper {
 						userId,
 						data.method,
 						orgId,
-						notifyUser
+						notifyUser,
+						tenant_code
 					)
 					if (sessionUpdateOrDelete.statusCode === httpStatusCode.accepted) {
 						data.statusMessage = this.appendWithComma(data.statusMessage, sessionUpdateOrDelete.message)
@@ -1002,7 +1007,8 @@ module.exports = class UserInviteHelper {
 						userId,
 						data.method,
 						orgId,
-						notifyUser
+						notifyUser,
+						tenant_code
 					)
 					if (sessionDelete.statusCode === httpStatusCode.accepted) {
 						data.statusMessage = this.appendWithComma(data.statusMessage, sessionDelete.message)
