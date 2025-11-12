@@ -256,7 +256,6 @@ module.exports = class MenteesHelper {
 					}
 					try {
 						await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
-						console.log(`🗑️ Session ${sessionId} cache deleted after session deletion`)
 					} catch (cacheError) {
 						console.error(`❌ Failed to delete session cache after deletion:`, cacheError)
 					}
@@ -479,7 +478,6 @@ const ratingCalculation = async function (ratingData, mentor_id, tenantCode, org
 		// Invalidate mentor profile cache after rating update
 		try {
 			await cacheHelper.mentor.delete(tenantCode, mentorDetails.organization_code, mentor_id)
-			console.log(`💾 Mentor cache invalidated after rating update for mentor ${mentor_id}`)
 		} catch (cacheError) {
 			console.error(`❌ Failed to invalidate mentor cache after rating update:`, cacheError)
 		}

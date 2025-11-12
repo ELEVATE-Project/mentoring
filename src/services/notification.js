@@ -128,7 +128,6 @@ module.exports = class NotificationTemplateHelper {
 			if (!id && code) {
 				const cachedTemplate = await cacheHelper.notificationTemplates.get(tenantCode, organizationCode, code)
 				if (cachedTemplate) {
-					console.log(`Notification template ${code} retrieved from cache`)
 					return responses.successResponse({
 						statusCode: httpStatusCode.ok,
 						message: 'NOTIFICATION_TEMPLATE_FETCHED_SUCCESSFULLY',
@@ -188,7 +187,6 @@ module.exports = class NotificationTemplateHelper {
 			if (!id && code && selectedTemplate) {
 				try {
 					await cacheHelper.notificationTemplates.set(tenantCode, organizationCode, code, selectedTemplate)
-					console.log(`💾 Notification template ${code} cached after fetch`)
 				} catch (cacheError) {
 					console.error(`❌ Failed to cache notification template:`, cacheError)
 				}
@@ -248,7 +246,6 @@ module.exports = class NotificationTemplateHelper {
 					}
 
 					await Promise.all(cachePromises)
-					console.log(`💾 ${notificationTemplates.length} notification templates cached individually`)
 				} catch (cacheError) {
 					console.warn('Failed to cache individual notification templates:', cacheError)
 				}

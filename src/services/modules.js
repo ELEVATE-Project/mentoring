@@ -80,7 +80,6 @@ module.exports = class modulesHelper {
 			if (updatePermissions) {
 				try {
 					await cacheHelper.permissions.evictAll()
-					console.log(`🔄 Permissions cache cleared after module ${updatedModules.code} permissions update`)
 				} catch (cacheError) {
 					console.error(`Cache deletion failed for permissions after module update:`, cacheError)
 				}
@@ -164,9 +163,13 @@ module.exports = class modulesHelper {
 			let modules = null
 
 			if (!search || search.trim() === '') {
-				modules = await cacheHelper.forms.get(tenantCode, organizationId || 'DEFAULT', 'modules_list', cacheKey)
+				modules = await cacheHelper.forms.get(
+					tenantCode,
+					organizationId || common.SYSTEM,
+					'modules_list',
+					cacheKey
+				)
 				if (modules) {
-					console.log(`💾 Modules list retrieved from cache for page ${page}`)
 				}
 			}
 
@@ -189,12 +192,11 @@ module.exports = class modulesHelper {
 					try {
 						await cacheHelper.forms.set(
 							tenantCode,
-							organizationId || 'DEFAULT',
+							organizationId || common.SYSTEM,
 							'modules_list',
 							cacheKey,
 							modules
 						)
-						console.log(`💾 Modules list cached for page ${page}`)
 					} catch (cacheError) {
 						console.error(`❌ Failed to cache modules list:`, cacheError)
 					}

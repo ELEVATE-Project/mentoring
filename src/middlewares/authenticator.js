@@ -292,24 +292,25 @@ async function fetchPermissions(roleTitle, apiPath, module) {
 		return permissionsFromCache
 	}
 
-	// Extract missing role/path combinations for database query
-	const missingRoles = []
-	const missingApiPaths = []
+	// Only query DB if there are actually missing combinations
+	let dbPermissions = []
+	if (requiredKeys.size > 0) {
+		// Build precise filter for only the missing role-path combinations
+		const filter = {
+			[Op.or]: Array.from(requiredKeys).map((key) => {
+				const [role, path] = key.split('::')
+				return { role_title: role, module, api_path: path }
+			}),
+		}
+		const attributes = ['request_type', 'api_path', 'module', 'role_title']
+		dbPermissions = (await rolePermissionMappingQueries.findAll(filter, attributes)) || []
 
-	requiredKeys.forEach((key) => {
-		const [role, apiPath] = key.split('::')
-		if (!missingRoles.includes(role)) missingRoles.push(role)
-		if (!missingApiPaths.includes(apiPath)) missingApiPaths.push(apiPath)
-	})
-
-	// Fetch only missing combinations from database
-	const filter = { role_title: missingRoles, module, api_path: { [Op.in]: missingApiPaths } }
-	const attributes = ['request_type', 'api_path', 'module', 'role_title']
-	const dbPermissions = await rolePermissionMappingQueries.findAll(filter, attributes)
-
-	// Cache the newly fetched results
-	if (dbPermissions && dbPermissions.length > 0) {
-		await cacheHelper.apiPermissions.setFromDatabaseResults(module, missingApiPaths, dbPermissions)
+		// Cache the newly fetched results
+		if (dbPermissions.length > 0) {
+			// Extract unique API paths for caching
+			const missingApiPaths = [...new Set(Array.from(requiredKeys).map((key) => key.split('::')[1]))]
+			await cacheHelper.apiPermissions.setFromDatabaseResults(module, missingApiPaths, dbPermissions)
+		}
 	}
 
 	// Merge cached and database results

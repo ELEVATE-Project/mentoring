@@ -31,13 +31,22 @@ module.exports = class EntityHelper {
 
 			// Invalidate entity list caches after creation
 			if (entity && sanitizedData.entity_type_id) {
+				// Separate try-catch for each cache deletion to ensure all caches are cleared
 				try {
-					// Use forms cache to store entity list data
-					await cacheHelper.forms.delete(tenantCode, 'DEFAULT', 'entity_list', sanitizedData.entity_type_id)
-					await cacheHelper.forms.delete(tenantCode, 'DEFAULT', 'entity_list_all', 'all_entities')
-					console.log(`💾 Entity list cache invalidated after creation of entity ${entity.id}`)
+					await cacheHelper.forms.delete(
+						tenantCode,
+						common.SYSTEM,
+						'entity_list',
+						sanitizedData.entity_type_id
+					)
 				} catch (cacheError) {
-					console.error(`❌ Failed to invalidate entity list cache after creation:`, cacheError)
+					console.error(`❌ Failed to invalidate entity_list cache after creation:`, cacheError)
+				}
+
+				try {
+					await cacheHelper.forms.delete(tenantCode, common.SYSTEM, 'entity_list_all', 'all_entities')
+				} catch (cacheError) {
+					console.error(`❌ Failed to invalidate entity_list_all cache after creation:`, cacheError)
 				}
 			}
 
@@ -108,12 +117,17 @@ module.exports = class EntityHelper {
 			// Invalidate entity list caches after update
 			if (updatedEntity && (updatedEntity.entity_type_id || sanitizedData.entity_type_id)) {
 				const entityTypeId = updatedEntity.entity_type_id || sanitizedData.entity_type_id
+				// Separate try-catch for each cache deletion to ensure all caches are cleared
 				try {
-					await cacheHelper.forms.delete(tenantCode, 'DEFAULT', 'entity_list', entityTypeId)
-					await cacheHelper.forms.delete(tenantCode, 'DEFAULT', 'entity_list_all', 'all_entities')
-					console.log(`💾 Entity list cache invalidated after update of entity ${id}`)
+					await cacheHelper.forms.delete(tenantCode, common.SYSTEM, 'entity_list', entityTypeId)
 				} catch (cacheError) {
-					console.error(`❌ Failed to invalidate entity list cache after update:`, cacheError)
+					console.error(`❌ Failed to invalidate entity_list cache after update:`, cacheError)
+				}
+
+				try {
+					await cacheHelper.forms.delete(tenantCode, common.SYSTEM, 'entity_list_all', 'all_entities')
+				} catch (cacheError) {
+					console.error(`❌ Failed to invalidate entity_list_all cache after update:`, cacheError)
 				}
 			}
 
@@ -167,9 +181,9 @@ module.exports = class EntityHelper {
 						{
 							id: query.id,
 							created_by: '0',
-							status: 'ACTIVE',
+							status: common.ACTIVE_STATUS,
 						},
-						{ id: query.id, created_by: userId, status: 'ACTIVE' },
+						{ id: query.id, created_by: userId, status: common.ACTIVE_STATUS },
 					],
 					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
@@ -179,9 +193,9 @@ module.exports = class EntityHelper {
 						{
 							value: query.value,
 							created_by: '0',
-							status: 'ACTIVE',
+							status: common.ACTIVE_STATUS,
 						},
-						{ value: query.value, created_by: userId, status: 'ACTIVE' },
+						{ value: query.value, created_by: userId, status: common.ACTIVE_STATUS },
 					],
 					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
@@ -294,8 +308,7 @@ module.exports = class EntityHelper {
 			// Invalidate entity list caches after deletion
 			try {
 				// Clear all entity list caches since we don't know the entity_type_id after deletion
-				await cacheHelper.forms.delete(tenantCode, 'DEFAULT', 'entity_list_all', 'all_entities')
-				console.log(`💾 Entity list cache invalidated after deletion of entity ${id}`)
+				await cacheHelper.forms.delete(tenantCode, common.SYSTEM, 'entity_list_all', 'all_entities')
 			} catch (cacheError) {
 				console.error(`❌ Failed to invalidate entity list cache after deletion:`, cacheError)
 			}
@@ -351,9 +364,8 @@ module.exports = class EntityHelper {
 			let entities = null
 
 			if (!searchText) {
-				entities = await cacheHelper.forms.get(tenantCode, 'DEFAULT', 'entity_list', cacheKey)
+				entities = await cacheHelper.forms.get(tenantCode, common.SYSTEM, 'entity_list', cacheKey)
 				if (entities) {
-					console.log(`💾 Entity list retrieved from cache for entityType: ${entityType || 'all'}`)
 				}
 			}
 
@@ -370,8 +382,7 @@ module.exports = class EntityHelper {
 				// Cache the result if no search text (searchable results shouldn't be cached)
 				if (!searchText && entities) {
 					try {
-						await cacheHelper.forms.set(tenantCode, 'DEFAULT', 'entity_list', cacheKey, entities)
-						console.log(`💾 Entity list cached for entityType: ${entityType || 'all'}`)
+						await cacheHelper.forms.set(tenantCode, common.SYSTEM, 'entity_list', cacheKey, entities)
 					} catch (cacheError) {
 						console.error(`❌ Failed to cache entity list:`, cacheError)
 					}

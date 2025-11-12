@@ -106,27 +106,6 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 							}
 						)
 
-						// Cache the fetched organizations
-						if (organizationExtension && organizationExtension.length > 0) {
-							const cachePromises = organizationExtension
-								.map((org) => {
-									if (org.organization_code && org.organization_id) {
-										return cacheHelper.organizations
-											.set(org.tenant_code, org.organization_code, org.organization_id, org)
-											.catch((cacheError) => {
-												console.error(
-													`❌ Failed to cache organization ${org.organization_id} in ASSOCIATED policy:`,
-													cacheError
-												)
-											})
-									}
-								})
-								.filter(Boolean)
-
-							Promise.all(cachePromises).catch((cacheError) => {
-								console.error(`❌ Some organizations failed to cache in ASSOCIATED policy:`, cacheError)
-							})
-						}
 						if (organizationExtension) {
 							const organizationCodesFromOrgExtension = organizationExtension.map(
 								(orgExt) => orgExt.organization_code
@@ -203,27 +182,6 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 							}
 						)
 
-						// Cache the fetched organizations
-						if (organizationExtension && organizationExtension.length > 0) {
-							const cachePromises = organizationExtension
-								.map((org) => {
-									if (org.organization_code && org.organization_id) {
-										return cacheHelper.organizations
-											.set(org.tenant_code, org.organization_code, org.organization_id, org)
-											.catch((cacheError) => {
-												console.error(
-													`❌ Failed to cache organization ${org.organization_id} in ALL policy:`,
-													cacheError
-												)
-											})
-									}
-								})
-								.filter(Boolean)
-
-							Promise.all(cachePromises).catch((cacheError) => {
-								console.error(`❌ Some organizations failed to cache in ALL policy:`, cacheError)
-							})
-						}
 						if (organizationExtension) {
 							const organizationCodesFromOrgExtension = organizationExtension.map(
 								(orgExt) => orgExt.organization_code

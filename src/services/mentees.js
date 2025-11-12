@@ -53,20 +53,12 @@ module.exports = class MenteesHelper {
 
 		// If we have cached data and not in raw mode, return complete response immediately
 		if (cachedProfile && !raw) {
-			console.log(`💾 Using complete cached mentee profile response for ${id}`)
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'PROFILE_FETCHED_SUCCESSFULLY',
 				result: cachedProfile,
 			})
 		}
-
-		// Continue with normal processing for raw mode or cache miss
-		console.log(
-			raw
-				? `🔄 Raw mode: Building fresh mentee profile for ${id}`
-				: `💾 Cache miss: Building mentee profile for ${id}`
-		)
 
 		const menteeDetails = await userRequests.getUserDetails(id, tenantCode)
 		const mentee = menteeDetails.data.result
@@ -116,9 +108,6 @@ module.exports = class MenteesHelper {
 		let displayProperties = await cacheHelper.displayProperties.get(tenantCode, organizationCode)
 
 		if (!displayProperties) {
-			console.log(
-				`🔨 Building display properties from entity types for tenant:${tenantCode} org:${organizationCode}`
-			)
 			// Build display properties from entity types
 			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
 			displayProperties = [
@@ -676,7 +665,17 @@ module.exports = class MenteesHelper {
 	 */
 	static async filterSessionsBasedOnSaasPolicy(userId, isAMentor, tenantCode, orgCode) {
 		try {
-			const menteeExtension = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+			// Try cache first for external_session_visibility, organization_id, is_mentor columns
+			let menteeExtension = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+			if (!menteeExtension) {
+				// Cache miss - get from database with specific columns needed for this method
+				menteeExtension = await menteeQueries.getMenteeExtension(
+					userId,
+					['external_session_visibility', 'organization_id', 'is_mentor'],
+					false,
+					tenantCode
+				)
+			}
 
 			if (!menteeExtension) {
 				throw responses.failureResponse({
@@ -1075,7 +1074,7 @@ module.exports = class MenteesHelper {
 
 			const userExtensionsModelName = await menteeQueries.getModelName()
 			const filter = {
-				status: 'ACTIVE',
+				status: common.ACTIVE_STATUS,
 				organization_code: { [Op.in]: [organizationCode, defaults.orgCode] },
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
@@ -1210,8 +1209,7 @@ module.exports = class MenteesHelper {
 	 */
 	static async getMenteeExtension(userId, organizationCode, tenantCode) {
 		try {
-			// Try cache first using logged-in user's organization context
-			let mentee = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
+			const mentee = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
 			if (!mentee) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -1236,7 +1234,7 @@ module.exports = class MenteesHelper {
 
 			const userExtensionsModelName = await menteeQueries.getModelName()
 			const filter = {
-				status: 'ACTIVE',
+				status: common.ACTIVE_STATUS,
 				organization_code: { [Op.in]: [organizationCode, defaults.orgCode] },
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
@@ -1639,8 +1637,18 @@ module.exports = class MenteesHelper {
 			// 	: ['external_mentor_visibility', 'organization_id']
 
 			const userPolicyDetails = isAMentor
-				? await cacheHelper.mentor.get(tenantCode, orgCode, userId)
-				: await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+				? await mentorQueries.getMentorExtension(
+						userId,
+						['external_mentee_visibility', 'organization_id'],
+						false,
+						tenantCode
+				  )
+				: await menteeQueries.getMenteeExtension(
+						userId,
+						['external_mentee_visibility', 'organization_id'],
+						false,
+						tenantCode
+				  )
 
 			const getOrgPolicy = await organisationExtensionQueries.findOne(
 				{
@@ -1719,8 +1727,18 @@ module.exports = class MenteesHelper {
 		try {
 			// user can be mentor or mentee, based on isAMentor key get policy details
 			const userPolicyDetails = isAMentor
-				? await cacheHelper.mentor.get(tenantCode, orgCode, userId)
-				: await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+				? await mentorQueries.getMentorExtension(
+						userId,
+						['external_mentee_visibility', 'organization_id'],
+						false,
+						tenantCode
+				  )
+				: await menteeQueries.getMenteeExtension(
+						userId,
+						['external_mentee_visibility', 'organization_id'],
+						false,
+						tenantCode
+				  )
 
 			// Throw error if mentor/mentee extension not found
 			if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
@@ -1914,7 +1932,6 @@ module.exports = class MenteesHelper {
 			// If we have cached complete response and not in raw mode, return it immediately
 			if (
 				requestedUserExtension &&
-				!raw &&
 				requestedUserExtension.displayProperties &&
 				requestedUserExtension.Permissions
 			) {
@@ -1960,7 +1977,6 @@ module.exports = class MenteesHelper {
 						message: 'PROFILE_RESTRICTED',
 					})
 				}
-				console.log(`💾 Using complete cached mentee details response for ${id}`)
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'PROFILE_FTECHED_SUCCESSFULLY',
@@ -1977,7 +1993,11 @@ module.exports = class MenteesHelper {
 
 			// If we don't have cached data, fetch it from database
 			if (!requestedUserExtension) {
-				requestedUserExtension = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
+				// Try cache again for basic user data (name, user_id are sufficient for this flow)
+				requestedUserExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, id)
+				if (!requestedUserExtension) {
+					requestedUserExtension = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
+				}
 			}
 
 			if (!requestedUserExtension || (!isAMentor && requestedUserExtension.is_mentor == false)) {
@@ -2102,9 +2122,6 @@ module.exports = class MenteesHelper {
 			let displayProperties = await cacheHelper.displayProperties.get(tenantCode, organizationCode)
 
 			if (!displayProperties) {
-				console.log(
-					`🔨 Building display properties from entity types for tenant:${tenantCode} org:${organizationCode}`
-				)
 				// Build display properties from entity types
 				const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
 				displayProperties = [

@@ -85,7 +85,7 @@ module.exports = class MentorsHelper {
 				})
 			let validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
 				{
-					status: 'ACTIVE',
+					status: common.ACTIVE_STATUS,
 					allow_filtering: true,
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
@@ -775,7 +775,6 @@ module.exports = class MentorsHelper {
 			if (mentorExtension && mentorExtension.organization_code) {
 				try {
 					await cacheHelper.mentor.delete(tenantCode, mentorExtension.organization_code, userId)
-					console.log(`🗑️ Mentor ${userId} cache deleted after mentor extension deletion`)
 				} catch (cacheError) {
 					console.error(`Cache deletion failed for mentor ${userId}:`, cacheError)
 				}
@@ -873,7 +872,6 @@ module.exports = class MentorsHelper {
 						})
 					}
 				}
-				console.log(`💾 Using complete cached mentor profile response for ${id}`)
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'PROFILE_FETCHED_SUCCESSFULLY',
@@ -969,7 +967,6 @@ module.exports = class MentorsHelper {
 					// Cache invalidation: Delete old cache after mentor extension update
 					try {
 						await cacheHelper.mentor.delete(tenantCode, orgCode, id)
-						console.log(`🗑️ Mentor ${id} old cache deleted after is_mentor flag update`)
 					} catch (cacheError) {
 						console.error(`Cache deletion failed for mentor ${id} after update:`, cacheError)
 					}
@@ -1311,7 +1308,7 @@ module.exports = class MentorsHelper {
 
 			let validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
 				{
-					status: 'ACTIVE',
+					status: common.ACTIVE_STATUS,
 					allow_filtering: true,
 					model_names: { [Op.contains]: [mentorExtensionsModelName] },
 				},
@@ -1483,9 +1480,7 @@ module.exports = class MentorsHelper {
 						.filter(Boolean)
 
 					Promise.all(cachePromises)
-						.then(() => {
-							console.log(`💾 Cached ${cachePromises.length} organizations from mentor list`)
-						})
+						.then(() => {})
 						.catch((cacheError) => {
 							console.error(`❌ Some organizations failed to cache in mentor list:`, cacheError)
 						})

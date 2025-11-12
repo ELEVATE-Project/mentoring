@@ -47,7 +47,6 @@ module.exports = class OrganizationService {
 					decodedToken.organization_id,
 					orgExtension
 				)
-				console.log(`💾 Organization ${decodedToken.organization_id} cache updated after update`)
 			} catch (cacheError) {
 				console.error(`❌ Failed to update organization cache after update:`, cacheError)
 			}
@@ -93,7 +92,6 @@ module.exports = class OrganizationService {
 					extensionData.organization_id,
 					orgExtension
 				)
-				console.log(`💾 Organization ${extensionData.organization_id} cached after creation`)
 			} catch (cacheError) {
 				console.error(`❌ Failed to cache organization after creation:`, cacheError)
 			}
@@ -127,7 +125,6 @@ module.exports = class OrganizationService {
 			let orgExtension = await cacheHelper.organizations.get(tenantCode, organizationCode, organizationId)
 
 			if (orgExtension) {
-				console.log(`Organization ${organizationId} retrieved from cache`)
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'ORG_EXTENSION_FETCHED_SUCCESSFULLY',

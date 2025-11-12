@@ -55,6 +55,53 @@ const feedbackService = require('@services/feedback')
 
 module.exports = class SessionsHelper {
 	/**
+	 * Clear user caches when session counts change
+	 * Session counts (sessions_attended, sessions_hosted) are cached in user profiles
+	 * @method
+	 * @name _clearUserCacheForSessionCountChange
+	 * @param {String|Array} userIds - user ID(s) whose session counts changed
+	 * @param {String} tenantCode - tenant code
+	 * @param {String} orgCode - organization code
+	 * @param {String} action - action performed (create, enroll, unenroll, etc.)
+	 * @returns {Promise<void>}
+	 */
+	static async _clearUserCacheForSessionCountChange(userIds, tenantCode, orgCode, action = 'session_change') {
+		try {
+			// Ensure userIds is an array
+			const userIdArray = Array.isArray(userIds) ? userIds : [userIds]
+
+			// Clear both mentee and mentor caches for each user since:
+			// 1. Users can be both mentee and mentor
+			// 2. Session counts are cached in both profile types
+			// 3. We don't know which cache type the user currently has
+
+			const clearPromises = []
+
+			for (const userId of userIdArray) {
+				// Clear mentee cache
+				clearPromises.push(
+					cacheHelper.mentee.delete(tenantCode, orgCode, userId).catch((error) => {
+						/* Cache invalidation failure - continue operation */
+					})
+				)
+
+				// Clear mentor cache
+				clearPromises.push(
+					cacheHelper.mentor.delete(tenantCode, orgCode, userId).catch((error) => {
+						/* Cache invalidation failure - continue operation */
+					})
+				)
+			}
+
+			// Execute all cache clearing operations in parallel
+			await Promise.all(clearPromises)
+		} catch (error) {
+			// Cache invalidation failure - continue operation
+			// Don't throw error - cache clearing failure shouldn't break the operation
+		}
+	}
+
+	/**
 	 * Create session.
 	 *
 	 * @static
@@ -102,7 +149,11 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const mentorDetails = await cacheHelper.mentor.get(tenantCode, orgCode, mentorIdToCheck)
+			// Try cache first for mentor details, fallback to database if not found
+			let mentorDetails = await cacheHelper.mentor.get(tenantCode, orgCode, mentorIdToCheck)
+			if (!mentorDetails) {
+				mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorIdToCheck, [], false, tenantCode)
+			}
 			if (!mentorDetails) {
 				return responses.failureResponse({
 					message: 'INVALID_PERMISSION',
@@ -528,23 +579,7 @@ module.exports = class SessionsHelper {
 				}
 			}
 
-			// Cache the newly created session
-			const cacheData = {
-				...processDbResponse,
-				share_link: undefined,
-				mentee_password: undefined,
-				mentor_password: undefined,
-			}
-
-			// Clean undefined values
-			Object.keys(cacheData).forEach((key) => {
-				if (cacheData[key] === undefined) {
-					delete cacheData[key]
-				}
-			})
-
-			await cacheHelper.sessions.set(tenantCode, orgCode, data.id, cacheData)
-			console.log(`Session ${data.id} cached successfully after creation`)
+			// Session will be cached when first accessed via details API
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -811,10 +846,17 @@ module.exports = class SessionsHelper {
 					// Cache invalidation: Remove deleted session from cache
 					try {
 						await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
-						console.log(`🗑️ Session ${sessionId} cache deleted after session deletion`)
 					} catch (cacheError) {
-						console.error(`❌ Failed to delete session cache after deletion:`, cacheError)
+						// Cache invalidation failure - continue operation
 					}
+
+					// Clear mentor cache since sessions_hosted count changed (session deleted)
+					await this._clearUserCacheForSessionCountChange(
+						sessionDetail.mentor_id,
+						tenantCode,
+						orgCode,
+						'session_delete'
+					)
 
 					// Delete scheduled jobs associated with deleted session
 					for (let jobIndex = 0; jobIndex < sessionRelatedJobIds.length; jobIndex++) {
@@ -956,13 +998,11 @@ module.exports = class SessionsHelper {
 				message = 'SESSION_UPDATED_SUCCESSFULLY'
 				updatedSessionData = updatedRows[0].dataValues
 
-				// Cache invalidation: Delete old cache and set new updated session data
+				// Cache invalidation: Delete old cache - will be set on next read
 				try {
 					await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
-					await cacheHelper.sessions.set(tenantCode, orgCode, sessionId, updatedSessionData)
-					console.log(`🔄 Session ${sessionId} cache updated after session modification`)
 				} catch (cacheError) {
-					console.error(`❌ Failed to update session cache after update:`, cacheError)
+					// Cache invalidation failure - continue operation
 				}
 				// check what are the values changed only if session is updated/deleted by manager
 				// This is to decide on which email to trigger
@@ -1392,49 +1432,8 @@ module.exports = class SessionsHelper {
 				}
 			}
 
-			// Invalidate and refresh session cache after successful update
+			// Invalidate session cache after successful update
 			await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
-			console.log(`Session ${sessionId} cache invalidated after update`)
-
-			// Fetch updated session data and cache it
-			try {
-				console.log(`🔄 Fetching updated session ${sessionId} for re-caching...`)
-				const updatedSession = await sessionQueries.findById(sessionId, tenantCode)
-				console.log(`📊 Updated session found:`, !!updatedSession)
-
-				if (updatedSession) {
-					console.log(`🔧 Processing session data for caching...`)
-					// For cache update, we don't need full validation, just clean the data
-					const sessionData = updatedSession.toJSON()
-
-					// Remove user-specific data before caching
-					const cacheData = {
-						...sessionData,
-						share_link: undefined,
-						mentee_password: undefined,
-						mentor_password: undefined,
-					}
-
-					// Clean undefined values
-					Object.keys(cacheData).forEach((key) => {
-						if (cacheData[key] === undefined) {
-							delete cacheData[key]
-						}
-					})
-
-					console.log(
-						`💾 Setting session cache with key: tenant:${tenantCode}:org:${orgCode}:sessions:${sessionId}`
-					)
-					await cacheHelper.sessions.set(tenantCode, orgCode, sessionId, cacheData)
-					console.log(`✅ Session ${sessionId} re-cached successfully after update`)
-				} else {
-					console.log(`❌ No updated session found with ID ${sessionId}`)
-				}
-			} catch (cacheError) {
-				console.error(`❌ Failed to cache updated session ${sessionId}:`, cacheError)
-				console.error(`❌ Cache error stack:`, cacheError.stack)
-				// Don't fail the update if caching fails
-			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
@@ -1472,8 +1471,25 @@ module.exports = class SessionsHelper {
 				// Only use cache for simple session details without user-specific data
 				sessionDetails = await cacheHelper.sessions.get(tenantCode, orgCode, id)
 				if (sessionDetails) {
-					console.log(`Session ${id} retrieved from cache`)
-					// Still need to check enrollment and accessibility for the current user
+					// Check accessibility before enriching with user data
+					if (userId !== '' && isAMentor !== '') {
+						let isAccessible = await this.checkIfSessionIsAccessible(
+							sessionDetails,
+							userId,
+							isAMentor,
+							tenantCode,
+							orgCode
+						)
+						if (!isAccessible) {
+							return responses.failureResponse({
+								statusCode: httpStatusCode.forbidden,
+								message: 'SESSION_RESTRICTED',
+								responseCode: 'CLIENT_ERROR',
+							})
+						}
+					}
+
+					// Still need to check enrollment for the current user
 					if (userId) {
 						await this._enrichSessionWithUserData(
 							sessionDetails,
@@ -1680,7 +1696,7 @@ module.exports = class SessionsHelper {
 
 			let entityTypeData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
 				{
-					status: 'ACTIVE',
+					status: common.ACTIVE_STATUS,
 					organization_id: { [Op.in]: orgIds },
 					model_names: { [Op.overlap]: modelNames },
 				},
@@ -1715,17 +1731,7 @@ module.exports = class SessionsHelper {
 
 			const processDbResponse = utils.processDbResponse(sessionDetails, validationData)
 
-			// Cache the session details for future requests (only for simple numeric id requests)
-			if (utils.isNumeric(id) && (!userId || !queryParams?.get_mentees)) {
-				// Cache the processed session without user-specific data
-				const cacheData = { ...processDbResponse }
-				delete cacheData.share_link
-				delete cacheData.mentee_password
-				delete cacheData.mentor_password
-
-				await cacheHelper.sessions.set(tenantCode, orgCode, sessionDetails.id, cacheData)
-				console.log(`Session ${sessionDetails.id} cached successfully`)
-			}
+			// Cache removed - sessions only deleted on write operations, no caching on read
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -1777,19 +1783,7 @@ module.exports = class SessionsHelper {
 				isInvited = sessionAttendee.type === common.INVITED
 			}
 
-			// Check accessibility
-			if (userId !== '' && isAMentor !== '') {
-				let isAccessible = await this.checkIfSessionIsAccessible(
-					sessionDetails,
-					userId,
-					isAMentor,
-					tenantCode,
-					orgCode
-				)
-				if (!isAccessible) {
-					throw new Error('SESSION_RESTRICTED')
-				}
-			}
+			// Accessibility check is now handled before calling this method
 
 			// Add mentees list if requested and user has permission
 			const isMenteesListRequested = queryParams?.get_mentees === 'true'
@@ -2140,13 +2134,22 @@ module.exports = class SessionsHelper {
 				type: enrollmentType,
 			}
 
-			// Create the enrollment record
-			const enrollmentResult = await sessionAttendeesQueries.create(attendee, tenantCode)
+			// Optimized: Use findOrCreate to handle enrollment atomically
+			const enrollmentResult = await sessionAttendeesQueries.findOrCreateAttendee(attendee, tenantCode)
 			if (enrollmentResult instanceof Error) {
 				return responses.failureResponse({
 					message: 'FAILED_TO_ENROLL_USER',
 					statusCode: httpStatusCode.internal_server_error,
 					responseCode: 'SERVER_ERROR',
+				})
+			}
+
+			// Check if user was already enrolled
+			if (!enrollmentResult.created) {
+				return responses.failureResponse({
+					message: 'USER_ALREADY_ENROLLED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
 				})
 			}
 
@@ -2207,41 +2210,15 @@ module.exports = class SessionsHelper {
 				await kafkaCommunication.pushEmailToKafka(payload)
 			}
 
-			// Refresh session cache after enrollment (seats_remaining changed)
+			// Invalidate session cache after enrollment (seats_remaining changed)
 			try {
-				console.log(`🔄 Refreshing session cache after enrollment for session ${sessionId}...`)
-
-				// Fetch updated session with correct seats_remaining
-				const updatedSession = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-					attributes: {
-						exclude: ['share_link', 'mentee_password', 'mentor_password'],
-					},
-				})
-
-				if (updatedSession) {
-					// Remove user-specific data before caching
-					const cacheData = {
-						...updatedSession,
-						share_link: undefined,
-						mentee_password: undefined,
-						mentor_password: undefined,
-					}
-
-					// Clean undefined values
-					Object.keys(cacheData).forEach((key) => {
-						if (cacheData[key] === undefined) {
-							delete cacheData[key]
-						}
-					})
-
-					await cacheHelper.sessions.set(tenantCode, orgCode, sessionId, cacheData)
-					console.log(
-						`✅ Session ${sessionId} cache refreshed after enrollment - seats_remaining: ${cacheData.seats_remaining}, orgCode: ${orgCode}`
-					)
-				}
+				await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
 			} catch (cacheError) {
-				console.error(`❌ Failed to refresh session cache after enrollment:`, cacheError)
+				// Cache invalidation failure - continue operation
 			}
+
+			// Clear user cache since sessions_attended count changed
+			await this._clearUserCacheForSessionCountChange(userId, tenantCode, orgCode, 'session_enroll')
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -2379,43 +2356,20 @@ module.exports = class SessionsHelper {
 				await kafkaCommunication.pushEmailToKafka(payload)
 			}
 
-			// Refresh session cache after unenrollment (seats_remaining changed)
+			// Invalidate session cache after unenrollment (seats_remaining changed)
 			try {
-				console.log(`🔄 Refreshing session cache after unenrollment for session ${sessionId}...`)
-
-				// Fetch updated session with correct seats_remaining
-				const updatedSession = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-					attributes: {
-						exclude: ['share_link', 'mentee_password', 'mentor_password'],
-					},
-				})
-
-				if (updatedSession) {
-					// Remove user-specific data before caching
-					const cacheData = {
-						...updatedSession,
-						share_link: undefined,
-						mentee_password: undefined,
-						mentor_password: undefined,
-					}
-
-					// Clean undefined values
-					Object.keys(cacheData).forEach((key) => {
-						if (cacheData[key] === undefined) {
-							delete cacheData[key]
-						}
-					})
-
-					await cacheHelper.sessions.set(tenantCode, orgCode, sessionId, cacheData)
-					console.log(
-						`✅ Session ${sessionId} cache refreshed after unenrollment - seats_remaining: ${
-							cacheData.seats_remaining
-						}, orgCode: ${orgCode || updatedSession.organization_code}`
-					)
-				}
+				await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
 			} catch (cacheError) {
-				console.error(`❌ Failed to refresh session cache after unenrollment:`, cacheError)
+				// Cache invalidation failure - continue operation
 			}
+
+			// Clear user cache since sessions_attended count changed
+			await this._clearUserCacheForSessionCountChange(
+				userTokenData.id,
+				tenantCode,
+				updatedSession.organization_code,
+				'session_unenroll'
+			)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
@@ -3514,38 +3468,11 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			// Refresh session cache after adding mentees (seats_remaining changed)
+			// Invalidate session cache after adding mentees (seats_remaining changed)
 			try {
-				// Fetch updated session with correct seats_remaining
-				const updatedSession = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-					attributes: {
-						exclude: ['share_link', 'mentee_password', 'mentor_password'],
-					},
-				})
-
-				if (updatedSession) {
-					// Remove user-specific data before caching
-					const cacheData = {
-						...(updatedSession.dataValues || updatedSession),
-						share_link: undefined,
-						mentee_password: undefined,
-						mentor_password: undefined,
-					}
-
-					// Clean undefined values
-					Object.keys(cacheData).forEach((key) => {
-						if (cacheData[key] === undefined) {
-							delete cacheData[key]
-						}
-					})
-
-					await cacheHelper.sessions.set(tenantCode, organizationCode, sessionId, cacheData)
-					console.log(
-						`✅ Session ${sessionId} cache refreshed after adding mentees - seats_remaining: ${cacheData.seats_remaining}, orgCode: ${organizationCode}`
-					)
-				}
+				await cacheHelper.sessions.delete(tenantCode, organizationCode, sessionId)
 			} catch (cacheError) {
-				console.error(`❌ Failed to refresh session cache after adding mentees:`, cacheError)
+				// Cache invalidation failure - continue operation
 			}
 
 			return responses.successResponse({
@@ -3745,40 +3672,21 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			// Refresh session cache after removing mentees (seats_remaining changed)
+			// Invalidate session cache after removing mentees (seats_remaining changed)
 			try {
-				console.log(`🔄 Refreshing session cache after removing mentees for session ${sessionId}...`)
-
-				// Fetch updated session with correct seats_remaining
-				const updatedSession = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-					attributes: {
-						exclude: ['share_link', 'mentee_password', 'mentor_password'],
-					},
-				})
-
-				if (updatedSession) {
-					// Remove user-specific data before caching
-					const cacheData = {
-						...updatedSession,
-						share_link: undefined,
-						mentee_password: undefined,
-						mentor_password: undefined,
-					}
-
-					// Clean undefined values
-					Object.keys(cacheData).forEach((key) => {
-						if (cacheData[key] === undefined) {
-							delete cacheData[key]
-						}
-					})
-
-					await cacheHelper.sessions.set(tenantCode, updatedSession.organization_code, sessionId, cacheData)
-					console.log(
-						`✅ Session ${sessionId} cache refreshed after removing mentees - seats_remaining: ${cacheData.seats_remaining}, orgCode: ${updatedSession.organization_code}`
-					)
-				}
+				await cacheHelper.sessions.delete(tenantCode, updatedSession.organization_code, sessionId)
 			} catch (cacheError) {
-				console.error(`❌ Failed to refresh session cache after removing mentees:`, cacheError)
+				// Cache invalidation failure - continue operation
+			}
+
+			// Clear user caches for all successfully removed mentees since sessions_attended count changed
+			if (successIds.length > 0) {
+				await this._clearUserCacheForSessionCountChange(
+					successIds,
+					tenantCode,
+					updatedSession.organization_code,
+					'bulk_mentee_removal'
+				)
 			}
 
 			return responses.successResponse({
@@ -4158,7 +4066,7 @@ module.exports = class SessionsHelper {
 					// Try cache with default organization context first
 					mentor = await cacheHelper.mentor.get(tenantCode, defaults.orgCode, mentorId)
 				} catch (cacheError) {
-					console.log(`Cache lookup failed for mentor ${mentorId}, falling back to database`)
+					// Cache lookup failed - fallback to database
 				}
 
 				if (!mentor) {
@@ -4254,8 +4162,11 @@ module.exports = class SessionsHelper {
 	 */
 	static async feedback(sessionId, bodyData, userId, organizationCode, tenantCode) {
 		try {
-			// Check if user is a mentor by querying mentor extension
-			const mentorDetails = await cacheHelper.mentor.get(tenantCode, organizationCode, userId)
+			// Check if user is a mentor - try cache first, fallback to database
+			let mentorDetails = await cacheHelper.mentor.get(tenantCode, organizationCode, userId)
+			if (!mentorDetails) {
+				mentorDetails = await mentorExtensionQueries.getMentorExtension(userId, [], false, tenantCode)
+			}
 			const isAMentor = !!mentorDetails
 
 			// Transform ratings data to feedback format expected by feedbackService

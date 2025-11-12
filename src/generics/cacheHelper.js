@@ -613,7 +613,7 @@ const mentor = {
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentor', id: mentorId })
 			const useInternal = nsUseInternal('mentor')
 			await del(cacheKey, { useInternal })
-			console.log(`🗑️ Mentor profile ${mentorId} cache deleted: tenant:${tenantCode}:org:${orgCode}`)
+			// Mentor cache deleted
 		} catch (error) {
 			console.error(`❌ Failed to delete mentor profile ${mentorId} cache:`, error)
 		}
@@ -693,7 +693,7 @@ const mentee = {
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentee', id: menteeId })
 			const useInternal = nsUseInternal('mentee')
 			await del(cacheKey, { useInternal })
-			console.log(`🗑️ Mentee profile ${menteeId} cache deleted: tenant:${tenantCode}:org:${orgCode}`)
+			// Mentee cache deleted
 		} catch (error) {
 			console.error(`❌ Failed to delete mentee profile ${menteeId} cache:`, error)
 		}

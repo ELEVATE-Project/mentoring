@@ -1,6 +1,7 @@
 const common = require('@constants/common')
 const defaultRuleQueries = require('@database/queries/defaultRule')
 const entityTypeCache = require('@helpers/entityTypeCache')
+const entityTypeQueries = require('@database/queries/entityType')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const sessionQueries = require('@database/queries/sessions')
@@ -12,7 +13,6 @@ const { UniqueConstraintError } = require('sequelize')
 
 const connections = require('@database/queries/connection')
 const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/defaultRules')
-const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class DefaultRuleHelper {
 	/**
@@ -41,14 +41,14 @@ module.exports = class DefaultRuleHelper {
 
 		const validFieldsPromise = Promise.all([
 			entityTypeQueries.findAllEntityTypes(orgCodes, tenantCodes, ['id', 'data_type'], {
-				status: 'ACTIVE',
+				status: common.ACTIVE_STATUS,
 				value: bodyData.target_field,
 				model_names: { [Op.contains]: [modelName] },
 				required: true,
 				allow_filtering: true,
 			}),
 			entityTypeQueries.findAllEntityTypes(orgCodes, tenantCodes, ['id', 'data_type'], {
-				status: 'ACTIVE',
+				status: common.ACTIVE_STATUS,
 				value: bodyData.requester_field,
 				model_names: { [Op.contains]: [mentorModelName] },
 				required: true,
@@ -166,7 +166,12 @@ module.exports = class DefaultRuleHelper {
 						tenantCode
 					)
 					for (const friendId of connectionsData) {
-						const requestedUserExtension = await cacheHelper.mentee.get(tenantCode, orgCode, friendId)
+						const requestedUserExtension = await menteeExtensionQueries.getMenteeExtension(
+							friendId,
+							[],
+							false,
+							tenantCode
+						)
 
 						if (requestedUserExtension) {
 							const validateDefaultRules = await validateDefaultRulesFilter({
@@ -193,7 +198,12 @@ module.exports = class DefaultRuleHelper {
 					if (connectionsRequests.count > 0) {
 						for (const request of connectionsRequests.rows) {
 							const friendId = request.friend_id
-							const requestedUserExtension = await cacheHelper.mentee.get(tenantCode, orgCode, friendId)
+							const requestedUserExtension = await menteeExtensionQueries.getMenteeExtension(
+								friendId,
+								[],
+								false,
+								tenantCode
+							)
 
 							if (requestedUserExtension) {
 								const validateDefaultRules = await validateDefaultRulesFilter({

@@ -146,7 +146,6 @@ module.exports = class OrgAdminService {
 			// Invalidate mentor cache after role change (mentor -> mentee)
 			try {
 				await cacheHelper.mentor.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
-				console.log(`💾 Mentor cache invalidated after role change for user ${bodyData.user_id}`)
 			} catch (cacheError) {
 				console.error(`❌ Failed to invalidate mentor cache after role change:`, cacheError)
 			}
@@ -243,7 +242,6 @@ module.exports = class OrgAdminService {
 			// Invalidate mentee cache after role change (mentee -> mentor)
 			try {
 				await cacheHelper.mentee.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
-				console.log(`💾 Mentee cache invalidated after role change for user ${bodyData.user_id}`)
 			} catch (cacheError) {
 				console.error(`❌ Failed to invalidate mentee cache after role change:`, cacheError)
 			}
@@ -349,7 +347,6 @@ module.exports = class OrgAdminService {
 			)
 
 			if (orgPolicies) {
-				console.log(`Organization policies ${decodedToken.organization_id} retrieved from cache`)
 				delete orgPolicies.deleted_at
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
@@ -537,7 +534,6 @@ module.exports = class OrgAdminService {
 				// Cache invalidation: Clear mentor cache after organization update
 				try {
 					await cacheHelper.mentor.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
-					console.log(`🔄 Mentor ${bodyData.user_id} cache cleared after organization update`)
 				} catch (cacheError) {
 					console.error(`Cache deletion failed for mentor ${bodyData.user_id} after org update:`, cacheError)
 				}
@@ -547,7 +543,6 @@ module.exports = class OrgAdminService {
 				// Cache invalidation: Clear mentee cache after organization update
 				try {
 					await cacheHelper.mentee.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
-					console.log(`🔄 Mentee ${bodyData.user_id} cache cleared after organization update`)
 				} catch (cacheError) {
 					console.error(`Cache deletion failed for mentee ${bodyData.user_id} after org update:`, cacheError)
 				}
@@ -690,7 +685,6 @@ module.exports = class OrgAdminService {
 				if (organizationDetails.success && organizationDetails.data && organizationDetails.data.result) {
 					const orgCode = organizationDetails.data.result.organization_code || orgId
 					await cacheHelper.organizations.delete(tenantCode, orgCode, orgId)
-					console.log(`Organization cache invalidated for org ${orgId} after updateRelatedOrgs`)
 				}
 			} catch (cacheError) {
 				console.error(`Failed to invalidate organization cache after updateRelatedOrgs:`, cacheError)
@@ -797,7 +791,6 @@ module.exports = class OrgAdminService {
 				if (organizationDetails.success && organizationDetails.data && organizationDetails.data.result) {
 					const orgId = organizationDetails.data.result.id
 					await cacheHelper.organizations.delete(tenantCode, orgCode, orgId)
-					console.log(`Organization cache invalidated for org ${orgId} after CSV upload`)
 				}
 			} catch (cacheError) {
 				console.error(`Failed to invalidate organization cache after CSV upload:`, cacheError)
@@ -847,7 +840,6 @@ module.exports = class OrgAdminService {
 		try {
 			const orgId = organizationDetails.data.result.id
 			await cacheHelper.organizations.delete(tenantCode, orgCode, orgId)
-			console.log(`Organization cache invalidated for org ${orgId} after theme update`)
 		} catch (cacheError) {
 			console.error(`Failed to invalidate organization cache after theme update:`, cacheError)
 		}
@@ -881,7 +873,6 @@ module.exports = class OrgAdminService {
 				const orgId = organizationInfo.data.result.id
 				organizationDetails = await cacheHelper.organizations.get(tenantCode, orgCode, orgId)
 				if (organizationDetails) {
-					console.log(`Organization theme for ${orgId} retrieved from cache`)
 					return responses.successResponse({
 						statusCode: httpStatusCode.ok,
 						message: 'ORG_THEME_FETCHED_SUCCESSFULLY',
@@ -913,7 +904,6 @@ module.exports = class OrgAdminService {
 			if (organizationInfo.success && organizationInfo.data && organizationInfo.data.result) {
 				const orgId = organizationInfo.data.result.id
 				await cacheHelper.organizations.set(tenantCode, orgCode, orgId, organizationDetails)
-				console.log(`💾 Organization ${orgId} cached after theme fetch`)
 			}
 		} catch (cacheError) {
 			console.error(`❌ Failed to cache organization after theme fetch:`, cacheError)

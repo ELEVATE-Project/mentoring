@@ -37,7 +37,6 @@ module.exports = class FormsHelper {
 			if (bodyData.type && bodyData.sub_type) {
 				try {
 					await cacheHelper.forms.delete(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
-					console.log(`Form cache invalidated: ${bodyData.type}:${bodyData.sub_type}`)
 				} catch (error) {
 					console.warn('Failed to invalidate form cache:', error)
 				}
@@ -123,7 +122,6 @@ module.exports = class FormsHelper {
 						originalForm.type,
 						originalForm.sub_type
 					)
-					console.log(`Old form cache deleted: ${originalForm.type}:${originalForm.sub_type}`)
 				}
 
 				// Cache new form if type/subtype provided in update
@@ -178,7 +176,6 @@ module.exports = class FormsHelper {
 			if (!id && bodyData?.type && bodyData?.sub_type) {
 				const cachedData = await cacheHelper.forms.get(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
 				if (cachedData) {
-					console.log(`Form ${bodyData.type}:${bodyData.sub_type} retrieved from cache`)
 					return responses.successResponse({
 						statusCode: httpStatusCode.ok,
 						message: 'FORM_FETCHED_SUCCESSFULLY',
@@ -229,7 +226,6 @@ module.exports = class FormsHelper {
 			// Cache the result if it was searched by type and subtype
 			if (!id && bodyData?.type && bodyData?.sub_type) {
 				await cacheHelper.forms.set(tenantCode, orgCode, bodyData.type, bodyData.sub_type, form)
-				console.log(`Form ${bodyData.type}:${bodyData.sub_type} cached successfully`)
 			}
 
 			return responses.successResponse({
@@ -289,7 +285,6 @@ module.exports = class FormsHelper {
 												formData.sub_type,
 												formData
 											)
-											console.log(`Individual form cached: ${formData.type}:${formData.sub_type}`)
 										}
 									}
 								} catch (error) {

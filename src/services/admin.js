@@ -20,6 +20,10 @@ const { Op, QueryTypes } = require('sequelize')
 const { sequelize, Session, SessionAttendee, Connection, RequestSession } = require('@database/models/index')
 const { literal } = require('sequelize')
 const sessionRequestMappingQueries = require('@database/queries/requestSessionMapping')
+const permissionsQueries = require('@database/queries/permissions')
+const entityTypeHelper = require('@helpers/entityTypeCache')
+const orgQueries = require('@database/queries/organisationExtension')
+const formQueries = require('@database/queries/form')
 const cacheHelper = require('@generics/cacheHelper')
 // sessionOwnership removed - functionality replaced by direct Session queries
 
@@ -384,7 +388,6 @@ module.exports = class AdminService {
 				if (menteeDetailsRemoved > 0) {
 					try {
 						await cacheHelper.mentee.delete(tenantCode, userInfo.organization_code, userId)
-						console.log(`🗑️ Mentee ${userId} cache deleted after mentee extension removal`)
 					} catch (cacheError) {
 						console.error(`Cache deletion failed for mentee ${userId}:`, cacheError)
 					}
@@ -424,7 +427,6 @@ module.exports = class AdminService {
 					// Cache invalidation: Clear session cache after seats_remaining update
 					try {
 						await cacheHelper.sessions.delete(tenantCode, organizationCode, session.id)
-						console.log(`🔄 Session ${session.id} cache cleared after seats_remaining update`)
 					} catch (cacheError) {
 						console.error(`Cache deletion failed for session ${session.id}:`, cacheError)
 					}
@@ -676,7 +678,6 @@ module.exports = class AdminService {
 								sessionDetail.mentor_organization_id,
 								session.session_id
 							)
-							console.log(`🔄 Session ${session.session_id} cache cleared after enrollment count update`)
 						} catch (cacheError) {
 							console.error(`Cache deletion failed for session ${session.session_id}:`, cacheError)
 						}
@@ -1220,7 +1221,6 @@ module.exports = class AdminService {
 				for (const session of removedSessionsDetail) {
 					try {
 						await cacheHelper.sessions.delete(tenantCode, userOrgCode, session.id)
-						console.log(`🗑️ Session ${session.id} cache deleted after mentor session removal`)
 					} catch (cacheError) {
 						console.error(`Cache deletion failed for session ${session.id}:`, cacheError)
 					}
@@ -1250,7 +1250,6 @@ module.exports = class AdminService {
 			// Cache invalidation: Clear mentor cache after removal
 			try {
 				await cacheHelper.mentor.delete(tenantCode, userOrgCode, mentorUserId)
-				console.log(`🗑️ Mentor ${mentorUserId} cache deleted after mentor removal`)
 			} catch (cacheError) {
 				console.error(`Cache deletion failed for mentor ${mentorUserId}:`, cacheError)
 			}
@@ -1267,7 +1266,6 @@ module.exports = class AdminService {
 				for (const sessionId of sessionIds) {
 					try {
 						await cacheHelper.sessions.delete(tenantCode, userOrgCode, sessionId)
-						console.log(`🗑️ Session ${sessionId} cache deleted after session deletion`)
 					} catch (cacheError) {
 						console.error(`Cache deletion failed for session ${sessionId}:`, cacheError)
 					}
@@ -1345,7 +1343,6 @@ module.exports = class AdminService {
 			for (const sessionId of sessionIds) {
 				try {
 					await cacheHelper.sessions.delete(userTenantCode, userOrgCode, sessionId)
-					console.log(`🗑️ Session ${sessionId} cache deleted after session deletion`)
 				} catch (cacheError) {
 					console.error(`Cache deletion failed for session ${sessionId}:`, cacheError)
 				}
@@ -1638,19 +1635,13 @@ module.exports = class AdminService {
 			const keyspaceInfo = await redisClient.info('keyspace')
 
 			// Get key counts by namespace for the tenant
-			const namespaces = [
-				'sessions',
-				'entityTypes',
-				'forms',
-				'organizations',
-				'mentor',
-				'mentee',
-				'platformConfig',
-				'notificationTemplates',
-				'displayProperties',
-				'permissions',
-				'apiPermissions',
-			]
+			// Extract namespaces from cacheHelper instead of hardcoding
+			const namespaces = Object.keys(cacheHelper).filter(
+				(key) =>
+					typeof cacheHelper[key] === 'object' &&
+					cacheHelper[key] !== null &&
+					typeof cacheHelper[key].get === 'function'
+			)
 
 			const namespaceCounts = {}
 			for (const namespace of namespaces) {
@@ -1762,8 +1753,6 @@ module.exports = class AdminService {
 				}
 			}
 
-			console.log(`💾 Admin cache clear: ${clearedKeys} keys cleared for patterns: ${patterns.join(', ')}`)
-
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'CACHE_CLEARED_SUCCESSFULLY',
@@ -1806,7 +1795,6 @@ module.exports = class AdminService {
 
 			// Warm up EntityTypes cache
 			try {
-				const entityTypeHelper = require('@helpers/entityTypeCache')
 				await entityTypeHelper.warmUpEntityTypesCache(tenantCode, orgId)
 				warmupResults.entityTypes = 1
 			} catch (error) {
@@ -1815,7 +1803,6 @@ module.exports = class AdminService {
 
 			// Warm up Organizations cache
 			try {
-				const orgQueries = require('@database/queries/organisationExtension')
 				const orgData = await orgQueries.findOne({ organization_id: orgId }, tenantCode)
 				if (orgData) {
 					await cacheHelper.organizations.set(tenantCode, orgId, orgId, orgData)
@@ -1827,7 +1814,6 @@ module.exports = class AdminService {
 
 			// Warm up Platform Config cache
 			try {
-				const formQueries = require('@database/queries/form')
 				const configData = await formQueries.findOneForm({ code: 'platformConfig' }, tenantCode)
 				if (configData) {
 					await cacheHelper.platformConfig.set(tenantCode, orgId, configData)
@@ -1839,9 +1825,11 @@ module.exports = class AdminService {
 
 			// Warm up Permissions cache
 			try {
-				const permissionsQueries = require('@database/queries/permissions')
-				const roles = ['mentee', 'mentor', 'org_admin', 'session_manager']
-				for (const role of roles) {
+				// Get all distinct roles from permissions table instead of hardcoding
+				const allPermissions = await permissionsQueries.findAll({}, tenantCode)
+				const uniqueRoles = [...new Set(allPermissions.map((perm) => perm.role))].filter(Boolean)
+
+				for (const role of uniqueRoles) {
 					const perms = await permissionsQueries.findAll({ role }, tenantCode)
 					if (perms && perms.length > 0) {
 						await cacheHelper.permissions.set(role, perms)
@@ -1852,19 +1840,14 @@ module.exports = class AdminService {
 				console.error('Permissions cache warmup failed:', error)
 			}
 
-			// Warm up Forms cache (most commonly used forms)
+			// Warm up Forms cache (get all forms dynamically)
 			try {
-				const formQueries = require('@database/queries/form')
-				const commonForms = [
-					{ type: 'editProfile', subtype: 'mentorForm' },
-					{ type: 'editProfile', subtype: 'menteeForm' },
-					{ type: 'session', subtype: 'sessionForm' },
-				]
+				// Get all forms from database instead of hardcoding specific forms
+				const allForms = await formQueries.findFormsByFilter({}, [tenantCode])
 
-				for (const { type, subtype } of commonForms) {
-					const formData = await formQueries.findOneForm({ type, sub_type: subtype }, tenantCode)
-					if (formData) {
-						await cacheHelper.forms.set(tenantCode, orgId, type, subtype, formData)
+				for (const form of allForms) {
+					if (form.type && form.sub_type) {
+						await cacheHelper.forms.set(tenantCode, orgId, form.type, form.sub_type, form)
 						warmupResults.forms++
 					}
 				}

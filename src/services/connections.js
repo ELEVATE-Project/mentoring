@@ -85,22 +85,34 @@ module.exports = class ConnectionHelper {
 				])
 
 				if (user1Extension) {
-					await Promise.all([
-						cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId),
-						cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId),
-					])
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
 				}
 
 				if (user2Extension) {
-					await Promise.all([
-						cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
-						cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
-					])
-				}
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
 
-				console.log(`💾 User caches invalidated for connection request: ${userId} and ${bodyData.user_id}`)
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+				}
 			} catch (cacheError) {
-				console.error(`❌ Failed to invalidate user caches after connection request:`, cacheError)
+				// Cache invalidation failure - continue operation
 			}
 
 			return responses.successResponse({
@@ -381,22 +393,34 @@ module.exports = class ConnectionHelper {
 				])
 
 				if (user1Extension) {
-					await Promise.all([
-						cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId),
-						cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId),
-					])
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
 				}
 
 				if (user2Extension) {
-					await Promise.all([
-						cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
-						cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
-					])
-				}
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
 
-				console.log(`💾 User caches invalidated for connection approval: ${userId} and ${bodyData.user_id}`)
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+				}
 			} catch (cacheError) {
-				console.error(`❌ Failed to invalidate user caches after connection approval:`, cacheError)
+				// Cache invalidation failure - continue operation
 			}
 
 			return responses.successResponse({
@@ -452,22 +476,34 @@ module.exports = class ConnectionHelper {
 				])
 
 				if (user1Extension) {
-					await Promise.all([
-						cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId),
-						cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId),
-					])
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
 				}
 
 				if (user2Extension) {
-					await Promise.all([
-						cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
-						cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id),
-					])
-				}
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
 
-				console.log(`💾 User caches invalidated for connection rejection: ${userId} and ${bodyData.user_id}`)
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+				}
 			} catch (cacheError) {
-				console.error(`❌ Failed to invalidate user caches after connection rejection:`, cacheError)
+				// Cache invalidation failure - continue operation
 			}
 
 			return responses.successResponse({
@@ -511,7 +547,7 @@ module.exports = class ConnectionHelper {
 			// Fetch validation data for filtering connections (excluding roles) - using cache
 			const validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
 				{
-					status: 'ACTIVE',
+					status: common.ACTIVE_STATUS,
 					allow_filtering: true,
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},

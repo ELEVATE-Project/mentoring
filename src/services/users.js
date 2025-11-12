@@ -85,11 +85,10 @@ module.exports = class UserHelper {
 				const result = await this.#createOrUpdateUserAndOrg(decodedToken.id, isNewUser, decodedToken)
 				return result
 			} else {
-				// Try to get mentee extension from cache first
-				let menteeExtension = await cacheHelper.mentee.get(
-					decodedToken.tenant_code,
-					decodedToken.organization_code,
-					decodedToken.id
+				// Skip cache during user creation - get fresh data from database
+				let menteeExtension = await menteeQueries.findOne(
+					{ user_id: decodedToken.id },
+					decodedToken.tenant_code
 				)
 			}
 			if (!menteeExtension) {
@@ -255,7 +254,6 @@ module.exports = class UserHelper {
 		let orgExtension = await cacheHelper.organizations.get(tenantCode, orgData.code, orgData.id)
 
 		if (orgExtension) {
-			console.log(`💾 Organization ${orgData.id} retrieved from cache`)
 			return orgExtension
 		}
 
@@ -265,7 +263,6 @@ module.exports = class UserHelper {
 			// Cache the found organization
 			try {
 				await cacheHelper.organizations.set(tenantCode, orgData.code, orgData.id, orgExtension)
-				console.log(`💾 Organization ${orgData.id} cached after database fetch`)
 			} catch (cacheError) {
 				console.error(`❌ Failed to cache organization ${orgData.id}:`, cacheError)
 			}
@@ -283,12 +280,11 @@ module.exports = class UserHelper {
 		orgExtension = await organisationExtensionQueries.upsert(orgExtensionData, tenantCode)
 		const orgResult = orgExtension.toJSON()
 
-		// Cache the newly created organization
+		// Clear organization cache after write operation to ensure consistency
 		try {
-			await cacheHelper.organizations.set(tenantCode, orgData.code, orgData.id, orgResult)
-			console.log(`💾 Organization ${orgData.id} cached after creation`)
+			await cacheHelper.organizations.delete(tenantCode, orgData.code, orgData.id)
 		} catch (cacheError) {
-			console.error(`❌ Failed to cache new organization ${orgData.id}:`, cacheError)
+			console.error(`❌ Failed to clear organization cache ${orgData.id}:`, cacheError)
 		}
 
 		return orgResult
@@ -330,12 +326,8 @@ module.exports = class UserHelper {
 
 		let isRoleChanged = false
 
-		// Try cache first using logged-in user's organization context
-		let menteeExtension = await cacheHelper.mentee.get(
-			decodedToken.tenant_code,
-			decodedToken.organization_code,
-			userExtensionData.id
-		)
+		// Skip cache during user updates - role changes require fresh data from database
+		let menteeExtension = await menteeQueries.findOne({ user_id: userExtensionData.id }, decodedToken.tenant_code)
 
 		if (!menteeExtension) throw new Error('User Not Found')
 
@@ -361,13 +353,17 @@ module.exports = class UserHelper {
 			//and additional data update of the user is done by orgAdmin's roleChange workflow
 			const roleChangeResult = await orgAdminService.roleChange(roleChangePayload, userExtensionData, tenantCode)
 
-			// Invalidate cache after role change
+			// Invalidate cache after role change - separate try-catch for each cache
 			try {
 				await cacheHelper.mentee.delete(tenantCode, userExtensionData.organization.code, userExtensionData.id)
-				await cacheHelper.mentor.delete(tenantCode, userExtensionData.organization.code, userExtensionData.id)
-				console.log(`💾 User cache invalidated after role change for user ${userExtensionData.id}`)
 			} catch (cacheError) {
-				console.error(`❌ Failed to invalidate user cache after role change:`, cacheError)
+				console.error(`❌ Failed to invalidate mentee cache after role change:`, cacheError)
+			}
+
+			try {
+				await cacheHelper.mentor.delete(tenantCode, userExtensionData.organization.code, userExtensionData.id)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate mentor cache after role change:`, cacheError)
 			}
 
 			return roleChangeResult
@@ -404,7 +400,6 @@ module.exports = class UserHelper {
 						userExtensionData.id
 					)
 				}
-				console.log(`💾 User cache invalidated after update for user ${userExtensionData.id}`)
 			} catch (cacheError) {
 				console.error(`❌ Failed to invalidate user cache after update:`, cacheError)
 			}
