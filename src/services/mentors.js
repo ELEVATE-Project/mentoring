@@ -1300,10 +1300,11 @@ module.exports = class MentorsHelper {
 			let validationData = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				mentorExtensionsModelName,
 				[orgCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				[tenantCode, defaults.tenantCode],
+				{ allow_filtering: true }
 			)
-
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData, mentorExtensionsModelName)
+
 			const saasFilter = await this.filterMentorListBasedOnSaasPolicy(
 				userId,
 				isAMentor,
@@ -1501,7 +1502,7 @@ module.exports = class MentorsHelper {
 				extensionDetails.data = await entityTypeService.processEntityTypesToAddValueLabels(
 					extensionDetails.data,
 					organizationCodes,
-					'UserExtension',
+					mentorExtensionsModelName,
 					'organization_code',
 					[],
 					[tenantCode]

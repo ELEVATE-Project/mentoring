@@ -155,8 +155,10 @@ async function getAllEntityTypesForModel(modelName, tenantCode, orgCode, orgCode
 			// Build filter for complete model data
 			const filter = {
 				status: 'ACTIVE',
+				allow_filtering: true,
 				organization_code: { [Op.in]: orgCodeArray },
 				model_names: { [Op.contains]: [modelName] },
+				...additionalFilters,
 			}
 
 			// Fetch complete dataset from database
