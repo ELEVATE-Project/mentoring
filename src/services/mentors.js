@@ -819,7 +819,7 @@ module.exports = class MentorsHelper {
 			const cachedProfile = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
 
 			// If we have cached data and not in raw mode, return complete response immediately
-			if (cachedProfile && !raw) {
+			if (cachedProfile) {
 				let requestedMentorExtension = false
 				if (userId !== '' && isAMentor !== '' && roles !== '') {
 					// Try cache first using logged-in user's organization context
