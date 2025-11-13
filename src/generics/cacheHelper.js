@@ -814,7 +814,13 @@ const notificationTemplates = {
 			}
 
 			// Get defaults for fallback cache and database query
-			const defaults = await getDefaults()
+			let defaults = null
+			try {
+				defaults = await getDefaults()
+			} catch (error) {
+				console.error('Failed to get defaults for notification template cache:', error.message)
+				// Continue without defaults - will fall back to database query
+			}
 
 			// Check default cache if defaults are available
 			if (defaults && defaults.orgCode && defaults.tenantCode) {
@@ -856,11 +862,22 @@ const notificationTemplates = {
 			}
 
 			// Use combination of user and default codes for database query
-			const templateFromDb = await notificationTemplateQueries.findOneEmailTemplate(
-				templateCode,
-				{ [Op.in]: allOrgCodes },
-				{ [Op.in]: allTenantCodes }
-			)
+			// Avoid circular dependency by using findOne instead of findOneEmailTemplate
+			let templateFromDb = null
+			try {
+				templateFromDb = await notificationTemplateQueries.findOne(
+					{
+						code: templateCode,
+						organization_code: { [Op.in]: allOrgCodes },
+						type: 'email',
+						status: 'active',
+					},
+					allTenantCodes[0] // Use first tenant code for the query
+				)
+			} catch (dbError) {
+				console.error(`Failed to fetch notification template ${templateCode} from database:`, dbError.message)
+				return null
+			}
 
 			if (templateFromDb) {
 				// Cache the result under the matching tenant/org combination

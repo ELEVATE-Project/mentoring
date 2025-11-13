@@ -705,7 +705,8 @@ module.exports = class SessionsHelper {
 				userId = bodyData.mentor_id
 			}
 
-			let mentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+			// Use direct database query instead of cache
+			let mentorExtension = await mentorExtensionQueries.getMentorExtension(userId, [], false, tenantCode)
 			if (!mentorExtension) {
 				return responses.failureResponse({
 					message: 'INVALID_PERMISSION',
@@ -1732,7 +1733,16 @@ module.exports = class SessionsHelper {
 
 			const processDbResponse = utils.processDbResponse(sessionDetails, validationData)
 
-			// Cache removed - sessions only deleted on write operations, no caching on read
+			// Cache the session details after successful database fetch (only for simple numeric IDs)
+			if (utils.isNumeric(id)) {
+				try {
+					await cacheHelper.sessions.set(tenantCode, orgCode, sessionDetails.id, processDbResponse)
+					console.log(`💾 Session ${sessionDetails.id} cached after database fetch`)
+				} catch (cacheError) {
+					console.log(`Failed to cache session ${sessionDetails.id}:`, cacheError.message)
+					// Continue without caching - don't fail the request
+				}
+			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -1962,7 +1972,7 @@ module.exports = class SessionsHelper {
 	 * @name enroll
 	 * @param {String} sessionId 			- Session id.
 	 * @param {Object} userTokenData
-	 * @param {String} userTokenData.id 	- user id.
+	 * @param {String} userTokenData.user_id 	- user id.
 	 * @param {String} timeZone 			- timezone.
 	 * @param {Boolean} isSelfEnrolled 		- true/false.
 	 * @param {Object} session 				- session details.
@@ -1984,6 +1994,13 @@ module.exports = class SessionsHelper {
 		tenantCode
 	) {
 		try {
+			console.log('====== ENROLL FUNCTION CALLED with:', {
+				sessionId,
+				userTokenData,
+				timeZone,
+				isAMentor,
+				isSelfEnrolled,
+			})
 			let email
 			let name
 			let userId
@@ -1993,7 +2010,7 @@ module.exports = class SessionsHelper {
 			// Else it will be available in userTokenData
 			if (isSelfEnrolled) {
 				const userDetails = await mentorExtensionQueries.getMentorExtension(
-					userTokenData.id,
+					userTokenData.user_id,
 					['user_id', 'name', 'email'],
 					true,
 					tenantCode
@@ -2013,8 +2030,8 @@ module.exports = class SessionsHelper {
 			}
 			// search for session only if session data not passed
 			if (!session || Object.keys(session).length === 0) {
-				// Try cache first for session details
-				session = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
+				// Use database query instead of cache for session details
+				session = await sessionQueries.findById(sessionId, tenantCode)
 			}
 			if (!session) {
 				return responses.failureResponse({
@@ -2134,9 +2151,11 @@ module.exports = class SessionsHelper {
 				time_zone: timeZone,
 				type: enrollmentType,
 			}
-
+			console.log('======attendee', attendee)
 			// Optimized: Use findOrCreate to handle enrollment atomically
 			const enrollmentResult = await sessionAttendeesQueries.findOrCreateAttendee(attendee, tenantCode)
+			console.log('======enrollmentResult', enrollmentResult)
+
 			if (enrollmentResult instanceof Error) {
 				return responses.failureResponse({
 					message: 'FAILED_TO_ENROLL_USER',
@@ -2260,7 +2279,7 @@ module.exports = class SessionsHelper {
 			// Else it will be available in userTokenData
 			if (isSelfUnenrollment) {
 				const userDetails = await mentorExtensionQueries.getMentorExtension(
-					userTokenData.id,
+					userTokenData.user_id,
 					['user_id', 'name', 'email'],
 					true,
 					tenantCode
@@ -2270,7 +2289,7 @@ module.exports = class SessionsHelper {
 				email = userDetails.email
 				name = userDetails.name
 			} else {
-				userId = userTokenData.id
+				userId = userTokenData.user_id
 				email = userTokenData.email
 				name = userTokenData.name
 				emailTemplateCode = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE // update with new template
@@ -2366,7 +2385,7 @@ module.exports = class SessionsHelper {
 
 			// Clear user cache since sessions_attended count changed
 			await this._clearUserCacheForSessionCountChange(
-				userTokenData.id,
+				userTokenData.user_id,
 				tenantCode,
 				updatedSession.organization_code,
 				'session_unenroll'
@@ -3402,9 +3421,9 @@ module.exports = class SessionsHelper {
 		tenantCode
 	) {
 		try {
-			// Check if session exists
-			const sessionDetails = await cacheHelper.sessions.get(tenantCode, organizationCode, sessionId)
-			if (!sessionDetails || Object.keys(sessionDetails).length === 0) {
+			// Check if session exists - use database query instead of cache for reliability
+			const sessionDetails = await sessionQueries.findById(sessionId, tenantCode)
+			if (!sessionDetails) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
@@ -3420,7 +3439,8 @@ module.exports = class SessionsHelper {
 				},
 				tenantCode
 			)
-			if (!mentees && mentees.length > 0) {
+			console.log('======== mentees found:', mentees)
+			if (!mentees || mentees.length === 0) {
 				return responses.failureResponse({
 					message: 'USER_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
@@ -3438,7 +3458,8 @@ module.exports = class SessionsHelper {
 					menteeData.is_mentor,
 					false,
 					sessionDetails,
-					[],
+					null, // mentorId
+					[], // roles
 					organizationId,
 					organizationCode,
 					tenantCode
@@ -3452,6 +3473,7 @@ module.exports = class SessionsHelper {
 
 			// Wait for all enrollments to settle
 			const results = await Promise.allSettled(enrollPromises)
+			console.log('------results', results)
 			results.forEach((result, index) => {
 				if (result.status === 'fulfilled' && result.value.status === 'fulfilled') {
 					successIds.push(mentees[index].id)

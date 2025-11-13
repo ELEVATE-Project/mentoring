@@ -17,7 +17,7 @@ const { Op } = require('sequelize')
 
 const menteeQueries = require('@database/queries/userExtension')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
-const cacheHelper = require('@generics/cacheHelper')
+// Removed cacheHelper to break circular dependency with getDefaultOrgId
 
 const emailEncryption = require('@utils/emailEncryption')
 
@@ -723,14 +723,7 @@ const organizationList = function (organizationCodes = [], tenantCodes = []) {
 				organizationDetails.forEach((orgInfo) => {
 					orgInfo.id = orgInfo.organization_code
 
-					// Cache each organization
-					const cachePromise = cacheHelper.organizations
-						.set(orgInfo.tenant_code, orgInfo.organization_code, orgInfo.organization_id, orgInfo)
-						.catch((cacheError) => {
-							console.error(`❌ Failed to cache organization ${orgInfo.organization_id}:`, cacheError)
-						})
-
-					cachePromises.push(cachePromise)
+					// Organization caching removed to break circular dependency
 				})
 
 				try {
@@ -865,19 +858,7 @@ const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false,
 			organizationDetails.forEach((org) => {
 				orgDetails[org.organization_id] = org
 
-				// Cache each organization for future lookups
-				if (org.organization_code) {
-					const cachePromise = cacheHelper.organizations
-						.set(tenantCode, org.organization_code, org.organization_id, org)
-						.catch((cacheError) => {
-							console.error(
-								`❌ Failed to cache organization ${org.organization_id} in getUserDetailedList:`,
-								cacheError
-							)
-						})
-
-					cachePromises.push(cachePromise)
-				}
+				// Organization caching removed to break circular dependency
 			})
 
 			// Cache organizations in parallel without blocking the main response

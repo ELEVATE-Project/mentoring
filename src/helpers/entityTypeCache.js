@@ -49,22 +49,21 @@ async function getEntityTypesAndEntitiesForModel(modelName, orgCodes, tenantCode
 		const primaryTenantCode = tenantCodeArray[0]
 		const primaryOrgCode = orgCodeArray[0]
 
-		// Get all entity types for the model using unified cache strategy
-		const allEntityTypes = await getAllEntityTypesForModel(
-			modelName,
-			primaryTenantCode,
-			primaryOrgCode,
-			orgCodeArray,
+		// Use standard cache helper instead of unified caching
+		// This will store individual entity types based on their values
+		console.log(`EntityTypes for model '${modelName}' fetching via standard cache pattern`)
+
+		// Fallback to database query with proper individual caching
+		return await getEntityTypesAndEntitiesWithFilter(
+			{
+				status: 'ACTIVE',
+				allow_filtering: true,
+				organization_code: { [Op.in]: orgCodeArray },
+				model_names: { [Op.contains]: [modelName] },
+				...additionalFilters,
+			},
 			tenantCodeArray
 		)
-
-		// Apply additional filters in-memory if specified
-		if (Object.keys(additionalFilters).length > 0) {
-			return applyInMemoryFilters(allEntityTypes, additionalFilters)
-		}
-
-		console.log(`EntityTypes for model '${modelName}' retrieved from unified cache`)
-		return allEntityTypes
 	} catch (error) {
 		throw error
 	}
@@ -107,18 +106,13 @@ async function getEntityTypesAndEntitiesWithFilter(filter, tenantCodes) {
 				? filter.organization_code[Op.in]
 				: [orgCode]
 
-			const allEntityTypes = await getAllEntityTypesForModel(
-				modelName,
-				primaryTenantCode,
-				orgCode,
-				orgCodeArray,
+			// Use database query with individual caching instead of unified cache
+			console.log(`EntityTypes filter query for model '${modelName}' - using database with individual cache`)
+			const entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(
+				filter,
 				tenantCodeArray
 			)
-
-			// Apply filters in-memory (much faster than separate cache)
-			const filtered = applyInMemoryFilters(allEntityTypes, filter)
-			console.log(`Filtered EntityTypes for model '${modelName}' retrieved from unified cache`)
-			return filtered
+			return entityTypesWithEntities
 		}
 
 		// Fallback: fetch directly from database without caching
@@ -131,92 +125,12 @@ async function getEntityTypesAndEntitiesWithFilter(filter, tenantCodes) {
 	}
 }
 
-/**
- * Unified cache strategy: Get all entity types for a model (single cache per model)
- * @method
- * @name getAllEntityTypesForModel
- * @param {String} modelName - model name
- * @param {String} tenantCode - primary tenant code
- * @param {String} orgCode - primary org code
- * @param {Array} orgCodeArray - all org codes to include
- * @param {Array} tenantCodeArray - all tenant codes to include
- * @returns {Array} - All entity types with entities for the model
- */
-async function getAllEntityTypesForModel(modelName, tenantCode, orgCode, orgCodeArray, tenantCodeArray) {
-	return await cacheHelper.getOrSet({
-		tenantCode,
-		orgCode,
-		ns: 'entityTypes',
-		id: `model:${modelName}:__ALL__`,
-		ttl: 86400, // 1 day TTL
-		fetchFn: async () => {
-			console.log(`EntityTypes cache miss for model '${modelName}', fetching complete dataset from DB`)
+// Removed getAllEntityTypesForModel - unified caching replaced with individual entity value caching
 
-			// Build filter for complete model data
-			const filter = {
-				status: 'ACTIVE',
-				allow_filtering: true,
-				organization_code: { [Op.in]: orgCodeArray },
-				model_names: { [Op.contains]: [modelName] },
-			}
-
-			// Fetch complete dataset from database
-			const allEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodeArray)
-
-			console.log(`Cached complete EntityTypes dataset for model '${modelName}' (${allEntityTypes.length} items)`)
-			return allEntityTypes
-		},
-	})
-}
+// Removed applyInMemoryFilters - no longer needed with individual entity value caching
 
 /**
- * Apply additional filters to entity types in-memory
- * @method
- * @name applyInMemoryFilters
- * @param {Array} entityTypes - array of entity types to filter
- * @param {Object} filters - filter conditions to apply
- * @returns {Array} - filtered entity types
- */
-function applyInMemoryFilters(entityTypes, filters) {
-	if (!entityTypes || !Array.isArray(entityTypes)) {
-		return []
-	}
-
-	return entityTypes.filter((entityType) => {
-		// Apply each filter condition
-		for (const [key, value] of Object.entries(filters)) {
-			// Skip standard query fields that are already applied at cache level
-			if (['status', 'organization_code', 'model_names'].includes(key)) {
-				continue
-			}
-
-			// Handle Sequelize operators
-			if (value && typeof value === 'object' && value[Op.in]) {
-				if (!value[Op.in].includes(entityType[key])) {
-					return false
-				}
-			} else if (value && typeof value === 'object' && value[Op.contains]) {
-				if (!entityType[key] || !entityType[key].some((item) => value[Op.contains].includes(item))) {
-					return false
-				}
-			} else if (value && typeof value === 'object' && value[Op.like]) {
-				const likeValue = value[Op.like].replace(/%/g, '')
-				if (!entityType[key] || !entityType[key].toLowerCase().includes(likeValue.toLowerCase())) {
-					return false
-				}
-			} else {
-				// Direct comparison
-				if (entityType[key] !== value) {
-					return false
-				}
-			}
-		}
-		return true
-	})
-}
-
-/**
- * Get individual entity type by value (uses unified cache)
+ * Get individual entity type by value (uses individual entity value caching)
  * @method
  * @name getEntityTypeByValue
  * @param {String} modelName - model name
@@ -228,20 +142,39 @@ function applyInMemoryFilters(entityTypes, filters) {
  * @returns {Object|null} - entity type object or null if not found
  */
 async function getEntityTypeByValue(modelName, entityValue, tenantCode, orgCode, orgCodeArray, tenantCodeArray) {
-	const allEntityTypes = await getAllEntityTypesForModel(
-		modelName,
-		tenantCode,
-		orgCode,
-		orgCodeArray,
-		tenantCodeArray
-	)
-	const found = allEntityTypes.find((entityType) => entityType.value === entityValue)
-
-	if (found) {
-		console.log(`EntityType '${entityValue}' for model '${modelName}' found in unified cache`)
+	// Use direct cache helper for individual entity value lookup
+	try {
+		const cachedEntity = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName, entityValue)
+		if (cachedEntity) {
+			console.log(`EntityType '${entityValue}' for model '${modelName}' found in individual cache`)
+			return cachedEntity
+		}
+	} catch (cacheError) {
+		console.log(`Cache lookup failed for entity ${entityValue}, falling back to database`)
 	}
 
-	return found || null
+	// Fallback to database query if not in cache
+	const filter = {
+		status: 'ACTIVE',
+		value: entityValue,
+		organization_code: { [Op.in]: orgCodeArray },
+		model_names: { [Op.contains]: [modelName] },
+	}
+
+	const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodeArray)
+	const found = entityTypes.length > 0 ? entityTypes[0] : null
+
+	if (found) {
+		console.log(`EntityType '${entityValue}' for model '${modelName}' found in database`)
+		// Cache it for future use
+		try {
+			await cacheHelper.entityTypes.set(tenantCode, orgCode, modelName, entityValue, found)
+		} catch (cacheError) {
+			console.log(`Failed to cache entity ${entityValue}:`, cacheError.message)
+		}
+	}
+
+	return found
 }
 
 module.exports = {
