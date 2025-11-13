@@ -1298,8 +1298,8 @@ module.exports = class MentorsHelper {
 				})
 
 			let validationData = await entityTypeCache.getEntityTypesAndEntitiesForModel(
-				{ [Op.contains]: [mentorExtensionsModelName] },
-				[organizationCode, defaults.orgCode],
+				mentorExtensionsModelName,
+				[orgCode, defaults.orgCode],
 				[tenantCode, defaults.tenantCode]
 			)
 
