@@ -48,11 +48,11 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - profile details
 	 */
 	static async read(id, organizationId, organizationCode, roles, tenantCode) {
-		// Try to get complete profile from cache first (only when raw = false)
+		// Try to get complete profile from cache first (only when false)
 		const cachedProfile = await cacheHelper.mentee.get(tenantCode, organizationCode, id, false)
 
-		// If we have cached data and not in raw mode, return complete response immediately
-		if (cachedProfile && !raw) {
+		// If we have cached data , return complete response immediately
+		if (cachedProfile) {
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'PROFILE_FETCHED_SUCCESSFULLY',
@@ -204,14 +204,12 @@ module.exports = class MenteesHelper {
 			Permissions: menteePermissions,
 		}
 
-		// Cache the complete profile response only when not in raw mode
-		if (!raw) {
-			try {
-				console.log(`💾 Caching complete mentee profile response for ${id}`)
-				await cacheHelper.mentee.set(tenantCode, organizationCode, id, finalProfile)
-			} catch (cacheError) {
-				console.error(`❌ Failed to cache mentee profile ${id}:`, cacheError)
-			}
+		// Cache the complete profile response
+		try {
+			console.log(`💾 Caching complete mentee profile response for ${id}`)
+			await cacheHelper.mentee.set(tenantCode, organizationCode, id, finalProfile)
+		} catch (cacheError) {
+			console.error(`❌ Failed to cache mentee profile ${id}:`, cacheError)
 		}
 
 		return responses.successResponse({
@@ -1929,7 +1927,7 @@ module.exports = class MenteesHelper {
 			// Try cache first using logged-in user's organization context
 			let requestedUserExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, id, false)
 
-			// If we have cached complete response and not in raw mode, return it immediately
+			// If we have cached complete response
 			if (
 				requestedUserExtension &&
 				requestedUserExtension.displayProperties &&
@@ -1983,13 +1981,6 @@ module.exports = class MenteesHelper {
 					result: requestedUserExtension,
 				})
 			}
-
-			// Continue with normal processing for raw mode or cache miss
-			console.log(
-				raw
-					? `🔄 Raw mode: Building fresh mentee details for ${id}`
-					: `💾 Cache miss: Building mentee details for ${id}`
-			)
 
 			// If we don't have cached data, fetch it from database
 			if (!requestedUserExtension) {
@@ -2159,14 +2150,12 @@ module.exports = class MenteesHelper {
 				Permissions: userPermissions,
 			}
 
-			// Cache the complete details response only when not in raw mode
-			if (!raw) {
-				try {
-					console.log(`💾 Caching complete mentee details response for ${id}`)
-					await cacheHelper.mentee.set(tenantCode, organizationCode, id, finalDetailsResponse)
-				} catch (cacheError) {
-					console.error(`❌ Failed to cache mentee details ${id}:`, cacheError)
-				}
+			// Cache the complete details response
+			try {
+				console.log(`💾 Caching complete mentee details response for ${id}`)
+				await cacheHelper.mentee.set(tenantCode, organizationCode, id, finalDetailsResponse)
+			} catch (cacheError) {
+				console.error(`❌ Failed to cache mentee details ${id}:`, cacheError)
 			}
 
 			return responses.successResponse({

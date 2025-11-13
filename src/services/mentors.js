@@ -815,10 +815,10 @@ module.exports = class MentorsHelper {
 				orgCode = mentorProfile.data.result.organization_code
 			}
 
-			// Try to get complete profile from cache first (only when raw = false)
+			// Try to get complete profile from cache first (only when false)
 			const cachedProfile = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
 
-			// If we have cached data and not in raw mode, return complete response immediately
+			// If we have cached data and not in mode, return complete response immediately
 			if (cachedProfile) {
 				let requestedMentorExtension = false
 				if (userId !== '' && isAMentor !== '' && roles !== '') {
@@ -878,13 +878,6 @@ module.exports = class MentorsHelper {
 					result: cachedProfile,
 				})
 			}
-
-			// Continue with normal processing for raw mode or cache miss
-			console.log(
-				raw
-					? `🔄 Raw mode: Building fresh mentor profile for ${id}`
-					: `💾 Cache miss: Building mentor profile for ${id}`
-			)
 
 			let requestedMentorExtension = false
 			if (userId !== '' && isAMentor !== '' && roles !== '') {
@@ -1133,14 +1126,12 @@ module.exports = class MentorsHelper {
 				Permissions: mentorPermissions,
 			}
 
-			// Cache the complete profile response only when not in raw mode
-			if (!raw) {
-				try {
-					console.log(`💾 Caching complete mentor profile response for ${id}`)
-					await cacheHelper.mentor.set(tenantCode, orgCode, id, finalProfile)
-				} catch (cacheError) {
-					console.error(`❌ Failed to cache mentor profile ${id}:`, cacheError)
-				}
+			// Cache the complete profile response
+			try {
+				console.log(`💾 Caching complete mentor profile response for ${id}`)
+				await cacheHelper.mentor.set(tenantCode, orgCode, id, finalProfile)
+			} catch (cacheError) {
+				console.error(`❌ Failed to cache mentor profile ${id}:`, cacheError)
 			}
 
 			return responses.successResponse({
