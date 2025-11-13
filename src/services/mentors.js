@@ -1297,12 +1297,9 @@ module.exports = class MentorsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			let validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
-				{
-					status: common.ACTIVE_STATUS,
-					allow_filtering: true,
-					model_names: { [Op.contains]: [mentorExtensionsModelName] },
-				},
+			let validationData = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				{ [Op.contains]: [mentorExtensionsModelName] },
+				[organizationCode, defaults.orgCode],
 				[tenantCode, defaults.tenantCode]
 			)
 
