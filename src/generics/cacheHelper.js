@@ -441,9 +441,10 @@ const entityTypes = {
 				model_names: { [Op.contains]: [modelName] },
 				value: entityValue,
 			}
-			const entityTypeFromDb = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: defaults.tenantCode ? [tenantCode, defaults.tenantCode] : [tenantCode],
-			})
+			const entityTypeFromDb = await entityTypeQueries.findUserEntityTypesAndEntities(
+				filter,
+				defaults.tenantCode ? [tenantCode, defaults.tenantCode] : [tenantCode]
+			)
 
 			if (entityTypeFromDb && entityTypeFromDb.length > 0) {
 				// Cache the fetched data for future requests in user's tenant/org

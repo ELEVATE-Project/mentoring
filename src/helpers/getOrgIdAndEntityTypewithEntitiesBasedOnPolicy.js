@@ -240,9 +240,10 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 			// Handle both array and string cases for tenantCodes
 			const tenantCodeArray = Array.isArray(tenantCodes) ? tenantCodes : [tenantCodes]
 			const finalTenantCodes = defaultTenantCode ? [...tenantCodeArray, defaultTenantCode] : tenantCodeArray
-			let entityTypesWithEntities = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(filter, {
-				[Op.in]: finalTenantCodes,
-			})
+			let entityTypesWithEntities = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
+				filter,
+				finalTenantCodes
+			)
 			return {
 				success: true,
 				result: entityTypesWithEntities,

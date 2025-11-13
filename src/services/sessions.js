@@ -1700,7 +1700,7 @@ module.exports = class SessionsHelper {
 					organization_id: { [Op.in]: orgIds },
 					model_names: { [Op.overlap]: modelNames },
 				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+				[tenantCode, defaults.tenantCode]
 			)
 
 			if (mentorExtension?.user_id) {
