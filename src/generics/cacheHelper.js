@@ -388,39 +388,73 @@ const entityTypes = {
 	async get(tenantCode, orgCode, modelName, entityValue) {
 		try {
 			const compositeId = `model:${modelName}:${entityValue}`
-			const key = await buildKey({ tenantCode, orgCode: orgCode, ns: 'entityTypes', id: compositeId })
+
+			// Step 1: Check cache for user's tenant/org
+			const userKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'entityTypes', id: compositeId })
 			const useInternal = nsUseInternal('entityTypes')
-			const cachedEntityType = await get(key, { useInternal })
+			const cachedEntityType = await get(userKey, { useInternal })
 			if (cachedEntityType) {
 				console.log(
-					`💾 EntityType ${modelName}:${entityValue} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`
+					`💾 EntityType ${modelName}:${entityValue} retrieved from user cache: tenant:${tenantCode}:org:${orgCode}`
 				)
 				return cachedEntityType
 			}
 
-			// Cache miss - fallback to database query
+			// Step 2: Check cache for default tenant/org
+			const defaults = await getDefaults()
+			if (
+				defaults.orgCode &&
+				defaults.tenantCode &&
+				(defaults.orgCode !== orgCode || defaults.tenantCode !== tenantCode)
+			) {
+				const defaultKey = await buildKey({
+					tenantCode: defaults.tenantCode,
+					orgCode: defaults.orgCode,
+					ns: 'entityTypes',
+					id: compositeId,
+				})
+				const defaultCachedEntityType = await get(defaultKey, { useInternal })
+				if (defaultCachedEntityType) {
+					console.log(
+						`💾 EntityType ${modelName}:${entityValue} retrieved from default cache: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
+					)
+					// Cache in user's tenant/org for future requests
+					await this.set(tenantCode, orgCode, modelName, entityValue, defaultCachedEntityType)
+					return defaultCachedEntityType
+				}
+			}
+
+			// Step 3: Cache miss - fallback to database query with both user and default tenant/org
 			console.log(
 				`💾 EntityType ${modelName}:${entityValue} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
 			)
+
+			if (!defaults.orgCode || !defaults.tenantCode) {
+				console.warn('⚠️ Default org/tenant codes not set, using only user tenant/org for database query')
+			}
+
 			const filter = {
 				status: 'ACTIVE',
-				organization_code: orgCode,
+				organization_code: {
+					[Op.in]: defaults.orgCode ? [orgCode, defaults.orgCode] : [orgCode],
+				},
 				model_names: { [Op.contains]: [modelName] },
 				value: entityValue,
 			}
 			const entityTypeFromDb = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: [tenantCode],
+				[Op.in]: defaults.tenantCode ? [tenantCode, defaults.tenantCode] : [tenantCode],
 			})
 
-			if (entityTypeFromDb) {
-				// Cache the fetched data for future requests
+			if (entityTypeFromDb && entityTypeFromDb.length > 0) {
+				// Cache the fetched data for future requests in user's tenant/org
 				await this.set(tenantCode, orgCode, modelName, entityValue, entityTypeFromDb)
 				console.log(
 					`💾 EntityType ${modelName}:${entityValue} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
 				)
+				return entityTypeFromDb
 			}
 
-			return entityTypeFromDb
+			return null
 		} catch (error) {
 			console.error(`❌ Failed to get entityType ${modelName}:${entityValue} from cache/database:`, error)
 			return null
