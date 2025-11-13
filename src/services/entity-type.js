@@ -356,17 +356,44 @@ module.exports = class EntityHelper {
 		try {
 			const entityValue = body.value
 
-			// Step 1: Try to get from cache for all possible models
-			for (const modelName of common.entityTypeModelNames) {
-				const cachedEntityType = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName, entityValue)
-				if (cachedEntityType) {
-					// The cached data should be the complete entity type with entities
-					return responses.successResponse({
-						statusCode: httpStatusCode.ok,
-						message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
-						result: { entity_types: [cachedEntityType] },
-					})
+			// Handle both single values and arrays
+			const entityValues = Array.isArray(entityValue) ? entityValue : [entityValue]
+			const allEntityTypes = []
+
+			// Process each entity value individually
+			for (const singleEntityValue of entityValues) {
+				// Step 1: Try to get from cache for all possible models
+				let foundInCache = false
+				for (const modelName of common.entityTypeModelNames) {
+					const cachedEntityType = await cacheHelper.entityTypes.get(
+						tenantCode,
+						orgCode,
+						modelName,
+						singleEntityValue
+					)
+					if (cachedEntityType) {
+						// The cached data should be the complete entity type with entities
+						allEntityTypes.push(
+							...(Array.isArray(cachedEntityType) ? cachedEntityType : [cachedEntityType])
+						)
+						foundInCache = true
+						break
+					}
 				}
+
+				// If not found in cache, will be processed in database query below
+				if (!foundInCache) {
+					// Continue to database query for this value
+				}
+			}
+
+			// If all values were found in cache, return them
+			if (allEntityTypes.length === entityValues.length) {
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
+					result: { entity_types: allEntityTypes },
+				})
 			}
 
 			// Step 2: If not found in cache, query database without model restriction
@@ -384,7 +411,7 @@ module.exports = class EntityHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			const filter = {
-				value: entityValue,
+				value: Array.isArray(entityValue) ? { [Op.in]: entityValue } : entityValue,
 				status: common.ACTIVE_STATUS,
 				organization_code: {
 					[Op.in]: [orgCode, defaults.orgCode],
@@ -406,14 +433,22 @@ module.exports = class EntityHelper {
 				})
 			}
 
-			// Cache the complete entity type with entities for all its model names
+			// Cache each entity type individually for all its model names
 			if (prunedEntities.length > 0) {
-				const entityTypeToCache = prunedEntities[0] // Should be the complete entity type with entities
-				const entityModelNames = entityTypeToCache.model_names || []
+				for (const entityTypeToCache of prunedEntities) {
+					const entityModelNames = entityTypeToCache.model_names || []
+					const entityTypeValue = entityTypeToCache.value
 
-				// Cache for each model name this entity type belongs to
-				for (const modelName of entityModelNames) {
-					await cacheHelper.entityTypes.set(tenantCode, orgCode, modelName, entityValue, entityTypeToCache)
+					// Cache for each model name this entity type belongs to
+					for (const modelName of entityModelNames) {
+						await cacheHelper.entityTypes.set(
+							tenantCode,
+							orgCode,
+							modelName,
+							entityTypeValue,
+							entityTypeToCache
+						)
+					}
 				}
 			}
 
