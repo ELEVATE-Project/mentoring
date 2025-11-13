@@ -1282,6 +1282,8 @@ module.exports = class MentorsHelper {
 
 			const query = utils.processQueryParametersWithExclusions(queryParams)
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
+			// Note: Entity types are actually configured for UserExtension model, not MentorExtension
+			const userExtensionsModelName = 'UserExtension'
 
 			const defaults = await getDefaults()
 			if (!defaults.orgCode)
@@ -1298,12 +1300,12 @@ module.exports = class MentorsHelper {
 				})
 
 			let validationData = await entityTypeCache.getEntityTypesAndEntitiesForModel(
-				mentorExtensionsModelName,
+				userExtensionsModelName, // Use UserExtension instead of MentorExtension
 				[orgCode, defaults.orgCode],
 				[tenantCode, defaults.tenantCode],
 				{ allow_filtering: true }
 			)
-			const filteredQuery = utils.validateAndBuildFilters(query, validationData, mentorExtensionsModelName)
+			const filteredQuery = utils.validateAndBuildFilters(query, validationData)
 
 			const saasFilter = await this.filterMentorListBasedOnSaasPolicy(
 				userId,
@@ -1499,12 +1501,13 @@ module.exports = class MentorsHelper {
 			const connectedMentorIds = new Set(connectedUsers.map((connectedUser) => connectedUser.friend_id))
 
 			if (extensionDetails.data && Array.isArray(extensionDetails.data) && extensionDetails.data.length > 0) {
+				// Process all entity types for UserExtension model (don't filter by specific entity types)
 				extensionDetails.data = await entityTypeService.processEntityTypesToAddValueLabels(
 					extensionDetails.data,
 					organizationCodes,
-					mentorExtensionsModelName,
+					userExtensionsModelName, // Use UserExtension model name for entity processing
 					'organization_code',
-					[],
+					[], // Empty array means process ALL entity types for this model
 					[tenantCode]
 				)
 			}

@@ -573,7 +573,7 @@ module.exports = class EntityHelper {
 					[Op.in]: tenantCodes,
 				},
 			}
-			if (entityType) filter.value = entityType
+			if (entityType && entityType.length > 0) filter.value = entityType
 			// get entityTypes with entities data
 			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodes)
 			entityTypesWithEntities = JSON.parse(JSON.stringify(entityTypesWithEntities))
