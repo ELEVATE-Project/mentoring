@@ -120,7 +120,7 @@ module.exports = class UserEntityData {
 			let whereClause = {
 				...filters,
 				// MANDATORY: Include tenant_code filtering
-				tenant_code: tenantCode,
+				tenant_code: Array.isArray(tenantCode) ? { [Op.in]: tenantCode } : tenantCode,
 			}
 
 			if (search) {
@@ -136,7 +136,7 @@ module.exports = class UserEntityData {
 						model: Entity.sequelize.models.EntityType,
 						as: 'entity_type',
 						attributes: ['id', 'value', 'label'], // Include entity_type details
-						where: { tenant_code: tenantCode },
+						where: { tenant_code: Array.isArray(tenantCode) ? { [Op.in]: tenantCode } : tenantCode },
 					},
 				],
 				offset: limit * (page - 1),

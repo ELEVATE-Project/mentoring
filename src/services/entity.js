@@ -374,7 +374,7 @@ module.exports = class EntityHelper {
 				// Optimized: Get entities with entity_type details included - eliminates N+1 queries for clients
 				entities = await entityTypeQueries.getAllEntitiesWithEntityTypeDetails(
 					filter,
-					{ [Op.in]: [defaults.tenantCode, tenantCode] },
+					[defaults.tenantCode, tenantCode],
 					pageNo,
 					pageSize,
 					searchText
