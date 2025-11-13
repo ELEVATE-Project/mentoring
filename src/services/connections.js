@@ -643,6 +643,7 @@ module.exports = class ConnectionHelper {
 	static async checkConnectionIfExists(user_id, body) {
 		try {
 			const { friend_id } = body
+
 			let connectionExists = false
 			if (!friend_id) {
 				return responses.failureResponse({
@@ -652,7 +653,16 @@ module.exports = class ConnectionHelper {
 				})
 			}
 
-			const connectionCheck = await connectionQueries.getConnection(user_id, friend_id)
+			const userInfo = await communicationHelper.resolve(friend_id)
+			if (!userInfo) {
+				return responses.failureResponse({
+					responseCode: 'CLIENT_ERROR',
+					statusCode: httpStatusCode.not_found,
+					message: USER_NOT_FOUND,
+				})
+			}
+
+			const connectionCheck = await connectionQueries.getConnection(user_id, userInfo.user_id)
 
 			if (connectionCheck) {
 				connectionExists = true
