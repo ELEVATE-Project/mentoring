@@ -123,9 +123,7 @@ async function getEntityTypesAndEntitiesWithFilter(filter, tenantCodes) {
 
 		// Fallback: fetch directly from database without caching
 		console.log('EntityTypes filter query without model/org info - skipping cache')
-		const entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-			[Op.in]: tenantCodeArray,
-		})
+		const entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodeArray)
 
 		return entityTypesWithEntities
 	} catch (error) {
@@ -162,9 +160,7 @@ async function getAllEntityTypesForModel(modelName, tenantCode, orgCode, orgCode
 			}
 
 			// Fetch complete dataset from database
-			const allEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: tenantCodeArray,
-			})
+			const allEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodeArray)
 
 			console.log(`Cached complete EntityTypes dataset for model '${modelName}' (${allEntityTypes.length} items)`)
 			return allEntityTypes
