@@ -705,7 +705,7 @@ module.exports = class SessionsHelper {
 				userId = bodyData.mentor_id
 			}
 
-			let mentorExtension = await cacheHelper.mentor.get(userId, [], false, tenantCode)
+			let mentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
 			if (!mentorExtension) {
 				return responses.failureResponse({
 					message: 'INVALID_PERMISSION',
