@@ -354,28 +354,22 @@ module.exports = class EntityHelper {
 
 	static async readUserEntityTypes(body, orgCode, tenantCode) {
 		try {
-			// Try to get from cache first
 			const entityValue = body.value
-			const modelName = body.model_name
 
-			if (!modelName) {
-				return responses.failureResponse({
-					message: 'MODEL_NAME_REQUIRED',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
+			// Step 1: Try to get from cache for all possible models
+			for (const modelName of common.entityTypeModelNames) {
+				const cachedEntityType = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName, entityValue)
+				if (cachedEntityType) {
+					// The cached data should be the complete entity type with entities
+					return responses.successResponse({
+						statusCode: httpStatusCode.ok,
+						message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
+						result: { entity_types: [cachedEntityType] },
+					})
+				}
 			}
 
-			const cachedEntityType = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName, entityValue)
-			if (cachedEntityType) {
-				// The cached data should be the complete entity type with entities
-				return responses.successResponse({
-					statusCode: httpStatusCode.ok,
-					message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
-					result: { entity_types: [cachedEntityType] },
-				})
-			}
-
+			// Step 2: If not found in cache, query database without model restriction
 			const defaults = await getDefaults()
 			if (!defaults.orgCode)
 				return responses.failureResponse({
@@ -412,10 +406,15 @@ module.exports = class EntityHelper {
 				})
 			}
 
-			// Cache the complete entity type with entities (your preferred format)
+			// Cache the complete entity type with entities for all its model names
 			if (prunedEntities.length > 0) {
 				const entityTypeToCache = prunedEntities[0] // Should be the complete entity type with entities
-				await cacheHelper.entityTypes.set(tenantCode, orgCode, modelName, entityValue, entityTypeToCache)
+				const entityModelNames = entityTypeToCache.model_names || []
+
+				// Cache for each model name this entity type belongs to
+				for (const modelName of entityModelNames) {
+					await cacheHelper.entityTypes.set(tenantCode, orgCode, modelName, entityValue, entityTypeToCache)
+				}
 			}
 
 			return responses.successResponse({
