@@ -262,11 +262,15 @@ module.exports = class EntityHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			// Fetch all entity types with model_names
+			// Try to get from existing individual entity caches first
+			const flattenedFromCache = []
+			const knownModelNames = common.entityTypeModelNames || ['Session', 'UserExtension']
+
+			// Get all unique entity values from database to check cache
 			const entities = await entityTypeQueries.findAllEntityTypes(
 				{ [Op.or]: [orgCode, defaults.orgCode] },
 				{ [Op.in]: [tenantCode, defaults.tenantCode] },
-				attributes
+				['value']
 			)
 
 			if (!entities.length) {
@@ -277,11 +281,63 @@ module.exports = class EntityHelper {
 				})
 			}
 
-			// Group entity types by model names
+			const uniqueValues = [...new Set(entities.map((e) => e.value))]
+			const cachedEntities = []
+			const uncachedValues = []
+
+			// Check cache for each entity value across all model names
+			for (const entityValue of uniqueValues) {
+				let foundInCache = false
+				for (const modelName of knownModelNames) {
+					try {
+						const cachedEntity = await cacheHelper.entityTypes.get(
+							tenantCode,
+							orgCode,
+							modelName,
+							entityValue
+						)
+						if (cachedEntity) {
+							// Extract just the fields we need for flattened response
+							cachedEntities.push({
+								value: cachedEntity.value,
+								label: cachedEntity.label,
+								id: cachedEntity.id,
+							})
+							foundInCache = true
+							break
+						}
+					} catch (cacheError) {
+						// Cache lookup failed, continue
+					}
+				}
+
+				if (!foundInCache) {
+					uncachedValues.push(entityValue)
+				}
+			}
+
+			// If we got everything from cache, return it
+			if (uncachedValues.length === 0 && cachedEntities.length > 0) {
+				console.log(`🎯 All entity types found in individual caches`)
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
+					result: cachedEntities,
+				})
+			}
+
+			// Fetch complete data from database if cache miss
+			const fullEntities = await entityTypeQueries.findAllEntityTypes(
+				{ [Op.or]: [orgCode, defaults.orgCode] },
+				{ [Op.in]: [tenantCode, defaults.tenantCode] },
+				attributes
+			)
+
+			// Group entity types by model names for caching
 			const freshGroupedByModel = {}
 			const allDistinctModels = new Set()
 
-			entities.forEach((entity) => {
+			fullEntities.forEach((entity) => {
 				// Get model names for this entity (could be multiple models)
 				const modelNames = entity.model_names || ['unknown']
 
@@ -302,50 +358,35 @@ module.exports = class EntityHelper {
 				})
 			})
 
-			// Cache individual entity types with complete data (including entities)
+			// Cache individual entity types using existing cache structure
 			for (const [modelName, entityTypesInModel] of Object.entries(freshGroupedByModel)) {
 				for (const entityType of entityTypesInModel) {
 					try {
-						// Fetch complete entity type with entities for consistent caching
-						const completeEntityType = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
-							{
-								id: entityType.id,
-								value: entityType.value,
-								organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
-								tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
-							},
-							[tenantCode, defaults.tenantCode]
-						)
-
-						let entityToCache = entityType
-						if (completeEntityType && completeEntityType.length > 0) {
-							// Use complete entity with entities
-							entityToCache = completeEntityType[0]
-						} else {
-							// Fallback: add empty entities array for consistency
-							entityToCache = {
-								...entityType,
-								entities: [],
-							}
-						}
-
-						await cacheHelper.entityTypes.set(
-							tenantCode,
-							orgCode,
-							modelName,
-							entityType.value,
-							entityToCache
-						)
+						await cacheHelper.entityTypes.set(tenantCode, orgCode, modelName, entityType.value, entityType)
 					} catch (cacheError) {
 						// Failed to cache entity type - continue operation
 					}
 				}
 			}
 
+			// Create flattened response removing duplicates
+			const uniqueEntitiesMap = new Map()
+			fullEntities.forEach((entity) => {
+				if (!uniqueEntitiesMap.has(entity.id)) {
+					uniqueEntitiesMap.set(entity.id, {
+						value: entity.value,
+						label: entity.label,
+						id: entity.id,
+					})
+				}
+			})
+
+			const flattenedResult = Array.from(uniqueEntitiesMap.values())
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'ENTITY_TYPE_FETCHED_SUCCESSFULLY',
-				result: freshGroupedByModel,
+				result: flattenedResult,
 			})
 		} catch (error) {
 			throw error
