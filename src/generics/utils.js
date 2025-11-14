@@ -827,56 +827,72 @@ Date.prototype.getWeek = function () {
 	return 1 + Math.ceil((firstThursday - target) / 604800000)
 }
 
-const generateDateRanges = (startEpoch, endEpoch, interval) => {
-	const startDate = new Date(startEpoch * 1000)
-	const endDate = new Date(endEpoch * 1000)
+const generateDateRanges = (startEpoch, endEpoch, interval, timeZone = 'UTC') => {
+	const startMoment = moment.unix(startEpoch).tz(timeZone)
+	const endMoment = moment.unix(endEpoch).tz(timeZone)
 
 	const dateRanges = []
-	let currentDate = new Date(startDate)
+	let current = startMoment.clone()
 
-	while (currentDate <= endDate) {
-		let nextDate
+	while (current.isSameOrBefore(endMoment)) {
+		let next, rangeStart, rangeEnd
 
 		switch (interval) {
 			case 'day':
-				nextDate = new Date(currentDate)
-				nextDate.setDate(currentDate.getDate() + 1)
+				rangeStart = current.clone().startOf('day')
+				rangeEnd = current.clone().endOf('day')
+
+				if (rangeEnd.isAfter(endMoment)) {
+					rangeEnd = endMoment.clone()
+				}
+
 				dateRanges.push({
-					start_date: Math.floor(currentDate.getTime() / 1000),
-					end_date: Math.floor(nextDate.getTime() / 1000) - 1,
+					start_date: rangeStart.unix(),
+					end_date: rangeEnd.unix(),
 				})
+
+				current = current.clone().add(1, 'day')
 				break
+
 			case 'week':
-				const currentWeek = currentDate.getWeek()
-				const sunday = new Date(currentDate)
-				sunday.setDate(sunday.getDate() - sunday.getDay())
-				nextDate = new Date(sunday)
-				nextDate.setDate(sunday.getDate() + 7)
+				rangeStart = current.clone().startOf('week') // Sunday by default
+				rangeEnd = current.clone().endOf('week')
+
+				if (rangeEnd.isAfter(endMoment)) {
+					rangeEnd = endMoment.clone()
+				}
 
 				dateRanges.push({
-					start_date: Math.floor(sunday.getTime() / 1000),
-					end_date: Math.floor(Math.min(nextDate.getTime() - 1, endDate.getTime()) / 1000),
+					start_date: rangeStart.unix(),
+					end_date: rangeEnd.unix(),
 				})
 
+				current = current.clone().add(1, 'week')
 				break
+
 			case 'month':
-				nextDate = new Date(currentDate)
-				nextDate.setMonth(currentDate.getMonth() + 1)
+				rangeStart = current.clone().startOf('month')
+				rangeEnd = current.clone().endOf('month')
+
+				if (rangeEnd.isAfter(endMoment)) {
+					rangeEnd = endMoment.clone()
+				}
+
 				dateRanges.push({
-					start_date: Math.floor(currentDate.getTime() / 1000),
-					end_date: Math.floor(Math.min(nextDate.getTime() - 1, endDate.getTime()) / 1000),
+					start_date: rangeStart.unix(),
+					end_date: rangeEnd.unix(),
 				})
+
+				current = current.clone().add(1, 'month')
 				break
+
 			default:
 				throw new Error('Invalid interval. Valid options: "day", "week", "month"')
 		}
-
-		currentDate = nextDate
 	}
 
 	return dateRanges
 }
-
 const mapEntityTypesToData = (data, entityTypes) => {
 	return data.map((item) => {
 		const newItem = { ...item }

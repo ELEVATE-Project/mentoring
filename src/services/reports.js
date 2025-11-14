@@ -155,7 +155,8 @@ module.exports = class ReportsHelper {
 		downloadCsv,
 		groupBy,
 		filterColumns,
-		filterValues
+		filterValues,
+		timeZone
 	) {
 		try {
 			// Validate report permissions
@@ -227,7 +228,7 @@ module.exports = class ReportsHelper {
 			if (reportConfig[0].report_type_title === common.BAR_CHART && groupBy) {
 				//	const listOfDates = await utils.getAllEpochDates(startDate, endDate, groupBy)
 
-				const dateRanges = await utils.generateDateRanges(startDate, endDate, groupBy)
+				const dateRanges = await utils.generateDateRanges(startDate, endDate, groupBy, timeZone)
 
 				// Initialize the array to store results
 				const dateRangeResults = []
