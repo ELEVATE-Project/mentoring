@@ -87,6 +87,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 
 		// Process entity types to add value labels
 		const uniqueOrgIds = [...new Set(enrolledUsers.map((user) => user.organization_id))]
+		console.log('🔍 DEBUG - Before entity processing:', JSON.stringify(enrolledUsers, null, 2))
 		enrolledUsers = await entityTypeService.processEntityTypesToAddValueLabels(
 			enrolledUsers,
 			uniqueOrgIds,
@@ -95,6 +96,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 			[],
 			[tenantCode]
 		)
+		console.log('🔍 DEBUG - After entity processing:', JSON.stringify(enrolledUsers, null, 2))
 
 		// Fetch organization details for each unique organization ID
 		const validOrgIds = uniqueOrgIds.filter((id) => id != null)

@@ -1662,7 +1662,11 @@ module.exports = class SessionsHelper {
 			const isMenteesListRequested = queryParams?.get_mentees === 'true'
 			const canRetrieveMenteeList = userId == sessionDetails.created_by || userId == sessionDetails.mentor_id
 
-			if (isMenteesListRequested && canRetrieveMenteeList) {
+			// Include mentees if explicitly requested OR if user has permission (backward compatibility)
+			if (
+				(isMenteesListRequested && canRetrieveMenteeList) ||
+				(!queryParams?.get_mentees && canRetrieveMenteeList)
+			) {
 				sessionDetails.mentees = await getEnrolledMentees(id, {}, userId, tenantCode)
 			}
 
@@ -1848,7 +1852,11 @@ module.exports = class SessionsHelper {
 			const isMenteesListRequested = queryParams?.get_mentees === 'true'
 			const canRetrieveMenteeList = userId == sessionDetails.created_by || userId == sessionDetails.mentor_id
 
-			if (isMenteesListRequested && canRetrieveMenteeList) {
+			// Include mentees if explicitly requested OR if user has permission (backward compatibility)
+			if (
+				(isMenteesListRequested && canRetrieveMenteeList) ||
+				(!queryParams?.get_mentees && canRetrieveMenteeList)
+			) {
 				sessionDetails.mentees = await getEnrolledMentees(sessionDetails.id, {}, userId, tenantCode)
 			}
 
@@ -3498,25 +3506,26 @@ module.exports = class SessionsHelper {
 			// Enroll mentees
 			const successIds = []
 			const failedIds = []
-			const enrollPromises = mentees.map((menteeData) =>
-				this.enroll(
-					sessionId,
-					menteeData,
-					timeZone,
-					menteeData.is_mentor,
-					false,
-					sessionDetails,
-					null, // mentorId
-					[], // roles
-					organizationId,
-					organizationCode,
-					tenantCode
-				)
-					.then((response) => ({
-						id: menteeData.user_id,
-						status: response.statusCode === httpStatusCode.created ? 'fulfilled' : 'rejected',
-					}))
-					.catch(() => ({ id: menteeData.id, status: 'rejected' }))
+			const enrollPromises = mentees.map(
+				(menteeData) =>
+					this.enroll(
+						sessionId,
+						{ user_id: menteeData.user_id }, // Fix: Correct user object structure
+						timeZone,
+						false, // Fix: Always false for mentees being added
+						false, // isSelfEnrolled - false for manager adding mentees
+						sessionDetails,
+						null, // mentorId
+						[], // roles
+						organizationId,
+						organizationCode,
+						tenantCode
+					)
+						.then((response) => ({
+							id: menteeData.user_id, // Fix: Use consistent user_id field
+							status: response.statusCode === httpStatusCode.created ? 'fulfilled' : 'rejected',
+						}))
+						.catch(() => ({ id: menteeData.user_id, status: 'rejected' })) // Fix: Use user_id consistently
 			)
 
 			// Wait for all enrollments to settle
@@ -3524,9 +3533,9 @@ module.exports = class SessionsHelper {
 			console.log('------results', results)
 			results.forEach((result, index) => {
 				if (result.status === 'fulfilled' && result.value.status === 'fulfilled') {
-					successIds.push(mentees[index].id)
+					successIds.push(mentees[index].user_id) // Fix: Use user_id field consistently
 				} else {
-					failedIds.push(mentees[index].id)
+					failedIds.push(mentees[index].user_id) // Fix: Use user_id field consistently
 				}
 			})
 
@@ -3677,7 +3686,6 @@ module.exports = class SessionsHelper {
 		try {
 			// check if session exists or not
 			const sessionDetails = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
-			sessionQueries.findOne({ id: sessionId }, tenantCode)
 
 			if (!sessionDetails || Object.keys(sessionDetails).length === 0) {
 				return responses.failureResponse({
@@ -3745,19 +3753,14 @@ module.exports = class SessionsHelper {
 
 			// Invalidate session cache after removing mentees (seats_remaining changed)
 			try {
-				await cacheHelper.sessions.delete(tenantCode, updatedSession.organization_code, sessionId)
+				await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
 			} catch (cacheError) {
 				// Cache invalidation failure - continue operation
 			}
 
 			// Clear user caches for all successfully removed mentees since sessions_attended count changed
 			if (successIds.length > 0) {
-				await this._clearUserCacheForSessionCountChange(
-					successIds,
-					tenantCode,
-					updatedSession.organization_code,
-					'bulk_mentee_removal'
-				)
+				await this._clearUserCacheForSessionCountChange(successIds, tenantCode, orgCode, 'bulk_mentee_removal')
 			}
 
 			return responses.successResponse({
