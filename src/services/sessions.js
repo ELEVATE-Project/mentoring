@@ -1469,8 +1469,8 @@ module.exports = class SessionsHelper {
 
 			// Try to get from cache first (only for numeric ids, share_link requires DB lookup)
 			let sessionDetails = null
-			if (utils.isNumeric(id) && (!userId || !queryParams?.get_mentees)) {
-				// Only use cache for simple session details without user-specific data
+			if (utils.isNumeric(id)) {
+				// Get from cache for all numeric session IDs
 				sessionDetails = await cacheHelper.sessions.get(tenantCode, orgCode, id)
 				if (sessionDetails) {
 					// Check accessibility before enriching with user data
@@ -1503,6 +1503,37 @@ module.exports = class SessionsHelper {
 							tenantCode
 						)
 					}
+
+					// Ensure mentor_designation is processed even for cached data
+					if (
+						sessionDetails.mentor_designation &&
+						Array.isArray(sessionDetails.mentor_designation) &&
+						sessionDetails.mentor_designation.length > 0 &&
+						typeof sessionDetails.mentor_designation[0] === 'string'
+					) {
+						// Get entity types for processing mentor designation using direct query
+						const defaults = await getDefaults()
+						const mentorExtensionsModelName = await mentorExtensionQueries.getModelName()
+						let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+							{
+								status: 'ACTIVE',
+								has_entities: true,
+								organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
+								model_names: { [Op.contains]: [mentorExtensionsModelName] },
+							},
+							[tenantCode, defaults.tenantCode]
+						)
+						if (!(entityTypes instanceof Error)) {
+							const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
+							const processedDesignation = utils.processDbResponse(
+								{ designation: sessionDetails.mentor_designation },
+								validationData
+							)
+							sessionDetails.mentor_designation =
+								processedDesignation.designation || sessionDetails.mentor_designation
+						}
+					}
+
 					return responses.successResponse({
 						statusCode: httpStatusCode.created,
 						message: 'SESSION_FETCHED_SUCCESSFULLY',
@@ -1696,13 +1727,13 @@ module.exports = class SessionsHelper {
 			const sessionModelName = await sessionQueries.getModelName()
 			const modelNames = [mentorExtensionsModelName, sessionModelName].filter(Boolean)
 
-			let entityTypeData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
+			let entityTypeData = await entityTypeQueries.findUserEntityTypesAndEntities(
 				{
-					status: common.ACTIVE_STATUS,
+					status: 'ACTIVE',
 					organization_id: { [Op.in]: orgIds },
 					model_names: { [Op.overlap]: modelNames },
 				},
-				[tenantCode, defaults.tenantCode]
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
 
 			if (mentorExtension?.user_id) {
@@ -1715,14 +1746,31 @@ module.exports = class SessionsHelper {
 					validationData
 				)
 				sessionDetails.mentor_designation = processedEntityType.designation
+			} else if (
+				sessionDetails.mentor_designation &&
+				Array.isArray(sessionDetails.mentor_designation) &&
+				sessionDetails.mentor_designation.length > 0
+			) {
+				// Process mentor_designation from session data if mentor extension is not available
+				const validationData = removeDefaultOrgEntityTypes(entityTypeData, defaults.orgCode)
+				const processedDesignation = utils.processDbResponse(
+					{ designation: sessionDetails.mentor_designation },
+					validationData
+				)
+				sessionDetails.mentor_designation = processedDesignation.designation
 			}
 
 			sessionDetails['resources'] = await this.getResources(sessionDetails.id, tenantCode)
 
-			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
-				sessionModelName,
-				[sessionDetails.mentor_organization_id, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [sessionDetails.mentor_organization_id, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [sessionModelName] },
+				},
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
