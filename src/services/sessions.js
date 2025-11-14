@@ -478,18 +478,12 @@ module.exports = class SessionsHelper {
 			// Set notification schedulers for the session
 			// Deep clone to avoid unintended modifications to the original object.
 			const jobsToCreate = _.cloneDeep(common.jobsToCreate)
-			console.log('📧 EMAIL DEBUG: Setting up notification schedulers for session:', data.id)
-			console.log('📧 EMAIL DEBUG: Jobs to create:', jobsToCreate)
 
 			// Calculate delays for notification jobs
 			jobsToCreate[0].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.start_date, 1, 'hour')
 			jobsToCreate[1].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.start_date, 24, 'hour')
 			jobsToCreate[2].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.start_date, 15, 'minutes')
 			jobsToCreate[3].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.end_date, 0, 'minutes')
-			console.log(
-				'📧 EMAIL DEBUG: Calculated delays:',
-				jobsToCreate.map((job) => ({ jobId: job.jobId, delay: job.delay }))
-			)
 
 			// Iterate through the jobs and create scheduler jobs
 			for (let jobIndex = 0; jobIndex < jobsToCreate.length; jobIndex++) {
@@ -1467,83 +1461,30 @@ module.exports = class SessionsHelper {
 				// For share_link, we still need to get the actual session to get the id for caching
 			}
 
-			// Try to get from cache first (only for numeric ids, share_link requires DB lookup)
-			let sessionDetails = null
+			// Try to get FINAL processed response from cache first (only for numeric ids)
+			// Use direct cache access to avoid cacheHelper's database fallback
+			let finalResponse = null
 			if (utils.isNumeric(id)) {
-				// Get from cache for all numeric session IDs
-				sessionDetails = await cacheHelper.sessions.get(tenantCode, orgCode, id)
-				if (sessionDetails) {
-					// Check accessibility before enriching with user data
-					if (userId !== '' && isAMentor !== '') {
-						let isAccessible = await this.checkIfSessionIsAccessible(
-							sessionDetails,
-							userId,
-							isAMentor,
-							tenantCode,
-							orgCode
-						)
-						if (!isAccessible) {
-							return responses.failureResponse({
-								statusCode: httpStatusCode.forbidden,
-								message: 'SESSION_RESTRICTED',
-								responseCode: 'CLIENT_ERROR',
-							})
-						}
+				try {
+					const cacheKey = `tenant:${tenantCode}:org:${orgCode}:sessions:${id}`
+					// Import helper functions to avoid database fallback
+					const { RedisCache } = require('elevate-node-cache')
+					finalResponse = await RedisCache.getKey(cacheKey)
+					if (finalResponse) {
+						// Return cached final response directly - already fully processed
+						return responses.successResponse({
+							statusCode: httpStatusCode.created,
+							message: 'SESSION_FETCHED_SUCCESSFULLY',
+							result: finalResponse,
+						})
 					}
-
-					// Still need to check enrollment for the current user
-					if (userId) {
-						await this._enrichSessionWithUserData(
-							sessionDetails,
-							userId,
-							isAMentor,
-							queryParams,
-							roles,
-							orgCode,
-							tenantCode
-						)
-					}
-
-					// Ensure mentor_designation is processed even for cached data
-					if (
-						sessionDetails.mentor_designation &&
-						Array.isArray(sessionDetails.mentor_designation) &&
-						sessionDetails.mentor_designation.length > 0 &&
-						typeof sessionDetails.mentor_designation[0] === 'string'
-					) {
-						// Get entity types for processing mentor designation using direct query
-						const defaults = await getDefaults()
-						const mentorExtensionsModelName = await mentorExtensionQueries.getModelName()
-						let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-							{
-								status: 'ACTIVE',
-								has_entities: true,
-								organization_code: { [Op.in]: [orgCode, defaults.orgCode] },
-								model_names: { [Op.contains]: [mentorExtensionsModelName] },
-							},
-							[tenantCode, defaults.tenantCode]
-						)
-						if (!(entityTypes instanceof Error)) {
-							const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
-							const processedDesignation = utils.processDbResponse(
-								{ designation: sessionDetails.mentor_designation },
-								validationData
-							)
-							sessionDetails.mentor_designation =
-								processedDesignation.designation || sessionDetails.mentor_designation
-						}
-					}
-
-					return responses.successResponse({
-						statusCode: httpStatusCode.created,
-						message: 'SESSION_FETCHED_SUCCESSFULLY',
-						result: sessionDetails,
-					})
+				} catch (cacheError) {
+					// Continue to database query
 				}
 			}
 
-			// Cache miss or complex query - fetch from database
-			sessionDetails = await sessionQueries.findOne(filter, tenantCode, {
+			// Cache miss or complex query - fetch from database and fully process
+			let sessionDetails = await sessionQueries.findOne(filter, tenantCode, {
 				attributes: {
 					exclude: ['share_link', 'mentee_password', 'mentor_password'],
 				},
@@ -1572,52 +1513,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			// Check if user already enrolled using existing logic
-			let sessionAttendee = await sessionAttendeesQueries.findOne(
-				{
-					session_id: sessionDetails.id,
-					mentee_id: userId,
-				},
-				tenantCode
-			)
-
-			if (!sessionAttendee) {
-				let validateDefaultRules
-				if (userId != sessionDetails.mentor_id) {
-					validateDefaultRules = await validateDefaultRulesFilter({
-						ruleType: common.DEFAULT_RULES.SESSION_TYPE,
-						requesterId: userId,
-						roles: roles,
-						requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
-						data: sessionDetails,
-						tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
-					})
-				}
-				if (validateDefaultRules?.error && validateDefaultRules?.error?.missingField) {
-					return responses.failureResponse({
-						message: 'PROFILE_NOT_UPDATED',
-						statusCode: httpStatusCode.bad_request,
-						responseCode: 'CLIENT_ERROR',
-					})
-				}
-
-				if (!validateDefaultRules && userId != sessionDetails.mentor_id) {
-					return responses.failureResponse({
-						message: 'SESSION_NOT_FOUND',
-						statusCode: httpStatusCode.bad_request,
-						responseCode: 'CLIENT_ERROR',
-					})
-				}
-			}
-
-			sessionDetails.is_enrolled = false
-			let isInvited = false
-			if (userId && sessionAttendee) {
-				sessionDetails.is_enrolled = true
-				sessionDetails.enrolment_type = sessionAttendee.type
-				isInvited = sessionAttendee.type === common.INVITED
-			}
-
+			// Get mentor details for mentor_designation processing
 			const mentorExtension = await mentorExtensionQueries.getMentorExtension(
 				sessionDetails.mentor_id,
 				[
@@ -1633,94 +1529,15 @@ module.exports = class SessionsHelper {
 				tenantCode
 			)
 
-			// check for accessibility
-			if (userId !== '' && isAMentor !== '') {
-				let isAccessible = await this.checkIfSessionIsAccessible(
-					sessionDetails,
-					userId,
-					isAMentor,
-					tenantCode,
-					orgCode
-				)
-
-				// Throw access error
-				if (!isAccessible) {
-					return responses.failureResponse({
-						statusCode: httpStatusCode.not_found,
-						message: 'SESSION_RESTRICTED',
-					})
-				}
-			}
-
-			if (userId != sessionDetails.mentor_id && userId != sessionDetails.created_by) {
-				delete sessionDetails?.meeting_info?.link
-				delete sessionDetails?.meeting_info?.meta
-			} else {
-				sessionDetails.is_assigned = sessionDetails.mentor_id !== sessionDetails.created_by
-			}
-
-			const isMenteesListRequested = queryParams?.get_mentees === 'true'
-			const canRetrieveMenteeList = userId == sessionDetails.created_by || userId == sessionDetails.mentor_id
-
-			// Include mentees if explicitly requested OR if user has permission (backward compatibility)
-			if (
-				(isMenteesListRequested && canRetrieveMenteeList) ||
-				(!queryParams?.get_mentees && canRetrieveMenteeList)
-			) {
-				sessionDetails.mentees = await getEnrolledMentees(id, {}, userId, tenantCode)
-			}
-
-			if (sessionDetails.image && sessionDetails.image.some(Boolean)) {
-				sessionDetails.image = sessionDetails.image.map(async (imgPath) => {
-					if (imgPath != '') {
-						return await utils.getDownloadableUrl(imgPath)
-					}
-				})
-				sessionDetails.image = await Promise.all(sessionDetails.image)
-			}
-
-			let sessionAccessorDetails
-			if (isInvited || sessionDetails.is_assigned || !mentorExtension) {
-				const managerDetails = await menteeExtensionQueries.getMenteeExtension(
-					sessionDetails.created_by,
-					[
-						'user_id',
-						'name',
-						'designation',
-						'organization_id',
-						'custom_entity_text',
-						'external_session_visibility',
-						'organization_id',
-					],
-					false,
-					tenantCode
-				)
-				sessionDetails.manager_name = managerDetails.name
-				sessionAccessorDetails = managerDetails
-			}
-
-			if (mentorExtension) {
-				sessionAccessorDetails = mentorExtension
-			}
-			// sessionAccessorDetails
-			const orgDetails = await organisationExtensionQueries.findOne(
-				{ organization_id: sessionAccessorDetails.organization_id },
-				tenantCode,
-				{ attributes: ['name'] }
-			)
-
-			if (orgDetails && orgDetails.name) {
-				sessionDetails.organization = orgDetails.name
-			}
-
+			// Set basic mentor info before entity processing
 			sessionDetails.mentor_name = mentorExtension ? mentorExtension.name : common.USER_NOT_FOUND
 			sessionDetails.mentor_designation = []
 
-			// Prepare unique orgIds
+			// Prepare unique orgIds for entity processing
 			const orgIds = [
 				...new Set(
 					[
-						sessionAccessorDetails.organization_id,
+						mentorExtension ? mentorExtension.organization_id : null,
 						sessionDetails.mentor_organization_id,
 						defaults.orgCode,
 					].filter(Boolean)
@@ -1740,28 +1557,11 @@ module.exports = class SessionsHelper {
 				{ [Op.in]: [tenantCode, defaults.tenantCode] }
 			)
 
-			if (mentorExtension?.user_id) {
-				const validationData = removeDefaultOrgEntityTypes(entityTypeData, defaults.orgCode)
-				const processedEntityType = utils.processDbResponse(
-					{
-						designation: mentorExtension.designation,
-						custom_entity_text: mentorExtension.custom_entity_text,
-					},
-					validationData
-				)
-				sessionDetails.mentor_designation = processedEntityType.designation
-			} else if (
-				sessionDetails.mentor_designation &&
-				Array.isArray(sessionDetails.mentor_designation) &&
-				sessionDetails.mentor_designation.length > 0
-			) {
-				// Process mentor_designation from session data if mentor extension is not available
-				const validationData = removeDefaultOrgEntityTypes(entityTypeData, defaults.orgCode)
-				const processedDesignation = utils.processDbResponse(
-					{ designation: sessionDetails.mentor_designation },
-					validationData
-				)
-				sessionDetails.mentor_designation = processedDesignation.designation
+			// Store mentor designation for later processing (don't set it as 'designation' field)
+			if (mentorExtension?.user_id && mentorExtension.designation) {
+				sessionDetails.mentor_designation_raw = mentorExtension.designation // Store for processing
+			} else {
+				sessionDetails.mentor_designation_raw = []
 			}
 
 			sessionDetails['resources'] = await this.getResources(sessionDetails.id, tenantCode)
@@ -1783,19 +1583,97 @@ module.exports = class SessionsHelper {
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 
-			const processDbResponse = utils.processDbResponse(sessionDetails, validationData)
+			// Extract clean data from Sequelize model before processing
+			const cleanSessionData = sessionDetails.dataValues || sessionDetails
 
-			// Cache the session details after successful database fetch (only for simple numeric IDs)
-			if (utils.isNumeric(id)) {
-				try {
-					await cacheHelper.sessions.set(tenantCode, orgCode, sessionDetails.id, processDbResponse)
-					console.log(`💾 Session ${sessionDetails.id} cached after database fetch`)
-				} catch (cacheError) {
-					console.log(`Failed to cache session ${sessionDetails.id}:`, cacheError.message)
-					// Continue without caching - don't fail the request
+			// Preserve resources that were added above (they might not be in dataValues)
+			if (sessionDetails.resources && !cleanSessionData.resources) {
+				cleanSessionData.resources = sessionDetails.resources
+			}
+
+			// Add mentor designation values as individual fields for entity processing
+			// This mimics how recommended_for and categories work
+			let mentorDesignationValues = []
+			if (sessionDetails.mentor_designation_raw && Array.isArray(sessionDetails.mentor_designation_raw)) {
+				mentorDesignationValues = [...sessionDetails.mentor_designation_raw]
+
+				// Add each designation value as an individual field for processing
+				mentorDesignationValues.forEach((value) => {
+					if (value && !cleanSessionData[value]) {
+						cleanSessionData[value] = value // Set field name = value for entity processing
+					}
+				})
+			}
+
+			const processDbResponse = utils.processDbResponse(cleanSessionData, validationData)
+
+			// Collect processed designation values and create mentor_designation array
+			if (mentorDesignationValues.length > 0) {
+				const processedDesignations = []
+				mentorDesignationValues.forEach((value) => {
+					if (processDbResponse[value] && typeof processDbResponse[value] === 'object') {
+						// Entity was processed successfully
+						processedDesignations.push(processDbResponse[value])
+						// Clean up the individual field from final response
+						delete processDbResponse[value]
+					} else if (processDbResponse[value]) {
+						// Fallback: create basic value/label if not processed
+						processedDesignations.push({
+							value: value,
+							label: value, // Use raw value as label if no processing occurred
+						})
+						delete processDbResponse[value]
+					}
+				})
+
+				if (processedDesignations.length > 0) {
+					processDbResponse.mentor_designation = processedDesignations
 				}
 			}
 
+			// Clean up unwanted fields that may have leaked from mentor extension
+			delete processDbResponse.designation
+			delete processDbResponse.mentor_designation_raw
+
+			// Add user-specific data (enrollment status, mentees list, etc.)
+			if (userId) {
+				await this._enrichSessionWithUserData(
+					processDbResponse,
+					userId,
+					isAMentor,
+					queryParams,
+					roles,
+					orgCode,
+					tenantCode
+				)
+			}
+
+			// Check accessibility after full processing
+			if (userId !== '' && isAMentor !== '') {
+				let isAccessible = await this.checkIfSessionIsAccessible(
+					processDbResponse,
+					userId,
+					isAMentor,
+					tenantCode,
+					orgCode
+				)
+				if (!isAccessible) {
+					return responses.failureResponse({
+						statusCode: httpStatusCode.forbidden,
+						message: 'SESSION_RESTRICTED',
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+			}
+
+			// Cache the FINAL processed response (only for simple numeric IDs)
+			if (utils.isNumeric(id)) {
+				try {
+					await cacheHelper.sessions.set(tenantCode, orgCode, processDbResponse.id, processDbResponse)
+				} catch (cacheError) {
+					// Continue without caching - don't fail the request
+				}
+			}
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'SESSION_FETCHED_SUCCESSFULLY',
