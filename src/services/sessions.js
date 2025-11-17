@@ -1544,19 +1544,7 @@ module.exports = class SessionsHelper {
 				),
 			]
 
-			const mentorExtensionsModelName = await mentorExtensionQueries.getModelName()
 			const sessionModelName = await sessionQueries.getModelName()
-			const modelNames = [mentorExtensionsModelName, sessionModelName].filter(Boolean)
-
-			let entityTypeData = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_id: { [Op.in]: orgIds },
-					model_names: { [Op.overlap]: modelNames },
-				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
-			)
-
 			// Store mentor designation for later processing (don't set it as 'designation' field)
 			if (mentorExtension?.user_id && mentorExtension.designation) {
 				sessionDetails.mentor_designation_raw = mentorExtension.designation // Store for processing
@@ -1566,16 +1554,39 @@ module.exports = class SessionsHelper {
 
 			sessionDetails['resources'] = await this.getResources(sessionDetails.id, tenantCode)
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [sessionDetails.mentor_organization_id, defaults.orgCode],
+			// Try to get from cache first using the model-based cache helper
+			let entityTypes
+			try {
+				entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+					sessionModelName,
+					[sessionDetails.mentor_organization_id, defaults.orgCode],
+					[tenantCode, defaults.tenantCode],
+					{
+						status: 'ACTIVE',
+					}
+				)
+
+				// Check if cache returned error response
+				if (entityTypes && entityTypes.statusCode && entityTypes.statusCode !== 200) {
+					throw new Error(entityTypes.message || 'Cache lookup failed')
+				}
+			} catch (cacheError) {
+				console.log('EntityTypes cache lookup failed, falling back to database:', cacheError.message)
+
+				// Fallback to direct database query
+				entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
+					{
+						status: 'ACTIVE',
+						organization_code: {
+							[Op.in]: [sessionDetails.mentor_organization_id, defaults.orgCode],
+						},
+						model_names: { [Op.contains]: [sessionModelName] },
 					},
-					model_names: { [Op.contains]: [sessionModelName] },
-				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
-			)
+					{ [Op.in]: [tenantCode, defaults.tenantCode] },
+					sessionModelName
+				)
+			}
+
 			if (entityTypes instanceof Error) {
 				throw entityTypes
 			}

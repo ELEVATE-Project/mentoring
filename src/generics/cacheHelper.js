@@ -1,4 +1,3 @@
-// src/generics/cacheHelper.js
 /* eslint-disable no-console */
 const { RedisCache, InternalCache } = require('elevate-node-cache')
 const md5 = require('md5')
@@ -31,7 +30,6 @@ const SHARDS = toInt(CACHE_CONFIG.shards, 32)
 const BATCH = toInt(CACHE_CONFIG.scanBatch, 1000)
 const SHARD_RETENTION_DAYS = toInt(CACHE_CONFIG.shardRetentionDays, 7)
 
-/** Helpers */
 function toInt(v, d) {
 	const n = parseInt(v, 10)
 	return Number.isFinite(n) ? n : d

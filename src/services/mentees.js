@@ -1076,9 +1076,11 @@ module.exports = class MenteesHelper {
 				organization_code: { [Op.in]: [organizationCode, defaults.orgCode] },
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
-			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(filter, {
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			})
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
+				filter,
+				[tenantCode, defaults.tenantCode],
+				userExtensionsModelName
+			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
 			}
@@ -1237,9 +1239,11 @@ module.exports = class MenteesHelper {
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
 
-			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(filter, {
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			})
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
+				filter,
+				[tenantCode, defaults.tenantCode],
+				userExtensionsModelName
+			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationId)
@@ -1460,12 +1464,13 @@ module.exports = class MenteesHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			let validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
+			let validationData = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
 				{
 					status: common.ACTIVE_STATUS,
 					model_names: { [Op.overlap]: [userExtensionModelName] },
 				},
-				[tenantCode, defaults.tenantCode]
+				[tenantCode, defaults.tenantCode],
+				userExtensionModelName
 			)
 
 			let filteredQuery = utils.validateAndBuildFilters(

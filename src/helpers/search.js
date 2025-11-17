@@ -223,7 +223,7 @@ async function getEntityTypeFilter(modelName, config, search, searchOn, tenantCo
 		entityTypes = config.fields.filter((field) => field.isAnEntityType === true).map((field) => field.name)
 	}
 
-	entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
+	entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
 		{
 			status: 'ACTIVE',
 			organization_code: defaults.orgCode,
@@ -231,7 +231,8 @@ async function getEntityTypeFilter(modelName, config, search, searchOn, tenantCo
 			allow_filtering: true,
 			value: entityTypes,
 		},
-		{ [Op.in]: [tenantCode, defaults.tenantCode] }
+		[tenantCode, defaults.tenantCode],
+		modelName
 	)
 
 	const entityTypeIds = entityTypes.map((entityType) => entityType.id)

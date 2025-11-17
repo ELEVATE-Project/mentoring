@@ -544,14 +544,15 @@ module.exports = class ConnectionHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			// Fetch validation data for filtering connections (excluding roles) - using cache
-			const validationData = await entityTypeCache.getEntityTypesAndEntitiesWithFilter(
+			// Fetch validation data for filtering connections (excluding roles) - using cache with fallback
+			const validationData = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
 				{
 					status: common.ACTIVE_STATUS,
 					allow_filtering: true,
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				[defaults.tenantCode, tenantCode]
+				[defaults.tenantCode, tenantCode],
+				userExtensionsModelName
 			)
 
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData, userExtensionsModelName)
