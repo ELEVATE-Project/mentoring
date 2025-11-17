@@ -40,9 +40,6 @@ The Mentor building block enables effective mentoring interactions between mento
 -   For Docker-based deployments, update the image tag to the latest version as specified for each service.
 -   For PM2 deployments, use the specified branch name.
 
----
-
-
 
 <br><br>
 # New Features
@@ -63,7 +60,6 @@ The Mentor building block enables effective mentoring interactions between mento
 - Provides complete control over personal data and privacy.
 ## 6. Events Introduced
 - Event-based communication has been introduced between the **User Service** and **Mentoring Service** for improved performance and reliability.
-##
 #
 
 <br><br>
@@ -83,7 +79,7 @@ The setup for **MentorEd version 3.2** involves configuring two primary componen
 
 For More Details  : https://github.com/ELEVATE-Project/chat-communications/blob/develop/README.md
 
-
+<br><br>
 ## **Rocket.Chat Setup**
 
 For detailed deployment and configuration instructions, refer to the official **Rocket.Chat Deployment Guide**:
@@ -286,8 +282,6 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 | Docker Image  | `shikshalokamqa/mentoring-mobile-app:3.3`            |
 
 
-
-# 
 
 # 
 
