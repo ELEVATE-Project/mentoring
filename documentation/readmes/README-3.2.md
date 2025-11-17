@@ -57,28 +57,31 @@ The Mentor building block enables effective mentoring interactions between mento
 (Dev)
  -->
 
+## General Notes
+
+-   All environment variables must be verified before deployment.
+-   Execute migration scripts only after successful deployment of each respective service.
+-   For Docker-based deployments, update the image tag to the latest version as specified for each service.
+-   For PM2 deployments, use the specified branch name.
+
+---
 
 
 
 
 # New Features
 ## 1. Chat Communication
-- Mentees can send chat requests to the mentors.
-- Mentors can accept or decline chat requests.
-- Real-time communication is enabled through Rocket.Chat.
+- Users can initiate chat requests to mentors.
+- Mentors have the option to accept or decline incoming requests.
+- Once a request is accepted, real-time conversation between the user and mentor is enabled through Rocket.Chat.
 ## 2. Session creation -> Upload Evidences / resources in session
 - Mentors and Session Managers can add **pre-session** and **post-session** resources.
 ## 3. Session Requests
-- Mentees can send a session request to mentors.
-- Mentors can review the request and accept or reject it based on their availability on the requested date.
-- Until the mentor responds, the mentee cannot send another session request.
-- Once the request is accepted, both mentee and mentor can start chatting.
-- If the request is accepted, the session will proceed as scheduled, and the mentee can submit another request afterward.
-- Mentors can also reject a session request with a note, so the mentee can clearly understand the reason.
-- If the request is rejected, the mentee can send a new session request
+- The session request system allows users to request a session with mentors based on availability. A mentee can send one request at a time, and the mentor can either accept or reject it. If accepted, chat access is opened and the session will be scheduled as planned. In rejection mentor can add reason for that and user can initiate new request.
+
 ## 4. Private Session Scheduling
-- Mentors can schedule private sessions with mentees.
-- For SM, we introduced a filter called Type, which allows them to view either mentees who are connected with a mentor or those who are not connected.
+- Mentors can schedule private sessions with connected mentees.
+- For the Session Manager, we introduced a Type filter that allows them to easily switch between viewing mentees who are already connected with a mentor and those who are not yet connected.
 ## 5. Account Deletion
 - Both mentors and mentees can delete their accounts.
 - Provides complete control over personal data and privacy.
@@ -113,7 +116,6 @@ For detailed deployment and configuration instructions, refer to the official **
 
 For detailed deployment and configuration instructions, refer to the official  
 [Chat Communication Service Documentation](https://github.com/ELEVATE-Project/chat-communications/blob/develop/README.md).
-
 
 ### Step 1 : Add Chat Service .env
 File Path : src/.env
@@ -152,9 +154,9 @@ chat_elevate_communications"
 ### Step 2 : Install Dependencies
 
 ```bash
-    npm run install
+    npm install
 ```
-### Step 2 : Run Database Migrations
+### Step 3 : Run Database Migrations
 
 ```bash
     npm run db:init
@@ -162,7 +164,16 @@ chat_elevate_communications"
 
 ### Step 4: Start the Service
    Start the Chat Communication Service
+```bash
+    node app.js
+```
 
+**Version & Build Information**
+
+| Item          | Value                                                |
+|---------------|------------------------------------------------------|
+| Git Branch    | `release-3.2.0`                                        |
+| Docker Image  | `shikshalokamqa/elevate-chat-communications:1.0`            |
 
 #
 
@@ -184,7 +195,7 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 ### Step 2 : Install Dependencies
 
 ```bash
-    npm run install
+    npm install
 ```
 ### Step 2 : Run Database Migrations
 
@@ -195,6 +206,13 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 ### Step 4: Restart the Service
    Restart the Mentoring Service to apply the latest configurations and updates.
 
+
+**Version & Build Information**
+
+| Item          | Value                                                |
+|---------------|------------------------------------------------------|
+| Git Branch    | `release-3.2.0`                                        |
+| Docker Image  | `shikshalokamqa/elevate-mentoring:3.3`            |
 
 # 
 
@@ -212,11 +230,19 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 ### Step 2 : Install Dependencies
 
 ```bash
-    npm run install
+    npm install
 ```
 
 ### Step 3: Restart the Service
    Restart the Interface Service to apply the latest configurations and updates.
+
+
+**Version & Build Information**
+
+| Item          | Value                                                |
+|---------------|------------------------------------------------------|
+| Git Branch    | `release-3.2.0`                                        |
+| Docker Image  | `shikshalokamqa/elevate-interface:3.3`            |
 
 #
 
@@ -230,7 +256,7 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 ### Step 2 : Install Dependencies
 
 ```bash
-    npm run install
+    npm install
 ```
 ### Step 3 : Run Database Migrations
 
@@ -241,6 +267,13 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 ### Step 4: Restart the Service
    Restart the User Service to apply the latest configurations and updates.
 
+
+**Version & Build Information**
+
+| Item          | Value                                                |
+|---------------|------------------------------------------------------|
+| Git Branch    | `release-3.2.0`                                        |
+| Docker Image  | `shikshalokamqa/eleavte-user:3.3`            |
 #
 
 # **Deployment of the Mentoring frontend**
@@ -260,13 +293,22 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 >
 > **npm run manage-forms**
 
-### Step 3:** **Restart the pm2
+### Step 3: Restart 
+     Restart the Mentoring frontend to apply the latest configurations and updates.
+
+
+**Version & Build Information**
+
+| Item          | Value                                                |
+|---------------|------------------------------------------------------|
+| Git Branch    | `release-3.2.0`                                        |
+| Docker Image  | `shikshalokamqa/mentoring-mobile-app:3.3`            |
+
+
 
 # 
 
 # 
-
-# \*\* \*\*
 
 # **References**
 
