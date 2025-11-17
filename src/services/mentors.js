@@ -56,7 +56,7 @@ module.exports = class MentorsHelper {
 			let requestedMentorExtension = false
 			if (id !== '' && isAMentor !== '' && roles !== '') {
 				// Try cache first, fallback to direct query
-				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
+				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
 
 				if (!requestedMentorExtension) {
 					return responses.failureResponse({
@@ -294,7 +294,7 @@ module.exports = class MentorsHelper {
 	static async share(id, userId, organizationCode, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let mentorsDetails = await cacheHelper.mentor.get(tenantCode, organizationCode, id)
+			let mentorsDetails = await cacheHelper.mentor.get(tenantCode, organizationCode, id, false)
 			if (!mentorsDetails) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.bad_request,
@@ -517,7 +517,7 @@ module.exports = class MentorsHelper {
 	static async updateMentorExtension(data, userId, orgCode, tenantCode) {
 		try {
 			// Try cache first for current mentor data
-			let currentUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+			let currentUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId, false)
 			if (!currentUser) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -637,7 +637,7 @@ module.exports = class MentorsHelper {
 
 			if (updateCount === 0) {
 				// Try cache first for fallback data
-				let fallbackUpdatedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+				let fallbackUpdatedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId, false)
 				if (!fallbackUpdatedUser) {
 					return responses.failureResponse({
 						statusCode: httpStatusCode.not_found,
@@ -688,7 +688,7 @@ module.exports = class MentorsHelper {
 	static async getMentorExtension(userId, organizationCode, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let mentor = await cacheHelper.mentor.get(tenantCode, organizationCode, userId)
+			let mentor = await cacheHelper.mentor.get(tenantCode, organizationCode, userId, false)
 			if (!mentor) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -697,22 +697,18 @@ module.exports = class MentorsHelper {
 			}
 
 			const orgCode = mentor.organization_code
-			let cachedUser = null
 
-			// Try mentor cache first (if user is a mentor)
+			// We already have mentor data from the initial cache call, no need to fetch again
 			if (mentor.is_mentor) {
-				cachedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
-				if (cachedUser) {
-					return responses.successResponse({
-						statusCode: httpStatusCode.ok,
-						message: 'MENTOR_EXTENSION_FETCHED',
-						result: cachedUser,
-					})
-				}
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'MENTOR_EXTENSION_FETCHED',
+					result: mentor,
+				})
 			}
 
 			// Try mentee cache as fallback (user might have both roles)
-			cachedUser = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+			const cachedUser = await cacheHelper.mentee.get(tenantCode, orgCode, userId, false)
 			if (cachedUser) {
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
@@ -824,7 +820,7 @@ module.exports = class MentorsHelper {
 				let requestedMentorExtension = false
 				if (userId !== '' && isAMentor !== '' && roles !== '') {
 					// Try cache first using logged-in user's organization context
-					requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
+					requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
 
 					const validateDefaultRules = await validateDefaultRulesFilter({
 						ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
@@ -883,7 +879,7 @@ module.exports = class MentorsHelper {
 			let requestedMentorExtension = false
 			if (userId !== '' && isAMentor !== '' && roles !== '') {
 				// Try cache first using logged-in user's organization context
-				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
+				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
 
 				const validateDefaultRules = await validateDefaultRulesFilter({
 					ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
@@ -940,7 +936,7 @@ module.exports = class MentorsHelper {
 				mentorExtension = requestedMentorExtension
 			} else {
 				// Try cache first using logged-in user's organization context
-				mentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
+				mentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
 			}
 
 			// If no mentor extension found, but user has admin/mentor roles, check if user extension exists and update it

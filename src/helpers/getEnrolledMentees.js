@@ -9,7 +9,6 @@ const { Op } = require('sequelize')
 
 exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) => {
 	try {
-		console.log('🔍 DEBUG - getEnrolledMentees called for session:', sessionId, 'tenant:', tenantCode)
 		const mentees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, tenantCode)
 
 		// Early return if no mentees found
@@ -59,19 +58,6 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 			userRequests.getUserDetailedList(menteeIds, tenantCode).then((result) => result.result),
 		])
 
-		console.log('🔍 DEBUG - Raw enrolled users from database:', {
-			userCount: enrolledUsers.length,
-			firstUser: enrolledUsers[0]
-				? {
-						user_id: enrolledUsers[0].user_id,
-						designation: enrolledUsers[0].designation,
-						area_of_expertise: enrolledUsers[0].area_of_expertise,
-						education_qualification: enrolledUsers[0].education_qualification,
-						organization_id: enrolledUsers[0].organization_id,
-				  }
-				: null,
-		})
-
 		enrolledUsers.forEach((user) => {
 			if (menteeTypeMap.hasOwnProperty(user.user_id)) {
 				user.type = menteeTypeMap[user.user_id]
@@ -102,14 +88,6 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 		// Process entity types to add value labels
 		const uniqueOrgIds = [...new Set(enrolledUsers.map((user) => user.organization_id))]
 		const modelName = await menteeExtensionQueries.getModelName()
-		console.log('🔍 DEBUG - Before entity processing in getEnrolledMentees:', {
-			userCount: enrolledUsers.length,
-			firstUserDesignation: enrolledUsers[0]?.designation,
-			firstUserAreaOfExpertise: enrolledUsers[0]?.area_of_expertise,
-			uniqueOrgIds,
-			modelName,
-			tenantCode,
-		})
 
 		const processedUsers = await entityTypeService.processEntityTypesToAddValueLabels(
 			enrolledUsers,
@@ -123,16 +101,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 		// Check if processing actually returned processed data or error
 		if (processedUsers && !processedUsers.responseCode) {
 			enrolledUsers = processedUsers
-			console.log('🔍 DEBUG - Entity processing successful in getEnrolledMentees:', {
-				userCount: enrolledUsers.length,
-				firstUserDesignation: enrolledUsers[0]?.designation,
-				firstUserAreaOfExpertise: enrolledUsers[0]?.area_of_expertise,
-			})
 		} else {
-			console.log(
-				'🔍 DEBUG - Entity processing failed/skipped in getEnrolledMentees:',
-				processedUsers?.message || 'Unknown error'
-			)
 			// Continue with original data if processing fails
 		}
 
@@ -160,23 +129,16 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 						if (org.organization_code) {
 							return cacheHelper.organizations
 								.set(tenantCode, org.organization_code, org.organization_id, org)
-								.catch((cacheError) => {
-									console.error(
-										`❌ Failed to cache organization ${org.organization_id} in getEnrolledMentees:`,
-										cacheError
-									)
+								.catch(() => {
+									// Silently handle cache errors
 								})
 						}
 					})
 					.filter(Boolean)
 
-				Promise.all(cachePromises)
-					.then(() => {
-						console.log(`💾 Cached ${cachePromises.length} organizations from getEnrolledMentees`)
-					})
-					.catch((cacheError) => {
-						console.error(`❌ Some organizations failed to cache in getEnrolledMentees:`, cacheError)
-					})
+				Promise.all(cachePromises).catch(() => {
+					// Silently handle cache errors
+				})
 			}
 		}
 

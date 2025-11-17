@@ -1554,10 +1554,11 @@ module.exports = class SessionsHelper {
 
 			sessionDetails['resources'] = await this.getResources(sessionDetails.id, tenantCode)
 
-			// Try to get from cache first using the model-based cache helper
-			let entityTypes
+			// Fetch entity types for both Session and UserExtension models for complete processing
+			let entityTypes = []
 			try {
-				entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				// Get Session model entity types
+				const sessionEntityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 					sessionModelName,
 					[sessionDetails.mentor_organization_id, defaults.orgCode],
 					[tenantCode, defaults.tenantCode],
@@ -1566,15 +1567,23 @@ module.exports = class SessionsHelper {
 					}
 				)
 
-				// Check if cache returned error response
-				if (entityTypes && entityTypes.statusCode && entityTypes.statusCode !== 200) {
-					throw new Error(entityTypes.message || 'Cache lookup failed')
-				}
+				// Get UserExtension model entity types (for mentor designation processing)
+				const userExtensionEntityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+					'UserExtension',
+					[sessionDetails.mentor_organization_id, defaults.orgCode],
+					[tenantCode, defaults.tenantCode],
+					{
+						status: 'ACTIVE',
+					}
+				)
+
+				// Combine both sets of entity types
+				entityTypes = [...(sessionEntityTypes || []), ...(userExtensionEntityTypes || [])]
 			} catch (cacheError) {
 				console.log('EntityTypes cache lookup failed, falling back to database:', cacheError.message)
 
-				// Fallback to direct database query
-				entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
+				// Fallback to direct database query for both models
+				const sessionEntityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
 					{
 						status: 'ACTIVE',
 						organization_code: {
@@ -1585,6 +1594,20 @@ module.exports = class SessionsHelper {
 					{ [Op.in]: [tenantCode, defaults.tenantCode] },
 					sessionModelName
 				)
+
+				const userEntityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
+					{
+						status: 'ACTIVE',
+						organization_code: {
+							[Op.in]: [sessionDetails.mentor_organization_id, defaults.orgCode],
+						},
+						model_names: { [Op.contains]: ['UserExtension'] },
+					},
+					{ [Op.in]: [tenantCode, defaults.tenantCode] },
+					'UserExtension'
+				)
+
+				entityTypes = [...(sessionEntityTypes || []), ...(userEntityTypes || [])]
 			}
 
 			if (entityTypes instanceof Error) {

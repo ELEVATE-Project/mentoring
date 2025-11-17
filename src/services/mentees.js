@@ -206,7 +206,6 @@ module.exports = class MenteesHelper {
 
 		// Cache the complete profile response
 		try {
-			console.log(`💾 Caching complete mentee profile response for ${id}`)
 			await cacheHelper.mentee.set(tenantCode, organizationCode, id, finalProfile)
 		} catch (cacheError) {
 			console.error(`❌ Failed to cache mentee profile ${id}:`, cacheError)
@@ -409,7 +408,7 @@ module.exports = class MenteesHelper {
 
 	static async joinSession(sessionId, userId, organizationCode, tenantCode) {
 		try {
-			const mentee = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
+			const mentee = await cacheHelper.mentee.get(tenantCode, organizationCode, userId, false)
 			if (!mentee) throw createUnauthorizedResponse('USER_NOT_FOUND')
 
 			// Optimized: Single query with JOIN to get session and attendee data together
@@ -663,17 +662,13 @@ module.exports = class MenteesHelper {
 	 */
 	static async filterSessionsBasedOnSaasPolicy(userId, isAMentor, tenantCode, orgCode) {
 		try {
-			// Try cache first for external_session_visibility, organization_id, is_mentor columns
-			let menteeExtension = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
-			if (!menteeExtension) {
-				// Cache miss - get from database with specific columns needed for this method
-				menteeExtension = await menteeQueries.getMenteeExtension(
-					userId,
-					['external_session_visibility', 'organization_id', 'is_mentor'],
-					false,
-					tenantCode
-				)
-			}
+			// Get raw data from database for policy checking (need specific raw columns)
+			const menteeExtension = await menteeQueries.getMenteeExtension(
+				userId,
+				['external_session_visibility', 'organization_id', 'is_mentor'],
+				false,
+				tenantCode
+			)
 
 			if (!menteeExtension) {
 				throw responses.failureResponse({
@@ -1042,7 +1037,7 @@ module.exports = class MenteesHelper {
 			dataToRemove.forEach((key) => delete data[key])
 
 			// Try cache first for current mentee data
-			let currentUser = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
+			let currentUser = await cacheHelper.mentee.get(tenantCode, organizationCode, userId, false)
 			if (!currentUser) {
 				currentUser = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
 			}
@@ -1158,7 +1153,7 @@ module.exports = class MenteesHelper {
 
 			if (updateCount === 0) {
 				// Try cache first for fallback data
-				let fallbackUpdatedUser = await cacheHelper.mentee.get(tenantCode, organizationCode, userId)
+				let fallbackUpdatedUser = await cacheHelper.mentee.get(tenantCode, organizationCode, userId, false)
 				if (!fallbackUpdatedUser) {
 					fallbackUpdatedUser = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
 				}
@@ -1209,6 +1204,16 @@ module.exports = class MenteesHelper {
 	 */
 	static async getMenteeExtension(userId, organizationCode, tenantCode) {
 		try {
+			// Try cache first for processed mentee extension data
+			const cachedMenteeExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, userId, false)
+			if (cachedMenteeExtension) {
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'MENTEE_EXTENSION_FETCHED',
+					result: cachedMenteeExtension,
+				})
+			}
+
 			const mentee = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
 			if (!mentee) {
 				return responses.failureResponse({
@@ -1246,8 +1251,15 @@ module.exports = class MenteesHelper {
 			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationId)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
 			const processDbResponse = utils.processDbResponse(mentee, validationData)
+
+			// Cache the processed response for future use
+			try {
+				await cacheHelper.mentee.set(tenantCode, organizationCode, userId, processDbResponse)
+			} catch (cacheError) {
+				// Continue execution if caching fails
+			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -1639,6 +1651,7 @@ module.exports = class MenteesHelper {
 			// 	? ['external_mentee_visibility', 'organization_id']
 			// 	: ['external_mentor_visibility', 'organization_id']
 
+			// Get raw data from database for policy checking (need specific raw columns)
 			const userPolicyDetails = isAMentor
 				? await mentorQueries.getMentorExtension(
 						userId,
@@ -1723,12 +1736,14 @@ module.exports = class MenteesHelper {
 	 * @param {Number} userId 					- User id.
 	 * @param {Array} userData					- User data
 	 * @param {Boolean} isAMentor 				- user mentor or not.
+	 * @param {String} tenantCode 				- tenant code.
+	 * @param {String} orgCode 					- organization code (optional, for cache optimization).
 	 * @returns {Boolean} 						- user Accessible
 	 */
 
-	static async checkIfMenteeIsAccessible(userData, userId, isAMentor, tenantCode) {
+	static async checkIfMenteeIsAccessible(userData, userId, isAMentor, tenantCode, orgCode) {
 		try {
-			// user can be mentor or mentee, based on isAMentor key get policy details
+			// Get raw data from database for policy checking (need specific raw columns)
 			const userPolicyDetails = isAMentor
 				? await mentorQueries.getMentorExtension(
 						userId,
@@ -1990,7 +2005,7 @@ module.exports = class MenteesHelper {
 			// If we don't have cached data, fetch it from database
 			if (!requestedUserExtension) {
 				// Try cache again for basic user data (name, user_id are sufficient for this flow)
-				requestedUserExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, id)
+				requestedUserExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, id, false)
 				if (!requestedUserExtension) {
 					requestedUserExtension = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
 				}
@@ -2157,7 +2172,6 @@ module.exports = class MenteesHelper {
 
 			// Cache the complete details response
 			try {
-				console.log(`💾 Caching complete mentee details response for ${id}`)
 				await cacheHelper.mentee.set(tenantCode, organizationCode, id, finalDetailsResponse)
 			} catch (cacheError) {
 				console.error(`❌ Failed to cache mentee details ${id}:`, cacheError)

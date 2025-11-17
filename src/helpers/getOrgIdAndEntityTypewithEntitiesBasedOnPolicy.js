@@ -2,6 +2,7 @@ const userRequests = require('@requests/user')
 const common = require('@constants/common')
 const entityTypeQueries = require('@database/queries/entityType')
 const entityTypeCache = require('@helpers/entityTypeCache')
+const cacheHelper = require('@generics/cacheHelper')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const { Op } = require('sequelize')
 

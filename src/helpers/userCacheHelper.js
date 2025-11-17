@@ -32,25 +32,21 @@ async function getUserExtensionCached(userId, tenantCode, preferredRole = 'mente
 		if (preferredRole === 'mentor') {
 			cachedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
 			if (cachedUser) {
-				console.log(`💾 User ${userId} retrieved from mentor cache`)
 				return cachedUser
 			}
 			// Fallback to mentee cache
 			cachedUser = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
 			if (cachedUser) {
-				console.log(`💾 User ${userId} retrieved from mentee cache (mentor fallback)`)
 				return cachedUser
 			}
 		} else {
 			cachedUser = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
 			if (cachedUser) {
-				console.log(`💾 User ${userId} retrieved from mentee cache`)
 				return cachedUser
 			}
 			// Fallback to mentor cache
 			cachedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
 			if (cachedUser) {
-				console.log(`💾 User ${userId} retrieved from mentor cache (mentee fallback)`)
 				return cachedUser
 			}
 		}
@@ -65,7 +61,6 @@ async function getUserExtensionCached(userId, tenantCode, preferredRole = 'mente
 		} // Fallback to just extension data
 		return userExtension
 	} catch (error) {
-		console.error(`Error getting user extension for ${userId}:`, error)
 		return null
 	}
 }
@@ -93,14 +88,12 @@ async function getMentorExtensionCached(userId, attributes = [], unScoped = fals
 		if (attributes.length === 0) {
 			cachedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
 			if (cachedUser) {
-				console.log(`💾 Mentor ${userId} retrieved from mentor cache`)
 				return cachedUser
 			}
 
 			// Fallback to mentee cache
 			cachedUser = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
 			if (cachedUser) {
-				console.log(`💾 Mentor ${userId} retrieved from mentee cache (fallback)`)
 				return cachedUser
 			}
 		}
@@ -108,28 +101,8 @@ async function getMentorExtensionCached(userId, attributes = [], unScoped = fals
 		// Cache miss or specific attributes requested - get from database
 		const mentor = await mentorQueries.getMentorExtension(userId, attributes, unScoped, tenantCode)
 
-		// Only cache full data (no specific attributes) in mentor cache
-		if (attributes.length === 0 && !unScoped && mentor) {
-			try {
-				// Get full profile and cache it
-				const user = await userRequests.getProfileDetails({ tenantCode, userId })
-				if (user.statusCode === httpStatusCode.ok && user.result) {
-					const userResponse = {
-						...user.result,
-						...mentor,
-					}
-					await cacheHelper.mentor.set(tenantCode, orgCode, userId, userResponse)
-					console.log(`💾 Mentor ${userId} cached after database fetch`)
-					return userResponse
-				}
-			} catch (cacheError) {
-				console.error(`❌ Failed to cache mentor ${userId}:`, cacheError)
-			}
-		}
-
 		return mentor
 	} catch (error) {
-		console.error(`Error getting mentor extension for ${userId}:`, error)
 		return null
 	}
 }
@@ -157,14 +130,12 @@ async function getMenteeExtensionCached(userId, attributes = [], unScoped = fals
 		if (attributes.length === 0) {
 			cachedUser = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
 			if (cachedUser) {
-				console.log(`💾 Mentee ${userId} retrieved from mentee cache`)
 				return cachedUser
 			}
 
 			// Fallback to mentor cache (user might have both roles)
 			cachedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
 			if (cachedUser) {
-				console.log(`💾 Mentee ${userId} retrieved from mentor cache (fallback)`)
 				return cachedUser
 			}
 		}
@@ -172,26 +143,8 @@ async function getMenteeExtensionCached(userId, attributes = [], unScoped = fals
 		// Cache miss or specific attributes requested - get from database
 		const mentee = await userExtensionQueries.getMenteeExtension(userId, attributes, unScoped, tenantCode)
 
-		// Only cache full data (no specific attributes) in mentee cache
-		if (attributes.length === 0 && !unScoped && mentee) {
-			try {
-				// Get full profile and cache it
-				const user = await userRequests.getProfileDetails({ tenantCode, userId })
-				if (user.statusCode === httpStatusCode.ok && user.result) {
-					const userResponse = {
-						...user.result,
-						...mentee,
-					}
-					return userResponse
-				}
-			} catch (cacheError) {
-				console.error(`❌ Failed to cache mentee ${userId}:`, cacheError)
-			}
-		}
-
 		return mentee
 	} catch (error) {
-		console.error(`Error getting mentee extension for ${userId}:`, error)
 		return null
 	}
 }
@@ -226,13 +179,8 @@ async function getUsersByIdsCached(userIds, tenantCode, preferredRole = 'mentee'
 		try {
 			const dbUsers = await userExtensionQueries.getUsersByUserIds(uncachedIds, {}, tenantCode, true)
 			results.push(...dbUsers)
-			console.log(
-				`💾 Fetched ${uncachedIds.length} users from database, ${
-					userIds.length - uncachedIds.length
-				} from cache`
-			)
 		} catch (error) {
-			console.error('Error fetching uncached users:', error)
+			// Silent error handling
 		}
 	}
 

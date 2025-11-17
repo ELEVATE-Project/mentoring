@@ -20,7 +20,6 @@ async function getEntityTypesAndEntitiesWithCache(originalFilter, tenantCodes, m
 	try {
 		// If no modelName provided, use direct database query
 		if (!modelName) {
-			console.log('No modelName provided for cache optimization - using direct database query')
 			return await entityTypeQueries.findUserEntityTypesAndEntities(originalFilter, tenantCodes)
 		}
 
@@ -30,7 +29,6 @@ async function getEntityTypesAndEntitiesWithCache(originalFilter, tenantCodes, m
 			: [originalFilter.organization_code]
 
 		if (!orgCodes || orgCodes.length === 0) {
-			console.log('No organization codes found - using direct database query')
 			return await entityTypeQueries.findUserEntityTypesAndEntities(originalFilter, tenantCodes)
 		}
 
@@ -50,94 +48,92 @@ async function getEntityTypesAndEntitiesWithCache(originalFilter, tenantCodes, m
 			tenantCodeArray.push(defaults.tenantCode)
 		}
 
-		const primaryTenantCode = tenantCodeArray[0]
-		const primaryOrgCode = orgCodeArray[0]
+		// Try to get cached data using individual entity values from each org/tenant combination
+		let cachedEntities = []
+		let hasCachedData = false
 
-		console.log(`Trying cache for model '${modelName}' with fallback to original filter`)
+		// Get all entity values that might be in the filter
+		const entityValues = originalFilter.value && originalFilter.value[Op.in] ? originalFilter.value[Op.in] : [] // If no specific values, we'll skip cache and go to DB
 
-		// Try cache first - check for cached entities
-		try {
-			const cacheKey = `model:${modelName}:all`
-			const cachedModelData = await cacheHelper.entityTypes.get(primaryTenantCode, primaryOrgCode, cacheKey)
+		// Check cache for each org/tenant/entity combination
+		for (const tenantCode of tenantCodeArray) {
+			for (const orgCode of orgCodeArray) {
+				for (const entityValue of entityValues) {
+					try {
+						const cachedEntity = await cacheHelper.entityTypes.get(
+							tenantCode,
+							orgCode,
+							modelName,
+							entityValue
+						)
 
-			if (cachedModelData && Array.isArray(cachedModelData) && cachedModelData.length > 0) {
-				console.log(`Found cached data for model '${modelName}' with ${cachedModelData.length} entities`)
-
-				// Apply original filters to cached data
-				const filteredData = cachedModelData.filter((entityType) => {
-					// Apply all original filter conditions
-					for (const [key, value] of Object.entries(originalFilter)) {
-						if (key === 'organization_code' || key === 'tenant_code') {
-							// Skip tenant/org filtering as cache is already scoped
-							continue
+						if (cachedEntity) {
+							cachedEntities.push(cachedEntity)
+							hasCachedData = true
 						}
-						if (key === 'model_names' && value[Op.contains]) {
-							// Check if entity's model_names contains the required model
-							const requiredModels = value[Op.contains]
-							const entityModels = entityType.model_names || []
-							const hasRequiredModel = requiredModels.some((reqModel) => entityModels.includes(reqModel))
-							if (!hasRequiredModel) {
-								return false
-							}
-						} else if (key === 'value' && value[Op.in]) {
-							// Check if entity value is in the required values
-							if (!value[Op.in].includes(entityType.value)) {
-								return false
-							}
-						} else if (Array.isArray(value)) {
-							// Array value filter (like entityType filter)
-							if (!value.includes(entityType[key])) {
-								return false
-							}
-						} else {
-							// Direct property match
-							if (entityType[key] !== value) {
-								return false
-							}
-						}
-					}
-					return true
-				})
-
-				console.log(
-					`Cache hit: filtered ${cachedModelData.length} cached entities down to ${filteredData.length} matching original filter`
-				)
-				return filteredData
+					} catch (cacheError) {}
+				}
 			}
-		} catch (cacheError) {
-			console.log(`Cache lookup failed for model '${modelName}':`, cacheError.message)
 		}
 
-		// Cache miss - fallback to original database query
-		console.log(`Cache miss for model '${modelName}' - falling back to original database query`)
+		// If we found cached data and it covers all requested entity values, apply original filter logic and return
+		if (hasCachedData && entityValues.length > 0) {
+			// Apply original filter conditions to cached data
+			const filteredData = cachedEntities.filter((entityType) => {
+				// Apply all original filter conditions
+				for (const [key, value] of Object.entries(originalFilter)) {
+					if (key === 'organization_code' || key === 'tenant_code') {
+						// Skip tenant/org filtering as cache is already scoped
+						continue
+					}
+					if (key === 'model_names' && value[Op.contains]) {
+						const requiredModels = value[Op.contains]
+						const entityModels = entityType.model_names || []
+						const hasRequiredModel = requiredModels.some((reqModel) => entityModels.includes(reqModel))
+						if (!hasRequiredModel) {
+							return false
+						}
+					} else if (key === 'value' && value[Op.in]) {
+						if (!value[Op.in].includes(entityType.value)) {
+							return false
+						}
+					} else if (Array.isArray(value)) {
+						if (!value.includes(entityType[key])) {
+							return false
+						}
+					} else {
+						if (entityType[key] !== value) {
+							return false
+						}
+					}
+				}
+				return true
+			})
+
+			return filteredData
+		}
+
+		// Cache miss or partial cache - fetch from database
 		const dbResult = await entityTypeQueries.findUserEntityTypesAndEntities(originalFilter, tenantCodes)
 
-		// Cache the result for future use (cache core model data only)
-		try {
-			if (dbResult && dbResult.length > 0) {
-				// Cache all entities for this model (not just the filtered subset)
-				const coreFilter = {
-					status: 'ACTIVE',
-					organization_code: { [Op.in]: orgCodeArray },
-					model_names: { [Op.contains]: [modelName] },
-				}
-
-				const allModelEntities = await entityTypeQueries.findUserEntityTypesAndEntities(
-					coreFilter,
-					tenantCodeArray
-				)
-
-				const cacheKey = `model:${modelName}:all`
-				await cacheHelper.entityTypes.set(primaryTenantCode, primaryOrgCode, cacheKey, allModelEntities)
-				console.log(`Cached ${allModelEntities.length} entities for model '${modelName}' for future use`)
+		// Cache individual entities using entity value pattern
+		if (dbResult && dbResult.length > 0) {
+			for (const entityType of dbResult) {
+				try {
+					// Cache each entity using the standard pattern: tenant:${tenantCode}:org:${orgCode}:entityTypes:model:${modelName}:${entityValue}
+					await cacheHelper.entityTypes.set(
+						entityType.tenant_code,
+						entityType.organization_code,
+						modelName,
+						entityType.value,
+						entityType
+					)
+				} catch (cacheSetError) {}
 			}
-		} catch (cacheSetError) {
-			console.log(`Failed to cache model data for '${modelName}':`, cacheSetError.message)
 		}
 
 		return dbResult
 	} catch (error) {
-		console.log('Cache function error - falling back to direct database query:', error.message)
 		return await entityTypeQueries.findUserEntityTypesAndEntities(originalFilter, tenantCodes)
 	}
 }
@@ -182,109 +178,66 @@ async function getEntityTypesAndEntitiesForModel(modelName, orgCodes, tenantCode
 			tenantCodeArray.push(defaults.tenantCode)
 		}
 
-		const primaryTenantCode = tenantCodeArray[0]
-		const primaryOrgCode = orgCodeArray[0]
-
-		console.log(`EntityTypes for model '${modelName}' fetching with cache support`)
-
-		// Try to get known entity types from cache first
-		// We'll check for common entity values that are likely to be cached
+		// Try to get known entity types from cache first for ALL org/tenant combinations
 		const knownEntityValues = common.entityTypeModelNames // Common model names
 		const cachedEntities = []
 		const uncachedEntityValues = []
 
 		try {
-			console.log(`Checking cache for model '${modelName}' with known entity values`)
+			// Check cache for each org/tenant/entity combination
+			for (const tenantCode of tenantCodeArray) {
+				for (const orgCode of orgCodeArray) {
+					for (const entityValue of knownEntityValues) {
+						try {
+							const cachedEntity = await cacheHelper.entityTypes.get(
+								tenantCode,
+								orgCode,
+								modelName,
+								entityValue
+							)
 
-			// Check cache for each known entity value
-			for (const entityValue of knownEntityValues) {
-				try {
-					const cachedEntity = await cacheHelper.entityTypes.get(
-						primaryTenantCode,
-						primaryOrgCode,
-						modelName,
-						entityValue
-					)
-
-					if (cachedEntity && cachedEntity.entities) {
-						cachedEntities.push(cachedEntity)
-						console.log(`Found cached entity '${entityValue}' for model '${modelName}'`)
-					} else {
-						uncachedEntityValues.push(entityValue)
-					}
-				} catch (entityFetchError) {
-					uncachedEntityValues.push(entityValue)
-				}
-			}
-
-			// If we found some cached entities, we can try to use them
-			// But we need to validate against database to ensure completeness
-			if (cachedEntities.length > 0) {
-				console.log(`Found ${cachedEntities.length} cached entities for model '${modelName}'`)
-
-				// Quick check: get entity values from database to compare
-				const dbEntityValues = await entityTypeQueries.findAllEntityTypes(
-					{ [Op.in]: orgCodeArray },
-					{ [Op.in]: tenantCodeArray },
-					['value'], // Only get values for comparison
-					{
-						status: 'ACTIVE',
-						model_names: { [Op.contains]: [modelName] },
-						...additionalFilters,
-					}
-				)
-
-				const dbValues = new Set(dbEntityValues.map((e) => e.value))
-				const cachedValues = new Set(cachedEntities.map((e) => e.value))
-
-				// Check if our cache covers all database values
-				const allValuesCached = [...dbValues].every((value) => cachedValues.has(value))
-
-				if (allValuesCached && cachedEntities.length === dbEntityValues.length) {
-					console.log(`Cache complete for model '${modelName}' - returning cached data as array`)
-
-					// Ensure each cached entity has the correct format (same as database result)
-					// Database returns: [{id, value, label, entities: [...], ...}, ...]
-					let formattedCachedEntities = cachedEntities.map((cachedEntity) => ({
-						...cachedEntity,
-						entities: Array.isArray(cachedEntity.entities) ? cachedEntity.entities : [],
-					}))
-
-					// Apply additional filters to cached results
-					if (additionalFilters && Object.keys(additionalFilters).length > 0) {
-						console.log(
-							`Applying additional filters to complete cached model '${modelName}' data:`,
-							additionalFilters
-						)
-
-						formattedCachedEntities = formattedCachedEntities.filter((entityType) => {
-							// Apply each additional filter
-							for (const [key, value] of Object.entries(additionalFilters)) {
-								if (Array.isArray(value)) {
-									// Array value filter
-									if (!value.includes(entityType[key])) {
-										return false
-									}
-								} else if (entityType[key] !== value) {
-									return false // This entity doesn't match the filter
-								}
+							if (cachedEntity && cachedEntity.entities) {
+								cachedEntities.push(cachedEntity)
+							} else {
+								uncachedEntityValues.push(entityValue)
 							}
-							return true // All filters match
-						})
-
-						console.log(
-							`Filtered ${cachedEntities.length} cached entities down to ${formattedCachedEntities.length} matching additional filters`
-						)
+						} catch (entityFetchError) {
+							uncachedEntityValues.push(entityValue)
+						}
 					}
-
-					return formattedCachedEntities // Returns array format matching database result
-				} else {
-					console.log(`Cache incomplete for model '${modelName}' - fetching from database`)
 				}
 			}
-		} catch (cacheError) {
-			console.log(`Cache checking failed for model '${modelName}':`, cacheError.message)
-		}
+
+			// If we found cached entities, use them directly without database validation
+			if (cachedEntities.length > 0) {
+				// Ensure each cached entity has the correct format (same as database result)
+				// Database returns: [{id, value, label, entities: [...], ...}, ...]
+				let formattedCachedEntities = cachedEntities.map((cachedEntity) => ({
+					...cachedEntity,
+					entities: Array.isArray(cachedEntity.entities) ? cachedEntity.entities : [],
+				}))
+
+				// Apply additional filters to cached results
+				if (additionalFilters && Object.keys(additionalFilters).length > 0) {
+					formattedCachedEntities = formattedCachedEntities.filter((entityType) => {
+						// Apply each additional filter
+						for (const [key, value] of Object.entries(additionalFilters)) {
+							if (Array.isArray(value)) {
+								// Array value filter
+								if (!value.includes(entityType[key])) {
+									return false
+								}
+							} else if (entityType[key] !== value) {
+								return false // This entity doesn't match the filter
+							}
+						}
+						return true // All filters match
+					})
+				}
+
+				return formattedCachedEntities // Returns array format matching database result
+			}
+		} catch (cacheError) {}
 
 		// Cache miss - fetch from database
 		const allEntitiesFilter = {
@@ -294,38 +247,30 @@ async function getEntityTypesAndEntitiesForModel(modelName, orgCodes, tenantCode
 			// Don't include additionalFilters in database query - we'll filter cached results
 		}
 
-		console.log(`Fetching all entity types for model '${modelName}' from database`)
 		const allEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
 			allEntitiesFilter,
 			tenantCodeArray
 		)
 
-		// Cache individual entities for both value-based and model-based lookups
+		// Cache individual entities for both value-based and model-based lookups for ALL org/tenant combinations
 		try {
-			console.log(`Caching ${allEntityTypes.length} individual entities for model '${modelName}'`)
-
 			for (const entityType of allEntityTypes) {
 				try {
+					// Cache this entity under its specific tenant/org combination
 					await cacheHelper.entityTypes.set(
-						primaryTenantCode,
-						primaryOrgCode,
+						entityType.tenant_code,
+						entityType.organization_code,
 						modelName,
 						entityType.value,
 						entityType
 					)
-				} catch (individualCacheError) {
-					console.log(`Failed to cache individual entity ${entityType.value}:`, individualCacheError.message)
-				}
+				} catch (individualCacheError) {}
 			}
-		} catch (cacheError) {
-			console.log(`Failed to cache entities for model '${modelName}':`, cacheError.message)
-		}
+		} catch (cacheError) {}
 
 		// Apply additional filters to the cached results
 		let filteredEntityTypes = allEntityTypes
 		if (additionalFilters && Object.keys(additionalFilters).length > 0) {
-			console.log(`Applying additional filters to cached model '${modelName}' data:`, additionalFilters)
-
 			filteredEntityTypes = allEntityTypes.filter((entityType) => {
 				// Apply each additional filter
 				for (const [key, value] of Object.entries(additionalFilters)) {
@@ -340,10 +285,6 @@ async function getEntityTypesAndEntitiesForModel(modelName, orgCodes, tenantCode
 				}
 				return true // All filters match
 			})
-
-			console.log(
-				`Filtered ${allEntityTypes.length} cached entities down to ${filteredEntityTypes.length} matching additional filters`
-			)
 		}
 
 		return filteredEntityTypes
@@ -369,10 +310,7 @@ async function clearModelCache(tenantCode, orgCode, modelNames = []) {
 			// So we clear the entire allModels namespace for this tenant/org
 			await cacheHelper.entityTypes.delete(tenantCode, orgCode, 'allModels', `*${modelName}*`)
 		}
-		console.log(`Cleared model-level cache for models: ${modelNames.join(', ')}`)
-	} catch (error) {
-		console.log('Failed to clear model cache:', error.message)
-	}
+	} catch (error) {}
 }
 
 // Removed applyInMemoryFilters - no longer needed with individual entity value caching
@@ -394,12 +332,9 @@ async function getEntityTypeByValue(modelName, entityValue, tenantCode, orgCode,
 	try {
 		const cachedEntity = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName, entityValue)
 		if (cachedEntity) {
-			console.log(`EntityType '${entityValue}' for model '${modelName}' found in individual cache`)
 			return cachedEntity
 		}
-	} catch (cacheError) {
-		console.log(`Cache lookup failed for entity ${entityValue}, falling back to database`)
-	}
+	} catch (cacheError) {}
 
 	// Fallback to database query if not in cache
 	const filter = {
@@ -413,13 +348,10 @@ async function getEntityTypeByValue(modelName, entityValue, tenantCode, orgCode,
 	const found = entityTypes.length > 0 ? entityTypes[0] : null
 
 	if (found) {
-		console.log(`EntityType '${entityValue}' for model '${modelName}' found in database`)
 		// Cache it for future use
 		try {
 			await cacheHelper.entityTypes.set(tenantCode, orgCode, modelName, entityValue, found)
-		} catch (cacheError) {
-			console.log(`Failed to cache entity ${entityValue}:`, cacheError.message)
-		}
+		} catch (cacheError) {}
 	}
 
 	return found
