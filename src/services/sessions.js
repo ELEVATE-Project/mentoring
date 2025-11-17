@@ -1955,7 +1955,7 @@ module.exports = class SessionsHelper {
 			// Else it will be available in userTokenData
 			if (isSelfEnrolled) {
 				const userDetails = await mentorExtensionQueries.getMentorExtension(
-					userTokenData.user_id,
+					userTokenData.id || userTokenData.user_id,
 					['user_id', 'name', 'email'],
 					true,
 					tenantCode
@@ -1966,7 +1966,7 @@ module.exports = class SessionsHelper {
 				name = userDetails.name
 				enrollmentType = common.ENROLLED
 			} else {
-				userId = userTokenData.user_id
+				userId = userTokenData.id || userTokenData.user_id
 				email = userTokenData.email
 				name = userTokenData.name
 
