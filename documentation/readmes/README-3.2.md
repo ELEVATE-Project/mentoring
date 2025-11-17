@@ -10,34 +10,7 @@
   />
 </a>
 
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/ELEVATE-Project/mentoring/tree/master.svg?style=shield)](https://dl.circleci.com/status-badge/redirect/gh/ELEVATE-Project/mentoring/tree/master)
-[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=ELEVATE-Project_mentoring&metric=duplicated_lines_density&branch=master)](https://sonarcloud.io/summary/new_code?id=ELEVATE-Project_mentoring)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=ELEVATE-Project_mentoring&metric=coverage)](https://sonarcloud.io/summary/new_code?id=ELEVATE-Project_mentoring)
-[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=ELEVATE-Project_mentoring&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=ELEVATE-Project_mentoring)
-[![Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io)
-[![Docs](https://img.shields.io/badge/Docs-success-informational)](https://elevate-docs.shikshalokam.org/mentorEd/intro)
-
-![GitHub package.json version (subfolder of monorepo)](https://img.shields.io/github/package-json/v/ELEVATE-Project/mentoring?filename=src%2Fpackage.json)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
-<details><summary>CircleCI insights</summary>
-
-[![CircleCI](https://dl.circleci.com/insights-snapshot/gh/ELEVATE-Project/mentoring/master/buil-and-test/badge.svg?window=30d)](https://app.circleci.com/insights/github/ELEVATE-Project/mentoring/workflows/buil-and-test/overview?branch=integration-testing&reporting-window=last-30-days&insights-snapshot=true)
-
-</details>
-
-<details><summary>develop</summary>
-
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/ELEVATE-Project/mentoring/tree/develop.svg?style=shield)](https://dl.circleci.com/status-badge/redirect/gh/ELEVATE-Project/mentoring/tree/develop)
-![GitHub package.json version (subfolder of monorepo)](https://img.shields.io/github/package-json/v/ELEVATE-Project/mentoring/develop?filename=src%2Fpackage.json)
-
-[![CircleCI](https://dl.circleci.com/insights-snapshot/gh/ELEVATE-Project/mentoring/dev/buil-and-test/badge.svg?window=30d)](https://app.circleci.com/insights/github/ELEVATE-Project/mentoring/workflows/buil-and-test/overview?branch=develop&reporting-window=last-30-days&insights-snapshot=true)
-
-[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=ELEVATE-Project_mentoring&metric=duplicated_lines_density&branch=develop)](https://sonarcloud.io/summary/new_code?id=ELEVATE-Project_mentoring)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=ELEVATE-Project_mentoring&metric=coverage&branch=develop)](https://sonarcloud.io/summary/new_code?id=ELEVATE-Project_mentoring)
-[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=ELEVATE-Project_mentoring&metric=vulnerabilities&branch=develop)](https://sonarcloud.io/summary/new_code?id=ELEVATE-Project_mentoring)
-
-</details>
+</br>
 
 </br>
 The Mentor building block enables effective mentoring interactions between mentors and mentees. The capability aims to create a transparent eco-system to learn, connect, solve, and share within communities. Mentor is an open source mentoring application that facilitates peer learning and professional development by creating a community of mentors and mentees.
@@ -57,6 +30,9 @@ The Mentor building block enables effective mentoring interactions between mento
 (Dev)
  -->
 
+
+<br><br>
+
 ## General Notes
 
 -   All environment variables must be verified before deployment.
@@ -68,7 +44,7 @@ The Mentor building block enables effective mentoring interactions between mento
 
 
 
-
+<br><br>
 # New Features
 ## 1. Chat Communication
 - Users can initiate chat requests to mentors.
@@ -90,12 +66,14 @@ The Mentor building block enables effective mentoring interactions between mento
 ##
 #
 
+<br><br>
 
-## Prerequisites
+# Prerequisites
 
 Ensure that the MentorEd system is updated to **version 3.1.2** before initiating the upgrade process to **version 3.2**.
 
-# ⚙️ Technical Setup
+<br><br>
+# **Technical Setup**
 
 The setup for **MentorEd version 3.2** involves configuring two primary components:
 
@@ -112,10 +90,12 @@ For detailed deployment and configuration instructions, refer to the official **
 
 [Rocket.Chat Deployment Documentation](https://docs.rocket.chat/deploy)
 
-## Chat Communication Service Setup
+<br><br>
+## **Chat Communication Service Setup**
 
 For detailed deployment and configuration instructions, refer to the official  
 [Chat Communication Service Documentation](https://github.com/ELEVATE-Project/chat-communications/blob/develop/README.md).
+
 
 ### Step 1 : Add Chat Service .env
 File Path : src/.env
@@ -177,7 +157,8 @@ chat_elevate_communications"
 
 #
 
-# Deployment of Mentoring Service
+<br><br>
+## **Deployment of Mentoring Service**
 
 ### **Step 1: Update Environment Variables**
 
@@ -215,8 +196,8 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 | Docker Image  | `shikshalokamqa/elevate-mentoring:3.3`            |
 
 # 
-
-# **Deployment of Interface Service**
+<br><br>
+## **Deployment of Interface Service**
 
 ### Step 1: update .env 
 
@@ -245,8 +226,8 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 | Docker Image  | `shikshalokamqa/elevate-interface:3.3`            |
 
 #
-
-# **Deployment of User Service**
+<br><br>
+## **Deployment of User Service**
 
 ### Step 1: update .env
 
@@ -275,8 +256,8 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 | Git Branch    | `release-3.2.0`                                        |
 | Docker Image  | `shikshalokamqa/eleavte-user:3.3`            |
 #
-
-# **Deployment of the Mentoring frontend**
+<br><br>
+## **Deployment of the Mentoring frontend**
 
 ### Step 1: update .env
 
