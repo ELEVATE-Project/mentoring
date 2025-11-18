@@ -119,6 +119,28 @@ exports.unenrollFromUpcomingSessions = async (userId, sessionIds) => {
 		throw error
 	}
 }
+
+exports.removeUserFromAllSessions = async (userId) => {
+	try {
+		// Remove from session attendees (all sessions)
+		const attendeeResult = await SessionAttendee.destroy({
+			where: {
+				mentee_id: userId,
+			},
+		})
+
+		// Remove from session enrollments (all sessions)
+		const enrollmentResult = await SessionEnrollment.destroy({
+			where: {
+				mentee_id: userId,
+			},
+		})
+
+		return { attendeeResult, enrollmentResult }
+	} catch (error) {
+		return error
+	}
+}
 exports.countEnrolledSessions = async (mentee_id) => {
 	try {
 		let sessionEnrollments = await SessionEnrollment.findAll({
@@ -229,5 +251,16 @@ exports.findPendingFeedbackSessions = async (menteeId, completedSessionIds) => {
 		})
 	} catch (error) {
 		return error
+	}
+}
+
+exports.getCount = async (filter = {}, options = {}) => {
+	try {
+		return await SessionAttendee.count({
+			where: filter,
+			...options,
+		})
+	} catch (error) {
+		throw error
 	}
 }

@@ -110,6 +110,7 @@ module.exports = async function (req, res, next) {
 			}
 		}
 
+
 		req.decodedToken.id =
 			typeof req.decodedToken?.id === 'number' ? req.decodedToken?.id?.toString() : req.decodedToken?.id
 		req.decodedToken.organization_id =

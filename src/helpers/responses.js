@@ -17,6 +17,7 @@ const successResponse = async ({
 	isResponseAStream = false,
 	stream,
 	fileName = '',
+	interpolation = false, // Can be true or an object like { title: 'Math' }
 }) => {
 	const versions = await form.getAllFormsVersion()
 	let response = {
@@ -25,6 +26,7 @@ const successResponse = async ({
 		message,
 		result,
 		isResponseAStream,
+		interpolation, // Pass interpolation object or true
 		meta: {
 			...meta,
 			formsVersion: versions,

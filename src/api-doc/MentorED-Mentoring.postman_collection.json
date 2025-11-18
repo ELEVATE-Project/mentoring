@@ -1,6 +1,6 @@
 {
 	"info": {
-		"_postman_id": "a0142733-af4d-4ff9-bbd7-7afd375fc495",
+		"_postman_id": "6040aeeb-2d97-4ffb-bf67-8f875fb86d61",
 		"name": "MentorED-Mentoring",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "21498549"
@@ -2184,6 +2184,25 @@
 									"value": "designation"
 								}
 							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "User details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{MentoringBaseUrl}}interface/v1/profile/get/312",
+							"host": ["{{MentoringBaseUrl}}interface"],
+							"path": ["v1", "profile", "get", "312"]
 						}
 					},
 					"response": []
@@ -4531,7 +4550,11 @@
 							"mode": "raw",
 							"raw": "{\n    \"title\": \"user\",\n\t\"label\": \"User\",\n\t\"scope\": \"SELF\",\n\t\"organization_id\": \"1\"\n}"
 						},
-						"url": "{{MentoringBaseUrl}}mentoring/v1/role-extension/create"
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/role-extension/create",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "role-extension", "create"]
+						}
 					},
 					"response": []
 				},
@@ -5016,7 +5039,11 @@
 								}
 							}
 						},
-						"url": "{{MentoringBaseUrl}}mentoring/v1/report-type/create"
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/report-type/create",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "report-type", "create"]
+						}
 					},
 					"response": []
 				},
@@ -5129,7 +5156,11 @@
 								}
 							}
 						},
-						"url": "{{MentoringBaseUrl}}mentoring/v1/report-mapping/create"
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/report-mapping/create",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "report-mapping", "create"]
+						}
 					},
 					"response": []
 				},
@@ -5258,7 +5289,11 @@
 								}
 							]
 						},
-						"url": "{{MentoringBaseUrl}}mentoring/v1/report-queries/create"
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/report-queries/create",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "report-queries", "create"]
+						}
 					},
 					"response": []
 				},
@@ -5344,6 +5379,525 @@
 								}
 							]
 						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Mentee Request Sessions",
+			"item": [
+				{
+					"name": "Create Session Request",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Calculate the current timestamp in seconds",
+									"const currentTimestamp = Math.floor(Date.now() / 1000);",
+									"",
+									"// Generate a random number of seconds (up to 7 days) to add to the current timestamp",
+									"const randomSeconds = Math.floor(Math.random() * 604800); // 7 days in seconds",
+									"",
+									"// Set the start date to be a random time in the future (up to 7 days)",
+									"pm.variables.set(\"startDate\", currentTimestamp + randomSeconds);",
+									"",
+									"// Set the end date to be 30 minutes after the start date",
+									"pm.variables.set(\"endDate\", pm.variables.get(\"startDate\") + 1800);",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "x-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"requestee_id\" : \"763\",\n    \"title\" : \"Sample Request Creation\",\n\t\"agenda\": \"Sample Agenda\",\n    \"start_date\" :\"1745229600\",\n    \"end_date\" : \"1745233200\",\n\t\"time_zone\" : \"Asia/Calcutta\"\n}\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/requestSessions/create?pageNo=1&pageSize=5",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "requestSessions", "create"],
+							"query": [
+								{
+									"key": "pageNo",
+									"value": "1"
+								},
+								{
+									"key": "pageSize",
+									"value": "5"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Session Requests List",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/requestSessions/list?pageNo=1&pageSize=5&status=REJECTED,ACCEPTED,REQUESTED",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "requestSessions", "list"],
+							"query": [
+								{
+									"key": "pageNo",
+									"value": "1"
+								},
+								{
+									"key": "pageSize",
+									"value": "5"
+								},
+								{
+									"key": "status",
+									"value": "REJECTED,ACCEPTED,REQUESTED"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Session Request Details",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/requestSessions/getDetails?request_session_id=4",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "requestSessions", "getDetails"],
+							"query": [
+								{
+									"key": "request_session_id",
+									"value": "4"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Availabilty",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/requestSessions/userAvailability?pageNo=1&pageSize=5&searchText&status=PUBLISHED,LIVE,COMPLETED&start_date=1746191987&end_date=1746193787",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "requestSessions", "userAvailability"],
+							"query": [
+								{
+									"key": "pageNo",
+									"value": "1"
+								},
+								{
+									"key": "pageSize",
+									"value": "5"
+								},
+								{
+									"key": "searchText",
+									"value": null
+								},
+								{
+									"key": "status",
+									"value": "PUBLISHED,LIVE,COMPLETED"
+								},
+								{
+									"key": "start_date",
+									"value": "1746191987"
+								},
+								{
+									"key": "end_date",
+									"value": "1746193787"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Accept Session Request",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [""],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [""],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "x-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "timezone",
+								"value": "Asia/Calcutta",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"request_session_id\" : \"1\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/requestSessions/accept?SkipValidation=true",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "requestSessions", "accept"],
+							"query": [
+								{
+									"key": "SkipValidation",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Session Request",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [""],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [""],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "x-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "timezone",
+								"value": "Asia/Calcutta",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"request_session_id\" : \"2\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "{{MentoringBaseUrl}}mentoring/v1/requestSessions/reject"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Connections",
+			"item": [
+				{
+					"name": "Send Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": \"2\",\n    \"message\": \"Hey i would like to connect with you.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/connections/initiate",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "connections", "initiate"]
+						},
+						"description": "### Create Default Rule\n\nThis endpoint allows the creation of a default rule for mentoring.\n\n#### Request Body\n\n- `type` (string): The type of the rule.\n- `target_field` (string): The target field for the rule.\n- `is_target_from_sessions_mentor` (boolean): Indicates if the target is from sessions mentor.\n- `requester_field` (string): The requester field for the rule.\n- `field_configs` (null): Field configurations (if any).\n- `matching_operator` (string): The matching operator for the rule.\n- `requester_roles` (array of strings): The roles of the requester.\n- `role_config.exclude` (boolean): Indicates if the role should be excluded.\n    \n\n#### Response\n\nThe response is in JSON format with the following schema:\n\n``` json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"responseCode\": {\"type\": \"string\"},\n    \"message\": {\"type\": \"string\"},\n    \"result\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"created_at\": {\"type\": \"string\"},\n        \"updated_at\": {\"type\": \"string\"},\n        \"id\": {\"type\": \"integer\"},\n        \"type\": {\"type\": \"string\"},\n        \"target_field\": {\"type\": \"string\"},\n        \"is_target_from_sessions_mentor\": {\"type\": \"boolean\"},\n        \"requester_field\": {\"type\": \"string\"},\n        \"field_configs\": {\"type\": \"null\"},\n        \"matching_operator\": {\"type\": \"string\"},\n        \"requester_roles\": {\n          \"type\": \"array\",\n          \"items\": {\"type\": \"string\"}\n        },\n        \"role_config\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"exclude\": {\"type\": \"boolean\"}\n          }\n        },\n        \"created_by\": {\"type\": \"integer\"},\n        \"updated_by\": {\"type\": \"integer\"},\n        \"organization_id\": {\"type\": \"integer\"},\n        \"deleted_at\": {\"type\": [\"string\", \"null\"]}\n      }\n    },\n    \"meta\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"formsVersion\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"id\": {\"type\": \"integer\"},\n              \"type\": {\"type\": \"string\"},\n              \"version\": {\"type\": \"integer\"}\n            }\n          }\n        },\n        \"correlation\": {\"type\": \"string\"},\n        \"meetingPlatform\": {\"type\": \"string\"}\n      }\n    }\n  }\n}\n\n ```"
+					},
+					"response": []
+				},
+				{
+					"name": "Pending Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/connections/pending?page=1&limit=100",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "connections", "pending"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Default: 1"
+								},
+								{
+									"key": "limit",
+									"value": "100",
+									"description": "Default: 100"
+								}
+							]
+						},
+						"description": "### Create Default Rule\n\nThis endpoint allows the creation of a default rule for mentoring.\n\n#### Request Body\n\n- `type` (string): The type of the rule.\n- `target_field` (string): The target field for the rule.\n- `is_target_from_sessions_mentor` (boolean): Indicates if the target is from sessions mentor.\n- `requester_field` (string): The requester field for the rule.\n- `field_configs` (null): Field configurations (if any).\n- `matching_operator` (string): The matching operator for the rule.\n- `requester_roles` (array of strings): The roles of the requester.\n- `role_config.exclude` (boolean): Indicates if the role should be excluded.\n    \n\n#### Response\n\nThe response is in JSON format with the following schema:\n\n``` json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"responseCode\": {\"type\": \"string\"},\n    \"message\": {\"type\": \"string\"},\n    \"result\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"created_at\": {\"type\": \"string\"},\n        \"updated_at\": {\"type\": \"string\"},\n        \"id\": {\"type\": \"integer\"},\n        \"type\": {\"type\": \"string\"},\n        \"target_field\": {\"type\": \"string\"},\n        \"is_target_from_sessions_mentor\": {\"type\": \"boolean\"},\n        \"requester_field\": {\"type\": \"string\"},\n        \"field_configs\": {\"type\": \"null\"},\n        \"matching_operator\": {\"type\": \"string\"},\n        \"requester_roles\": {\n          \"type\": \"array\",\n          \"items\": {\"type\": \"string\"}\n        },\n        \"role_config\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"exclude\": {\"type\": \"boolean\"}\n          }\n        },\n        \"created_by\": {\"type\": \"integer\"},\n        \"updated_by\": {\"type\": \"integer\"},\n        \"organization_id\": {\"type\": \"integer\"},\n        \"deleted_at\": {\"type\": [\"string\", \"null\"]}\n      }\n    },\n    \"meta\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"formsVersion\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"id\": {\"type\": \"integer\"},\n              \"type\": {\"type\": \"string\"},\n              \"version\": {\"type\": \"integer\"}\n            }\n          }\n        },\n        \"correlation\": {\"type\": \"string\"},\n        \"meetingPlatform\": {\"type\": \"string\"}\n      }\n    }\n  }\n}\n\n ```"
+					},
+					"response": []
+				},
+				{
+					"name": "Connected users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/connections/list?page=1&limit=20",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "connections", "list"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Default: 1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "search",
+									"value": "YXNhc2Q=",
+									"disabled": true
+								},
+								{
+									"key": "organization_ids",
+									"value": "1,2",
+									"disabled": true
+								},
+								{
+									"key": "area_of_expertise",
+									"value": "educational_leadership",
+									"disabled": true
+								}
+							]
+						},
+						"description": "### Create Default Rule\n\nThis endpoint allows the creation of a default rule for mentoring.\n\n#### Request Body\n\n- `type` (string): The type of the rule.\n- `target_field` (string): The target field for the rule.\n- `is_target_from_sessions_mentor` (boolean): Indicates if the target is from sessions mentor.\n- `requester_field` (string): The requester field for the rule.\n- `field_configs` (null): Field configurations (if any).\n- `matching_operator` (string): The matching operator for the rule.\n- `requester_roles` (array of strings): The roles of the requester.\n- `role_config.exclude` (boolean): Indicates if the role should be excluded.\n    \n\n#### Response\n\nThe response is in JSON format with the following schema:\n\n``` json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"responseCode\": {\"type\": \"string\"},\n    \"message\": {\"type\": \"string\"},\n    \"result\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"created_at\": {\"type\": \"string\"},\n        \"updated_at\": {\"type\": \"string\"},\n        \"id\": {\"type\": \"integer\"},\n        \"type\": {\"type\": \"string\"},\n        \"target_field\": {\"type\": \"string\"},\n        \"is_target_from_sessions_mentor\": {\"type\": \"boolean\"},\n        \"requester_field\": {\"type\": \"string\"},\n        \"field_configs\": {\"type\": \"null\"},\n        \"matching_operator\": {\"type\": \"string\"},\n        \"requester_roles\": {\n          \"type\": \"array\",\n          \"items\": {\"type\": \"string\"}\n        },\n        \"role_config\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"exclude\": {\"type\": \"boolean\"}\n          }\n        },\n        \"created_by\": {\"type\": \"integer\"},\n        \"updated_by\": {\"type\": \"integer\"},\n        \"organization_id\": {\"type\": \"integer\"},\n        \"deleted_at\": {\"type\": [\"string\", \"null\"]}\n      }\n    },\n    \"meta\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"formsVersion\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"id\": {\"type\": \"integer\"},\n              \"type\": {\"type\": \"string\"},\n              \"version\": {\"type\": \"integer\"}\n            }\n          }\n        },\n        \"correlation\": {\"type\": \"string\"},\n        \"meetingPlatform\": {\"type\": \"string\"}\n      }\n    }\n  }\n}\n\n ```"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Connection Info",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": \"34\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/connections/getInfo",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "connections", "getInfo"]
+						},
+						"description": "### Create Default Rule\n\nThis endpoint allows the creation of a default rule for mentoring.\n\n#### Request Body\n\n- `type` (string): The type of the rule.\n- `target_field` (string): The target field for the rule.\n- `is_target_from_sessions_mentor` (boolean): Indicates if the target is from sessions mentor.\n- `requester_field` (string): The requester field for the rule.\n- `field_configs` (null): Field configurations (if any).\n- `matching_operator` (string): The matching operator for the rule.\n- `requester_roles` (array of strings): The roles of the requester.\n- `role_config.exclude` (boolean): Indicates if the role should be excluded.\n    \n\n#### Response\n\nThe response is in JSON format with the following schema:\n\n``` json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"responseCode\": {\"type\": \"string\"},\n    \"message\": {\"type\": \"string\"},\n    \"result\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"created_at\": {\"type\": \"string\"},\n        \"updated_at\": {\"type\": \"string\"},\n        \"id\": {\"type\": \"integer\"},\n        \"type\": {\"type\": \"string\"},\n        \"target_field\": {\"type\": \"string\"},\n        \"is_target_from_sessions_mentor\": {\"type\": \"boolean\"},\n        \"requester_field\": {\"type\": \"string\"},\n        \"field_configs\": {\"type\": \"null\"},\n        \"matching_operator\": {\"type\": \"string\"},\n        \"requester_roles\": {\n          \"type\": \"array\",\n          \"items\": {\"type\": \"string\"}\n        },\n        \"role_config\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"exclude\": {\"type\": \"boolean\"}\n          }\n        },\n        \"created_by\": {\"type\": \"integer\"},\n        \"updated_by\": {\"type\": \"integer\"},\n        \"organization_id\": {\"type\": \"integer\"},\n        \"deleted_at\": {\"type\": [\"string\", \"null\"]}\n      }\n    },\n    \"meta\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"formsVersion\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"id\": {\"type\": \"integer\"},\n              \"type\": {\"type\": \"string\"},\n              \"version\": {\"type\": \"integer\"}\n            }\n          }\n        },\n        \"correlation\": {\"type\": \"string\"},\n        \"meetingPlatform\": {\"type\": \"string\"}\n      }\n    }\n  }\n}\n\n ```"
+					},
+					"response": []
+				},
+				{
+					"name": "Accept Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": \"1\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/connections/accept",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "connections", "accept"]
+						},
+						"description": "### Create Default Rule\n\nThis endpoint allows the creation of a default rule for mentoring.\n\n#### Request Body\n\n- `type` (string): The type of the rule.\n- `target_field` (string): The target field for the rule.\n- `is_target_from_sessions_mentor` (boolean): Indicates if the target is from sessions mentor.\n- `requester_field` (string): The requester field for the rule.\n- `field_configs` (null): Field configurations (if any).\n- `matching_operator` (string): The matching operator for the rule.\n- `requester_roles` (array of strings): The roles of the requester.\n- `role_config.exclude` (boolean): Indicates if the role should be excluded.\n    \n\n#### Response\n\nThe response is in JSON format with the following schema:\n\n``` json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"responseCode\": {\"type\": \"string\"},\n    \"message\": {\"type\": \"string\"},\n    \"result\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"created_at\": {\"type\": \"string\"},\n        \"updated_at\": {\"type\": \"string\"},\n        \"id\": {\"type\": \"integer\"},\n        \"type\": {\"type\": \"string\"},\n        \"target_field\": {\"type\": \"string\"},\n        \"is_target_from_sessions_mentor\": {\"type\": \"boolean\"},\n        \"requester_field\": {\"type\": \"string\"},\n        \"field_configs\": {\"type\": \"null\"},\n        \"matching_operator\": {\"type\": \"string\"},\n        \"requester_roles\": {\n          \"type\": \"array\",\n          \"items\": {\"type\": \"string\"}\n        },\n        \"role_config\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"exclude\": {\"type\": \"boolean\"}\n          }\n        },\n        \"created_by\": {\"type\": \"integer\"},\n        \"updated_by\": {\"type\": \"integer\"},\n        \"organization_id\": {\"type\": \"integer\"},\n        \"deleted_at\": {\"type\": [\"string\", \"null\"]}\n      }\n    },\n    \"meta\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"formsVersion\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"id\": {\"type\": \"integer\"},\n              \"type\": {\"type\": \"string\"},\n              \"version\": {\"type\": \"integer\"}\n            }\n          }\n        },\n        \"correlation\": {\"type\": \"string\"},\n        \"meetingPlatform\": {\"type\": \"string\"}\n      }\n    }\n  }\n}\n\n ```"
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-auth-token",
+								"value": "bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": \"1\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{MentoringBaseUrl}}mentoring/v1/connections/reject",
+							"host": ["{{MentoringBaseUrl}}mentoring"],
+							"path": ["v1", "connections", "reject"]
+						},
+						"description": "### Create Default Rule\n\nThis endpoint allows the creation of a default rule for mentoring.\n\n#### Request Body\n\n- `type` (string): The type of the rule.\n- `target_field` (string): The target field for the rule.\n- `is_target_from_sessions_mentor` (boolean): Indicates if the target is from sessions mentor.\n- `requester_field` (string): The requester field for the rule.\n- `field_configs` (null): Field configurations (if any).\n- `matching_operator` (string): The matching operator for the rule.\n- `requester_roles` (array of strings): The roles of the requester.\n- `role_config.exclude` (boolean): Indicates if the role should be excluded.\n    \n\n#### Response\n\nThe response is in JSON format with the following schema:\n\n``` json\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"responseCode\": {\"type\": \"string\"},\n    \"message\": {\"type\": \"string\"},\n    \"result\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"created_at\": {\"type\": \"string\"},\n        \"updated_at\": {\"type\": \"string\"},\n        \"id\": {\"type\": \"integer\"},\n        \"type\": {\"type\": \"string\"},\n        \"target_field\": {\"type\": \"string\"},\n        \"is_target_from_sessions_mentor\": {\"type\": \"boolean\"},\n        \"requester_field\": {\"type\": \"string\"},\n        \"field_configs\": {\"type\": \"null\"},\n        \"matching_operator\": {\"type\": \"string\"},\n        \"requester_roles\": {\n          \"type\": \"array\",\n          \"items\": {\"type\": \"string\"}\n        },\n        \"role_config\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"exclude\": {\"type\": \"boolean\"}\n          }\n        },\n        \"created_by\": {\"type\": \"integer\"},\n        \"updated_by\": {\"type\": \"integer\"},\n        \"organization_id\": {\"type\": \"integer\"},\n        \"deleted_at\": {\"type\": [\"string\", \"null\"]}\n      }\n    },\n    \"meta\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"formsVersion\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"object\",\n            \"properties\": {\n              \"id\": {\"type\": \"integer\"},\n              \"type\": {\"type\": \"string\"},\n              \"version\": {\"type\": \"integer\"}\n            }\n          }\n        },\n        \"correlation\": {\"type\": \"string\"},\n        \"meetingPlatform\": {\"type\": \"string\"}\n      }\n    }\n  }\n}\n\n ```"
 					},
 					"response": []
 				}

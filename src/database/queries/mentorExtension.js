@@ -52,6 +52,27 @@ module.exports = class MentorExtensionQueries {
 			}
 
 			const whereClause = _.isEmpty(customFilter) ? { user_id: userId } : customFilter
+			// If `meta` is included in `data`, use `jsonb_set` to merge changes safely
+			if (data.meta) {
+				let metaExpr = Sequelize.fn('COALESCE', Sequelize.col('meta'), Sequelize.literal(`'{}'::jsonb`))
+
+				for (const [key, value] of Object.entries(data.meta)) {
+					if (!/^[A-Za-z0-9_-]+$/.test(key)) {
+						throw new Error(`Invalid meta key: ${key}`)
+					}
+					metaExpr = Sequelize.fn(
+						'jsonb_set',
+						metaExpr,
+						Sequelize.literal(`'{${key}}'`),
+						Sequelize.literal(`${Sequelize.escape(JSON.stringify(value))}::jsonb`),
+						true
+					)
+				}
+
+				data.meta = metaExpr
+			} else {
+				delete data.meta
+			}
 
 			const result = unscoped
 				? await MentorExtension.unscoped().update(data, {
@@ -111,32 +132,42 @@ module.exports = class MentorExtensionQueries {
 	}
 	static async removeMentorDetails(userId) {
 		try {
-			return await MentorExtension.update(
-				{
-					designation: null,
-					area_of_expertise: [],
-					education_qualification: null,
-					rating: null,
-					meta: null,
-					stats: null,
-					tags: [],
-					configs: null,
-					mentor_visibility: null,
-					visible_to_organizations: [],
-					external_session_visibility: null,
-					external_mentor_visibility: null,
-					deleted_at: Date.now(),
-					name: null,
-					email: null,
-					phone: null,
-					image: null,
-				},
-				{
-					where: {
-						user_id: userId,
-					},
+			const modelAttributes = MentorExtension.rawAttributes
+
+			const fieldsToNullify = {}
+
+			for (const [key, attribute] of Object.entries(modelAttributes)) {
+				// Skip primary key or explicitly excluded fields
+				if (
+					attribute.primaryKey ||
+					key === 'user_id' ||
+					key === 'organization_id' || // required field
+					key === 'created_at' ||
+					key === 'updated_at' ||
+					key === 'is_mentor' // has default value
+				) {
+					continue
 				}
-			)
+
+				// Set types accordingly
+				if (attribute.type.constructor.name === 'ARRAY') {
+					fieldsToNullify[key] = []
+				} else if (attribute.type.key === 'JSON' || attribute.type.key === 'JSONB') {
+					fieldsToNullify[key] = {} // Or `{}` if you prefer default object
+				} else if (key === 'deleted_at') {
+					fieldsToNullify[key] = new Date() // Timestamp field
+				} else if (key === 'name') {
+					fieldsToNullify[key] = common.USER_NOT_FOUND
+				} else {
+					fieldsToNullify[key] = null
+				}
+			}
+
+			return await MentorExtension.update(fieldsToNullify, {
+				where: {
+					user_id: userId,
+				},
+			})
 		} catch (error) {
 			console.error('An error occurred:', error)
 			throw error
@@ -192,7 +223,7 @@ module.exports = class MentorExtensionQueries {
 	) {
 		try {
 			const excludeUserIds = ids.length === 0
-			let userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.join(',')})`
+			let userFilterClause = excludeUserIds ? '' : `user_id IN (${ids.map((id) => `'${id}'`).join(',')})`
 			let additionalFilter = ''
 			if (searchText) {
 				additionalFilter = `AND name ILIKE :search`

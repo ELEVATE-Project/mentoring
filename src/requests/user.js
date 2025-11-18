@@ -125,28 +125,31 @@ const validRoles = new Set([
  *   .catch(error => console.error(error));
  */
 
-const fetchUserDetails = async ({ token, userId }) => {
+const fetchUserDetails = async ({ token, userId, tenantCode }) => {
 	try {
-		let profileUrl = `${userBaseUrl}${endpoints.USER_PROFILE_DETAILS}`
-
+		const isTenantScoped = Boolean(tenantCode)
+		if (isTenantScoped && !userId) {
+			throw new Error('fetchUserDetails: tenantCode requires userId')
+		}
+		let profileUrl = `${userBaseUrl}${
+			isTenantScoped ? endpoints.USER_PROFILE_DETAILS_INTERNAL : endpoints.USER_PROFILE_DETAILS
+		}`
 		if (userId) profileUrl += `/${userId}`
+		if (isTenantScoped) profileUrl += `?tenant_code=${encodeURIComponent(tenantCode)}`
 
 		const isInternalTokenRequired = true
 		const userDetails = await requests.get(profileUrl, token, isInternalTokenRequired)
-
 		userDetails.data = userDetails.data || {}
 		userDetails.data.result = userDetails.data.result || {}
-		userDetails.data.result.user_roles = userDetails.data.result.user_roles || [{ title: common.MENTEE_ROLE }]
-
-		if (
-			userDetails.data.result.user_roles.length === 1 &&
-			userDetails.data.result.user_roles[0].title === common.MENTEE_ROLE
-		)
-			return userDetails
+		// userDetails.data.result.user_roles = userDetails.data.result.user_roles || [{ title: common.MENTEE_ROLE }]
 
 		let isMentor = false
 		let isMenteeRolePresent = false
-		const roles = userDetails.data.result.user_roles.reduce((acc, role) => {
+
+		const rawRoles = userDetails?.data?.result?.user_roles ||
+			userDetails?.data?.result?.organizations?.[0]?.roles || [{ title: common.MENTEE_ROLE }]
+
+		const roles = rawRoles.reduce((acc, role) => {
 			if (validRoles.has(role.title)) {
 				if (role.title === common.MENTOR_ROLE) isMentor = true
 				else if (role.title === common.MENTEE_ROLE) isMenteeRolePresent = true
@@ -157,6 +160,12 @@ const fetchUserDetails = async ({ token, userId }) => {
 
 		if (!isMentor && !isMenteeRolePresent) roles.push({ title: common.MENTEE_ROLE })
 		userDetails.data.result.user_roles = roles
+
+		const orgId = userDetails?.data?.result?.organization_id ?? userDetails?.data?.result?.organizations?.[0]?.id
+
+		if (orgId !== undefined && orgId !== null) {
+			userDetails.data.result.organization_id = orgId.toString()
+		}
 
 		return userDetails
 	} catch (error) {
@@ -734,7 +743,7 @@ const getDownloadableUrl = function (path) {
  *   .catch(error => console.error(error));
  */
 
-const getUserDetailedList = function (userIds) {
+const getUserDetailedList = function (userIds, deletedUsers = false, unscopped = false) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			// Fetch user details
@@ -743,7 +752,12 @@ const getUserDetailedList = function (userIds) {
 					result: [],
 				})
 			}
-			const userDetails = await menteeQueries.getAllUsersByIds(userIds)
+
+			let options = {}
+			if (deletedUsers) {
+				options = { paranoid: false }
+			}
+			const userDetails = await menteeQueries.getUsersByUserIds(userIds, options, unscopped)
 
 			// Extract unique organization IDs and create a mapping for organization details
 			const organizationIds = new Set()
@@ -754,7 +768,6 @@ const getUserDetailedList = function (userIds) {
 					organizationIds.add(user.organization_id)
 				})
 			}
-
 			// Fetch organization details
 			const filter = {
 				organization_id: {
@@ -774,8 +787,12 @@ const getUserDetailedList = function (userIds) {
 			// Enrich user details with roles and organization info
 			await Promise.all(
 				userDetails.map(async function (user) {
+					if (user.deleted_at) return user
 					if (user.email) {
-						user.email = await emailEncryption.decrypt(user.email)
+						let decryptedEmail = await emailEncryption.decryptAndValidate(user.email)
+						if (decryptedEmail) {
+							user.email = decryptedEmail
+						}
 					}
 
 					if (user.image) {
@@ -819,6 +836,21 @@ const getProfileDetails = async ({ tenantCode, userId }) => {
 	}
 }
 
+const getTenantDetails = async (tenantCode) => {
+	try {
+		let profileUrl = `${userBaseUrl}${endpoints.GET_TENANT_DETAILS}`
+
+		profileUrl += `/${tenantCode}`
+
+		const tenantDeatils = await requests.get(profileUrl, '', true)
+
+		return tenantDeatils
+	} catch (error) {
+		console.error(error)
+		throw error
+	}
+}
+
 module.exports = {
 	fetchOrgDetails, // dependent on releated orgs  And query on code
 	fetchUserDetails, // dependendt on languages and prefered lang etc
@@ -836,4 +868,5 @@ module.exports = {
 	organizationList,
 	getOrgDetails,
 	getProfileDetails,
+	getTenantDetails,
 }

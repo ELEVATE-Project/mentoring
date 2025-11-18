@@ -29,7 +29,6 @@ module.exports = class Sessions {
 		try {
 			// check if notifyUser is true or false. By default true
 			const notifyUser = req.query.notifyUser ? req.query.notifyUser.toLowerCase() === 'true' : true
-
 			if (req.params.id) {
 				if (req.headers.timezone) {
 					req.body['time_zone'] = req.headers.timezone
@@ -41,7 +40,8 @@ module.exports = class Sessions {
 					req.decodedToken.id,
 					req.method,
 					req.decodedToken.organization_id,
-					notifyUser
+					notifyUser,
+					req.decodedToken.tenant_code
 				)
 
 				return sessionUpdated
@@ -49,12 +49,14 @@ module.exports = class Sessions {
 				if (req.headers.timezone) {
 					req.body['time_zone'] = req.headers.timezone
 				}
+
 				const sessionCreated = await sessionService.create(
 					req.body,
 					req.decodedToken.id,
 					req.decodedToken.organization_id,
 					isAMentor(req.decodedToken.roles),
-					notifyUser
+					notifyUser,
+					req.decodedToken.tenant_code
 				)
 
 				return sessionCreated
@@ -161,6 +163,7 @@ module.exports = class Sessions {
 				isAMentor(req.decodedToken.roles),
 				isSelfEnrolled,
 				session,
+				null,
 				req.decodedToken.roles,
 				req.decodedToken.organization_id
 			)
@@ -201,7 +204,11 @@ module.exports = class Sessions {
 
 	async start(req) {
 		try {
-			const sessionsStarted = await sessionService.start(req.params.id, req.decodedToken)
+			const sessionsStarted = await sessionService.start(
+				req.params.id,
+				req.decodedToken,
+				req.decodedToken.tenant_code
+			)
 			return sessionsStarted
 		} catch (error) {
 			return error
@@ -376,7 +383,11 @@ module.exports = class Sessions {
 	 */
 	async bulkSessionCreate(req) {
 		try {
-			const sessionUploadRes = await sessionService.bulkSessionCreate(req.body.file_path, req.decodedToken)
+			const sessionUploadRes = await sessionService.bulkSessionCreate(
+				req.body.file_path,
+				req.decodedToken,
+				req.decodedToken.tenant_code
+			)
 			return sessionUploadRes
 		} catch (error) {
 			return error

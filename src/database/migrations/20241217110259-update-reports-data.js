@@ -99,7 +99,7 @@ module.exports = {
 							filterType: '=',
 							isEntityType: false,
 							defaultValues: [
-								{ label: 'ALL', value: ['PUBLIC','PRIVATE'] },
+								{ label: 'ALL', value: ['PUBLIC', 'PRIVATE'] },
 								{ label: 'PUBLIC', value: 'PUBLIC' },
 								{ label: 'PRIVATE', value: 'PRIVATE' },
 							],
@@ -282,7 +282,7 @@ module.exports = {
 							filterType: '=',
 							isEntityType: false,
 							defaultValues: [
-								{ label: 'ALL', value: ['PUBLIC','PRIVATE'] },
+								{ label: 'ALL', value: ['PUBLIC', 'PRIVATE'] },
 								{ label: 'PUBLIC', value: 'PUBLIC' },
 								{ label: 'PRIVATE', value: 'PRIVATE' },
 							],

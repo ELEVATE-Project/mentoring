@@ -6,29 +6,17 @@ const { Parser } = require('@json2csv/plainjs')
 
 exports.getEnrolledMentees = async (sessionId, queryParams, userID) => {
 	try {
-		const mentees = await sessionAttendeesQueries.findAll({ session_id: sessionId })
+		const mentees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, { paranoid: false })
 		const menteeIds = mentees.map((mentee) => mentee.mentee_id)
 		let menteeTypeMap = {}
 		mentees.forEach((mentee) => {
-			menteeTypeMap[mentee.mentee_id] = mentee.type
+			const isDeleted = Boolean(mentee.deleted_at ?? mentee.deletedAt)
+			menteeTypeMap[mentee.mentee_id] = isDeleted ? '' : mentee.type
 		})
-		const options = {
-			attributes: {
-				exclude: [
-					'rating',
-					'stats',
-					'tags',
-					'configs',
-					'visible_to_organizations',
-					'external_session_visibility',
-					'external_mentee_visibility',
-					'experience',
-					'mentee_visibility',
-				],
-			},
-		}
+
 		let [enrolledUsers] = await Promise.all([
-			userRequests.getUserDetailedList(menteeIds).then((result) => result.result),
+			userRequests.getUserDetailedList(menteeIds, true, true).then((result) => result.result),
+
 		])
 
 		enrolledUsers.forEach((user) => {
@@ -77,7 +65,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID) => {
 						: '',
 					email: user.email,
 					type: user.type,
-					organization: user.organization.name,
+					organization: user.organization?.name || '',
 				}))
 			)
 

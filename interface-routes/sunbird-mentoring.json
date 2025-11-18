@@ -1,24 +1,29 @@
 {
 	"routes": [
 		{
-            "sourceRoute": "/interface/v1/mentors/details/:id",
-            "type": "GET",
-            "priority": "MUST_HAVE",
-            "inSequence": true,
-            "orchestrated": true,
-	    "service": "mentoring",
-            "responseMessage": "Profile fetched successfully.",
-            "targetPackages": [
-                {
-                    "service": "mentoring",
-		    "basePackageName": "mentoring",
-                    "packageName": "sunbird-mentoring",
-                    "targetBody": [],
-                    "responseBody": []
-                }
-                
-            ]
-        },
+
+			"sourceRoute": "/interface/v1/mentors/details/:id",
+			"type": "GET",
+			"priority": "MUST_HAVE",
+			"inSequence": true,
+			"orchestrated": true,
+			"service": "mentoring",
+			"responseMessage": "Profile fetched successfully.",
+			"targetPackages": [
+				{
+					"service": "mentoring",
+					"basePackageName": "mentoring",
+					"packageName": "sunbird-mentoring",
+					"targetBody": [],
+					"responseBody": [
+						{
+							"sourceField": "user_roles",
+							"targetField": "mentoring.user_roles[]"
+						}
+					]
+				}
+			]
+		},
 		{
 			"sourceRoute": "/scheduler/jobs/create",
 			"type": "POST",
@@ -770,20 +775,22 @@
 			"sourceRoute": "/interface/v1/profile/read",
 			"type": "GET",
 			"priority": "MUST_HAVE",
-			"service": "mentoring",
 			"inSequence": false,
 			"orchestrated": false,
 			"responseMessage": "User Profile Fetched Successfully.",
 			"requiresCustomHandling": true,
 			"targetPackages": [
 				{
+					"service": "mentoring",
 					"basePackageName": "mentoring",
 					"packageName": "sunbird-mentoring",
 					"targetBody": [],
-					"responseBody": [{
+					"responseBody": [
+						{
 							"sourceField": "user_id",
 							"targetField": "id"
-						}]
+						}
+					]
 				}
 			]
 		},
@@ -2826,7 +2833,7 @@
 				"type": "public-low"
 			}
 		},
-	{
+		{
 			"sourceRoute": "/mentoring/v1/reports/filterList",
 			"type": "GET",
 			"priority": "MUST_HAVE",
@@ -3107,11 +3114,34 @@
 			"orchestrated": false,
 			"targetPackages": [
 				{
-					"basePackageName":"mentoring",
+					"basePackageName": "mentoring",
 					"packageName": "elevate-mentoring"
 				}
 			]
+		},
+		{
+            "sourceRoute": "/interface/v1/mentors/details/:id",
+            "type": "GET",
+            "priority": "MUST_HAVE",
+            "inSequence": true,
+            "orchestrated": true,
+            "responseMessage": "Profile fetched successfully.",
+            "targetPackages": [
+                {
+                    "service": "mentoring",
+			"basePackageName": "mentoring",
+                    "packageName": "sunbird-mentoring",
+                    "targetBody": [],
+                    "responseBody": [
+						{
+							"sourceField": "user_roles",
+							"targetField": "mentoring.user_roles[]"
+						}
+					]
+                }
+                
+            ]
+        }
 		}
-	
 	]
 }

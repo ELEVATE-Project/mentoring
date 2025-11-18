@@ -48,3 +48,21 @@ exports.findAll = async (filter, options = {}, returnUniqueSessionIds = false) =
 		return error
 	}
 }
+
+/**
+ * Update SessionOwnership table rows with provided data and conditions
+ * @param {Object} data - Fields to update (e.g., { deleted_at: new Date() })
+ * @param {Object} where - WHERE condition (e.g., { id: sessionIds })
+ * @returns {Promise<number>} Number of affected rows
+ */
+exports.updateRecords = async (data, options = {}) => {
+	try {
+		if (!options.where || Object.keys(options.where).length === 0) {
+			throw new Error('updateRecords: "where" condition is required')
+		}
+		const result = await SessionOwnership.update(data, options)
+		return Array.isArray(result) ? result[0] : result // Sequelize returns [number of affected rows]
+	} catch (error) {
+		throw error
+	}
+}

@@ -92,5 +92,4 @@ echo "$jsonData" | jq -c '.[]' | while read -r item; do
     echo "$query" >> "$DUMP_FILE"
 done
 
-
 echo "Queries written to: $DUMP_FILE"

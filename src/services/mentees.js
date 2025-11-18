@@ -23,11 +23,14 @@ const { getEnrolledMentees } = require('@helpers/getEnrolledMentees')
 const responses = require('@helpers/responses')
 const permissions = require('@helpers/getPermissions')
 const { buildSearchFilter } = require('@helpers/search')
-const { defaultRulesFilter } = require('@helpers/defaultRules')
+const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/defaultRules')
 
 const defaultSearchConfig = require('@configs/search.json')
 const emailEncryption = require('@utils/emailEncryption')
+const communicationHelper = require('@helpers/communications')
 const menteeExtensionQueries = require('@database/queries/userExtension')
+const { checkIfUserIsAccessible } = require('@helpers/saasUserAccessibility')
+const connectionQueries = require('@database/queries/connection')
 const getOrgIdAndEntityTypes = require('@helpers/getOrgIdAndEntityTypewithEntitiesBasedOnPolicy')
 const searchConfig = require('@root/config.json')
 
@@ -67,7 +70,21 @@ module.exports = class MenteesHelper {
 		const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
 		//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
-		const processDbResponse = utils.processDbResponse(mentee, validationData)
+		let processDbResponse = utils.processDbResponse(mentee, validationData)
+
+		const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+		let displayProperties = [
+			{
+				key: 'organization',
+				label: 'Organization',
+				visible: true,
+				visibility: 'main',
+				sequence: 1,
+			},
+		]
+		for (const entityType of sortedEntityType) {
+			displayProperties.push({ key: entityType.value, ...entityType.meta })
+		}
 
 		const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id)
 
@@ -79,6 +96,22 @@ module.exports = class MenteesHelper {
 
 		const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
 		menteeDetails.data.result.profile_mandatory_fields = profileMandatoryFields
+
+		let communications = null
+
+		if (mentee?.meta?.communications_user_id) {
+			try {
+				const chat = await communicationHelper.login(id)
+				communications = chat
+			} catch (error) {
+				console.error('Failed to log in to communication service:', error)
+			}
+		}
+
+		processDbResponse.meta = {
+			...processDbResponse.meta,
+			communications,
+		}
 
 		if (!menteeDetails.data.result.organization) {
 			const orgDetails = await organisationExtensionQueries.findOne(
@@ -97,6 +130,7 @@ module.exports = class MenteesHelper {
 				sessions_attended: totalSession,
 				...menteeDetails.data.result,
 				...processDbResponse,
+				displayProperties,
 			},
 		})
 	}
@@ -253,43 +287,59 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Mentees homeFeed.
 	 */
 
-	static async homeFeed(userId, isAMentor, page, limit, search, queryParams, roles, orgId) {
+	static async homeFeed(userId, isAMentor, page, limit, search, queryParams, roles, orgId, start_date, end_date) {
 		try {
 			/* All Sessions */
 
-			let allSessions = await this.getAllSessions(
-				page,
-				limit,
-				search,
-				userId,
-				queryParams,
-				isAMentor,
-				'',
-				roles,
-				orgId
-			)
+			let result = {}
 
-			if (allSessions.error && allSessions.error.missingField) {
-				return responses.failureResponse({
-					message: 'PROFILE_NOT_UPDATED',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
+			let scope = ['all', 'my']
+			if (queryParams.sessionScope) {
+				scope = queryParams.sessionScope.split(',').map((s) => s.trim().toLowerCase())
+				delete queryParams.sessionScope
+			}
+			let errors = []
+			if (scope.includes('all')) {
+				let allSessions = await this.getAllSessions(
+					page,
+					limit,
+					search,
+					userId,
+					queryParams,
+					isAMentor,
+					'',
+					roles,
+					orgId
+				)
+
+				if (allSessions.error && allSessions.error.missingField) {
+					errors.push({ scope: 'all', message: 'PROFILE_NOT_UPDATED' })
+				} else {
+					result.all_sessions = allSessions.rows
+					result.allSessions_count = allSessions.count
+				}
+			}
+
+			if (scope.includes('my')) {
+				try {
+					let mySessions = await this.getMySessions(page, limit, search, userId, start_date, end_date)
+					result.my_sessions = mySessions.rows
+					result.my_sessions_count = mySessions.count
+				} catch (error) {
+					// Handle error similarly to getAllSessions or add to errors array
+					console.error('Error fetching my sessions:', error)
+				}
 			}
 
 			/* My Sessions */
-			let mySessions = await this.getMySessions(page, limit, search, userId)
 
-			const result = {
-				all_sessions: allSessions.rows,
-				my_sessions: mySessions.rows,
-			}
 			const feedbackData = await feedbackHelper.pending(userId, isAMentor)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'SESSION_FETCHED_SUCCESSFULLY',
 				result: result,
+				error: errors,
 				meta: {
 					type: 'feedback',
 					data: feedbackData.result,
@@ -578,37 +628,21 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - List of enrolled sessions
 	 */
 
-	static async getMySessions(page, limit, search, userId) {
+	static async getMySessions(page, limit, search, userId, startDate, endDate) {
 		try {
-			const upcomingSessions = await sessionQueries.getUpcomingSessions(page, limit, search, userId)
-			const upcomingSessionIds = upcomingSessions.rows.map((session) => session.id)
-			const usersUpcomingSessions = await sessionAttendeesQueries.usersUpcomingSessions(
+			const sessionDetails = await sessionQueries.getEnrolledSessions(
+				page,
+				limit,
+				search,
 				userId,
-				upcomingSessionIds
+				startDate,
+				endDate
 			)
 
-			let sessionAndMenteeMap = {}
-			usersUpcomingSessions.forEach((session) => {
-				sessionAndMenteeMap[session.session_id] = session.type
-			})
-
-			const usersUpcomingSessionIds = usersUpcomingSessions.map(
-				(usersUpcomingSession) => usersUpcomingSession.session_id
-			)
-
-			const attributes = { exclude: ['mentee_password', 'mentor_password'] }
-			let sessionDetails = await sessionQueries.findAndCountAll(
-				{ id: usersUpcomingSessionIds },
-				{ order: [['start_date', 'ASC']] },
-				{ attributes: attributes }
-			)
-			if (sessionDetails.rows.length > 0) {
-				sessionDetails.rows.forEach((session) => {
-					if (sessionAndMenteeMap.hasOwnProperty(session.id)) {
-						session.enrolled_type = sessionAndMenteeMap[session.id]
-					}
-				})
-
+			if (!sessionDetails || typeof sessionDetails.count !== 'number' || !Array.isArray(sessionDetails.rows)) {
+				return { rows: [], count: 0 }
+			}
+			if (sessionDetails.count > 0) {
 				const uniqueOrgIds = [...new Set(sessionDetails.rows.map((obj) => obj.mentor_organization_id))]
 				sessionDetails.rows = await entityTypeService.processEntityTypesToAddValueLabels(
 					sessionDetails.rows,
@@ -616,8 +650,9 @@ module.exports = class MenteesHelper {
 					common.sessionModelName,
 					'mentor_organization_id'
 				)
+				sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows)
+				sessionDetails.rows = sessionDetails.rows.map((r) => ({ ...r, is_enrolled: true }))
 			}
-			sessionDetails.rows = await this.sessionMentorDetails(sessionDetails.rows)
 
 			return sessionDetails
 		} catch (error) {
@@ -666,7 +701,7 @@ module.exports = class MenteesHelper {
 			const mentorDetails = await menteeQueries.getUsersByUserIds(
 				mentorIds,
 				{
-					attributes: ['user_id', 'organization_id'],
+					attributes: ['name', 'user_id', 'organization_id'],
 				},
 				true
 			)
@@ -750,7 +785,6 @@ module.exports = class MenteesHelper {
 				orgId,
 				organization_name
 			)
-
 			data.user_id = userId
 
 			const defaultOrgId = await getDefaultOrgId()
@@ -798,7 +832,6 @@ module.exports = class MenteesHelper {
 				...saasPolicyData,
 				visible_to_organizations: userOrgDetails.data.result.related_orgs,
 			}
-
 			const response = await menteeQueries.createMenteeExtension(data)
 			const processDbResponse = utils.processDbResponse(response.toJSON(), validationData)
 
@@ -823,16 +856,19 @@ module.exports = class MenteesHelper {
 	 * Update a mentee extension.
 	 * @method
 	 * @name updateMenteeExtension
-	 * @param {String} userId - User ID of the mentee.
 	 * @param {Object} data - Updated mentee extension data excluding user_id.
+	 * @param {String} userId - User ID of the mentee.
+	 * @param {String} orgId - Organization ID for validation.
 	 * @returns {Promise<Object>} - Updated mentee extension details.
 	 */
 	static async updateMenteeExtension(data, userId, orgId) {
 		try {
+			// Encrypt email if provided
 			if (data.email) data.email = emailEncryption.encrypt(data.email.toLowerCase())
 
-			let skipValidation = data.skipValidation ? data.skipValidation : false
-			// Remove certain data in case it is getting passed
+			let skipValidation = data.skipValidation || false
+
+			// Remove unnecessary data keys
 			const dataToRemove = [
 				'user_id',
 				'mentor_visibility',
@@ -842,31 +878,34 @@ module.exports = class MenteesHelper {
 				'external_mentee_visibility',
 				'mentee_visibility',
 			]
+			dataToRemove.forEach((key) => delete data[key])
 
-			dataToRemove.forEach((key) => {
-				if (data[key]) {
-					delete data[key]
-				}
-			})
+			// Fetch current mentee extension data
+			const currentUser = await menteeQueries.getMenteeExtension(userId)
+			if (!currentUser) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'MENTEE_EXTENSION_NOT_FOUND',
+				})
+			}
 
+			// Perform validation
 			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
+			if (!defaultOrgId) {
 				return responses.failureResponse({
 					message: 'DEFAULT_ORG_ID_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			}
 			const userExtensionsModelName = await menteeQueries.getModelName()
 			const filter = {
 				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [orgId, defaultOrgId],
-				},
+				organization_id: { [Op.in]: [orgId, defaultOrgId] },
 				model_names: { [Op.contains]: [userExtensionsModelName] },
 			}
 			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
 
-			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
 			let res = utils.validateInput(data, validationData, userExtensionsModelName, skipValidation)
 			if (!res.success) {
@@ -878,10 +917,11 @@ module.exports = class MenteesHelper {
 				})
 			}
 
+			// Restructure the data
 			let userExtensionModel = await menteeQueries.getColumns()
-
 			data = utils.restructureBody(data, validationData, userExtensionModel)
 
+			// Handle organization update logic if organization data is provided
 			if (data?.organization?.id) {
 				//Do a org policy update for the user only if the data object explicitly includes an
 				//organization.id. This is added for the users/update workflow where
@@ -905,14 +945,29 @@ module.exports = class MenteesHelper {
 					new Set([...userOrgDetails.data.result.related_orgs, data.organization.id])
 				)
 			}
+
+			// Update the database
 			const [updateCount, updatedUser] = await menteeQueries.updateMenteeExtension(userId, data, {
 				returning: true,
 				raw: true,
 			})
 
+			if (currentUser?.meta?.communications_user_id) {
+				const promises = []
+				if (data.name && data.name !== currentUser.name) {
+					promises.push(communicationHelper.updateUser(userId, data.name))
+				}
+
+				if (data.image && data.image !== currentUser.image) {
+					const downloadableUrl = (await userRequests.getDownloadableUrl(data.image))?.result
+					promises.push(communicationHelper.updateAvatar(userId, downloadableUrl))
+				}
+
+				await Promise.all(promises)
+			}
+
 			if (updateCount === 0) {
 				const fallbackUpdatedUser = await menteeQueries.getMenteeExtension(userId)
-				console.log(fallbackUpdatedUser)
 				if (!fallbackUpdatedUser) {
 					return responses.failureResponse({
 						statusCode: httpStatusCode.not_found,
@@ -928,8 +983,8 @@ module.exports = class MenteesHelper {
 				})
 			}
 
+			// Return updated data
 			const processDbResponse = utils.processDbResponse(updatedUser[0], validationData)
-
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'MENTEE_EXTENSION_UPDATED',
@@ -1042,13 +1097,24 @@ module.exports = class MenteesHelper {
 				organization_ids = [...organizations.result]
 
 				if (organization_ids.length > 0) {
-					//get organization list
-					const organizationList = await userRequests.organizationList(organization_ids)
+					const defaultOrgId = await getDefaultOrgId()
+					if (!defaultOrgId) {
+						return responses.failureResponse({
+							message: 'DEFAULT_ORG_ID_NOT_SET',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+
+					let orgIdsWithoutDefaultOrg = organization_ids
+					if (organization_ids.length > 1) {
+						orgIdsWithoutDefaultOrg = organization_ids.filter((orgId) => orgId != defaultOrgId)
+					}
+
+					const organizationList = await userRequests.organizationList(orgIdsWithoutDefaultOrg)
 					if (organizationList.success && organizationList.data?.result?.length > 0) {
 						result.organizations = organizationList.data.result
 					}
-
-					const defaultOrgId = await getDefaultOrgId()
 
 					const modelName = []
 
@@ -1136,6 +1202,48 @@ module.exports = class MenteesHelper {
 			const query = utils.processQueryParametersWithExclusions(queryParams)
 			const userExtensionModelName = await menteeQueries.getModelName()
 
+			let connectedMenteeIds = []
+			let connectedMenteesCount
+			if (queryParams.connected_mentees === 'true') {
+				const connectedQueryParams = { ...queryParams }
+				delete connectedQueryParams.connected_mentees
+				const connectedQuery = utils.processQueryParametersWithExclusions(connectedQueryParams)
+
+				const connectionDetails = await connectionQueries.getConnectionsDetails(
+					pageNo,
+					pageSize,
+					connectedQuery,
+					searchText,
+					queryParams.mentorId ? queryParams.mentorId : userId,
+					organization_ids,
+					[] // roles can be passed if needed
+				)
+
+				if (connectionDetails?.data?.length > 0) {
+					pageNo = null
+					pageSize = null
+					connectedMenteeIds = connectionDetails.data.map((item) => item.user_id)
+					// if (!connectedMenteeIds.includes(userId)) {
+					// 	connectedMenteeIds.push(userId)
+					// }
+				}
+				if (typeof connectionDetails?.count === 'number') {
+					connectedMenteesCount = connectionDetails.count
+				}
+
+				// If there are no connected mentees, short-circuit and return empty
+				if (connectedMenteeIds.length === 0) {
+					return responses.successResponse({
+						statusCode: httpStatusCode.ok,
+						message: 'MENTEE_LIST',
+						result: {
+							data: [],
+							count: 0,
+						},
+					})
+				}
+			}
+
 			let validationData = await entityTypeQueries.findAllEntityTypesAndEntities({
 				status: common.ACTIVE_STATUS,
 				model_names: { [Op.overlap]: [userExtensionModelName] },
@@ -1159,7 +1267,7 @@ module.exports = class MenteesHelper {
 
 			const saasFilter = await this.filterMenteeListBasedOnSaasPolicy(userId, isAMentor, organization_ids)
 			let extensionDetails = await menteeQueries.getAllUsers(
-				[],
+				connectedMenteeIds ? connectedMenteeIds : [],
 				pageNo,
 				pageSize,
 				filteredQuery,
@@ -1209,6 +1317,16 @@ module.exports = class MenteesHelper {
 					id: user.user_id, // Add 'id' key, to be removed later
 					email: user.email ? await emailEncryption.decrypt(user.email) : null, // Decrypt email
 					organization: orgMap[user.organization_id] || null,
+					image: user.image
+						? await (async () => {
+								try {
+									return (await utils.getDownloadableUrl(user.image)) ?? null
+								} catch (error) {
+									console.error(`Failed to get downloadable URL for user ${user.user_id}:`, error)
+									return null
+								}
+						  })()
+						: null,
 				}))
 			)
 
@@ -1249,7 +1367,7 @@ module.exports = class MenteesHelper {
 				message: 'MENTEE_LIST',
 				result: {
 					data: extensionDetails.data,
-					count: extensionDetails.count,
+					count: queryParams.connected_mentees === 'true' ? connectedMenteesCount : extensionDetails.count,
 				},
 			})
 		} catch (error) {
@@ -1403,6 +1521,263 @@ module.exports = class MenteesHelper {
 			return isAccessible
 		} catch (error) {
 			return error
+		}
+	}
+
+	/**
+	 * Retrieves a communication token for the logged in user.
+	 *
+	 * This asynchronous method logs in a user using their unique identifier (`id`)
+	 * to obtain a communication token and other relevant details, then returns a
+	 * standardized success response with the token, user ID, and metadata.
+	 *
+	 * @async
+	 * @function getCommunicationToken
+	 * @param {string} id - The unique identifier of the user for whom the communication token is to be retrieved.
+	 * @returns {Promise<Object>} A promise that resolves to an object containing the response code, message, result data,
+	 * and additional metadata.
+	 *
+	 * @throws {Error} If the communicationHelper login process fails, this method may throw an error.
+	 *
+	 * @example
+	 * const response = await getCommunicationToken(123);
+	 * console.log(response);
+	 * // {
+	 * //   responseCode: "OK",
+	 * //   message: "Communication token fetched successfully!",
+	 * //   result: {
+	 * //     auth_token: "_GTFHENH422lGlLcgYQfu2GnnWO8bg6zY8ZHrXkcNmN",
+	 * //     user_id: "Q9hz3jbPXkk3fXQoL"
+	 * //   },
+	 * //   meta: {
+	 * //     correlation: "69893cb9-8b0c-44f9-945e-1bff2174af0d",
+	 * //     meetingPlatform: "BBB"
+	 * //   }
+	 * // }
+	 */
+	static async getCommunicationToken(id) {
+		try {
+			const token = await communicationHelper.login(id)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'COMMUNICATION_TOKEN_FETCHED_SUCCESSFULLY',
+				result: token,
+			})
+		} catch (error) {
+			if (error.message == 'unauthorized') {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'COMMUNICATION_TOKEN_NOT_FOUND',
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+		}
+	}
+
+	/**
+	 * Logs out a user by invoking the `communicationHelper.logout` function and
+	 * returns a success response upon successful logout. If the logout fails due to
+	 * an unauthorized error, returns a failure response indicating that the communication
+	 * token was not found.
+	 *
+	 * @async
+	 * @function logout
+	 * @param {string} id - The ID of the user to be logged out.
+	 * @returns {Promise<Object>} Resolves with a success response object if the logout is successful,
+	 * or a failure response object if an unauthorized error occurs.
+	 *
+	 * @throws {Error} If an error other than 'unauthorized' occurs, it will not be caught here and may be handled upstream.
+	 */
+	static async logout(id) {
+		try {
+			const response = await communicationHelper.logout(id)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'USER_LOGGED_OUT',
+				result: response,
+			})
+		} catch (error) {
+			if (error.message === 'unauthorized') {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'COMMUNICATION_TOKEN_NOT_FOUND',
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			throw error // rethrow other errors to be handled by a higher-level error handler
+		}
+	}
+
+	static async details(id, orgId, userId = '', isAMentor = '', roles = '') {
+		try {
+			let requestedUserExtension = await menteeQueries.getMenteeExtension(id)
+			if (!requestedUserExtension || (!isAMentor && requestedUserExtension.is_mentor == false)) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'USER_NOT_FOUND',
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			let totalSessionHosted
+			if (requestedUserExtension.is_mentor == true) {
+				// Get mentor visibility and org id
+				const validateDefaultRules = await validateDefaultRulesFilter({
+					ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
+					requesterId: userId,
+					roles: roles,
+					requesterOrganizationId: orgId,
+					data: requestedUserExtension,
+				})
+				if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
+					return responses.failureResponse({
+						message: 'PROFILE_NOT_UPDATED',
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+				if (!validateDefaultRules) {
+					return responses.failureResponse({
+						message: 'USER_NOT_FOUND',
+						statusCode: httpStatusCode.forbidden,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+				totalSessionHosted = await sessionQueries.countHostedSessions(id)
+			}
+			// Check for accessibility for reading shared mentor profile
+			const isAccessible = await checkIfUserIsAccessible(userId, requestedUserExtension)
+
+			// Throw access error
+			if (!isAccessible) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.forbidden,
+					message: 'PROFILE_RESTRICTED',
+				})
+			}
+
+			let mentorExtension
+			if (requestedUserExtension) mentorExtension = requestedUserExtension
+			else mentorExtension = await mentorQueries.getMentorExtension(id)
+
+			mentorExtension = utils.deleteProperties(mentorExtension, [
+				'user_id',
+				'visible_to_organizations',
+				'image',
+				'email',
+				'phone',
+				'settings',
+			])
+
+			const defaultOrgId = await getDefaultOrgId()
+			if (!defaultOrgId)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_ID_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			const menteeExtensionsModelName = await menteeQueries.getModelName()
+
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
+				status: 'ACTIVE',
+				organization_id: {
+					[Op.in]: [requestedUserExtension.organization_id, defaultOrgId],
+				},
+				model_names: { [Op.contains]: [menteeExtensionsModelName] },
+			})
+
+			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, requestedUserExtension.organization_id)
+			const processDbResponse = utils.processDbResponse(mentorExtension, validationData)
+
+			const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
+
+			processDbResponse.profile_mandatory_fields = profileMandatoryFields
+
+			const connection = await connectionQueries.getConnection(userId, id)
+
+			const orgDetails = await organisationExtensionQueries.findOne(
+				{ organization_id: requestedUserExtension.organization_id },
+				{ attributes: ['name'] }
+			)
+			processDbResponse['organization'] = {
+				id: requestedUserExtension.organization_id,
+				name: orgDetails.name,
+			}
+
+			const totalSession = await sessionAttendeesQueries.countEnrolledSessions(id)
+
+			processDbResponse.sessions_attended = totalSession
+			processDbResponse.sessions_hosted = totalSessionHosted
+
+			processDbResponse.is_connected = Boolean(connection)
+
+			if (processDbResponse.is_connected) {
+				processDbResponse.connection_details = connection.meta
+			}
+
+			const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
+			let displayProperties = [
+				{
+					key: 'organization',
+					label: 'Organization',
+					visible: true,
+					visibility: 'main',
+					sequence: 1,
+				},
+			]
+			for (const entityType of sortedEntityType) {
+				displayProperties.push({ key: entityType.value, ...entityType.meta })
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'PROFILE_FTECHED_SUCCESSFULLY',
+				result: {
+					...processDbResponse,
+					displayProperties,
+				},
+			})
+		} catch (error) {
+			console.error(error)
+			return error
+		}
+	}
+
+	/**
+	 * Resolves an external user ID to an internal user ID using the communication helper.
+	 * Returns a success response with the resolved user ID if successful,
+	 * or a failure response if the token is unauthorized or not found.
+	 *
+	 * @async
+	 * @static
+	 * @function externalMapping
+	 * @param {Object} body - The request payload containing the external user ID.
+	 * @param {string} body.external_user_id - The external user identifier to resolve.
+	 * @returns {Promise<Object>} A standardized success or failure response object.
+	 *
+	 * @example
+	 * const response = await ClassName.externalMapping({ external_user_id: 'abc-123' });
+	 * // response => { statusCode: 200, message: 'COMMUNICATION_TOKEN_FETCHED_SUCCESSFULLY', result: 'internal-user-id' }
+	 */
+	static async externalMapping(body) {
+		try {
+			const userId = await communicationHelper.resolve(body.external_user_id)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'COMMUNICATION_MAPPING_FETCHED_SUCCESSFULLY',
+				result: userId,
+			})
+		} catch (error) {
+			if (error.message == 'unauthorized') {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'COMMUNICATION_TOKEN_NOT_FOUND',
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 		}
 	}
 }

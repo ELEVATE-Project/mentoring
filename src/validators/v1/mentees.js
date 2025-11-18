@@ -7,7 +7,20 @@
 
 module.exports = {
 	sessions: (req) => {},
-	homeFeed: (req) => {},
+	homeFeed: (req) => {
+		req.checkQuery('sessionScope')
+			.optional()
+			.custom((value) => {
+				const validScopes = ['all', 'my']
+				const scopes = value.split(',').map((s) => s.trim().toLowerCase())
+				const invalidScopes = scopes.filter((s) => !validScopes.includes(s))
+				if (invalidScopes.length > 0) {
+					return false
+				}
+				return true
+			})
+			.withMessage('INVALID_SESSION_SCOPE')
+	},
 
 	reports: (req) => {
 		req.checkQuery('filterType')

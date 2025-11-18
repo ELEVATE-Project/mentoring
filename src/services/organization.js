@@ -59,7 +59,7 @@ module.exports = class OrganizationService {
 				organization_id: eventBody.entityId,
 				created_by: eventBody.created_by,
 				updated_by: eventBody.created_by,
-				name: eventBody.name
+				name: eventBody.name,
 			}
 			console.log('EXTENSION DATA BEFORE INSERT: ', extensionData)
 			const orgExtension = await organisationExtensionQueries.upsert(extensionData)

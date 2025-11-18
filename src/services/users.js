@@ -11,6 +11,8 @@ const mentorsService = require('@services/mentors')
 const menteesService = require('@services/mentees')
 const orgAdminService = require('@services/org-admin')
 
+const userServiceHelper = require('@helpers/users')
+
 module.exports = class UserHelper {
 	/**
 	 * Get user list.
@@ -99,8 +101,9 @@ module.exports = class UserHelper {
 	static async update(updateData) {
 		try {
 			const userId = updateData.userId
+
 			const isNewUser = await this.#checkUserExistence(userId)
-			const result = await this.#createOrUpdateUserAndOrg(userId, isNewUser)
+			const result = await this.#createOrUpdateUserAndOrg(userId, isNewUser, undefined, updateData?.tenantCode)
 			return result
 		} catch (error) {
 			console.log(error)
@@ -114,6 +117,10 @@ module.exports = class UserHelper {
 		const isNewUser = await this.#checkUserExistence(bodyData.id)
 		if (isNewUser) {
 			result = await this.#createUserWithBody(bodyData)
+		} else {
+			bodyData.new_roles = bodyData.newValues?.organizations?.[0]?.roles ?? []
+			const targetHasMentorRole = bodyData.new_roles.some((role) => role.title === common.MENTOR_ROLE)
+			result = await this.#createOrUpdateUserAndOrg(bodyData.id, isNewUser, targetHasMentorRole)
 		}
 		return result
 	}
@@ -140,8 +147,8 @@ module.exports = class UserHelper {
 				result: createResult.result,
 			})
 	}
-	static async #createOrUpdateUserAndOrg(userId, isNewUser) {
-		const userDetails = await userRequests.fetchUserDetails({ userId })
+	static async #createOrUpdateUserAndOrg(userId, isNewUser, targetHasMentorRole = undefined, tenantCode = '') {
+		const userDetails = await userRequests.fetchUserDetails({ userId, tenantCode })
 		if (!userDetails?.data?.result) {
 			return responses.failureResponse({
 				message: 'SOMETHING_WENT_WRONG',
@@ -170,10 +177,9 @@ module.exports = class UserHelper {
 			})
 		}
 		const userExtensionData = this.#getExtensionData(userDetails.data.result, orgExtension)
-
 		const createOrUpdateResult = isNewUser
 			? await this.#createUser(userExtensionData)
-			: await this.#updateUser(userExtensionData)
+			: await this.#updateUser(userExtensionData, targetHasMentorRole)
 		if (createOrUpdateResult.statusCode != httpStatusCode.ok) return createOrUpdateResult
 		else
 			return responses.successResponse({
@@ -185,10 +191,10 @@ module.exports = class UserHelper {
 
 	static #getExtensionData(userDetails, orgExtension) {
 		const data = {
-			id: userDetails.id,
+			id: userDetails.id.toString(),
 			name: userDetails?.name,
 			organization: {
-				id: orgExtension.organization_id,
+				id: orgExtension.organization_id.toString(),
 			},
 		}
 
@@ -201,7 +207,7 @@ module.exports = class UserHelper {
 			competency: userDetails?.competency,
 			designation: userDetails?.designation,
 			language: userDetails?.language,
-			image: userDetails?.image ? userDetails.image : '',
+			image: userDetails?.image_cloud_path || userDetails?.image || '',
 		}
 
 		// Add only defined values to the data object
@@ -239,8 +245,9 @@ module.exports = class UserHelper {
 
 	static #checkOrgChange = (existingOrgId, newOrgId) => existingOrgId !== newOrgId
 
-	static async #updateUser(userExtensionData) {
+	static async #updateUser(userExtensionData, targetHasMentorRole) {
 		const isAMentee = userExtensionData.roles.some((role) => role.title === common.MENTEE_ROLE)
+		const isAMentor = userExtensionData.roles.some((role) => role.title === common.MENTOR_ROLE)
 		const roleChangePayload = {
 			user_id: userExtensionData.id,
 			organization_id: userExtensionData.organization.id,
@@ -255,11 +262,18 @@ module.exports = class UserHelper {
 
 		if (!menteeExtension) throw new Error('User Not Found')
 
-		if (isAMentee && menteeExtension.is_mentor) {
+		if (isAMentor && !menteeExtension.is_mentor) {
+			roleChangePayload.current_roles = [common.MENTEE_ROLE]
+			roleChangePayload.new_roles = [common.MENTOR_ROLE]
+			isRoleChanged = true
+		}
+		if (!isAMentor && menteeExtension.is_mentor) {
 			roleChangePayload.current_roles = [common.MENTOR_ROLE]
 			roleChangePayload.new_roles = [common.MENTEE_ROLE]
 			isRoleChanged = true
-		} else if (!isAMentee && !menteeExtension.is_mentor) {
+		}
+
+		if (targetHasMentorRole) {
 			roleChangePayload.current_roles = [common.MENTEE_ROLE]
 			roleChangePayload.new_roles = [common.MENTOR_ROLE]
 			isRoleChanged = true
@@ -332,7 +346,7 @@ module.exports = class UserHelper {
 		if (!userDetails.data.result) {
 			return 'FAILED_TO_GET_REQUIRED_USER_DETAILS'
 		} else {
-			const requiredFields = ['id', 'user_roles', 'email', 'name', 'organization', 'organization_id']
+			const requiredFields = ['id', 'user_roles', 'name', 'organization_id']
 			for (const field of requiredFields) {
 				if (!userDetails.data.result[field] || userDetails.data.result[field] == null) {
 					return 'FAILED_TO_GET_REQUIRED_USER_DETAILS'
@@ -340,5 +354,28 @@ module.exports = class UserHelper {
 			}
 		}
 		return null
+	}
+
+	/**
+	 * Get user requestCount.
+	 * @method
+	 * @name requestCount
+	 * @param {String} userId 					- userId	.
+	 * @returns {JSON} 							- request count.
+	 */
+
+	static async requestCount(userId) {
+		try {
+			const response = await userServiceHelper.findRequestCounts(userId)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'REQUESTS_COUNT_FETCHED',
+				result: response,
+			})
+		} catch (error) {
+			console.log(error)
+			throw error
+		}
 	}
 }

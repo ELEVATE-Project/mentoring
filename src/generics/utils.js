@@ -292,6 +292,13 @@ function restructureBody(requestBody, entityData, allowedKeys) {
 						requestBody[currentFieldName].push('other') //This should cause error at DB write
 						requestBody.custom_entity_text[currentFieldName] = customEntities
 					}
+					if (
+						recognizedEntities.length === 0 &&
+						customEntities.length === 0 &&
+						!allowedKeys.includes(currentFieldName)
+					) {
+						requestBody.meta[currentFieldName] = []
+					}
 				} else {
 					if (!entityType.get('entities').has(currentFieldValue)) {
 						requestBody.custom_entity_text[currentFieldName] = {
@@ -712,6 +719,13 @@ function convertEntitiesForFilter(entityTypes) {
 
 		if (!result[key]) {
 			result[key] = []
+		}
+
+		if (entityType.allow_custom_entities) {
+			entityType.entities.push({
+				value: 'other',
+				label: 'other',
+			})
 		}
 
 		const newObj = {
@@ -1243,6 +1257,28 @@ function transformEntityTypes(input) {
 	return { entityTypes }
 }
 
+function sortData(data = [], path = 'meta.sequence') {
+	const getValue = (obj, path) => {
+		return path.split('.').reduce((acc, key) => acc?.[key], obj)
+	}
+
+	return [...data].sort((a, b) => {
+		const aVal = getValue(a, path)
+		const bVal = getValue(b, path)
+
+		if (aVal !== undefined && bVal !== undefined) {
+			const aNum = Number(aVal)
+			const bNum = Number(bVal)
+			if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum
+			// Fallback to string comparison for non-numeric values
+			return String(aVal).localeCompare(String(bVal))
+		}
+		if (aVal !== undefined) return -1
+		if (bVal !== undefined) return 1
+		return 0
+	})
+}
+
 module.exports = {
 	hash: hash,
 	getCurrentMonthRange,
@@ -1304,4 +1340,5 @@ module.exports = {
 	mapEntityTypeToData,
 	getDynamicEntityCondition,
 	transformEntityTypes,
+	sortData,
 }

@@ -193,11 +193,12 @@ module.exports = class EntityHelper {
 	 * @name processEntityTypesToAddValueLabels
 	 * @param {Array} responseData 				- data to modify
 	 * @param {Array} orgIds 					- org ids
-	 * @param {String} modelName 				- model name which the entity search is assocoated to.
+	 * @param {String} modelName 				- model name which the entity search is associated to.
 	 * @param {String} orgIdKey 				- In responseData which key represents org id
+	 * @param {ARRAY} entityType 				- Array of entity types value
 	 * @returns {JSON} 							- modified response data
 	 */
-	static async processEntityTypesToAddValueLabels(responseData, orgIds, modelName, orgIdKey) {
+	static async processEntityTypesToAddValueLabels(responseData, orgIds, modelName, orgIdKey, entityType) {
 		try {
 			const defaultOrgId = await getDefaultOrgId()
 			if (!defaultOrgId)
@@ -221,20 +222,9 @@ module.exports = class EntityHelper {
 					[Op.contains]: Array.isArray(modelName) ? modelName : [modelName],
 				},
 			}
-
-			let entityTypesWithEntities
-			const modelNames = Array.isArray(modelName) ? modelName : [modelName]
-			const cacheKey = `ENTITY_TYPES_orgs_${orgIds.join(',')}_models_${modelNames.join(',')}`
-
-			let entityCacheData = await utils.internalGet(cacheKey)
-			if (entityCacheData) {
-				entityTypesWithEntities = entityCacheData
-			} else {
-				entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
-				await utils.internalSet(cacheKey, entityTypesWithEntities)
-			}
+			if (entityType) filter.value = entityType
 			// get entityTypes with entities data
-
+     let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
 			entityTypesWithEntities = JSON.parse(JSON.stringify(entityTypesWithEntities))
 			if (!entityTypesWithEntities.length > 0) {
 				return responseData

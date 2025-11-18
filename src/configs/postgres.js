@@ -1,7 +1,6 @@
 require('module-alias/register')
 require('dotenv').config()
 
-
 let environmentData = require('../envVariables')()
 
 if (!environmentData.success) {

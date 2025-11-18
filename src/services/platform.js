@@ -21,10 +21,12 @@ module.exports = class platformHelper {
 			if (searchConfig.search) {
 				search_config = { search: searchConfig.search }
 			}
+
 			let config = {
 				meeting_platform: process.env.DEFAULT_MEETING_SERVICE,
 				session_mentee_limit: process.env.SESSION_MENTEE_LIMIT,
 				search_config: convertKeysToSnakeCase(search_config),
+				chat_config: process.env.ENABLE_CHAT,
 			}
 
 			return responses.successResponse({

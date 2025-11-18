@@ -82,6 +82,24 @@ exports.updateOne = async (filter, update, options = {}) => {
 	}
 }
 
+/**
+ * Update Session table rows with provided data and conditions
+ * @param {Object} data - Fields to update (e.g., { deleted_at: new Date() })
+ * @param {Object} where - WHERE condition (e.g., { id: sessionIds })
+ * @returns {Promise<number>} Number of affected rows
+ */
+exports.updateRecords = async (data, options = {}) => {
+	try {
+		if (!options.where || Object.keys(options.where).length === 0) {
+			throw new Error('updateRecords: "where" condition is required')
+		}
+		const result = await Session.update(data, options)
+		return Array.isArray(result) ? result[0] : result // Sequelize returns [number of affected rows]
+	} catch (error) {
+		throw error
+	}
+}
+
 exports.findAll = async (filter, options = {}) => {
 	try {
 		return await Session.findAll({
@@ -220,6 +238,8 @@ exports.removeAndReturnMentorSessions = async (userId) => {
 
 		const foundSessions = await Session.findAll({
 			where: {
+				mentor_id: userId,
+				created_by: userId,
 				id: { [Op.in]: sessionIds },
 				[Op.or]: [{ start_date: { [Op.gt]: currentEpochTime } }, { status: common.PUBLISHED_STATUS }],
 			},
@@ -227,16 +247,20 @@ exports.removeAndReturnMentorSessions = async (userId) => {
 		})
 
 		const sessionIdAndTitle = foundSessions.map((session) => {
-			return { id: session.id, title: session.title }
+			return { id: session.id, title: session.title, start_date: session.start_date }
 		})
 		const upcomingSessionIds = foundSessions.map((session) => session.id)
 
 		const updatedSessions = await Session.update(
 			{
 				deleted_at: currentDateTime,
+				mentor_name: common.USER_NOT_FOUND,
+				mentor_id: null,
 			},
 			{
 				where: {
+					mentor_id: userId,
+					created_by: userId,
 					id: { [Op.in]: upcomingSessionIds },
 				},
 			}
@@ -247,6 +271,7 @@ exports.removeAndReturnMentorSessions = async (userId) => {
 			},
 			{
 				where: {
+					user_id: userId,
 					session_id: { [Op.in]: upcomingSessionIds },
 				},
 			}
@@ -549,21 +574,38 @@ exports.getMentorsUpcomingSessions = async (page, limit, search, mentorId) => {
 		return error
 	}
 }
-exports.getUpcomingSessions = async (page, limit, search, userId) => {
+
+exports.getUpcomingSessions = async (page, limit, search, userId, startDate, endDate) => {
 	try {
 		const currentEpochTime = moment().unix()
-		const sessionData = await Session.findAndCountAll({
-			where: {
-				[Op.or]: [{ title: { [Op.iLike]: `%${search}%` } }], // Case-insensitive search
-				mentor_id: { [Op.ne]: userId },
-				end_date: {
-					[Op.gt]: currentEpochTime,
-				},
-				status: {
-					[Op.in]: [common.PUBLISHED_STATUS, common.LIVE_STATUS],
-				},
+		let whereCondition = {
+			[Op.or]: [{ title: { [Op.iLike]: `%${search}%` } }],
+			mentor_id: {
+				[Op.or]: [{ [Op.ne]: userId }, { [Op.is]: null }],
 			},
-			// order: [['created_at', 'DESC']],
+			end_date: {
+				[Op.gt]: currentEpochTime,
+			},
+			status: {
+				[Op.in]: [common.PUBLISHED_STATUS, common.LIVE_STATUS],
+			},
+		}
+
+		if (startDate && endDate) {
+			const startEpoch = startDate
+			const endEpoch = endDate
+
+			// Log to debug
+			console.log('Filtering sessions between:', startEpoch, 'and', endEpoch)
+
+			whereCondition.start_date = {
+				[Op.gte]: startEpoch,
+				[Op.lte]: endEpoch,
+			}
+		}
+
+		const sessionData = await Session.findAndCountAll({
+			where: whereCondition,
 			order: [['start_date', 'ASC']],
 			attributes: [
 				'id',
@@ -589,6 +631,74 @@ exports.getUpcomingSessions = async (page, limit, search, userId) => {
 	} catch (error) {
 		console.error(error)
 		return error
+	}
+}
+
+exports.getEnrolledSessions = async (page, limit, search, userId, startDate, endDate) => {
+	try {
+		const query = `
+		SELECT 
+			s.*,
+			sa.type AS enrolled_type,
+			sa.is_feedback_skipped
+		FROM session_attendees sa
+		INNER JOIN sessions s ON sa.session_id = s.id
+		WHERE 
+			sa.mentee_id = :userId
+			AND s.status IN (:statusList)
+			AND s.end_date > :currentEpoch
+			AND s.deleted_at IS NULL
+			AND sa.deleted_at IS NULL
+			${search ? 'AND s.title ILIKE :search' : ''}
+			${startDate && endDate ? 'AND s.start_date BETWEEN :startEpoch AND :endEpoch' : ''}
+		ORDER BY s.start_date ASC
+		OFFSET :offset
+		LIMIT :limit
+		`
+
+		const replacements = {
+			userId,
+			statusList: [common.PUBLISHED_STATUS, common.LIVE_STATUS],
+			currentEpoch: moment().unix(),
+			search: `%${search}%`,
+			startEpoch: startDate,
+			endEpoch: endDate,
+			offset: limit * (page - 1),
+			limit,
+		}
+
+		const sessionDetails = await Sequelize.query(query, {
+			replacements,
+			type: QueryTypes.SELECT,
+		})
+
+		const countQuery = `
+		SELECT COUNT(DISTINCT s.id) AS "count"
+		FROM session_attendees sa
+		INNER JOIN sessions s ON sa.session_id = s.id
+		WHERE 
+			sa.mentee_id = :userId
+			AND s.status IN (:statusList)
+			AND s.end_date > :currentEpoch
+			AND s.deleted_at IS NULL
+			AND sa.deleted_at IS NULL
+			${search ? 'AND s.title ILIKE :search' : ''}
+			${startDate && endDate ? 'AND s.start_date BETWEEN :startEpoch AND :endEpoch' : ''}
+		`
+		const count = await Sequelize.query(countQuery, {
+			type: QueryTypes.SELECT,
+			replacements: replacements,
+		})
+
+		let rows = []
+		if (sessionDetails.length > 0) {
+			rows = sessionDetails.map(({ mentee_password, mentor_password, ...rest }) => rest)
+		}
+
+		return { rows, count: Number(count[0].count) }
+	} catch (error) {
+		console.error(error)
+		throw error
 	}
 }
 
@@ -775,7 +885,8 @@ exports.getMentorsUpcomingSessionsFromView = async (
 	mentorId,
 	filter,
 	saasFilter = '',
-	defaultFilter = ''
+	defaultFilter = '',
+	menteeUserId
 ) => {
 	try {
 		const currentEpochTime = Math.floor(Date.now() / 1000)
@@ -788,32 +899,42 @@ exports.getMentorsUpcomingSessionsFromView = async (
 
 		const query = `
 		SELECT
-			id,
-			title,
-			description,
-			start_date,
-			end_date,
-			status,
-			image,
-			mentor_id,
-			meeting_info,
-			visibility,
-			mentor_organization_id
+		Sessions.id,
+		Sessions.title,
+		Sessions.description,
+			Sessions.start_date,
+			Sessions.end_date,
+			Sessions.status,
+			Sessions.image,
+			Sessions.mentor_id,
+			Sessions.meeting_info,
+			Sessions.visibility,
+			Sessions.mentor_organization_id,
+			Sessions.type,
+			CASE WHEN sa.id IS NOT NULL THEN true ELSE false END AS is_enrolled,
+			COALESCE(sa.type, NULL) AS enrolment_type
 		FROM
-				${common.materializedViewsPrefix + Session.tableName}
+				${common.materializedViewsPrefix + Session.tableName} as Sessions 
+			LEFT JOIN session_attendees AS sa
+				ON Sessions.id = sa.session_id AND sa.mentee_id = :menteeUserId
 		WHERE
-			mentor_id = :mentorId
-			AND status = 'PUBLISHED'
-			AND start_date > :currentEpochTime
-			AND started_at IS NULL
+		Sessions.mentor_id = :mentorId
+			AND Sessions.status = 'PUBLISHED'
+			AND Sessions.start_date > :currentEpochTime
+			AND Sessions.started_at IS NULL
 			AND (
 				LOWER(title) LIKE :search
+			)
+			AND (
+				Sessions.type = 'PUBLIC'
+				OR (Sessions.type = 'PRIVATE' AND sa.id IS NOT NULL)
 			)
 			${filterClause}
 			${saasFilterClause}
 			${defaultFilterClause}
+			
 		ORDER BY
-			start_date ASC
+			Sessions.start_date ASC
 		OFFSET
 			:offset
 		LIMIT
@@ -826,6 +947,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			search: `%${search.toLowerCase()}%`,
 			offset: limit * (page - 1),
 			limit: limit,
+			menteeUserId,
 			...filter.replacements, // Add filter parameters to replacements
 		}
 
@@ -833,17 +955,24 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			type: QueryTypes.SELECT,
 			replacements: replacements,
 		})
+
 		const countQuery = `
 		SELECT count(*) AS "count"
 		FROM
-		${common.materializedViewsPrefix + Session.tableName}
+		${common.materializedViewsPrefix + Session.tableName} as Sessions
+		LEFT JOIN session_attendees AS sa
+				ON Sessions.id = sa.session_id AND sa.mentee_id = :menteeUserId
 		WHERE
 			mentor_id = :mentorId
-			AND status = 'PUBLISHED'
-			AND start_date > :currentEpochTime
-			AND started_at IS NULL
+			AND Sessions.status = 'PUBLISHED'
+			AND Sessions.start_date > :currentEpochTime
+			AND Sessions.started_at IS NULL
 			AND (
 				LOWER(title) LIKE :search
+			)
+			AND (
+				Sessions.type = 'PUBLIC'
+				OR (Sessions.type = 'PRIVATE' AND sa.id IS NOT NULL)
 			)
 			${filterClause}
 			${saasFilterClause}
@@ -904,3 +1033,392 @@ exports.deactivateAndReturnMentorSessions = async (userId) => {
 		return error
 	}
 }
+
+exports.getUpcomingSessionsOfMentee = async (menteeUserId, sessionType) => {
+	try {
+		// Get private sessions where the deleted mentee was enrolled and session is in future
+		const query = `
+			SELECT s.id, s.title, s.mentor_id, s.start_date, s.end_date, s.type, s.created_by
+			FROM sessions s
+			LEFT JOIN  session_attendees sa ON s.id = sa.session_id
+			WHERE sa.mentee_id = :menteeUserId
+			AND s.type = :sessionType
+			AND s.start_date > :currentTime
+			AND s.deleted_at IS NULL
+		`
+
+		const privateSessions = await Sequelize.query(query, {
+			type: QueryTypes.SELECT,
+			replacements: {
+				menteeUserId,
+				sessionType,
+				currentTime: Math.floor(Date.now() / 1000),
+			},
+		})
+
+		return privateSessions || []
+	} catch (error) {
+		throw error
+	}
+}
+
+exports.getUpcomingSessionsForMentor = async (mentorUserId) => {
+	try {
+		const currentTime = Math.floor(Date.now() / 1000)
+
+		const upcomingSessions = await Session.findAll({
+			where: {
+				mentor_id: mentorUserId,
+				start_date: { [Op.gt]: currentTime },
+				deleted_at: null,
+				created_by: {
+					[Op.and]: [{ [Op.ne]: null }, { [Op.ne]: mentorUserId }],
+				},
+			},
+			raw: true,
+		})
+
+		return upcomingSessions || []
+	} catch (error) {
+		throw error
+	}
+}
+
+exports.getSessionsCreatedByMentor = async (mentorUserId) => {
+	try {
+		const query = `
+				SELECT s.*, sa.mentee_id
+				FROM ${Session.tableName} s
+				LEFT JOIN session_attendees sa ON s.id = sa.session_id
+				WHERE s.mentor_id = :mentorUserId 
+				AND s.start_date > :currentTime
+				AND s.deleted_at IS NULL
+				AND s.created_by = :mentorUserId
+			`
+
+		const sessionsToDelete = await Sequelize.query(query, {
+			type: QueryTypes.SELECT,
+			replacements: {
+				mentorUserId,
+				currentTime: Math.floor(Date.now() / 1000),
+			},
+		})
+
+		return sessionsToDelete
+	} catch (error) {
+		throw error
+	}
+}
+
+exports.getSessionsAssignedToMentor = async (mentorUserId) => {
+	try {
+		const query = `
+				SELECT s.*, sa.mentee_id
+				FROM ${Session.tableName} s
+				LEFT JOIN session_attendees sa ON s.id = sa.session_id
+				WHERE s.mentor_id = :mentorUserId 
+				AND s.start_date > :currentTime
+				AND s.deleted_at IS NULL
+			`
+
+		const sessionsToDelete = await Sequelize.query(query, {
+			type: QueryTypes.SELECT,
+			replacements: {
+				mentorUserId,
+				currentTime: Math.floor(Date.now() / 1000),
+			},
+		})
+
+		return sessionsToDelete
+	} catch (error) {
+		throw error
+	}
+}
+
+exports.addOwnership = async (sessionId, mentorId) => {
+	try {
+		await sessionOwnership.create({
+			user_id: mentorId,
+			session_id: sessionId,
+			type: common.SESSION_OWNERSHIP_TYPE.MENTOR,
+		})
+		return true
+	} catch (error) {
+		return error
+	}
+}
+
+// Session Manager Deletion Flow Codes
+
+// exports.replaceSessionManagerAndReturn = async (userId, newUserId, orgAdminUserId) => {
+// 	try {
+// 		const currentEpochTime = moment().unix()
+// 		const currentDateTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
+
+// 		// Get session_ids where user is CREATOR
+// 		const creatorSessions = await sessionOwnership.findAll(
+// 			{ user_id: userId, type: common.SESSION_OWNERSHIP_TYPE.CREATOR },
+// 			{ attributes: ['session_id'] },
+// 			true
+// 		)
+// 		const creatorSessionIds = creatorSessions.map((s) => s.session_id)
+
+// 		// Get session_ids where user is MENTOR
+// 		const mentorSessions = await sessionOwnership.findAll(
+// 			{ user_id: userId, type: common.SESSION_OWNERSHIP_TYPE.MENTOR },
+// 			{ attributes: ['session_id'] },
+// 			true
+// 		)
+// 		const mentorSessionIds = mentorSessions.map((s) => s.session_id)
+
+// 		// Sessions where user is both MENTOR and CREATOR
+// 		const bothRolesSessionIds = creatorSessionIds.filter((id) => mentorSessionIds.includes(id))
+
+// 		// Sessions where user is only CREATOR
+// 		const onlyCreatorSessionIds = creatorSessionIds.filter((id) => !bothRolesSessionIds.includes(id))
+
+// 		// ----- Handle bothRolesSessionIds -----
+// 		let removedSessions = []
+
+// 		if (bothRolesSessionIds.length > 0) {
+// 			const foundSessions = await Session.findAll({
+// 				where: {
+// 					id: { [Op.in]: bothRolesSessionIds },
+// 					[Op.or]: [
+// 						{ start_date: { [Op.gt]: currentEpochTime } },
+// 						{ status: common.PUBLISHED_STATUS },
+// 					],
+// 				},
+// 				raw: true,
+// 			})
+
+// 			const sessionIdAndTitle = foundSessions.map((session) => ({
+// 				id: session.id,
+// 				title: session.title,
+// 			}))
+// 			const upcomingSessionIds = foundSessions.map((session) => session.id)
+
+// 			if (upcomingSessionIds.length > 0) {
+// 				await Session.update(
+// 					{ deleted_at: currentDateTime },
+// 					{ where: { id: { [Op.in]: upcomingSessionIds } } }
+// 				)
+// 				await SessionOwnership.update(
+// 					{ deleted_at: currentDateTime },
+// 					{ where: { session_id: { [Op.in]: upcomingSessionIds } } }
+// 				)
+// 			}
+
+// 			removedSessions = sessionIdAndTitle
+// 		}
+
+// 		// ----- Handle onlyCreatorSessionIds -----
+// 		if (onlyCreatorSessionIds.length > 0) {
+// 			const onlyCreatorSessions = await Session.findAll({
+// 				where: {
+// 					id: { [Op.in]: onlyCreatorSessionIds },
+// 				},
+// 				attributes: ['id', 'status'],
+// 				raw: true,
+// 			})
+
+// 			const publishedOrLiveSessionIds = onlyCreatorSessions
+// 				.filter((s) => [common.PUBLISHED_STATUS, common.LIVE_STATUS].includes(s.status))
+// 				.map((s) => s.id)
+
+// 			const completedSessionIds = onlyCreatorSessions
+// 				.filter((s) => s.status === common.COMPLETED_STATUS)
+// 				.map((s) => s.id)
+
+// 			// Update user_id to newUserId for PUBLISHED or LIVE sessions
+// 			if (publishedOrLiveSessionIds.length > 0) {
+// 				await SessionOwnership.update(
+// 					{ user_id: newUserId },
+// 					{
+// 						where: {
+// 							user_id: userId,
+// 							session_id: { [Op.in]: publishedOrLiveSessionIds },
+// 							type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
+// 						},
+// 					}
+// 				)
+
+// 				await Session.update(
+// 					{ created_by: newUserId ,
+// 					  updated_by: newUserId },
+// 					{
+// 						where: {
+// 							id: { [Op.in]: publishedOrLiveSessionIds }
+// 						},
+// 					}
+// 				)
+// 			}
+
+// 			// Update user_id to orgAdminUserId for COMPLETED sessions
+// 			if (completedSessionIds.length > 0) {
+// 				await SessionOwnership.update(
+// 					{ user_id: orgAdminUserId },
+// 					{
+// 						where: {
+// 							user_id: userId,
+// 							session_id: { [Op.in]: completedSessionIds },
+// 							type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
+// 						},
+// 					}
+// 				)
+// 				await Session.update(
+// 					{
+// 					  created_by: orgAdminUserId ,
+// 					  updated_by: orgAdminUserId
+// 					},
+// 					{
+// 						where: {
+// 							id: { [Op.in]: completedSessionIds }						},
+// 					}
+// 				)
+// 			}
+// 		}
+
+// 		return {
+// 			removedSessions,
+// 			bothRolesSessionIds,
+// 			onlyCreatorSessionIds,
+// 		}
+// 	} catch (error) {
+// 		console.error('Error in removeAndReturnMentorSessions:', error)
+// 		return error
+// 	}
+// }
+
+// exports.replaceSessionManagerAndReturn = async (oldSMUserId, newSMUserId, orgUserId) => {
+// 	try {
+// 		const currentEpochTime = moment().unix()
+// 		const currentDateTime = moment().format('YYYY-MM-DD HH:mm:ssZ')
+
+// 		const getSessionIds = async (type) => {
+// 			const filter = {
+// 			  user_id: oldSMUserId, // Ensure it's a string
+// 			  type: type,
+// 			}
+
+// 			const options = {
+// 			  attributes: ['session_id'],
+// 			}
+
+// 			const sessionIds = await sessionOwnership.findAll(filter, options, true) // third param = true to get only session_ids
+// 			return sessionIds
+// 		  }
+
+// 		const updateSessionOwnerships = async (ids, uid) => {
+// 			try {
+// 				return await SessionOwnership.update(
+// 					{ user_id: uid },
+// 					{
+// 						where: {
+// 							user_id: oldSMUserId,
+// 							session_id: { [Op.in]: ids },
+// 							type: common.SESSION_OWNERSHIP_TYPE.CREATOR,
+// 						},
+// 					}
+// 				);
+// 			} catch (error) {
+// 				console.error('Error updating session ownerships:', error);
+// 				throw error;
+// 			}
+// 		};
+
+// 		const updateSessions = (ids, uid) => {
+// 			return Session.update(
+// 				{ created_by: uid, updated_by: uid },
+// 				{ where: { id: { [Op.in]: ids } } }
+// 			)
+// 		}
+
+// 		const softDeleteSessions = (ids) => {
+// 			return Promise.all([
+// 				Session.update(
+// 					{ deleted_at: currentDateTime },
+// 					{ where: { id: { [Op.in]: ids } } }
+// 				),
+// 				SessionOwnership.update(
+// 					{ deleted_at: currentDateTime },
+// 					{ where: { session_id: { [Op.in]: ids } } }
+// 				)
+// 			])
+// 		}
+
+// 		// Fetch creator and mentor session IDs
+// 		const [creatorSessionIds, mentorSessionIds] = await Promise.all([
+// 			getSessionIds(common.SESSION_OWNERSHIP_TYPE.CREATOR),
+// 			getSessionIds(common.SESSION_OWNERSHIP_TYPE.MENTOR),
+// 		])
+
+// 		// Identify bothRoles and onlyCreator session IDs
+// 		const bothRolesSessionIds = creatorSessionIds.filter(id => mentorSessionIds.includes(id))
+// 		const onlyCreatorSessionIds = creatorSessionIds.filter(id => !mentorSessionIds.includes(id))
+
+// 		let removedSessions = []
+
+// 		// Handle sessions where user is both MENTOR and CREATOR
+// 		if (bothRolesSessionIds.length > 0) {
+// 			const foundSessions = await Session.findAll({
+// 				where: {
+// 					id: { [Op.in]: bothRolesSessionIds },
+// 					[Op.or]: [
+// 						{ start_date: { [Op.gt]: currentEpochTime } },
+// 						{ status: common.PUBLISHED_STATUS },
+// 					],
+// 				},
+// 				raw: true,
+// 			})
+
+// 			const upcomingSessionIds = foundSessions.map(s => s.id)
+// 			removedSessions = foundSessions.map(({ id, title }) => ({ id, title }))
+
+// 			if (upcomingSessionIds.length > 0) {
+// 				await softDeleteSessions(upcomingSessionIds);
+// 			}
+// 		}
+
+// 		// Handle sessions where user is only CREATOR
+// 		if (onlyCreatorSessionIds.length > 0) {
+// 			const onlyCreatorSessions = await Session.findAll({
+// 				where: { id: { [Op.in]: onlyCreatorSessionIds } },
+// 				attributes: ['id', 'status'],
+// 				raw: true,
+// 			})
+
+// 			const publishedOrLiveSessionIds = []
+// 			const completedSessionIds = []
+
+// 			for (const s of onlyCreatorSessions) {
+// 				if ([common.PUBLISHED_STATUS, common.LIVE_STATUS].includes(s.status)) {
+// 					publishedOrLiveSessionIds.push(s.id)
+// 				} else if (s.status === common.COMPLETED_STATUS) {
+// 					completedSessionIds.push(s.id)
+// 				}
+// 			}
+// 			if (publishedOrLiveSessionIds.length > 0) {
+// 				const result1 = await updateSessionOwnerships(publishedOrLiveSessionIds, newSMUserId);
+
+// 				const result2 = await updateSessions(publishedOrLiveSessionIds, newSMUserId);
+// 			}
+
+// 			if (completedSessionIds.length > 0) {
+// 				const result3 = await updateSessionOwnerships(completedSessionIds, orgUserId);
+
+// 				const result4 = await updateSessions(completedSessionIds, orgUserId);
+// 			}
+
+// 		}
+
+// 		return {
+// 			removedSessions,
+// 			bothRolesSessionIds,
+// 			onlyCreatorSessionIds,
+// 		};
+// 	} catch (error) {
+// 		console.error('Error in replaceSessionManagerAndReturn:', error)
+// 		return error
+// 	}
+// }

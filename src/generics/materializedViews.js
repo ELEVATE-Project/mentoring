@@ -6,6 +6,7 @@ const common = require('@constants/common')
 const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
 const defaultSearchConfig = require('@configs/search.json')
 const indexQueries = require('@generics/mViewsIndexQueries')
+const searchConfig = require('@root/config.json')
 
 const searchConfig = require('@root/config.json')
 

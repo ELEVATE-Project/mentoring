@@ -241,8 +241,13 @@ module.exports = class OrgAdminService {
 					const organizationDetails = await userRequests.fetchOrgDetails({
 						organizationId: decodedToken.organization_id,
 					})
-					policyData.visible_to_organizations = organizationDetails.data.result.related_orgs
+					policyData.visible_to_organizations = organizationDetails.data.result.related_orgs || []
+
+					if (!policyData.visible_to_organizations.includes(decodedToken.organization_id)) {
+						policyData.visible_to_organizations.push(decodedToken.organization_id)
+					}
 				}
+
 				//Update all users belonging to the org with new policies
 				await menteeQueries.updateMenteeExtension(
 					'', //userId not required
@@ -409,8 +414,12 @@ module.exports = class OrgAdminService {
 				mentor_visibility: orgPolicies.mentor_visibility_policy,
 				mentee_visibility: orgPolicies.mentee_visibility_policy,
 				external_mentee_visibility: orgPolicies.external_mentee_visibility_policy,
-				visible_to_organizations: organizationDetails.data.result.related_orgs,
+				visible_to_organizations: organizationDetails.data.result.related_orgs || [],
 			}
+			if (!updateData.visible_to_organizations.includes(orgId)) {
+				updateData.visible_to_organizations.push(orgId)
+			}
+
 			if (utils.validateRoleAccess(bodyData.roles, common.MENTOR_ROLE))
 				await mentorQueries.updateMentorExtension(bodyData.user_id, updateData)
 			else await menteeQueries.updateMenteeExtension(bodyData.user_id, updateData)
@@ -601,6 +610,57 @@ module.exports = class OrgAdminService {
 			message: 'CSV_UPDATE_FAILED',
 			statusCode: httpStatusCode.bad_request,
 			responseCode: 'CLIENT_ERROR',
+		})
+	}
+
+	/**
+	 * Update the theme for a specific organization.
+	 * @method
+	 * @name updateTheme
+	 * @param {Object} data - The theme data to be updated.
+	 * @param {String} orgId - The organization ID for which the theme needs to be updated.
+	 * @returns {Object} - The result of the theme update, either success or error details.
+	 */
+	static async updateTheme(data, orgId) {
+		let organizationDetails = await userRequests.fetchOrgDetails({ organizationId: orgId })
+		if (!(organizationDetails.success && organizationDetails.data && organizationDetails.data.result)) {
+			return responses.failureResponse({
+				message: 'ORGANIZATION_NOT_FOUND',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		}
+
+		const newData = { theme: data }
+		let result = await organisationExtensionQueries.update(newData, orgId)
+		if (!result) {
+			return responses.failureResponse({
+				message: 'FAILED_TO_UPDATED_ORG_THEME',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		}
+		return responses.successResponse({
+			statusCode: httpStatusCode.ok,
+			message: 'ORG_THEME_UPDATED_SUCCESSFULLY',
+		})
+	}
+
+	static async themeDetails(orgId) {
+		let organizationDetails = await organisationExtensionQueries.getById(orgId)
+
+		if (!organizationDetails) {
+			return responses.failureResponse({
+				message: 'ORGANIZATION_NOT_FOUND',
+				statusCode: httpStatusCode.bad_request,
+				responseCode: 'CLIENT_ERROR',
+			})
+		}
+
+		return responses.successResponse({
+			statusCode: httpStatusCode.ok,
+			message: 'ORG_THEME_FETCHED_SUCCESSFULLY',
+			result: organizationDetails.theme,
 		})
 	}
 }

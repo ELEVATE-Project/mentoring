@@ -23,13 +23,6 @@ module.exports = class admin {
 
 	async userDelete(req) {
 		try {
-			if (!req.decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)) {
-				return responses.failureResponse({
-					message: 'UNAUTHORIZED_REQUEST',
-					statusCode: httpStatusCode.unauthorized,
-					responseCode: 'UNAUTHORIZED',
-				})
-			}
 			const userDelete = await adminService.userDelete(req.query.userId)
 			return userDelete
 		} catch (error) {
@@ -80,4 +73,15 @@ module.exports = class admin {
 			console.log(err)
 		}
 	}
+
+	//Session Manager Deletion Flow Codes
+
+	// async assignNewSessionManager(req) {
+	// 	try {
+	// 		const assignNewSessionManager = await adminService.assignNewSessionManager(req.decodedToken, req.query.oldSessionManagerId, req.query.newSessionManagerId, req.query.orgAdminUserId)
+	// 		return assignNewSessionManager
+	// 	} catch (error) {
+	// 		return error
+	// 	}
+	// }
 }

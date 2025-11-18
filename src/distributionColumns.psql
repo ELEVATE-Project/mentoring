@@ -13,4 +13,9 @@ SELECT create_distributed_table('session_enrollments', 'mentee_id');
 SELECT create_distributed_table('session_ownerships', 'user_id');
 SELECT create_distributed_table('sessions', 'id');
 SELECT create_distributed_table('user_extensions', 'user_id');
+SELECT create_distributed_table('connection_requests', 'user_id');
+SELECT create_distributed_table('connections', 'user_id');
+SELECT create_distributed_table('session_request', 'requestor_id');
+SELECT create_distributed_table('session_request_mapping', 'requestee_id');
+SELECT create_distributed_table('resources', 'session_id');
 

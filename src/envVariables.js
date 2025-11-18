@@ -137,6 +137,11 @@ let enviromentVariables = {
 		optional: process.env.ENABLE_EMAIL_FOR_REPORT_ISSUE === 'true' ? false : true,
 		default: 'user_issue_reported',
 	},
+	CONNECTION_REQUEST_REJECTION_EMAIL_TEMPLATE: {
+		message: 'Required email template code to send email when connection request is rejected',
+		optional: true,
+		default: 'connection_request_rejected',
+	},
 	BIG_BLUE_BUTTON_BASE_URL: {
 		message: 'Big blue button base url',
 		optional: true,
@@ -218,6 +223,11 @@ let enviromentVariables = {
 		message: 'Required email template name for mentee session enrollment by manager',
 		optional: true,
 		default: 'mentee_session_enrollment_by_manager',
+	},
+	MENTEE_PUBLIC_SESSION_ENROLLMENT_BY_MANAGER_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentee session enrollment by manager',
+		optional: true,
+		default: 'mentee_public_session_enrollment_by_manager',
 	},
 	MENTOR_PRIVATE_SESSION_INVITE_BY_MANAGER_EMAIL_TEMPLATE: {
 		message: 'Required email template name for mentor private session invite by manager',
@@ -399,10 +409,59 @@ let enviromentVariables = {
 		optional: true,
 		default: 'CURRENT',
 	},
+	ENABLE_CHAT: {
+		message: 'Enable or Disable Chat Capabilities',
+		optional: true,
+		default: false,
+	},
+	COMMUNICATION_SERVICE_HOST: {
+		message: 'Communication service host',
+		optional: process.env.ENABLE_CHAT === 'true' ? false : true,
+		default: false,
+	},
+	COMMUNICATION_SERVICE_BASE_URL: {
+		message: 'Base URL for the Communication Service',
+		optional: true,
+		default: '/communications/',
+	},
 	CLEAR_INTERNAL_CACHE: {
 		message: 'Required Default Internal Cache',
 		optional: true,
 		default: 'internalmentoring',
+	},
+	MENTOR_ACCEPT_SESSION_REQUEST_EMAIL_TEMPLATE: {
+		message: 'Required email template name for request session accepted',
+		optional: true,
+		default: 'request_session_accepted_email_template',
+	},
+	MENTOR_REJECT_SESSION_REQUEST_EMAIL_TEMPLATE: {
+		message: 'Required email template name for request session accepted',
+		optional: true,
+		default: 'request_session_rejected_email_template',
+	},
+	POST_RESOURCE_EMAIL_TEMPLATE_CODE: {
+		message: 'Required post resource update email template code',
+		optional: true,
+		default: 'post_session_resource_email',
+	},
+	PRE_RESOURCE_EMAIL_TEMPLATE_CODE: {
+		message: 'Required pre resource update email template code',
+		optional: true,
+		default: 'pre_session_resource_email',
+	},
+	RESOURCE_ADD_EMAIL_TEMPLATE_CODE: {
+		message: 'Required resource add email template code',
+		optional: true,
+		default: 'new_session_resource_email',
+	},
+	POST_RESOURCE_DELETE_TIMEOUT: {
+		message: 'Required post resource delete timeout',
+		optional: true,
+		default: 1440,
+	},
+	PORTAL_BASE_URL: {
+		message: 'Required portal base url',
+		optional: false,
 	},
 	DB_POOL_MAX_CONNECTIONS: {
 		message: 'Required DB Pool Max number of connections',
@@ -428,6 +487,91 @@ let enviromentVariables = {
 		message: 'Required Session refresh view internal in milliseconds',
 		optional: true,
 		default: 30000,
+	},
+	MENTOR_SESSION_DELETION_EMAIL_CODE: {
+		message: 'Required mentor session deletion email template code',
+		optional: true,
+		default: 'session_deleted_mentor_deletion_email',
+	},
+	MENTOR_SESSION_REQUEST_DELETION_EMAIL_CODE: {
+		message: 'Required mentor session request deletion template code',
+		optional: true,
+		default: 'mentor_request_session_deletion_email',
+	},
+	MENTEE_SESSION_REQUEST_DELETION_EMAIL_CODE: {
+		message: 'Required mentee session request deletion template code',
+		optional: true,
+		default: 'mentor_request_session_deletion_email',
+	},
+	SESSION_MANAGER_MENTEE_DELETION_EMAIL_TEMPLATE: {
+		message: 'Required session manager private session deletion template code',
+		optional: true,
+		default: 'session_manager_private_session_deletion_email',
+	},
+	MENTEE_DELETION_NOTIFICATION_EMAIL_TEMPLATE: {
+		message: 'Required mentee deletion notification email template code',
+		optional: true,
+		default: 'mentee_deletion_notification_email',
+	},
+	MENTOR_DELETION_NOTIFICATION_EMAIL_TEMPLATE: {
+		message: 'Required mentor deletion notification email template code',
+		optional: true,
+		default: 'mentor_deletion_notification_email',
+	},
+	PRIVATE_SESSION_CANCELLED_EMAIL_TEMPLATE: {
+		message: 'Required private session cancelled email template code',
+		optional: true,
+		default: 'private_session_cancelled_email',
+	},
+	SESSION_REQUEST_REJECTED_MENTOR_DELETION_EMAIL_TEMPLATE: {
+		message: 'Required session request rejected due to mentor deletion email template code',
+		optional: true,
+		default: 'session_request_rejected_mentor_deletion_email',
+	},
+	SESSION_MANAGER_MENTOR_DELETION_EMAIL_TEMPLATE: {
+		message: 'Required session manager mentor deletion notification email template code',
+		optional: true,
+		default: 'session_manager_mentor_deletion_email',
+	},
+	SESSION_DELETED_MENTOR_DELETION_EMAIL_TEMPLATE: {
+		message: 'Required session deleted due to mentor deletion email template code',
+		optional: true,
+		default: 'session_deleted_mentor_deletion_email',
+	},
+	LIMIT_FOR_SESSION_REQUEST_MONTH: {
+		message: 'Request Session Allowed Limit in months',
+		optional: true,
+		default: 3,
+	},
+	CONNECTION_REQUEST_ACCEPT_EMAIL_TEMPLATE: {
+		message: 'Required email template name for chat request accepted',
+		optional: true,
+		default: 'connection_request_accept',
+	},
+	SESSION_MEETLINK_ADDED_EMAIL_TEMPLATE: {
+		message: 'Required email template name for session meet link added',
+		optional: true,
+		default: 'session_meeting_link_added',
+	},
+	SESSION_MENTOR_CHANGED_EMAIL_TEMPLATE: {
+		message: 'Required email template name for when mentor has updated',
+		optional: true,
+		default: 'mentor_has_changed',
+	},
+	KAFKA_HEALTH_CHECK_TOPIC: {
+		message: 'Required KAFKA_HEALTH_CHECK_TOPIC',
+		optional: true,
+		default: 'mentoring-health-check-topic-check',
+	},
+	SESSION_CREATOR_DELETE_SESSION_EMAIL_TEMPLATE: {
+		message: 'Required email template name for when session creator has deleted the session',
+		optional: true,
+		default: 'session_creator_delete_the_session',
+	},
+	EVENTS_TOPIC: {
+		message: 'Required event topic for handling events',
+		optional: true,
+		default: 'mentoring.events',
 	},
 }
 

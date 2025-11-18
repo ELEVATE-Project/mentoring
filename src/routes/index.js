@@ -161,9 +161,18 @@ module.exports = (app) => {
 			res.set('Content-Type', 'application/octet-stream')
 			res.status(controllerResponse.statusCode).send(controllerResponse.stream)
 		} else if (controllerResponse) {
+			const interpolationOptions = {
+				interpolation: { escapeValue: false },
+				...(typeof controllerResponse.interpolation === 'object' ? controllerResponse.interpolation : {}),
+			}
+
+			controllerResponse.message = controllerResponse.interpolation
+				? req.t(controllerResponse.message, interpolationOptions)
+				: req.t(controllerResponse.message)
+
 			res.status(controllerResponse.statusCode).json({
 				responseCode: controllerResponse.responseCode,
-				message: req.t(controllerResponse.message),
+				message: controllerResponse.message,
 				result: controllerResponse.result,
 				meta: controllerResponse.meta,
 			})
