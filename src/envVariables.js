@@ -573,6 +573,11 @@ let enviromentVariables = {
 		optional: true,
 		default: 'mentoring.events',
 	},
+	SERVICE_NAME: {
+		message: 'Required SERVICE_NAME to handling health check',
+		optional: true,
+		default: 'MentoringService',
+	},
 }
 
 let success = true
