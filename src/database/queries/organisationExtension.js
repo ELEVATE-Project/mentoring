@@ -1,6 +1,7 @@
 'use strict'
 const OrganizationExtension = require('@database/models/index').OrganizationExtension
 const common = require('@constants/common')
+const utils = require('@generics/utils')
 
 module.exports = class OrganizationExtensionQueries {
 	static async upsert(data) {
@@ -84,6 +85,24 @@ module.exports = class OrganizationExtensionQueries {
 				raw: true,
 			})
 			return orgExtension
+		} catch (error) {
+			throw new Error(`Error fetching organisation extension: ${error.message}`)
+		}
+	}
+	static async findOneById(id) {
+		try {
+			if (await utils.internalGet(id)) {
+				return await utils.internalGet(id)
+			} else {
+				const orgExtension = await OrganizationExtension.findOne({
+					where: { organization_id: id },
+					raw: true,
+				})
+
+				await utils.internalSet(id, orgExtension)
+
+				return await utils.internalGet(id)
+			}
 		} catch (error) {
 			throw new Error(`Error fetching organisation extension: ${error.message}`)
 		}

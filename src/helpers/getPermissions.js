@@ -2,6 +2,7 @@ const rolePermissionMappingQueries = require('@database/queries/role-permission-
 const common = require('@constants/common')
 const responses = require('@helpers/responses')
 const httpStatusCode = require('@generics/http-status')
+const utils = require('@generics/utils')
 
 module.exports = class UserHelper {
 	// Your other methods here
@@ -18,23 +19,42 @@ module.exports = class UserHelper {
 			const titles = userRoles.map((role) => role.title)
 			const filter = { role_title: titles }
 			const attributes = ['module', 'request_type']
-			const PermissionAndModules = await rolePermissionMappingQueries.findAll(filter, attributes)
-			const PermissionByModules = PermissionAndModules.reduce((PermissionByModules, { module, request_type }) => {
-				if (PermissionByModules[module]) {
-					PermissionByModules[module].request_type = [
-						...new Set([...PermissionByModules[module].request_type, ...request_type]),
-					]
-				} else {
-					PermissionByModules[module] = { module, request_type: [...request_type] }
-				}
-				return PermissionByModules
-			}, {})
 
-			const allPermissions = Object.values(PermissionByModules).map(({ module, request_type }) => ({
-				module,
-				request_type,
-				service: common.MENTORING_SERVICE,
-			}))
+			const cacheKey = userRoles
+				.map((role) => role.title)
+				.sort()
+				.join(',')
+
+			let rolePermission = await utils.internalGet(cacheKey)
+
+			if (rolePermission) {
+				return rolePermission
+			} else {
+				const PermissionAndModules = await rolePermissionMappingQueries.findAll(filter, attributes)
+				const PermissionByModules = PermissionAndModules.reduce(
+					(PermissionByModules, { module, request_type }) => {
+						if (PermissionByModules[module]) {
+							PermissionByModules[module].request_type = [
+								...new Set([...PermissionByModules[module].request_type, ...request_type]),
+							]
+						} else {
+							PermissionByModules[module] = { module, request_type: [...request_type] }
+						}
+						return PermissionByModules
+					},
+					{}
+				)
+
+				const allPermissions = Object.values(PermissionByModules).map(({ module, request_type }) => ({
+					module,
+					request_type,
+					service: common.MENTORING_SERVICE,
+				}))
+
+				await utils.internalSet(cacheKey, allPermissions)
+
+				return await utils.internalGet(cacheKey)
+			}
 
 			return allPermissions
 		} catch (error) {

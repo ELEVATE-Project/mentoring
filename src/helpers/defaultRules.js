@@ -5,6 +5,7 @@ const menteeQueries = require('@database/queries/userExtension')
 const common = require('@constants/common')
 
 const { isAMentor } = require('@generics/utils')
+const utils = require('@generics/utils')
 
 const operatorMapping = new Map([
 	['equals', '='],
@@ -99,12 +100,19 @@ exports.defaultRulesFilter = async function defaultRulesFilter({
 	requesterOrganizationId,
 }) {
 	try {
-		const [userDetails, defaultRules] = await Promise.all([
-			getUserDetails(requesterId, isAMentor(roles)),
-			defaultRuleQueries.findAll({ type: ruleType, organization_id: requesterOrganizationId }),
-		])
+		const userDetails = await getUserDetails(requesterId, isAMentor(roles))
 
-		const validConfigs = getValidConfigs(defaultRules, roles)
+		let defaultRoles = await utils.internalGet('DefaultRule_' + ruleType + '_' + requesterOrganizationId)
+		if (!defaultRoles) {
+			defaultRoles = await defaultRuleQueries.findAll({
+				type: ruleType,
+				organization_id: requesterOrganizationId,
+			})
+
+			await utils.internalSet('DefaultRule_' + ruleType + '_' + requesterOrganizationId, defaultRoles)
+		}
+
+		const validConfigs = getValidConfigs(defaultRoles, roles)
 
 		if (validConfigs.length === 0) {
 			return ''
