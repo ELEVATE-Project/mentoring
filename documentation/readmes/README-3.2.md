@@ -113,15 +113,15 @@ File Path : src/.env
   "DEV_DATABASE_URL" = "postgres://shikshalokam:password@localhost:5432/
 chat_elevate_communications"  
 
-  "INTERNAL_ACCESS_TOKEN":"FqHQ0gXydRtBCg5l",  //same as mentoring service 
+  "INTERNAL_ACCESS_TOKEN" = "FqHQ0gXydRtBCg5l",  //same as mentoring service 
  
 
-  "PASSWORD_HASH_SALT": ""
-  "PASSWORD_HASH_LENGTH": 10
+  "PASSWORD_HASH_SALT" = ""
+  "PASSWORD_HASH_LENGTH" = 10
  
 
-  "USERNAME_HASH_SALT": ""
-  "USERNAME_HASH_LENGTH": 10
+  "USERNAME_HASH_SALT" = ""
+  "USERNAME_HASH_LENGTH" = 10
 
 ```
 
@@ -199,9 +199,9 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 
 ```env
 
-    "ROUTE_CONFIG_JSON_URLS_PATHS": "https://raw.githubusercontent.com/ELEVATE-Project/utils/refs/heads/staging/interface-routes/elevate-routes.json"
+    "ROUTE_CONFIG_JSON_URLS_PATHS" = "https://raw.githubusercontent.com/ELEVATE-Project/utils/refs/heads/staging/interface-routes/elevate-routes.json"
     // update elevate-mentoring package version
-    "REQUIRED_PACKAGES": "elevate-mentoring@1.2.93”
+    "REQUIRED_PACKAGES" = "elevate-mentoring@1.2.93”
 ```
 
 ### Step 2 : Install Dependencies
@@ -258,8 +258,8 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 ### Step 1: update .env
 
 ```env
-    "chatBaseUrl": "https://chat-dev-temp.elevate-apis.shikshalokam.org/",
-    "chatWebSocketUrl": "wss://chat-dev-temp.elevate-apis.shikshalokam.org/websocket",
+    "chatBaseUrl" = "https://chat-dev-temp.elevate-apis.shikshalokam.org/",
+    "chatWebSocketUrl" = "wss://chat-dev-temp.elevate-apis.shikshalokam.org/websocket",
 
 ```
 ### Step 2: Run form script
