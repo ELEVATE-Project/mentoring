@@ -7,16 +7,13 @@ const path = require('path')
 const csv = require('csvtojson')
 const axios = require('axios')
 const common = require('@constants/common')
-const fileService = require('@services/files')
-const request = require('request')
 const userRequests = require('@requests/user')
 const sessionService = require('@services/sessions')
-const { isAMentor } = require('@generics/utils')
 const ProjectRootDir = path.join(__dirname, '../')
 const fileUploadQueries = require('@database/queries/fileUpload')
 const notificationTemplateQueries = require('@database/queries/notificationTemplate')
 const kafkaCommunication = require('@generics/kafka-communication')
-const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 const sessionQueries = require('@database/queries/sessions')
 const entityTypeQueries = require('@database/queries/entityType')
 const { Op } = require('sequelize')
@@ -30,12 +27,16 @@ module.exports = class UserInviteHelper {
 		return new Promise(async (resolve, reject) => {
 			try {
 				const filePath = data.fileDetails.input_path
-				const userId = data.user.id
+				const userId = data.user.userId
 				const orgId = data.user.organization_id
 				const tenant_code = data.user.tenant_code
 				const notifyUser = true
+				const tenantCode = data.user.tenant_code
+				const orgCode = String(data.user.organization_code)
+				const defaultOrgCode = data.user.defaultOrganiztionCode
+				const defaultTenantCode = data.user.defaultTenantCode
 
-				const mentor = await menteeExtensionQueries.getMenteeExtension(userId, ['is_mentor'])
+				const mentor = await menteeExtensionQueries.getMenteeExtension(userId, ['is_mentor'], false, tenantCode)
 				if (!mentor) throw createUnauthorizedResponse('USER_NOT_FOUND')
 
 				const isMentor = mentor.is_mentor
@@ -57,7 +58,10 @@ module.exports = class UserInviteHelper {
 					orgId,
 					notifyUser,
 					isMentor,
-					tenant_code
+					tenantCode,
+					orgCode,
+					defaultOrgCode,
+					defaultTenantCode
 				)
 				if (createResponse.success == false) console.log(':::::::::', createResponse.message)
 				const outputFilename = path.basename(createResponse.result.outputFilePath)
@@ -73,6 +77,7 @@ module.exports = class UserInviteHelper {
 				//update output path in file uploads
 				const rowsAffected = await fileUploadQueries.update(
 					{ id: data.fileDetails.id, organization_id: orgId },
+					tenantCode,
 					update
 				)
 				if (rowsAffected === 0) {
@@ -82,9 +87,11 @@ module.exports = class UserInviteHelper {
 				// send email to admin
 				const templateCode = process.env.SESSION_UPLOAD_EMAIL_TEMPLATE_CODE
 				if (templateCode) {
+					const defaults = await getDefaults()
 					const templateData = await notificationTemplateQueries.findOneEmailTemplate(
 						templateCode,
-						data.user.organization_id
+						data.user.organization_code,
+						defaults.tenantCode
 					)
 
 					if (templateData) {
@@ -402,7 +409,7 @@ module.exports = class UserInviteHelper {
 		return { ...restOfSession, custom_entities }
 	}
 
-	static async processSession(session, userId, orgId, validRowsCount, invalidRowsCount) {
+	static async processSession(session, userId, orgCode, validRowsCount, invalidRowsCount, tenantCode) {
 		const requiredFields = [
 			'action',
 			'title',
@@ -494,7 +501,7 @@ module.exports = class UserInviteHelper {
 			if (session.mentees.length != 0 && Array.isArray(session.mentees)) {
 				const validEmails = await this.validateAndCategorizeEmails(session)
 				if (validEmails.length != 0) {
-					const menteeDetails = await userRequests.getListOfUserDetailsByEmail(validEmails)
+					const menteeDetails = await userRequests.getListOfUserDetailsByEmail(validEmails, tenantCode)
 					session.mentees = menteeDetails.result
 				} else if (session.mentees.some((item) => typeof item === 'string')) {
 					session.statusMessage = this.appendWithComma(session.statusMessage, ' Mentee Details are incorrect')
@@ -521,7 +528,7 @@ module.exports = class UserInviteHelper {
 					session.status = 'Invalid'
 					session.statusMessage = this.appendWithComma(session.statusMessage, 'Invalid Mentor Email')
 				} else {
-					const mentorId = await userRequests.getListOfUserDetailsByEmail([mentorEmail])
+					const mentorId = await userRequests.getListOfUserDetailsByEmail([mentorEmail], tenantCode)
 					const mentor_Id = mentorId.result[0]
 
 					if (isNaN(mentor_Id)) {
@@ -549,22 +556,36 @@ module.exports = class UserInviteHelper {
 				)
 			}
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
+			const sessionModelName = await sessionQueries.getModelName()
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			const sessionModelName = await sessionQueries.getModelName()
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [orgId, defaultOrgId],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [orgCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				model_names: { [Op.contains]: [sessionModelName] },
-			})
+				{
+					[Op.in]: [tenantCode, defaults.tenantCode],
+				}
+			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,
 				entities: item.entities,
@@ -701,7 +722,18 @@ module.exports = class UserInviteHelper {
 		}
 	}
 
-	static async processSessionDetails(csvData, sessionFileDir, userId, orgId, notifyUser, isMentor, tenant_code) {
+	static async processSessionDetails(
+		csvData,
+		sessionFileDir,
+		userId,
+		orgId,
+		notifyUser,
+		isMentor,
+		tenantCode,
+		orgCode,
+		defaultOrgCode,
+		defaultTenantCode
+	) {
 		try {
 			const outputFileName = utils.generateFileName(common.sessionOutputFile, common.csvExtension)
 			let rowsWithStatus = []
@@ -714,7 +746,14 @@ module.exports = class UserInviteHelper {
 							validRowsCount: valid,
 							invalidRowsCount: invalid,
 							processedSession,
-						} = await this.processSession(session, userId, orgId, validRowsCount, invalidRowsCount)
+						} = await this.processSession(
+							session,
+							userId,
+							orgCode,
+							validRowsCount,
+							invalidRowsCount,
+							tenantCode
+						)
 						validRowsCount = valid
 						invalidRowsCount = invalid
 						rowsWithStatus.push(processedSession)
@@ -736,7 +775,14 @@ module.exports = class UserInviteHelper {
 							validRowsCount: valid,
 							invalidRowsCount: invalid,
 							processedSession,
-						} = await this.processSession(session, userId, orgId, validRowsCount, invalidRowsCount)
+						} = await this.processSession(
+							session,
+							userId,
+							orgCode,
+							validRowsCount,
+							invalidRowsCount,
+							tenantCode
+						)
 						validRowsCount = valid
 						invalidRowsCount = invalid
 						session.method = 'POST'
@@ -782,27 +828,40 @@ module.exports = class UserInviteHelper {
 				orgId,
 				isMentor,
 				notifyUser,
-				tenant_code
+				tenantCode,
+				orgCode
 			)
 
-			await this.fetchMentorIds(sessionCreationOutput)
+			await this.fetchMentorIds(sessionCreationOutput, tenantCode)
 
-			const defaultOrgId = await getDefaultOrgId()
-			if (!defaultOrgId)
+			const sessionModelName = await sessionQueries.getModelName()
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
 				return responses.failureResponse({
-					message: 'DEFAULT_ORG_ID_NOT_SET',
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			const sessionModelName = await sessionQueries.getModelName()
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-				status: 'ACTIVE',
-				organization_id: {
-					[Op.in]: [orgId, defaultOrgId],
+			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: {
+						[Op.in]: [orgCode, defaults.orgCode],
+					},
+					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				model_names: { [Op.contains]: [sessionModelName] },
-			})
+				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,
 				entities: item.entities,
@@ -914,7 +973,7 @@ module.exports = class UserInviteHelper {
 		}
 	}
 
-	static async processCreateData(SessionsArray, userId, orgId, isMentor, notifyUser, tenant_code) {
+	static async processCreateData(SessionsArray, userId, orgId, isMentor, notifyUser, tenantCode, orgCode) {
 		const output = []
 		for (const data of SessionsArray) {
 			if (data.status != 'Invalid') {
@@ -933,9 +992,10 @@ module.exports = class UserInviteHelper {
 						dataWithoutId,
 						userId,
 						orgId,
+						orgCode,
 						isMentor,
 						notifyUser,
-						tenant_code
+						tenantCode
 					)
 					if (sessionCreation.statusCode === httpStatusCode.created) {
 						data.statusMessage = this.appendWithComma(data.statusMessage, sessionCreation.message)
@@ -977,8 +1037,9 @@ module.exports = class UserInviteHelper {
 						userId,
 						data.method,
 						orgId,
+						orgCode,
 						notifyUser,
-						tenant_code
+						tenantCode
 					)
 					if (sessionUpdateOrDelete.statusCode === httpStatusCode.accepted) {
 						data.statusMessage = this.appendWithComma(data.statusMessage, sessionUpdateOrDelete.message)
@@ -1007,8 +1068,9 @@ module.exports = class UserInviteHelper {
 						userId,
 						data.method,
 						orgId,
+						orgCode,
 						notifyUser,
-						tenant_code
+						tenantCode
 					)
 					if (sessionDelete.statusCode === httpStatusCode.accepted) {
 						data.statusMessage = this.appendWithComma(data.statusMessage, sessionDelete.message)
@@ -1030,11 +1092,16 @@ module.exports = class UserInviteHelper {
 		return output
 	}
 
-	static async fetchMentorIds(sessionCreationOutput) {
+	static async fetchMentorIds(sessionCreationOutput, tenantCode) {
 		for (const item of sessionCreationOutput) {
 			const mentorIdPromise = item.mentor_id
 			if (!isNaN(mentorIdPromise) && mentorIdPromise) {
-				const mentorId = await menteeExtensionQueries.getMenteeExtension(mentorIdPromise, ['email'])
+				const mentorId = await menteeExtensionQueries.getMenteeExtension(
+					mentorIdPromise,
+					['email'],
+					false,
+					tenantCode
+				)
 				if (!mentorId) throw createUnauthorizedResponse('USER_NOT_FOUND')
 				item.mentor_id = mentorId.email
 			} else {
@@ -1046,7 +1113,12 @@ module.exports = class UserInviteHelper {
 				for (let i = 0; i < item.mentees.length; i++) {
 					const menteeId = item.mentees[i]
 					if (!isNaN(menteeId)) {
-						const mentee = await menteeExtensionQueries.getMenteeExtension(menteeId, ['email'])
+						const mentee = await menteeExtensionQueries.getMenteeExtension(
+							menteeId,
+							['email'],
+							false,
+							tenantCode
+						)
 						if (!mentee) throw createUnauthorizedResponse('USER_NOT_FOUND')
 						menteeEmails.push(mentee.email)
 					} else {

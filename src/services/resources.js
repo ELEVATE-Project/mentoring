@@ -16,28 +16,24 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- deleted response
 	 */
 
-	static async deleteResource(resourceId, sessionId) {
+	static async deleteResource(resourceId, sessionId, userId, organizationId, tenantCode) {
 		try {
-			// check if session exists or not
-			console.log('sessionId', sessionId)
-			const sessionDetails = await sessionQueries.findOne({ id: sessionId })
+			// Optimized: Single query with JOIN validation - eliminates separate session existence check
+			const deletedRows = await resourceQueries.deleteResourceByIdWithSessionValidation(resourceId, tenantCode)
 
-			if (!sessionDetails || Object.keys(sessionDetails).length === 0) {
+			if (deletedRows === 0) {
 				return responses.failureResponse({
-					message: 'SESSION_NOT_FOUND',
+					message: 'RESOURCE_NOT_FOUND_OR_SESSION_INVALID',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-
-			await resourceQueries.deleteResourceById(resourceId, sessionId)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'RESOURCE_DELETED_SUCCESSFULLY',
 			})
 		} catch (error) {
-			console.log(error)
 			throw error
 		}
 	}

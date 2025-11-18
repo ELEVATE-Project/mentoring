@@ -4,6 +4,7 @@ const entityTypeQueries = require('../database/queries/entity')
 const { UniqueConstraintError, ForeignKeyConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
 
 module.exports = class EntityHelper {
 	/**
@@ -12,30 +13,36 @@ module.exports = class EntityHelper {
 	 * @name create
 	 * @param {Object} bodyData - entity body data.
 	 * @param {String} id -  id.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - Entity created response.
 	 */
 
-	static async create(bodyData, id) {
-		bodyData.created_by = id
-		bodyData.updated_by = id
+	static async create(bodyData, id, tenantCode) {
+		// Create sanitized data object to avoid parameter mutation
+		const sanitizedData = {
+			...bodyData,
+			created_by: id,
+			updated_by: id,
+		}
 		try {
-			const entity = await entityTypeQueries.createEntity(bodyData)
+			// Optimized: Validate entity_type exists before creation - better UX than constraint errors
+			const entity = await entityTypeQueries.createEntityWithValidation(sanitizedData, tenantCode)
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_CREATED_SUCCESSFULLY',
 				result: entity,
 			})
 		} catch (error) {
-			if (error instanceof UniqueConstraintError) {
+			if (error.message === 'ENTITY_TYPE_NOT_FOUND') {
 				return responses.failureResponse({
-					message: 'ENTITY_ALREADY_EXISTS',
+					message: 'ENTITY_TYPE_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			if (error instanceof ForeignKeyConstraintError) {
+			if (error instanceof UniqueConstraintError) {
 				return responses.failureResponse({
-					message: 'ENTITY_TYPE_NOT_FOUND',
+					message: 'ENTITY_ALREADY_EXISTS',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -51,16 +58,30 @@ module.exports = class EntityHelper {
 	 * @param {Object} bodyData - entity body data.
 	 * @param {String} _id - entity id.
 	 * @param {String} loggedInUserId - logged in user id.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - Entity updated response.
 	 */
 
-	static async update(bodyData, id, loggedInUserId) {
-		bodyData.updated_by = loggedInUserId
+	static async update(bodyData, id, loggedInUserId, tenantCode) {
+		// Create sanitized data object to avoid parameter mutation
+		const sanitizedData = {
+			...bodyData,
+			updated_by: loggedInUserId,
+		}
+		const whereClause = {
+			id: id,
+			created_by: loggedInUserId,
+		}
 		try {
-			const [updateCount, updatedEntity] = await entityTypeQueries.updateOneEntity(id, bodyData, loggedInUserId, {
-				returning: true,
-				raw: true,
-			})
+			const [updateCount, updatedEntity] = await entityTypeQueries.updateOneEntity(
+				whereClause,
+				tenantCode,
+				sanitizedData,
+				{
+					returning: true,
+					raw: true,
+				}
+			)
 
 			if (updateCount === 0) {
 				return responses.failureResponse({
@@ -91,11 +112,27 @@ module.exports = class EntityHelper {
 	 * @method
 	 * @name read
 	 * @param {Object} bodyData - entity body data.
+	 * @param {String} userId - user id.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - Entity read response.
 	 */
 
-	static async read(query, userId) {
+	static async read(query, userId, tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
 			let filter
 			if (query.id) {
 				filter = {
@@ -107,6 +144,7 @@ module.exports = class EntityHelper {
 						},
 						{ id: query.id, created_by: userId, status: 'ACTIVE' },
 					],
+					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
 			} else {
 				filter = {
@@ -118,9 +156,12 @@ module.exports = class EntityHelper {
 						},
 						{ value: query.value, created_by: userId, status: 'ACTIVE' },
 					],
+					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
 			}
-			const entities = await entityTypeQueries.findAllEntities(filter)
+			const entities = await entityTypeQueries.findAllEntities(filter, {
+				[Op.in]: [tenantCode, defaults.tenantCode],
+			})
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -139,8 +180,24 @@ module.exports = class EntityHelper {
 		}
 	}
 
-	static async readAll(query, userId) {
+	static async readAll(query, userId, tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			let filter
 			if (query.read_user_entity == true) {
 				filter = {
@@ -152,13 +209,17 @@ module.exports = class EntityHelper {
 							created_by: userId,
 						},
 					],
+					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
 			} else {
 				filter = {
 					created_by: '0',
+					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
 			}
-			const entities = await entityTypeQueries.findAllEntities(filter)
+			const entities = await entityTypeQueries.findAllEntities(filter, {
+				[Op.in]: [tenantCode, defaults.tenantCode],
+			})
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -182,12 +243,19 @@ module.exports = class EntityHelper {
 	 * @method
 	 * @name delete
 	 * @param {String} _id - Delete entity.
+	 * @param {String} userId - user id.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - Entity deleted response.
 	 */
 
-	static async delete(id, userId) {
+	static async delete(id, userId, tenantCode) {
 		try {
-			const deleteCount = await entityTypeQueries.deleteOneEntityType(id, userId)
+			const whereClause = {
+				id: id,
+				created_by: userId,
+				tenant_code: tenantCode,
+			}
+			const deleteCount = await entityTypeQueries.deleteOneEntityType(whereClause, tenantCode)
 			if (deleteCount === '0') {
 				return responses.failureResponse({
 					message: 'ENTITY_NOT_FOUND',
@@ -210,22 +278,46 @@ module.exports = class EntityHelper {
 	 * @method
 	 * @name list
 	 * @param {Object} query - query params
-	 * @param {String} userId - logged in user id.
 	 * @param {String} searchText - search label in entity.
-	 * @param {Integer} page -  page no.
+	 * @param {Integer} pageNo -  page no.
 	 * @param {Integer} pageSize -  page limit per api.
+	 * @param {String} tenantCode - tenant code.
 	 * @returns {JSON} - Entity search matched response.
 	 */
-	static async list(query, searchText, pageNo, pageSize) {
+	static async list(query, searchText, pageNo, pageSize, tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			let entityType = query.entity_type_id ? query.entity_type_id : ''
-			let filter = {}
+			let filter = {
+				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
+			}
 			if (entityType) {
 				filter['entity_type_id'] = entityType
 			}
 
-			const attributes = ['id', 'entity_type_id', 'value', 'label', 'status', 'type', 'created_by', 'created_at']
-			const entities = await entityTypeQueries.getAllEntities(filter, attributes, pageNo, pageSize, searchText)
+			// Optimized: Get entities with entity_type details included - eliminates N+1 queries for clients
+			const entities = await entityTypeQueries.getAllEntitiesWithEntityTypeDetails(
+				filter,
+				{ [Op.in]: [defaults.tenantCode, tenantCode] },
+				pageNo,
+				pageSize,
+				searchText
+			)
 
 			if (entities.rows == 0 || entities.count == 0) {
 				return responses.failureResponse({
