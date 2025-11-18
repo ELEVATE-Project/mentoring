@@ -49,8 +49,7 @@ module.exports = class MenteesHelper {
 	 */
 	static async read(id, organizationId, organizationCode, roles, tenantCode) {
 		// Try to get complete profile from cache first (only when false)
-		const cachedProfile = await cacheHelper.mentee.get(tenantCode, organizationCode, id, false)
-
+		const cachedProfile = await cacheHelper.mentee.getCacheOnly(tenantCode, organizationCode, id)
 		// If we have cached data , return complete response immediately
 		if (cachedProfile) {
 			return responses.successResponse({
@@ -201,7 +200,6 @@ module.exports = class MenteesHelper {
 			settings: mentee.settings, // Add settings to match mentor read
 			image: mentee.image, // Add image to match mentor read
 			displayProperties,
-			Permissions: menteePermissions,
 		}
 
 		// Cache the complete profile response
@@ -1945,23 +1943,16 @@ module.exports = class MenteesHelper {
 	static async details(id, organizationCode, userId = '', isAMentor = '', roles = '', tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let requestedUserExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, id, false)
-
-			// If we have cached complete response
-			if (
-				requestedUserExtension &&
-				requestedUserExtension.displayProperties &&
-				requestedUserExtension.Permissions
-			) {
-				let totalSessionHosted
-				if (requestedUserExtension.is_mentor == true) {
+			const cacheProfileDetails = await cacheHelper.mentee.getCacheOnly(tenantCode, organizationCode, id)
+			if (cacheProfileDetails) {
+				if (cacheProfileDetails.is_mentor == true) {
 					// Get mentor visibility and org id
 					const validateDefaultRules = await validateDefaultRulesFilter({
 						ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 						requesterId: userId,
 						roles: roles,
 						requesterOrganizationCode: organizationCode,
-						data: requestedUserExtension,
+						data: cacheProfileDetails,
 						tenantCode: tenantCode,
 					})
 					if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
@@ -1978,12 +1969,11 @@ module.exports = class MenteesHelper {
 							responseCode: 'CLIENT_ERROR',
 						})
 					}
-					totalSessionHosted = await sessionQueries.countHostedSessions(id, tenantCode)
 				}
 				// Check for accessibility for reading shared mentor profile
 				const isAccessible = await checkIfUserIsAccessible(
 					userId,
-					requestedUserExtension,
+					cacheProfileDetails,
 					tenantCode,
 					organizationCode
 				)
@@ -1998,17 +1988,14 @@ module.exports = class MenteesHelper {
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'PROFILE_FTECHED_SUCCESSFULLY',
-					result: requestedUserExtension,
+					result: cacheProfileDetails,
 				})
 			}
 
 			// If we don't have cached data, fetch it from database
-			if (!requestedUserExtension) {
-				// Try cache again for basic user data (name, user_id are sufficient for this flow)
-				requestedUserExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, id, false)
-				if (!requestedUserExtension) {
-					requestedUserExtension = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
-				}
+			let requestedUserExtension
+			if (!cacheProfileDetails) {
+				requestedUserExtension = await menteeQueries.getMenteeExtension(id, [], false, tenantCode)
 			}
 
 			if (!requestedUserExtension || (!isAMentor && requestedUserExtension.is_mentor == false)) {

@@ -812,15 +812,15 @@ module.exports = class MentorsHelper {
 				orgCode = mentorProfile.data.result.organization_code
 			}
 
-			// Try to get complete profile from cache first (only when false)
-			const cachedProfile = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
+			// Try to get complete profile from cache first using getCacheOnly
+			const cachedProfile = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, id)
 
-			// If we have cached data and not in mode, return complete response immediately
+			// If we have cached data, use it efficiently
 			if (cachedProfile) {
 				let requestedMentorExtension = false
 				if (userId !== '' && isAMentor !== '' && roles !== '') {
-					// Try cache first using logged-in user's organization context
-					requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
+					// Use cached data for validation instead of making redundant database query
+					requestedMentorExtension = cachedProfile
 
 					const validateDefaultRules = await validateDefaultRulesFilter({
 						ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
@@ -876,17 +876,17 @@ module.exports = class MentorsHelper {
 				})
 			}
 
-			let requestedMentorExtension = false
-			if (userId !== '' && isAMentor !== '' && roles !== '') {
-				// Try cache first using logged-in user's organization context
-				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
+			// Get mentor extension data efficiently (avoid redundant queries)
+			let mentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
 
+			// If user authentication is required, perform validation
+			if (userId !== '' && isAMentor !== '' && roles !== '') {
 				const validateDefaultRules = await validateDefaultRulesFilter({
 					ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 					requesterId: userId,
 					roles: roles,
 					requesterOrganizationCode: orgCode,
-					data: requestedMentorExtension,
+					data: mentorExtension,
 					tenantCode: tenantCode,
 				})
 				if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
@@ -904,7 +904,7 @@ module.exports = class MentorsHelper {
 					})
 				}
 				// Throw error if extension not found
-				if (!requestedMentorExtension || Object.keys(requestedMentorExtension).length === 0) {
+				if (!mentorExtension || Object.keys(mentorExtension).length === 0) {
 					return responses.failureResponse({
 						statusCode: httpStatusCode.not_found,
 						message: 'MENTORS_NOT_FOUND',
@@ -913,7 +913,7 @@ module.exports = class MentorsHelper {
 
 				// Check for accessibility for reading shared mentor profile
 				const isAccessible = await this.checkIfMentorIsAccessible(
-					[requestedMentorExtension],
+					[mentorExtension],
 					userId,
 					isAMentor,
 					tenantCode,
@@ -930,14 +930,6 @@ module.exports = class MentorsHelper {
 			}
 
 			const mentorOrgCode = mentorProfile.data.result.organization_code
-
-			let mentorExtension
-			if (requestedMentorExtension) {
-				mentorExtension = requestedMentorExtension
-			} else {
-				// Try cache first using logged-in user's organization context
-				mentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
-			}
 
 			// If no mentor extension found, but user has admin/mentor roles, check if user extension exists and update it
 			if (!mentorExtension && roles && roles.some((role) => role.title === 'admin' || role.title === 'mentor')) {
@@ -1112,6 +1104,10 @@ module.exports = class MentorsHelper {
 				...mentorProfile,
 				...processDbResponse,
 				...userProfile, // Include userProfile only if token was provided
+				meta: {
+					...(userProfile.meta || {}),
+					...(processDbResponse.meta || {}),
+				},
 				sessions_hosted: totalSessionHosted,
 				visible_to_organizations: mentorExtension.visible_to_organizations, // Add to match mentee read
 				settings: mentorExtension.settings, // Add settings to match mentee read
@@ -1120,10 +1116,8 @@ module.exports = class MentorsHelper {
 				profile_mandatory_fields: processDbResponse.profile_mandatory_fields, // Ensure not overwritten
 				organization: mentorProfile.organization, // Ensure not overwritten
 				displayProperties,
-				Permissions: mentorPermissions,
 			}
 
-			// Cache the complete profile response
 			try {
 				console.log(`💾 Caching complete mentor profile response for ${id}`)
 				await cacheHelper.mentor.set(tenantCode, orgCode, id, finalProfile)
@@ -1142,6 +1136,36 @@ module.exports = class MentorsHelper {
 	}
 
 	/**
+	 * Get user policy details from cache or database
+	 * @method
+	 * @name _getUserPolicyDetails
+	 * @param {Boolean} isAMentor - Whether user is a mentor
+	 * @param {String} tenantCode - Tenant code
+	 * @param {String} orgCode - Organization code
+	 * @param {String} userId - User ID
+	 * @returns {Object|null} - User policy details
+	 */
+	static async _getUserPolicyDetails(isAMentor, tenantCode, orgCode, userId) {
+		const cacheKey = isAMentor ? 'mentor' : 'mentee'
+		const queryFunction = isAMentor ? mentorQueries.getMentorExtension : menteeQueries.getMenteeExtension
+
+		// Try cache first
+		let userPolicyDetails = await cacheHelper[cacheKey].getCacheOnly(tenantCode, orgCode, userId)
+
+		// Fallback to database query if cache miss
+		if (!userPolicyDetails) {
+			userPolicyDetails = await queryFunction(
+				userId,
+				['external_mentor_visibility', 'organization_id'],
+				false,
+				tenantCode
+			)
+		}
+
+		return userPolicyDetails
+	}
+
+	/**
 	 * @description 							- check if mentor is accessible based on user's saas policy.
 	 * @method
 	 * @name checkIfMentorIsAccessible
@@ -1152,10 +1176,8 @@ module.exports = class MentorsHelper {
 	 */
 	static async checkIfMentorIsAccessible(userData, userId, isAMentor, tenantCode, orgCode) {
 		try {
-			// user can be mentor or mentee, based on isAMentor key get policy details
-			const userPolicyDetails = isAMentor
-				? await cacheHelper.mentor.get(tenantCode, orgCode, userId)
-				: await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+			// Get user policy details using helper function
+			const userPolicyDetails = await this._getUserPolicyDetails(isAMentor, tenantCode, orgCode, userId)
 
 			// Throw error if mentor/mentee extension not found
 			if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {

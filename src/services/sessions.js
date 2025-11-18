@@ -15,6 +15,7 @@ const postSessionQueries = require('@database/queries/postSessionDetail')
 const entityTypeQueries = require('@database/queries/entityType')
 const entityTypeCache = require('@helpers/entityTypeCache')
 const cacheHelper = require('@generics/cacheHelper')
+const { get: getFromCache, buildKey } = require('@generics/cacheHelper')
 const entitiesQueries = require('@database/queries/entity')
 const { Op } = require('sequelize')
 const notificationQueries = require('@database/queries/notificationTemplate')
@@ -1458,26 +1459,86 @@ module.exports = class SessionsHelper {
 				filter.id = id
 			} else {
 				filter.share_link = id
-				// For share_link, we still need to get the actual session to get the id for caching
 			}
 
-			// Try to get FINAL processed response from cache first (only for numeric ids)
-			// Use direct cache access to avoid cacheHelper's database fallback
+			// Try to get session from cache first (only for numeric ids)
 			let finalResponse = null
-			if (utils.isNumeric(id)) {
+			finalResponse = await cacheHelper.sessions.get(tenantCode, orgCode, id)
+
+			if (utils.isNumeric(id) && finalResponse) {
 				try {
-					const cacheKey = `tenant:${tenantCode}:org:${orgCode}:sessions:${id}`
-					// Import helper functions to avoid database fallback
-					const { RedisCache } = require('elevate-node-cache')
-					finalResponse = await RedisCache.getKey(cacheKey)
-					if (finalResponse) {
-						// Return cached final response directly - already fully processed
-						return responses.successResponse({
-							statusCode: httpStatusCode.created,
-							message: 'SESSION_FETCHED_SUCCESSFULLY',
-							result: finalResponse,
-						})
+					// Convert cached Sequelize model to plain object for proper serialization
+					if (finalResponse.dataValues) {
+						finalResponse = { ...finalResponse.dataValues, ...finalResponse }
+						delete finalResponse.dataValues
+						delete finalResponse._previousDataValues
+						delete finalResponse._changed
+						delete finalResponse._options
+						delete finalResponse.uniqno
+						delete finalResponse.isNewRecord
 					}
+
+					// Check if this is a fully processed cached response (has processed entity fields)
+					const isFullyProcessedCache =
+						finalResponse.mentor_designation &&
+						Array.isArray(finalResponse.mentor_designation) &&
+						finalResponse.mentor_designation.length > 0 &&
+						typeof finalResponse.mentor_designation[0] === 'object' &&
+						finalResponse.mentor_designation[0].value !== undefined
+
+					if (!isFullyProcessedCache) {
+						// Process mentor designation for cached response (only if not already processed)
+						await this._processMentorDesignation(finalResponse, tenantCode, orgCode)
+
+						// Process session entity fields for cached response (only if not already processed)
+						await this._processSessionEntityFields(finalResponse, tenantCode, orgCode)
+					}
+
+					// Add user-specific data (enrollment status, mentees list, etc.) for cached response
+					if (userId) {
+						await this._enrichSessionWithUserData(
+							finalResponse,
+							userId,
+							isAMentor,
+							queryParams,
+							roles,
+							orgCode,
+							tenantCode
+						)
+					}
+
+					// Check accessibility for cached response
+					if (userId !== '' && isAMentor !== '') {
+						let isAccessible = await this.checkIfSessionIsAccessible(
+							finalResponse,
+							userId,
+							isAMentor,
+							tenantCode,
+							orgCode
+						)
+						if (!isAccessible) {
+							return responses.failureResponse({
+								statusCode: httpStatusCode.forbidden,
+								message: 'SESSION_RESTRICTED',
+								responseCode: 'CLIENT_ERROR',
+							})
+						}
+					}
+
+					// Cache the fully processed session for future requests
+					if (utils.isNumeric(id)) {
+						try {
+							await cacheHelper.sessions.set(tenantCode, orgCode, finalResponse.id, finalResponse)
+						} catch (cacheError) {
+							// Continue without caching - don't fail the request
+						}
+					}
+
+					return responses.successResponse({
+						statusCode: httpStatusCode.created,
+						message: 'SESSION_FETCHED_SUCCESSFULLY',
+						result: finalResponse,
+					})
 				} catch (cacheError) {
 					// Continue to database query
 				}
@@ -1514,35 +1575,26 @@ module.exports = class SessionsHelper {
 			}
 
 			// Get mentor details for mentor_designation processing
-			const mentorExtension = await mentorExtensionQueries.getMentorExtension(
-				sessionDetails.mentor_id,
-				[
-					'user_id',
-					'name',
-					'designation',
-					'organization_id',
-					'custom_entity_text',
-					'external_session_visibility',
-					'organization_id',
-				],
-				true,
-				tenantCode
-			)
+			const mentorExtension =
+				(await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, sessionDetails.mentor_id)) ||
+				(await mentorExtensionQueries.getMentorExtension(
+					sessionDetails.mentor_id,
+					[
+						'user_id',
+						'name',
+						'designation',
+						'organization_id',
+						'custom_entity_text',
+						'external_session_visibility',
+						'organization_id',
+					],
+					true,
+					tenantCode
+				))
 
 			// Set basic mentor info before entity processing
 			sessionDetails.mentor_name = mentorExtension ? mentorExtension.name : common.USER_NOT_FOUND
 			sessionDetails.mentor_designation = []
-
-			// Prepare unique orgIds for entity processing
-			const orgIds = [
-				...new Set(
-					[
-						mentorExtension ? mentorExtension.organization_id : null,
-						sessionDetails.mentor_organization_id,
-						defaults.orgCode,
-					].filter(Boolean)
-				),
-			]
 
 			const sessionModelName = await sessionQueries.getModelName()
 			// Store mentor designation for later processing (don't set it as 'designation' field)
@@ -1554,68 +1606,35 @@ module.exports = class SessionsHelper {
 
 			sessionDetails['resources'] = await this.getResources(sessionDetails.id, tenantCode)
 
-			// Fetch entity types for both Session and UserExtension models for complete processing
+			// Optimized: Fetch entity types for both models using standard cache pattern
 			let entityTypes = []
 			try {
 				// Get Session model entity types
-				const sessionEntityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
-					sessionModelName,
-					[sessionDetails.mentor_organization_id, defaults.orgCode],
-					[tenantCode, defaults.tenantCode],
-					{
-						status: 'ACTIVE',
-					}
-				)
-
-				// Get UserExtension model entity types (for mentor designation processing)
-				const userExtensionEntityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
-					'UserExtension',
-					[sessionDetails.mentor_organization_id, defaults.orgCode],
-					[tenantCode, defaults.tenantCode],
-					{
-						status: 'ACTIVE',
-					}
-				)
-
-				// Combine both sets of entity types
-				entityTypes = [...(sessionEntityTypes || []), ...(userExtensionEntityTypes || [])]
-			} catch (cacheError) {
-				console.log('EntityTypes cache lookup failed, falling back to database:', cacheError.message)
-
-				// Fallback to direct database query for both models
-				const sessionEntityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
-					{
-						status: 'ACTIVE',
-						organization_code: {
-							[Op.in]: [sessionDetails.mentor_organization_id, defaults.orgCode],
-						},
-						model_names: { [Op.contains]: [sessionModelName] },
-					},
-					{ [Op.in]: [tenantCode, defaults.tenantCode] },
+				const sessionEntityTypes = await cacheHelper.entityTypes.getEntityTypesWithMentorOrg(
+					tenantCode,
+					orgCode,
+					sessionDetails.mentor_organization_id,
 					sessionModelName
 				)
 
-				const userEntityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
-					{
-						status: 'ACTIVE',
-						organization_code: {
-							[Op.in]: [sessionDetails.mentor_organization_id, defaults.orgCode],
-						},
-						model_names: { [Op.contains]: ['UserExtension'] },
-					},
-					{ [Op.in]: [tenantCode, defaults.tenantCode] },
+				// Get UserExtension model entity types
+				const userEntityTypes = await cacheHelper.entityTypes.getEntityTypesWithMentorOrg(
+					tenantCode,
+					orgCode,
+					sessionDetails.mentor_organization_id,
 					'UserExtension'
 				)
 
+				// Combine both sets
 				entityTypes = [...(sessionEntityTypes || []), ...(userEntityTypes || [])]
+			} catch (error) {
+				console.error('Optimized entity types fetch failed:', error.message)
+				entityTypes = []
 			}
 
-			if (entityTypes instanceof Error) {
-				throw entityTypes
-			}
-
-			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
+			// Instead of using removeDefaultOrgEntityTypes which could remove UserExtension entity types
+			// we need, filter out duplicates while preserving all model types needed for processing
+			const validationData = this._removeDefaultOrgEntityTypesPreservingModels(entityTypes, defaults.orgCode)
 
 			// Extract clean data from Sequelize model before processing
 			const cleanSessionData = sessionDetails.dataValues || sessionDetails
@@ -1644,18 +1663,31 @@ module.exports = class SessionsHelper {
 			// Collect processed designation values and create mentor_designation array
 			if (mentorDesignationValues.length > 0) {
 				const processedDesignations = []
+
 				mentorDesignationValues.forEach((value) => {
 					if (processDbResponse[value] && typeof processDbResponse[value] === 'object') {
 						// Entity was processed successfully
 						processedDesignations.push(processDbResponse[value])
-						// Clean up the individual field from final response
 						delete processDbResponse[value]
 					} else if (processDbResponse[value]) {
-						// Fallback: create basic value/label if not processed
-						processedDesignations.push({
-							value: value,
-							label: value, // Use raw value as label if no processing occurred
-						})
+						// Check if we can find any entity type that contains this value
+						const matchingEntityType = validationData.find(
+							(et) => et.entities && et.entities.find((entity) => entity.value === value)
+						)
+
+						if (matchingEntityType) {
+							const matchingEntity = matchingEntityType.entities.find((entity) => entity.value === value)
+							processedDesignations.push({
+								value: value,
+								label: matchingEntity.label || value,
+							})
+						} else {
+							// Last resort: use raw value as label
+							processedDesignations.push({
+								value: value,
+								label: value,
+							})
+						}
 						delete processDbResponse[value]
 					}
 				})
@@ -1699,7 +1731,6 @@ module.exports = class SessionsHelper {
 					})
 				}
 			}
-
 			// Cache the FINAL processed response (only for simple numeric IDs)
 			if (utils.isNumeric(id)) {
 				try {
@@ -1716,6 +1747,36 @@ module.exports = class SessionsHelper {
 		} catch (error) {
 			throw error
 		}
+	}
+
+	/**
+	 * Remove default org entity types while preserving all needed model types
+	 * This prevents removing UserExtension entity types needed for designation processing
+	 * when Session model has entity types with same values
+	 * @method
+	 * @name _removeDefaultOrgEntityTypesPreservingModels
+	 * @param {Array} entityTypes - Array of entity types from multiple models
+	 * @param {String} orgCode - Primary organization code
+	 * @returns {Array} - Filtered entity types preserving all model types
+	 */
+	static _removeDefaultOrgEntityTypesPreservingModels(entityTypes, orgCode) {
+		// Use a Map with composite key: value + model_names to preserve different model types
+		const entityTypeMap = new Map()
+
+		entityTypes.forEach((entityType) => {
+			const modelNames = Array.isArray(entityType.model_names) ? entityType.model_names.sort().join(',') : ''
+			const compositeKey = `${entityType.value}:${modelNames}`
+
+			if (!entityTypeMap.has(compositeKey)) {
+				// First entity with this value+model combination
+				entityTypeMap.set(compositeKey, entityType)
+			} else if (entityType.organization_code === orgCode) {
+				// Prefer primary org entity type over default org
+				entityTypeMap.set(compositeKey, entityType)
+			}
+		})
+
+		return Array.from(entityTypeMap.values())
 	}
 
 	/**
@@ -1769,7 +1830,10 @@ module.exports = class SessionsHelper {
 				(isMenteesListRequested && canRetrieveMenteeList) ||
 				(!queryParams?.get_mentees && canRetrieveMenteeList)
 			) {
-				sessionDetails.mentees = await getEnrolledMentees(sessionDetails.id, {}, userId, tenantCode)
+				// Only fetch mentees if not already cached
+				if (!sessionDetails.mentees || !Array.isArray(sessionDetails.mentees)) {
+					sessionDetails.mentees = await getEnrolledMentees(sessionDetails.id, {}, userId, tenantCode)
+				}
 			}
 
 			// Remove sensitive meeting info if user is not mentor or creator
@@ -1781,6 +1845,252 @@ module.exports = class SessionsHelper {
 			}
 		} catch (error) {
 			throw error
+		}
+	}
+
+	/**
+	 * @description 							- Process mentor designation for cached sessions
+	 * @method
+	 * @name _processMentorDesignation
+	 * @param {Object} sessionDetails 			- Session data
+	 * @param {String} tenantCode 				- Tenant code
+	 * @param {String} orgCode 					- Organization code
+	 * @returns {void} 							- Modifies sessionDetails in place
+	 */
+	static async _processMentorDesignation(sessionDetails, tenantCode, orgCode) {
+		try {
+			// Skip if mentor_designation already exists (already processed)
+			if (sessionDetails.mentor_designation) {
+				return
+			}
+
+			// Get default values
+			const defaults = await getDefaults()
+			if (!defaults.orgCode || !defaults.tenantCode) {
+				console.warn('⚠️ Default org/tenant codes not set for mentor designation processing')
+				sessionDetails.mentor_designation = []
+				return
+			}
+
+			// Get mentor details for designation processing
+			const mentorExtension =
+				(await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, sessionDetails.mentor_id)) ||
+				(await mentorExtensionQueries.getMentorExtension(
+					sessionDetails.mentor_id,
+					['user_id', 'name', 'designation', 'organization_id'],
+					true,
+					tenantCode
+				))
+
+			// Initialize designation array
+			sessionDetails.mentor_designation = []
+
+			if (!mentorExtension?.designation || !Array.isArray(mentorExtension.designation)) {
+				return
+			}
+
+			// Prepare unique orgIds for entity processing
+			const orgIds = [
+				...new Set(
+					[mentorExtension.organization_id, sessionDetails.mentor_organization_id, defaults.orgCode].filter(
+						Boolean
+					)
+				),
+			]
+
+			// Optimized: Fetch UserExtension entity types using standard cache pattern
+			let entityTypes = []
+			try {
+				const allEntityTypes = await cacheHelper.entityTypes.getEntityTypesWithMentorOrg(
+					tenantCode,
+					orgCode,
+					sessionDetails.mentor_organization_id,
+					'UserExtension'
+				)
+				// Filter for designation-related entity types
+				entityTypes = allEntityTypes.filter((et) => et.value === 'designation')
+			} catch (error) {
+				console.error('Failed to get designation entity types:', error.message)
+			}
+
+			// Process each designation value
+			const processedDesignations = []
+			for (const value of mentorExtension.designation) {
+				if (!value) continue
+
+				// Find matching entity type
+				const matchingEntityType = entityTypes.find(
+					(et) => et.entities && et.entities.find((entity) => entity.value === value)
+				)
+
+				if (matchingEntityType) {
+					const matchingEntity = matchingEntityType.entities.find((entity) => entity.value === value)
+					processedDesignations.push({
+						value: value,
+						label: matchingEntity.label || value,
+					})
+				} else {
+					// Use raw value as label if no entity found
+					processedDesignations.push({
+						value: value,
+						label: value,
+					})
+				}
+			}
+
+			sessionDetails.mentor_designation = processedDesignations
+		} catch (error) {
+			// Don't fail the entire request for designation processing errors
+			console.error('Error processing mentor designation:', error)
+			sessionDetails.mentor_designation = []
+		}
+	}
+
+	/**
+	 * @description 							- Process session entity fields for cached sessions
+	 * @method
+	 * @name _processSessionEntityFields
+	 * @param {Object} sessionDetails 			- Session data
+	 * @param {String} tenantCode 				- Tenant code
+	 * @param {String} orgCode 					- Organization code
+	 * @returns {void} 							- Modifies sessionDetails in place
+	 */
+	static async _processSessionEntityFields(sessionDetails, tenantCode, orgCode) {
+		try {
+			// Get defaults for entity type lookup
+			const defaults = await getDefaults()
+			if (!defaults.orgCode || !defaults.tenantCode) {
+				return
+			}
+
+			// Fields to process with their corresponding entity type values
+			const fieldMappings = {
+				recommended_for: 'recommended_for',
+				categories: 'categories',
+				medium: 'medium',
+			}
+
+			// Get session model name
+			const sessionModelName = await sessionQueries.getModelName()
+
+			// Process each field
+			for (const [fieldName, entityValue] of Object.entries(fieldMappings)) {
+				if (!sessionDetails[fieldName] || !Array.isArray(sessionDetails[fieldName])) {
+					continue
+				}
+
+				const rawValues = sessionDetails[fieldName]
+				const processedValues = []
+
+				// Get entity types for this field using simplified approach
+				let entityTypes = []
+				try {
+					const allEntityTypes = await cacheHelper.entityTypes.getAllEntityTypesForModel(
+						tenantCode,
+						orgCode,
+						sessionModelName
+					)
+					// Filter for specific entity value
+					entityTypes = allEntityTypes.filter((et) => et.value === entityValue)
+				} catch (error) {
+					console.error(`Failed to get entity types for ${entityValue}:`, error.message)
+				}
+
+				// Process each value in the field array
+				for (const value of rawValues) {
+					if (!value) continue
+
+					// Check if value is already processed (has value/label structure)
+					if (value && typeof value === 'object' && value.value !== undefined && value.label !== undefined) {
+						// Already processed - use as is
+						processedValues.push(value)
+						continue
+					}
+
+					// Find matching entity type
+					const matchingEntityType = entityTypes.find(
+						(et) => et.entities && et.entities.find((entity) => entity.value === value)
+					)
+
+					if (matchingEntityType) {
+						const matchingEntity = matchingEntityType.entities.find((entity) => entity.value === value)
+						processedValues.push({
+							value: value,
+							label: matchingEntity.label || value,
+						})
+					} else {
+						// Use raw value as label if no entity found
+						processedValues.push({
+							value: value,
+							label: value,
+						})
+					}
+				}
+
+				// Update the field with processed values
+				sessionDetails[fieldName] = processedValues
+			}
+
+			// Process single value fields
+			const singleValueFields = {
+				status: 'status',
+				type: 'type',
+			}
+
+			for (const [fieldName, entityValue] of Object.entries(singleValueFields)) {
+				if (!sessionDetails[fieldName]) {
+					continue
+				}
+
+				const rawValue = sessionDetails[fieldName]
+
+				// Check if value is already processed (has value/label structure)
+				if (
+					rawValue &&
+					typeof rawValue === 'object' &&
+					rawValue.value !== undefined &&
+					rawValue.label !== undefined
+				) {
+					// Already processed - skip
+					continue
+				}
+
+				// Get entity types for this field using simplified approach
+				let entityTypes = []
+				try {
+					const allEntityTypes = await cacheHelper.entityTypes.getAllEntityTypesForModel(
+						tenantCode,
+						orgCode,
+						sessionModelName
+					)
+					// Filter for specific entity value
+					entityTypes = allEntityTypes.filter((et) => et.value === entityValue)
+				} catch (error) {
+					console.error(`Failed to get entity types for ${entityValue}:`, error.message)
+				}
+
+				// Find matching entity type
+				const matchingEntityType = entityTypes.find(
+					(et) => et.entities && et.entities.find((entity) => entity.value === rawValue)
+				)
+
+				if (matchingEntityType) {
+					const matchingEntity = matchingEntityType.entities.find((entity) => entity.value === rawValue)
+					sessionDetails[fieldName] = {
+						value: rawValue,
+						label: matchingEntity.label || rawValue,
+					}
+				} else {
+					// Keep as raw value if no entity found
+					sessionDetails[fieldName] = {
+						value: rawValue,
+						label: rawValue,
+					}
+				}
+			}
+		} catch (error) {
+			// Don't fail the entire request for entity processing errors
+			console.error('Error processing session entity fields:', error)
 		}
 	}
 

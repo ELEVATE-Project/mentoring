@@ -329,15 +329,7 @@ const sessions = {
 				`💾 Session ${sessionId} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
 			)
 			const sessionFromDb = await sessionQueries.findById(sessionId, tenantCode)
-
-			if (sessionFromDb) {
-				// Cache the fetched data for future requests
-				await this.set(tenantCode, orgCode, sessionId, sessionFromDb)
-				console.log(
-					`💾 Session ${sessionId} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
-				)
-			}
-
+			// Note: NOT caching here - let the service layer cache the enriched session
 			return sessionFromDb
 		} catch (error) {
 			console.error(`❌ Failed to get session ${sessionId} from cache/database:`, error)
@@ -483,6 +475,86 @@ const entityTypes = {
 	async clearAll(tenantCode, orgCode) {
 		return await evictNamespace({ tenantCode, orgCode: orgCode, ns: 'entityTypes' })
 	},
+
+	/**
+	 * Get all entity types for a specific model using direct database query
+	 * @param {string} tenantCode - Tenant code
+	 * @param {string} orgCode - Organization code
+	 * @param {string} modelName - Model name (e.g., 'Session', 'UserExtension')
+	 * @returns {Promise<Array>} Array of all entity types for the model
+	 */
+	async getAllEntityTypesForModel(tenantCode, orgCode, modelName) {
+		try {
+			// Use database query to get all entity types for a model without hardcoding values
+			const defaults = await getDefaults()
+			const tenantCodes = defaults.tenantCode ? [tenantCode, defaults.tenantCode] : [tenantCode]
+			const orgCodes = defaults.orgCode ? [orgCode, defaults.orgCode] : [orgCode]
+
+			const filter = {
+				status: 'ACTIVE',
+				organization_code: { [Op.in]: orgCodes },
+				model_names: { [Op.contains]: [modelName] },
+			}
+
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodes)
+
+			// Cache each entity type individually using standard cache pattern
+			if (entityTypes && entityTypes.length > 0) {
+				for (const entityType of entityTypes) {
+					try {
+						await this.set(tenantCode, orgCode, modelName, entityType.value, [entityType])
+					} catch (cacheError) {
+						// Continue if caching fails for individual entity type
+					}
+				}
+			}
+
+			return entityTypes || []
+		} catch (error) {
+			console.error(`❌ Failed to get all entity types for model ${modelName}:`, error)
+			return []
+		}
+	},
+
+	/**
+	 * Get entity types for specific model with mentor org code resolution using standard cache
+	 * @param {string} tenantCode - Tenant code
+	 * @param {string} currentOrgCode - Current organization code
+	 * @param {string} mentorOrganizationId - Mentor's organization ID (numeric)
+	 * @param {string} modelName - Model name ('Session' or 'UserExtension')
+	 * @returns {Promise<Array>} Array of entity types
+	 */
+	async getEntityTypesWithMentorOrg(tenantCode, currentOrgCode, mentorOrganizationId, modelName) {
+		try {
+			// Step 1: Get mentor organization code using organization cache
+			let mentorOrgCode = null
+			if (mentorOrganizationId) {
+				try {
+					const mentorOrg = await organizations.get(tenantCode, currentOrgCode, mentorOrganizationId)
+					mentorOrgCode = mentorOrg?.organization_code
+				} catch (orgCacheError) {
+					console.warn('Organization cache lookup failed, falling back to database query')
+					// Fallback: Direct database query for organization code
+					const organisationExtensionQueries = require('@database/queries/organisationExtension')
+					const orgData = await organisationExtensionQueries.findOne(
+						{ organization_id: mentorOrganizationId },
+						tenantCode,
+						{ attributes: ['organization_code'], raw: true }
+					)
+					mentorOrgCode = orgData?.organization_code
+				}
+			}
+
+			// Step 2: Use mentor org code if available, otherwise current org code
+			const effectiveOrgCode = mentorOrgCode || currentOrgCode
+
+			// Step 3: Get entity types for the specific model and org
+			return await this.getAllEntityTypesForModel(tenantCode, effectiveOrgCode, modelName)
+		} catch (error) {
+			console.error('Failed to get entity types with mentor org resolution:', error)
+			return []
+		}
+	},
 }
 
 /**
@@ -597,30 +669,18 @@ const organizations = {
  * TTL: 1 day (86400 seconds)
  */
 const mentor = {
-	async get(tenantCode, orgCode, mentorId, raw = true) {
+	async get(tenantCode, orgCode, mentorId) {
 		try {
-			// If raw is true, skip cache and return direct database query
-			if (raw) {
-				console.log(
-					`🔄 Raw mode: Fetching fresh mentor profile ${mentorId} from database: tenant:${tenantCode}:org:${orgCode}`
-				)
-				return await mentorQueries.getMentorExtension(mentorId, [], false, tenantCode)
-			}
-
 			// Cache mode: Check cache first
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentor', id: mentorId })
 			const useInternal = nsUseInternal('mentor')
 			const cachedProfile = await get(cacheKey, { useInternal })
 			if (cachedProfile) {
-				console.log(`💾 Mentor profile ${mentorId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`)
 				return cachedProfile
 			}
 
-			// Cache miss - will be handled by service layer to cache complete response
-			console.log(
-				`💾 Mentor profile ${mentorId} cache miss, returning null for service layer handling: tenant:${tenantCode}:org:${orgCode}`
-			)
-			return null
+			const rawExtension = await mentorQueries.getMentorExtension(mentorId, [], false, tenantCode)
+			return rawExtension
 		} catch (error) {
 			console.error(`❌ Failed to get mentor profile ${mentorId} from cache/database:`, error)
 			return null
@@ -655,19 +715,46 @@ const mentor = {
 	_sanitizeProfileData(profileData) {
 		const sanitized = { ...profileData }
 
-		// Remove fields that are cached separately - get from existing caches
-		delete sanitized.displayProperties // Get from displayProperties cache
-		delete sanitized.Permissions // Get from permissions cache
-		delete sanitized.connectedUsers // Will implement separate cache
-		delete sanitized.email // Security: don't cache email
-		delete sanitized.email_verified // Security: don't cache email verification
+		// Cache complete profile data for direct API response
+		// Only remove truly sensitive data that should never be cached
 
-		// Handle image URL - don't cache downloadable URLs
+		// Remove only downloadable URLs that might expire
 		if (sanitized.image && typeof sanitized.image === 'string' && sanitized.image.includes('download')) {
 			delete sanitized.image
 		}
 
+		// Keep all other fields including:
+		// - displayProperties (needed for direct API response)
+		// - Permissions (needed for direct API response)
+		// - email (needed for complete profile response)
+		// - email_verified (needed for complete profile response)
+		// - connectedUsers (needed for complete profile response)
+
 		return sanitized
+	},
+
+	/**
+	 * Get mentor profile from cache only. Returns null if cache miss or no data.
+	 * @param {string} tenantCode - Tenant code for multi-tenancy
+	 * @param {string} orgCode - Organization code
+	 * @param {string} id - Mentor user ID
+	 * @returns {Promise<Object|null>} Profile data from cache or null if cache miss
+	 */
+	async getCacheOnly(tenantCode, orgCode, id) {
+		try {
+			// Cache mode: Check cache first
+			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentor', id: id })
+			const useInternal = nsUseInternal('mentor')
+			const cachedProfile = await get(cacheKey, { useInternal })
+			if (cachedProfile) {
+				return cachedProfile
+			}
+
+			return null
+		} catch (error) {
+			console.error(`❌ [mentor.getCacheOnly] Error for profile ${id}:`, error)
+			return null
+		}
 	},
 }
 
@@ -677,30 +764,18 @@ const mentor = {
  * TTL: 1 day (86400 seconds)
  */
 const mentee = {
-	async get(tenantCode, orgCode, menteeId, raw = true) {
+	async get(tenantCode, orgCode, menteeId) {
 		try {
-			// If raw is true, skip cache and return direct database query
-			if (raw) {
-				console.log(
-					`🔄 Raw mode: Fetching fresh mentee profile ${menteeId} from database: tenant:${tenantCode}:org:${orgCode}`
-				)
-				return await userQueries.getMenteeExtension(menteeId, [], false, tenantCode)
-			}
-
 			// Cache mode: Check cache first
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'mentee', id: menteeId })
 			const useInternal = nsUseInternal('mentee')
 			const cachedProfile = await get(cacheKey, { useInternal })
 			if (cachedProfile) {
-				console.log(`💾 Mentee profile ${menteeId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`)
 				return cachedProfile
 			}
 
-			// Cache miss - will be handled by service layer to cache complete response
-			console.log(
-				`💾 Mentee profile ${menteeId} cache miss, returning null for service layer handling: tenant:${tenantCode}:org:${orgCode}`
-			)
-			return null
+			const rawExtension = await userQueries.getMenteeExtension(menteeId, [], false, tenantCode)
+			return rawExtension
 		} catch (error) {
 			console.error(`❌ Failed to get mentee profile ${menteeId} from cache/database:`, error)
 			return null
@@ -735,19 +810,46 @@ const mentee = {
 	_sanitizeProfileData(profileData) {
 		const sanitized = { ...profileData }
 
-		// Remove fields that are cached separately - get from existing caches
-		delete sanitized.displayProperties // Get from displayProperties cache
-		delete sanitized.Permissions // Get from permissions cache
-		delete sanitized.connectedUsers // Will implement separate cache
-		delete sanitized.email // Security: don't cache email
-		delete sanitized.email_verified // Security: don't cache email verification
+		// Cache complete profile data for direct API response
+		// Only remove truly sensitive data that should never be cached
 
-		// Handle image URL - don't cache downloadable URLs
+		// Remove only downloadable URLs that might expire
 		if (sanitized.image && typeof sanitized.image === 'string' && sanitized.image.includes('download')) {
 			delete sanitized.image
 		}
 
+		// Keep all other fields including:
+		// - displayProperties (needed for direct API response)
+		// - Permissions (needed for direct API response)
+		// - email (needed for complete profile response)
+		// - email_verified (needed for complete profile response)
+		// - connectedUsers (needed for complete profile response)
+
 		return sanitized
+	},
+
+	/**
+	 * Get mentee profile from cache only. Returns null if cache miss or no data.
+	 * @param {string} tenantCode - Tenant code for multi-tenancy
+	 * @param {string} organizationCode - Organization code
+	 * @param {string} id - Mentee user ID
+	 * @returns {Promise<Object|null>} Profile data from cache or null if cache miss
+	 */
+	async getCacheOnly(tenantCode, organizationCode, id) {
+		try {
+			// Cache mode: Check cache first
+			const cacheKey = await buildKey({ tenantCode, orgCode: organizationCode, ns: 'mentee', id: id })
+			const useInternal = nsUseInternal('mentee')
+			const cachedProfile = await get(cacheKey, { useInternal })
+			if (cachedProfile) {
+				return cachedProfile
+			}
+
+			return null
+		} catch (error) {
+			console.error(`❌ [mentee.getCacheOnly] Error for profile ${id}:`, error)
+			return null
+		}
 	},
 }
 

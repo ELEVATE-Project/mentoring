@@ -18,7 +18,14 @@ async function checkIfUserIsAccessible(userId, userData, tenantCode, orgCode) {
 		const users = Array.isArray(userData) ? userData : [userData]
 
 		// Fetch policy details
-		const userPolicyDetails = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+		const userPolicyDetails =
+			(await cacheHelper.mentee.getCacheOnly(tenantCode, orgCode, userId)) ||
+			(await menteeQueries.getMenteeExtension(
+				userId,
+				['external_mentor_visibility', 'external_mentee_visibility', 'organization_id'],
+				false,
+				tenantCode
+			))
 		if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
 			return false // If no user policy details found, return false for accessibility
 		}
