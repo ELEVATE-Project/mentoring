@@ -302,7 +302,7 @@ Run the following query in the User Service database to disable the SCP feature:
 #
 
 <br><br>
-## ** Project And Survey  Updates **
+## Project And Survey Changes
 
 ### Step 1: Execute Migrations
      The latest User Service will no longer have orgCodes with spaces or uppercase characters. Since these changes will also reflect in the user token details, the current Project and Survey services need to work with the updated format. To ensure compatibility, we needed to normalize the orgIds in the collections by running these migrations
