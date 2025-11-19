@@ -110,7 +110,6 @@ module.exports = async function (req, res, next) {
 			}
 		}
 
-
 		req.decodedToken.id =
 			typeof req.decodedToken?.id === 'number' ? req.decodedToken?.id?.toString() : req.decodedToken?.id
 		req.decodedToken.organization_id =
@@ -241,16 +240,7 @@ function createUnauthorizedResponse(message = 'UNAUTHORIZED_REQUEST') {
 async function checkPermissions(roleTitle, requestPath, requestMethod) {
 	const parts = requestPath.match(/[^/]+/g)
 	const apiPath = getApiPaths(parts)
-
-	let allowedPermissions
-	let key = 'Permission_' + apiPath + '_' + roleTitle + '_' + parts[2]
-	if (await utils.internalGet(key)) {
-		allowedPermissions = await utils.internalGet(key)
-	} else {
-		allowedPermissions = await fetchPermissions(roleTitle, apiPath, parts[2])
-		await utils.internalSet(key, allowedPermissions)
-	}
-
+	const allowedPermissions = await fetchPermissions(roleTitle, apiPath, parts[2])
 	return allowedPermissions.some((permission) => permission.request_type.includes(requestMethod))
 }
 
