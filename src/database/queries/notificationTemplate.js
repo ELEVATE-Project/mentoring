@@ -3,16 +3,19 @@ const { Op } = require('sequelize')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
+// Removed cacheHelper import to break circular dependency
 
 module.exports = class NotificationTemplateData {
 	static async findOne(filter, tenantCode, options = {}) {
 		try {
+			// Direct database query - cache logic moved to caller level
+
 			filter.tenant_code = tenantCode
 
 			// Safe merge: tenant filtering cannot be overridden by options.where
 			const { where: optionsWhere, ...otherOptions } = options
 
-			return await NotificationTemplate.findOne({
+			const result = await NotificationTemplate.findOne({
 				where: {
 					...optionsWhere, // Allow additional where conditions
 					...filter, // But tenant filtering takes priority
@@ -20,6 +23,10 @@ module.exports = class NotificationTemplateData {
 				...otherOptions,
 				raw: true,
 			})
+
+			// Cache logic removed - cache managed at caller level
+
+			return result
 		} catch (error) {
 			return error
 		}
@@ -88,6 +95,8 @@ module.exports = class NotificationTemplateData {
 
 	static async findOneEmailTemplate(code, orgCodeParam, tenantCodeParam) {
 		try {
+			// Direct database query - cache logic moved to caller level
+
 			const defaults = await getDefaults()
 			if (!defaults.orgCode) {
 				return responses.failureResponse({
@@ -199,6 +208,8 @@ module.exports = class NotificationTemplateData {
 					selectedTemplate.body += footer.body
 				}
 			}
+
+			// Cache logic removed - cache managed at caller level
 
 			return selectedTemplate
 		} catch (error) {

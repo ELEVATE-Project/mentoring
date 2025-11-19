@@ -10,6 +10,7 @@ const fs = require('fs')
 const MenteeExtensionQueries = require('@database/queries/userExtension')
 const utils = require('@generics/utils')
 const path = require('path')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = async function (req, res, next) {
 	try {
@@ -268,9 +269,53 @@ function getApiPaths(parts) {
 
 async function fetchPermissions(roleTitle, apiPath, module) {
 	if (Array.isArray(roleTitle) && !roleTitle.includes(common.PUBLIC_ROLE)) roleTitle.push(common.PUBLIC_ROLE)
-	const filter = { role_title: roleTitle, module, api_path: { [Op.in]: apiPath } }
-	const attributes = ['request_type', 'api_path', 'module']
-	return await rolePermissionMappingQueries.findAll(filter, attributes)
+
+	const roles = Array.isArray(roleTitle) ? roleTitle : [roleTitle]
+	const apiPaths = Array.isArray(apiPath) ? apiPath : [apiPath]
+
+	// Try to get cached permissions for all role-path combinations (global cache)
+	const cachedPermissions = await cacheHelper.apiPermissions.getMultipleRoles(roles, module, apiPaths)
+
+	// Check if we have all required role/path combinations cached
+	const requiredKeys = new Set()
+	roles.forEach((role) => {
+		apiPaths.forEach((path) => requiredKeys.add(`${role}::${path}`))
+	})
+
+	const permissionsFromCache = cachedPermissions || []
+	permissionsFromCache.forEach((permission) =>
+		requiredKeys.delete(`${permission.role_title}::${permission.api_path}`)
+	)
+
+	// If all combinations are cached, return them
+	if (requiredKeys.size === 0) {
+		return permissionsFromCache
+	}
+
+	// Only query DB if there are actually missing combinations
+	let dbPermissions = []
+	if (requiredKeys.size > 0) {
+		// Build precise filter for only the missing role-path combinations
+		const filter = {
+			[Op.or]: Array.from(requiredKeys).map((key) => {
+				const [role, path] = key.split('::')
+				return { role_title: role, module, api_path: path }
+			}),
+		}
+		const attributes = ['request_type', 'api_path', 'module', 'role_title']
+		dbPermissions = (await rolePermissionMappingQueries.findAll(filter, attributes)) || []
+
+		// Cache the newly fetched results
+		if (dbPermissions.length > 0) {
+			// Extract unique API paths for caching
+			const missingApiPaths = [...new Set(Array.from(requiredKeys).map((key) => key.split('::')[1]))]
+			await cacheHelper.apiPermissions.setFromDatabaseResults(module, missingApiPaths, dbPermissions)
+		}
+	}
+
+	// Merge cached and database results
+	const allPermissions = [...permissionsFromCache, ...(dbPermissions || [])]
+	return allPermissions
 }
 
 async function verifyToken(token) {

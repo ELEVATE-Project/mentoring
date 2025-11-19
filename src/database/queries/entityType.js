@@ -56,7 +56,7 @@ module.exports = class UserEntityData {
 		try {
 			const whereClause = {
 				...filter,
-				tenant_code: tenantCodes,
+				tenant_code: Array.isArray(tenantCodes) ? { [Op.in]: tenantCodes } : tenantCodes,
 			}
 
 			const entityTypes = await EntityType.findAll({

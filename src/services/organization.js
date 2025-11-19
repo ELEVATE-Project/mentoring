@@ -6,6 +6,7 @@ const questionSetQueries = require('../database/queries/question-set')
 const { Op } = require('sequelize')
 const { eventListenerRouter } = require('@helpers/eventListnerRouter')
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class OrganizationService {
 	static async update(bodyData, decodedToken, tenantCode) {
@@ -37,6 +38,19 @@ module.exports = class OrganizationService {
 				updated_by: decodedToken.id,
 			}
 			const orgExtension = await organisationExtensionQueries.upsert(extensionData)
+
+			// Update cache with fresh data after update
+			try {
+				await cacheHelper.organizations.set(
+					tenantCode,
+					decodedToken.organization_code,
+					decodedToken.organization_id,
+					orgExtension
+				)
+			} catch (cacheError) {
+				console.error(`❌ Failed to update organization cache after update:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'ORG_DEFAULT_QUESTION_SETS_SET_SUCCESSFULLY',
@@ -69,6 +83,19 @@ module.exports = class OrganizationService {
 			console.log('EXTENSION DATA BEFORE INSERT: ', extensionData)
 			const orgExtension = await organisationExtensionQueries.upsert(extensionData)
 			console.log('EXTENSION DATA AFTER INSERT: ', orgExtension)
+
+			// Cache the newly created organization extension
+			try {
+				await cacheHelper.organizations.set(
+					tenantCode,
+					extensionData.organization_code,
+					extensionData.organization_id,
+					orgExtension
+				)
+			} catch (cacheError) {
+				console.error(`❌ Failed to cache organization after creation:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'ORG_EXTENSION_CREATED_SUCCESSFULLY',
@@ -80,6 +107,50 @@ module.exports = class OrganizationService {
 			if (error.name === 'SequelizeUniqueConstraintError')
 				throw new Error(`Extension Already Exist For Organization With Id: ${eventBody.entityId}`)
 			else throw error
+		}
+	}
+
+	/**
+	 * Get organization extension details with cache support
+	 * @method
+	 * @name details
+	 * @param {String} organizationCode - Organization code
+	 * @param {String} organizationId - Organization ID
+	 * @param {String} tenantCode - Tenant code
+	 * @returns {JSON} - Organization extension details
+	 */
+	static async details(organizationCode, organizationId, tenantCode) {
+		try {
+			// Try to get from cache first
+			let orgExtension = await cacheHelper.organizations.get(tenantCode, organizationCode, organizationId)
+
+			if (orgExtension) {
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'ORG_EXTENSION_FETCHED_SUCCESSFULLY',
+					result: orgExtension,
+				})
+			}
+
+			// If not in cache, fetch from database
+			orgExtension = await organisationExtensionQueries.getById(organizationCode, tenantCode)
+
+			if (!orgExtension) {
+				return responses.failureResponse({
+					message: 'ORG_EXTENSION_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'ORG_EXTENSION_FETCHED_SUCCESSFULLY',
+				result: orgExtension,
+			})
+		} catch (error) {
+			console.log(error)
+			throw error
 		}
 	}
 

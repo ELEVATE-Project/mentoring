@@ -6,6 +6,7 @@ const { UniqueConstraintError } = require('sequelize')
 const common = require('@constants/common')
 const entityTypeService = require('@services/entity-type')
 const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeCache = require('@helpers/entityTypeCache')
 const { Op } = require('sequelize')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
@@ -15,6 +16,7 @@ const userRequests = require('@requests/user')
 const notificationQueries = require('@database/queries/notificationTemplate')
 const kafkaCommunication = require('@generics/kafka-communication')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class ConnectionHelper {
 	/**
@@ -38,10 +40,14 @@ module.exports = class ConnectionHelper {
 	 * @param {string} userId - The ID of the user initiating the request.
 	 * @returns {Promise<Object>} A success or failure response.
 	 */
-	static async initiate(bodyData, userId, tenantCode) {
+	static async initiate(bodyData, userId, tenantCode, orgCode) {
 		try {
-			// Check if the target user exists
-			const userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id, [], false, tenantCode)
+			// Check if the target user exists using cache first, then fallback to database query
+			let userExists = await cacheHelper.mentee.getCacheOnly(tenantCode, orgCode, bodyData.user_id)
+
+			if (!userExists) {
+				userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id, [], false, tenantCode)
+			}
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -72,6 +78,46 @@ module.exports = class ConnectionHelper {
 				bodyData.message,
 				tenantCode
 			)
+
+			// Invalidate cache for both users involved in the connection request
+			try {
+				// Get user extensions to determine org codes for cache invalidation
+				const [user1Extension, user2Extension] = await Promise.all([
+					userExtensionQueries.getMenteeExtension(userId, ['organization_code'], false, tenantCode),
+					userExtensionQueries.getMenteeExtension(bodyData.user_id, ['organization_code'], false, tenantCode),
+				])
+
+				if (user1Extension) {
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+				}
+
+				if (user2Extension) {
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+				}
+			} catch (cacheError) {
+				// Cache invalidation failure - continue operation
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'CONNECTION_REQUEST_SEND_SUCCESSFULLY',
@@ -117,9 +163,13 @@ module.exports = class ConnectionHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			const [userExtensionsModelName, userDetails] = await Promise.all([
-				userExtensionQueries.getModelName(),
-				userExtensionQueries.getMenteeExtension(
+			const userExtensionsModelName = await userExtensionQueries.getModelName()
+
+			// Use getCacheOnly first, then fallback to database query if cache miss
+			let userDetails = await cacheHelper.mentee.getCacheOnly(tenantCode, defaults.orgCode, friendId)
+
+			if (!userDetails) {
+				userDetails = await userExtensionQueries.getMenteeExtension(
 					friendId,
 					[
 						'name',
@@ -137,8 +187,8 @@ module.exports = class ConnectionHelper {
 					],
 					false,
 					tenantCode
-				),
-			])
+				)
+			}
 
 			if (connection?.status === common.CONNECTIONS_STATUS.BLOCKED || !userDetails) {
 				return responses.successResponse({
@@ -149,17 +199,10 @@ module.exports = class ConnectionHelper {
 			userDetails.image &&= (await userRequests.getDownloadableUrl(userDetails.image))?.result
 
 			// Fetch entity types associated with the user
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [userDetails.organization_code, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [userExtensionsModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				userExtensionsModelName,
+				[userDetails.organization_code, defaults.orgCode],
+				[tenantCode, defaults.tenantCode]
 			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_code)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
@@ -348,6 +391,45 @@ module.exports = class ConnectionHelper {
 
 			await this.sendConnectionAcceptNotification(bodyData.user_id, userId, orgCode, tenantCode)
 
+			// Invalidate cache for both users involved in the connection
+			try {
+				// Get user extensions to determine org codes for cache invalidation
+				const [user1Extension, user2Extension] = await Promise.all([
+					userExtensionQueries.getMenteeExtension(userId, ['organization_code'], false, tenantCode),
+					userExtensionQueries.getMenteeExtension(bodyData.user_id, ['organization_code'], false, tenantCode),
+				])
+
+				if (user1Extension) {
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+				}
+
+				if (user2Extension) {
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+				}
+			} catch (cacheError) {
+				// Cache invalidation failure - continue operation
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'CONNECTION_REQUEST_APPROVED',
@@ -392,6 +474,45 @@ module.exports = class ConnectionHelper {
 			// Send notification to the mentee who requested the connection
 			await this.sendConnectionRejectionNotification(bodyData.user_id, userId, orgCode, tenantCode)
 
+			// Invalidate cache for both users involved in the connection rejection
+			try {
+				// Get user extensions to determine org codes for cache invalidation
+				const [user1Extension, user2Extension] = await Promise.all([
+					userExtensionQueries.getMenteeExtension(userId, ['organization_code'], false, tenantCode),
+					userExtensionQueries.getMenteeExtension(bodyData.user_id, ['organization_code'], false, tenantCode),
+				])
+
+				if (user1Extension) {
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+				}
+
+				if (user2Extension) {
+					try {
+						await cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+
+					try {
+						await cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
+					} catch (cacheError) {
+						// Cache invalidation failure - continue operation
+					}
+				}
+			} catch (cacheError) {
+				// Cache invalidation failure - continue operation
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'CONNECTION_REQUEST_REJECTED',
@@ -430,14 +551,15 @@ module.exports = class ConnectionHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			// Fetch validation data for filtering connections (excluding roles)
-			const validationData = await entityTypeQueries.findAllEntityTypesAndEntities(
+			// Fetch validation data for filtering connections (excluding roles) - using cache with fallback
+			const validationData = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
 				{
-					status: 'ACTIVE',
+					status: common.ACTIVE_STATUS,
 					allow_filtering: true,
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				{ [Op.in]: [defaults.tenantCode, tenantCode] }
+				[defaults.tenantCode, tenantCode],
+				userExtensionsModelName
 			)
 
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData, userExtensionsModelName)
@@ -531,19 +653,39 @@ module.exports = class ConnectionHelper {
 				tenantCode
 			)
 
-			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
+			// Get mentor details using getCacheOnly first, then fallback to database query
+			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, mentorId)
+
+			if (!mentorDetails) {
+				mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
+			}
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return
 			}
 
 			// Get email template
-			const templateData = await notificationQueries.findOneEmailTemplate(
-				templateCode,
-				orgCode.toString(),
-				tenantCode
-			)
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			const tenantCodes = [tenantCode, defaults.tenantCode]
+			const orgCodes = [orgCode, defaults.orgCode]
+
+			// Get email template
+			const templateData = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, templateCode)
 
 			if (templateData) {
 				const menteeName = menteeDetails[0].name
@@ -594,19 +736,38 @@ module.exports = class ConnectionHelper {
 				tenantCode
 			)
 
-			// Get mentor details
-			const mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
+			// Get mentor details using getCacheOnly first, then fallback to database query
+			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, mentorId)
+
+			if (!mentorDetails) {
+				mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], false, tenantCode)
+			}
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return
 			}
 
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			const tenantCodes = [tenantCode, defaults.tenantCode]
+			const orgCodes = [orgCode, defaults.orgCode]
+
 			// Get email template
-			const templateData = await notificationQueries.findOneEmailTemplate(
-				templateCode,
-				orgCode.toString(),
-				tenantCode
-			)
+			const templateData = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, templateCode)
 
 			if (templateData) {
 				const menteeName = menteeDetails[0].name

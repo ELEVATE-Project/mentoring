@@ -12,6 +12,7 @@ const menteesService = require('@services/mentees')
 const orgAdminService = require('@services/org-admin')
 
 const userServiceHelper = require('@helpers/users')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class UserHelper {
 	/**
@@ -84,26 +85,24 @@ module.exports = class UserHelper {
 				const result = await this.#createOrUpdateUserAndOrg(decodedToken.id, isNewUser, decodedToken)
 				return result
 			} else {
-				const menteeExtension = await menteeQueries.getMenteeExtension(
-					decodedToken.id,
-					[],
-					false,
+				// Skip cache during user creation - get fresh data from database
+				let menteeExtension = await menteeQueries.findOne(
+					{ user_id: decodedToken.id },
 					decodedToken.tenant_code
 				)
-
-				if (!menteeExtension) {
-					return responses.failureResponse({
-						statusCode: httpStatusCode.not_found,
-						message: 'USER_NOT_FOUND',
-					})
-				}
-
-				return responses.successResponse({
-					statusCode: httpStatusCode.ok,
-					message: 'USER_DETAILS_FETCHED_SUCCESSFULLY',
-					result: menteeExtension,
+			}
+			if (!menteeExtension) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'USER_NOT_FOUND',
 				})
 			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'USER_DETAILS_FETCHED_SUCCESSFULLY',
+				result: menteeExtension,
+			})
 		} catch (error) {
 			throw error
 		}
@@ -251,9 +250,24 @@ module.exports = class UserHelper {
 	}
 
 	static async #createOrUpdateOrg(orgData, tenantCode) {
+		// Try to get from cache first
+		let orgExtension = await cacheHelper.organizations.get(tenantCode, orgData.code, orgData.id)
+
+		if (orgExtension) {
+			return orgExtension
+		}
+
 		// Use organization_id as organization_code for lookup since they're the same in user service data
-		let orgExtension = await organisationExtensionQueries.getById(orgData.code, tenantCode)
-		if (orgExtension) return orgExtension
+		orgExtension = await organisationExtensionQueries.getById(orgData.code, tenantCode)
+		if (orgExtension) {
+			// Cache the found organization
+			try {
+				await cacheHelper.organizations.set(tenantCode, orgData.code, orgData.id, orgExtension)
+			} catch (cacheError) {
+				console.error(`❌ Failed to cache organization ${orgData.id}:`, cacheError)
+			}
+			return orgExtension
+		}
 
 		const orgExtensionData = {
 			...common.getDefaultOrgPolicies(),
@@ -264,7 +278,16 @@ module.exports = class UserHelper {
 			tenant_code: tenantCode,
 		}
 		orgExtension = await organisationExtensionQueries.upsert(orgExtensionData, tenantCode)
-		return orgExtension.toJSON()
+		const orgResult = orgExtension.toJSON()
+
+		// Clear organization cache after write operation to ensure consistency
+		try {
+			await cacheHelper.organizations.delete(tenantCode, orgData.code, orgData.id)
+		} catch (cacheError) {
+			console.error(`❌ Failed to clear organization cache ${orgData.id}:`, cacheError)
+		}
+
+		return orgResult
 	}
 
 	static async #createUser(userExtensionData, tenantCode) {
@@ -286,6 +309,7 @@ module.exports = class UserHelper {
 					tenantCode,
 					orgId
 			  )
+
 		return user
 	}
 
@@ -302,12 +326,8 @@ module.exports = class UserHelper {
 
 		let isRoleChanged = false
 
-		const menteeExtension = await menteeQueries.getMenteeExtension(
-			userExtensionData.id,
-			['organization_id', 'is_mentor', 'organization_code', 'tenant_code'],
-			false,
-			decodedToken.tenant_code
-		)
+		// Skip cache during user updates - role changes require fresh data from database
+		let menteeExtension = await menteeQueries.findOne({ user_id: userExtensionData.id }, decodedToken.tenant_code)
 
 		if (!menteeExtension) throw new Error('User Not Found')
 
@@ -332,6 +352,20 @@ module.exports = class UserHelper {
 			//If role is changed, the role change, org policy changes for that user
 			//and additional data update of the user is done by orgAdmin's roleChange workflow
 			const roleChangeResult = await orgAdminService.roleChange(roleChangePayload, userExtensionData, tenantCode)
+
+			// Invalidate cache after role change - separate try-catch for each cache
+			try {
+				await cacheHelper.mentee.delete(tenantCode, userExtensionData.organization.code, userExtensionData.id)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate mentee cache after role change:`, cacheError)
+			}
+
+			try {
+				await cacheHelper.mentor.delete(tenantCode, userExtensionData.organization.code, userExtensionData.id)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate mentor cache after role change:`, cacheError)
+			}
+
 			return roleChangeResult
 		} else {
 			if (userExtensionData.email) delete userExtensionData.email
@@ -350,19 +384,42 @@ module.exports = class UserHelper {
 						userExtensionData.organization.code,
 						decodedToken.tenant_code
 				  )
+
+			// Invalidate cache after user update
+			try {
+				if (isAMentee) {
+					await cacheHelper.mentee.delete(
+						tenantCode,
+						userExtensionData.organization.code,
+						userExtensionData.id
+					)
+				} else {
+					await cacheHelper.mentor.delete(
+						tenantCode,
+						userExtensionData.organization.code,
+						userExtensionData.id
+					)
+				}
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate user cache after update:`, cacheError)
+			}
+
 			return user
 		}
 	}
 
 	/**
 	 * Checks the existence of a user based on their mentee extension.
+	 * Uses caching to improve performance for frequent user existence checks.
 	 *
 	 * @param {string} userId - The ID of the user to check.
+	 * @param {string} tenantCode - The tenant code for multi-tenant isolation.
 	 * @returns {Promise<boolean>} - Returns `true` if the user does not exist, `false` otherwise.
 	 * @throws {Error} - Throws an error if the query fails.
 	 */
 	static async #checkUserExistence(userId, tenantCode) {
 		try {
+			// Check mentee extension for user existence
 			const menteeExtension = await menteeQueries.getMenteeExtension(
 				userId,
 				['organization_id'],
@@ -370,9 +427,7 @@ module.exports = class UserHelper {
 				tenantCode
 			)
 
-			// Check if menteeExtension exists
-			const userExists = menteeExtension !== null
-
+			userExists = menteeExtension !== null
 			return !userExists // Return true if user does not exist
 		} catch (error) {
 			throw error

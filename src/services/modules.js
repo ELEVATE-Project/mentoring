@@ -6,6 +6,7 @@ const permissionsQueries = require('@database/queries/permissions')
 const { UniqueConstraintError, ForeignKeyConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class modulesHelper {
 	/**
@@ -70,10 +71,19 @@ module.exports = class modulesHelper {
 				bodyData,
 				tenantCode
 			)
-			const updatePermissions = permissionsQueries.updatePermissions(
+			const updatePermissions = await permissionsQueries.updatePermissions(
 				{ module: modules.code, tenant_code: tenantCode },
 				{ module: updatedModules.code }
 			)
+
+			// Cache invalidation: Clear permissions cache after permissions update
+			if (updatePermissions) {
+				try {
+					await cacheHelper.permissions.evictAll()
+				} catch (cacheError) {
+					console.error(`Cache deletion failed for permissions after module update:`, cacheError)
+				}
+			}
 
 			if (!updatedModules && !updatePermissions) {
 				return responses.failureResponse({
@@ -148,16 +158,50 @@ module.exports = class modulesHelper {
 		try {
 			const offset = common.getPaginationOffset(page, limit)
 
-			const filter = {
-				code: { [Op.iLike]: `%${search}%` },
-				tenant_code: tenantCode,
+			// Try to get modules from cache first (only cache without search)
+			const cacheKey = `page${page}_limit${limit}`
+			let modules = null
+
+			if (!search || search.trim() === '') {
+				modules = await cacheHelper.forms.get(
+					tenantCode,
+					organizationId || common.SYSTEM,
+					'modules_list',
+					cacheKey
+				)
+				if (modules) {
+				}
 			}
-			const options = {
-				offset,
-				limit,
+
+			if (!modules) {
+				const filter = {
+					tenant_code: tenantCode,
+				}
+				if (search && search.trim() !== '') {
+					filter.code = { [Op.iLike]: `%${search.trim()}%` }
+				}
+				const options = {
+					offset,
+					limit,
+				}
+				const attributes = ['id', 'code', 'status']
+				modules = await modulesQueries.findAllModules(filter, attributes, options, tenantCode)
+
+				// Cache the result if no search text
+				if ((!search || search.trim() === '') && modules) {
+					try {
+						await cacheHelper.forms.set(
+							tenantCode,
+							organizationId || common.SYSTEM,
+							'modules_list',
+							cacheKey,
+							modules
+						)
+					} catch (cacheError) {
+						console.error(`❌ Failed to cache modules list:`, cacheError)
+					}
+				}
 			}
-			const attributes = ['id', 'code', 'status']
-			const modules = await modulesQueries.findAllModules(filter, attributes, options, tenantCode)
 
 			if (modules.rows == 0 || modules.count == 0) {
 				return responses.failureResponse({
