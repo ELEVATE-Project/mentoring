@@ -626,10 +626,7 @@ const organizations = {
 			console.log(
 				`💾 Organization ${organizationId} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
 			)
-			const orgFromDb = await organisationExtensionQueries.findOne(
-				{ organization_id: organizationId },
-				tenantCode
-			)
+			const orgFromDb = await organisationExtensionQueries.getById(orgCode, tenantCode)
 
 			if (orgFromDb) {
 				// Cache the fetched data for future requests
