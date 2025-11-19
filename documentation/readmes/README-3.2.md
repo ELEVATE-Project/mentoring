@@ -175,15 +175,16 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 ```bash
     npm install
 ```
-### Step 2 : Run Database Migrations
+### Step 3 : Run Database Migrations
 
 ```bash
     npm run db:init
 ```
 
-### Step 3 : Run script to update rocket chat config
+### Step 4 : Run script to update the rocket chat settings
 ```bash
-    node 
+    cd src/scripts
+    node updateRCSettings.js
 ```
 
 
