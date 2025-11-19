@@ -390,11 +390,10 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
-	static async findOneFromView(userId, attributes = []) {
+	static async findOneFromView(userId) {
 		try {
-			const columns = attributes.length > 0 ? attributes.join(', ') : '*'
 			let query = `
-				SELECT ${columns}
+				SELECT *
 				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
 				WHERE user_id = :userId
 				LIMIT 1
@@ -404,18 +403,7 @@ module.exports = class MenteeExtensionQueries {
 				type: QueryTypes.SELECT,
 			})
 
-			const mentee = user.length > 0 ? user[0] : null
-
-			// Decrypt email if it's present in the result
-			if (mentee && mentee.email) {
-				mentee.email = await emailEncryption.decrypt(mentee.email.toLowerCase())
-			}
-			mentee.user_roles = [{ title: common.MENTEE_ROLE }]
-			if (mentee.is_mentor) {
-				mentee.user_roles.push({ title: common.MENTOR_ROLE })
-			}
-
-			return mentee
+			return user.length > 0 ? user[0] : null
 		} catch (error) {
 			return error
 		}

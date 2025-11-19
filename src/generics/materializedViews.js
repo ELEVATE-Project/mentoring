@@ -6,7 +6,6 @@ const common = require('@constants/common')
 const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
 const defaultSearchConfig = require('@configs/search.json')
 const indexQueries = require('@generics/mViewsIndexQueries')
-
 const searchConfig = require('@root/config.json')
 
 let refreshInterval
@@ -462,6 +461,7 @@ const checkAndCreateMaterializedViews = async () => {
 	await Promise.all(
 		entityTypesGroupedByModel.map(async (modelEntityTypes) => {
 			const model = require('@database/models/index')[modelEntityTypes.modelName]
+
 			const mViewExits = result.some(
 				({ matviewname }) => matviewname === common.materializedViewsPrefix + model.tableName
 			)

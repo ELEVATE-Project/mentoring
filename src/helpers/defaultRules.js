@@ -104,7 +104,7 @@ exports.defaultRulesFilter = async function defaultRulesFilter({
 			defaultRuleQueries.findAll({ type: ruleType, organization_id: requesterOrganizationId }),
 		])
 
-		const validConfigs = getValidConfigs(defaultRoles, roles)
+		const validConfigs = getValidConfigs(defaultRules, roles)
 
 		if (validConfigs.length === 0) {
 			return ''
