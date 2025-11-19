@@ -1,6 +1,7 @@
 // Dependencies
 const httpStatusCode = require('@generics/http-status')
-const entityTypeQueries = require('../database/queries/entity')
+const entityQueries = require('@database/queries/entity')
+const entityTypeQueries = require('@database/queries/entityType')
 const { UniqueConstraintError, ForeignKeyConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
@@ -28,7 +29,26 @@ module.exports = class EntityHelper {
 		}
 		try {
 			// Optimized: Validate entity_type exists before creation - better UX than constraint errors
-			const entity = await entityTypeQueries.createEntityWithValidation(sanitizedData, tenantCode)
+			const result = await entityQueries.createEntityWithValidation(sanitizedData, tenantCode)
+			const entity = result.entity
+			const entityTypeDetails = result.entityTypeDetails
+
+			// Invalidate entityType cache using the fetched entityType details
+			if (entityTypeDetails && entityTypeDetails.value && entityTypeDetails.model_names) {
+				try {
+					// Delete entityType cache for each model using the actual entityType value
+					for (const modelName of entityTypeDetails.model_names) {
+						await cacheHelper.entityTypes.delete(
+							tenantCode,
+							entityTypeDetails.organization_code,
+							modelName,
+							entityTypeDetails.value
+						)
+					}
+				} catch (cacheError) {
+					console.error(`❌ Failed to invalidate entityType cache after entity creation:`, cacheError)
+				}
+			}
 
 			// Invalidate entity list caches after creation
 			if (entity && sanitizedData.entity_type_id) {
@@ -97,7 +117,10 @@ module.exports = class EntityHelper {
 			created_by: loggedInUserId,
 		}
 		try {
-			const [updateCount, updatedEntity] = await entityTypeQueries.updateOneEntity(
+			// Get original entity to fetch its entity_type_id for cache invalidation
+			const originalEntity = await entityQueries.findEntityTypeById(id, tenantCode)
+
+			const [updateCount, updatedEntity] = await entityQueries.updateOneEntity(
 				whereClause,
 				tenantCode,
 				sanitizedData,
@@ -113,6 +136,31 @@ module.exports = class EntityHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			}
+
+			// Invalidate entityType cache using the original entity's entity_type_id
+			if (originalEntity && originalEntity.entity_type_id) {
+				try {
+					// Fetch entityType details for cache invalidation
+					const entityTypeDetails = await entityTypeQueries.findEntityTypeById(
+						originalEntity.entity_type_id,
+						tenantCode
+					)
+
+					if (entityTypeDetails && entityTypeDetails.value && entityTypeDetails.model_names) {
+						// Delete entityType cache for each model using the actual entityType value
+						for (const modelName of entityTypeDetails.model_names) {
+							await cacheHelper.entityTypes.delete(
+								tenantCode,
+								entityTypeDetails.organization_code,
+								modelName,
+								entityTypeDetails.value
+							)
+						}
+					}
+				} catch (cacheError) {
+					console.error(`❌ Failed to invalidate entityType cache after entity update:`, cacheError)
+				}
 			}
 
 			// Invalidate entity list caches after update
@@ -186,7 +234,6 @@ module.exports = class EntityHelper {
 						},
 						{ id: query.id, created_by: userId, status: common.ACTIVE_STATUS },
 					],
-					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
 			} else {
 				filter = {
@@ -198,12 +245,9 @@ module.exports = class EntityHelper {
 						},
 						{ value: query.value, created_by: userId, status: common.ACTIVE_STATUS },
 					],
-					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
 			}
-			const entities = await entityTypeQueries.findAllEntities(filter, {
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			})
+			const entities = await entityQueries.findAllEntities(filter, { [Op.in]: [tenantCode, defaults.tenantCode] })
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -251,17 +295,13 @@ module.exports = class EntityHelper {
 							created_by: userId,
 						},
 					],
-					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
 			} else {
 				filter = {
 					created_by: '0',
-					tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				}
 			}
-			const entities = await entityTypeQueries.findAllEntities(filter, {
-				[Op.in]: [tenantCode, defaults.tenantCode],
-			})
+			const entities = await entityQueries.findAllEntities(filter, { [Op.in]: [tenantCode, defaults.tenantCode] })
 
 			if (!entities.length) {
 				return responses.failureResponse({
@@ -292,18 +332,59 @@ module.exports = class EntityHelper {
 
 	static async delete(id, userId, tenantCode) {
 		try {
+			// Get original entity to fetch its entity_type_id for cache invalidation BEFORE deletion
+			const originalEntity = await entityQueries.findEntityTypeById(id, tenantCode)
+
+			if (!originalEntity || originalEntity.created_by !== userId) {
+				return responses.failureResponse({
+					message: 'ENTITY_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			// Fetch entityType details for cache invalidation before deletion
+			let entityTypeDetails = null
+			if (originalEntity.entity_type_id) {
+				try {
+					entityTypeDetails = await entityTypeQueries.findEntityTypeById(
+						originalEntity.entity_type_id,
+						tenantCode
+					)
+				} catch (error) {
+					// Failed to fetch entityType details - continue with deletion
+				}
+			}
+
 			const whereClause = {
 				id: id,
 				created_by: userId,
 				tenant_code: tenantCode,
 			}
-			const deleteCount = await entityTypeQueries.deleteOneEntityType(whereClause, tenantCode)
+			const deleteCount = await entityQueries.deleteOneEntityType(whereClause, tenantCode)
 			if (deleteCount === '0') {
 				return responses.failureResponse({
 					message: 'ENTITY_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			}
+
+			// Invalidate entityType cache using the fetched entityType details
+			if (entityTypeDetails && entityTypeDetails.value && entityTypeDetails.model_names) {
+				try {
+					// Delete entityType cache for each model using the actual entityType value
+					for (const modelName of entityTypeDetails.model_names) {
+						await cacheHelper.entityTypes.delete(
+							tenantCode,
+							entityTypeDetails.organization_code,
+							modelName,
+							entityTypeDetails.value
+						)
+					}
+				} catch (cacheError) {
+					console.error(`❌ Failed to invalidate entityType cache after entity deletion:`, cacheError)
+				}
 			}
 
 			// Invalidate entity list caches after deletion
@@ -372,7 +453,7 @@ module.exports = class EntityHelper {
 
 			if (!entities) {
 				// Optimized: Get entities with entity_type details included - eliminates N+1 queries for clients
-				entities = await entityTypeQueries.getAllEntitiesWithEntityTypeDetails(
+				entities = await entityQueries.getAllEntitiesWithEntityTypeDetails(
 					filter,
 					[defaults.tenantCode, tenantCode],
 					pageNo,

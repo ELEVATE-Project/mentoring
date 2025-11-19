@@ -660,13 +660,17 @@ module.exports = class MenteesHelper {
 	 */
 	static async filterSessionsBasedOnSaasPolicy(userId, isAMentor, tenantCode, orgCode) {
 		try {
-			// Get raw data from database for policy checking (need specific raw columns)
-			const menteeExtension = await menteeQueries.getMenteeExtension(
-				userId,
-				['external_session_visibility', 'organization_id', 'is_mentor'],
-				false,
-				tenantCode
-			)
+			// Try cache first, then fallback to database for policy checking
+			let menteeExtension = await cacheHelper.mentee.getCacheOnly(tenantCode, orgCode, userId)
+
+			if (!menteeExtension) {
+				menteeExtension = await menteeQueries.getMenteeExtension(
+					userId,
+					['external_session_visibility', 'organization_id', 'is_mentor'],
+					false,
+					tenantCode
+				)
+			}
 
 			if (!menteeExtension) {
 				throw responses.failureResponse({

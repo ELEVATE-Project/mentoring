@@ -40,17 +40,6 @@ module.exports = class EntityHelper {
 
 			const entityType = await entityTypeQueries.createEntityType(bodyData, tenantCode)
 
-			// CREATE operation does NOT cache - only READ operations set cache
-			// Cache will be populated when entity is first read
-
-			// Clear user caches since entity types affect user profiles
-			await this._clearUserCachesForEntityTypeChange(
-				orgCode,
-				tenantCode,
-				bodyData.model_names ? bodyData.model_names[0] : null,
-				bodyData.value
-			)
-
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ENTITY_TYPE_CREATED_SUCCESSFULLY',
@@ -86,15 +75,10 @@ module.exports = class EntityHelper {
 
 		try {
 			// Get original entity before update to handle cache cleanup
-			let originalEntity = null
-			try {
-				originalEntity = await entityTypeQueries.findOneEntityType(
-					{ id, organization_code: orgCode },
-					tenantCode
-				)
-			} catch (error) {
-				// Could not fetch original entity for cache cleanup
-			}
+			const originalEntity = await entityTypeQueries.findOneEntityType(
+				{ id, organization_code: orgCode },
+				tenantCode
+			)
 
 			if (bodyData.allow_filtering) {
 				const isAdmin =
@@ -120,109 +104,16 @@ module.exports = class EntityHelper {
 				})
 			}
 
-			// Update individual entity type cache with complete data
+			// Cache invalidation after successful update: just delete using original entity data
 			try {
-				const updatedEntity = updatedEntityType[0]
-
-				// Delete old cache entries if value or model_names changed
-				if (originalEntity) {
-					const valueChanged = originalEntity.value !== updatedEntity.value
-					const oldModelNames = originalEntity.model_names || []
-					const newModelNames = updatedEntity.model_names || []
-					const modelNamesChanged =
-						JSON.stringify(oldModelNames.sort()) !== JSON.stringify(newModelNames.sort())
-
-					if (valueChanged || modelNamesChanged) {
-						// Strategy: Delete all old cache entries, then create new ones
-						// This handles both value changes and model removals
-
-						// 1. Delete from all old model_names with old value
-						for (const modelName of oldModelNames) {
-							try {
-								await cacheHelper.entityTypes.delete(
-									tenantCode,
-									orgCode,
-									modelName,
-									originalEntity.value
-								)
-							} catch (delError) {
-								// Failed to delete old cache - continue operation
-							}
-						}
-
-						// 2. If only model names changed (not value), also delete from removed models with current value
-						if (!valueChanged && modelNamesChanged) {
-							const removedModels = oldModelNames.filter((model) => !newModelNames.includes(model))
-
-							for (const removedModel of removedModels) {
-								try {
-									await cacheHelper.entityTypes.delete(
-										tenantCode,
-										orgCode,
-										removedModel,
-										updatedEntity.value
-									)
-								} catch (delError) {
-									// Failed to delete removed model cache - continue operation
-								}
-							}
-						}
-					} else {
-					}
-				} else {
-					// No original entity found - skipping cache cleanup
-				}
-
-				// Fetch complete entity type with entities using direct database query
-				const defaults = await getDefaults()
-				const tenantCodes = [tenantCode]
-				if (!tenantCodes.includes(defaults.tenantCode)) {
-					tenantCodes.push(defaults.tenantCode)
-				}
-
-				const completeUpdatedEntity = await entityTypeQueries.findUserEntityTypesAndEntities(
-					{ id: updatedEntity.id, organization_code: orgCode, tenant_code: tenantCode },
-					tenantCodes
-				)
-
-				let entityWithEntities = null
-				if (completeUpdatedEntity && completeUpdatedEntity.length > 0) {
-					entityWithEntities = completeUpdatedEntity[0]
-				} else {
-					// Fallback: use basic updated entity with empty entities array
-					entityWithEntities = {
-						...updatedEntity,
-						entities: [], // Consistent structure
-					}
-				}
-
-				// For each model this entity belongs to, cache individually
-				if (updatedEntity.model_names && Array.isArray(updatedEntity.model_names)) {
-					for (const modelName of updatedEntity.model_names) {
-						// Cache complete entity type with entities (Reset/SetOrGet operation)
-						await cacheHelper.entityTypes.set(
-							tenantCode,
-							orgCode,
-							modelName,
-							updatedEntity.value,
-							entityWithEntities
-						)
+				if (originalEntity && originalEntity.model_names && originalEntity.value) {
+					// Delete cache entries using original entity's model_names and value
+					for (const modelName of originalEntity.model_names) {
+						await cacheHelper.entityTypes.delete(tenantCode, orgCode, modelName, originalEntity.value)
 					}
 				}
 			} catch (cacheError) {
-				// Failed to perform selective cache update - continue operation
-
-				// Fallback: clear cache only for this specific entity value
-				const updatedEntity = updatedEntityType[0]
-				if (updatedEntity.model_names && Array.isArray(updatedEntity.model_names)) {
-					for (const modelName of updatedEntity.model_names) {
-						try {
-							await cacheHelper.entityTypes.delete(tenantCode, orgCode, modelName, updatedEntity.value)
-						} catch (delError) {
-							// Failed to clear cache - continue operation
-						}
-					}
-				}
+				// Failed to invalidate entity type cache - continue operation
 			}
 
 			// Clear user caches since entity types affect user profiles
@@ -292,23 +183,8 @@ module.exports = class EntityHelper {
 
 	static async readUserEntityTypes(body, orgCode, tenantCode) {
 		try {
-			const defaults = await getDefaults()
-			if (!defaults.orgCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			if (!defaults.tenantCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_TENANT_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-
 			// Try to get from cache first
 			const entityValue = body.value
-			const cacheKey = `${tenantCode}_${orgCode}_${entityValue}`
 
 			try {
 				// Check if data exists in cache
@@ -330,6 +206,20 @@ module.exports = class EntityHelper {
 			} catch (cacheError) {
 				console.log('Cache lookup failed, falling back to database:', cacheError.message)
 			}
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 
 			// Cache miss - fetch from database
 			const filter = {

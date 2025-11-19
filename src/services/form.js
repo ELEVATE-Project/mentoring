@@ -33,15 +33,6 @@ module.exports = class FormsHelper {
 
 			await KafkaProducer.clearInternalCache('formVersion')
 
-			// Invalidate specific form cache after creation (no "all forms" cache)
-			if (bodyData.type && bodyData.sub_type) {
-				try {
-					await cacheHelper.forms.delete(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
-				} catch (error) {
-					console.warn('Failed to invalidate form cache:', error)
-				}
-			}
-
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'FORM_CREATED_SUCCESSFULLY',
@@ -70,28 +61,24 @@ module.exports = class FormsHelper {
 	static async update(id, bodyData, orgCode, tenantCode) {
 		try {
 			let filter = {}
-			if (id) {
-				filter = {
-					id: id,
-				}
-			} else {
-				filter = {
-					type: bodyData.type,
-					sub_type: bodyData.sub_type,
-				}
-			}
-
-			// Fetch original form data before update to handle cache cleanup
 			let originalForm = null
-			try {
-				if (id) {
-					originalForm = await formQueries.findOne({ id: id }, tenantCode)
-				} else {
+
+			if (id) {
+				// ID-based update: use direct database query
+				filter = { id: id }
+				originalForm = await formQueries.findOne({ id: id }, tenantCode)
+			} else {
+				// Type/subtype based update: use cache first, then fallback to database query
+				filter = { type: bodyData.type, sub_type: bodyData.sub_type }
+
+				// Try cache first for type/subtype lookup
+				originalForm = await cacheHelper.forms.get(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
+
+				if (!originalForm) {
+					// Cache miss: fallback to database query
 					const originalForms = await formQueries.findFormsByFilter(filter, [tenantCode])
 					originalForm = originalForms && originalForms.length > 0 ? originalForms[0] : null
 				}
-			} catch (error) {
-				console.warn('Failed to fetch original form for cache cleanup:', error)
 			}
 
 			const result = await formQueries.updateOneForm(filter, bodyData, tenantCode, orgCode)
@@ -112,10 +99,10 @@ module.exports = class FormsHelper {
 			await utils.internalDel('formVersion')
 			await KafkaProducer.clearInternalCache('formVersion')
 
-			// Handle cache invalidation after successful update
+			// Cache invalidation after successful update: just delete, don't re-set
 			try {
-				// Delete old cache entry if original form had different type/subtype
 				if (originalForm && originalForm.type && originalForm.sub_type) {
+					// Delete the form cache using original form's type/subtype information
 					await cacheHelper.forms.delete(
 						tenantCode,
 						originalForm.organization_code || orgCode,
@@ -123,27 +110,8 @@ module.exports = class FormsHelper {
 						originalForm.sub_type
 					)
 				}
-
-				// Cache new form if type/subtype provided in update
-				if (bodyData.type && bodyData.sub_type) {
-					// Fetch updated form and cache it
-					const updatedForm = await formQueries.findFormsByFilter(
-						{ type: bodyData.type, sub_type: bodyData.sub_type },
-						[tenantCode]
-					)
-					if (updatedForm && updatedForm.length > 0) {
-						await cacheHelper.forms.set(
-							tenantCode,
-							updatedForm[0].organization_code || orgCode,
-							bodyData.type,
-							bodyData.sub_type,
-							updatedForm[0]
-						)
-						console.log(`New form cache set: ${bodyData.type}:${bodyData.sub_type}`)
-					}
-				}
 			} catch (error) {
-				console.warn('Failed to handle form cache invalidation:', error)
+				console.warn('Failed to invalidate form cache:', error)
 			}
 
 			return responses.successResponse({

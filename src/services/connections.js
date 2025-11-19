@@ -16,7 +16,6 @@ const userRequests = require('@requests/user')
 const notificationQueries = require('@database/queries/notificationTemplate')
 const kafkaCommunication = require('@generics/kafka-communication')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
-const userCacheHelper = require('@helpers/userCacheHelper')
 const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class ConnectionHelper {
@@ -43,8 +42,12 @@ module.exports = class ConnectionHelper {
 	 */
 	static async initiate(bodyData, userId, tenantCode, orgCode) {
 		try {
-			// Check if the target user exists
-			const userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id, [], false, tenantCode)
+			// Check if the target user exists using cache first, then fallback to database query
+			let userExists = await cacheHelper.mentee.getCacheOnly(tenantCode, orgCode, bodyData.user_id)
+
+			if (!userExists) {
+				userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id, [], false, tenantCode)
+			}
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -160,9 +163,13 @@ module.exports = class ConnectionHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			const [userExtensionsModelName, userDetails] = await Promise.all([
-				userExtensionQueries.getModelName(),
-				userCacheHelper.getMenteeExtensionCached(
+			const userExtensionsModelName = await userExtensionQueries.getModelName()
+
+			// Use getCacheOnly first, then fallback to database query if cache miss
+			let userDetails = await cacheHelper.mentee.getCacheOnly(tenantCode, defaults.orgCode, friendId)
+
+			if (!userDetails) {
+				userDetails = await userExtensionQueries.getMenteeExtension(
 					friendId,
 					[
 						'name',
@@ -180,8 +187,8 @@ module.exports = class ConnectionHelper {
 					],
 					false,
 					tenantCode
-				),
-			])
+				)
+			}
 
 			if (connection?.status === common.CONNECTIONS_STATUS.BLOCKED || !userDetails) {
 				return responses.successResponse({
@@ -646,8 +653,12 @@ module.exports = class ConnectionHelper {
 				tenantCode
 			)
 
-			// Get mentor details
-			const mentorDetails = await userCacheHelper.getMentorExtensionCached(mentorId, ['name'], true, tenantCode)
+			// Get mentor details using getCacheOnly first, then fallback to database query
+			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, mentorId)
+
+			if (!mentorDetails) {
+				mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
+			}
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return
@@ -725,8 +736,12 @@ module.exports = class ConnectionHelper {
 				tenantCode
 			)
 
-			// Get mentor details
-			const mentorDetails = await cacheHelper.mentor.get(tenantCode, orgCode, mentorId)
+			// Get mentor details using getCacheOnly first, then fallback to database query
+			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, mentorId)
+
+			if (!mentorDetails) {
+				mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], false, tenantCode)
+			}
 
 			if (!menteeDetails || menteeDetails.length === 0 || !mentorDetails) {
 				return

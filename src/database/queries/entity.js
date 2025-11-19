@@ -14,14 +14,14 @@ module.exports = class UserEntityData {
 
 	static async createEntityWithValidation(data, tenantCode) {
 		try {
-			// Sequelize approach: Validate entity_type exists first
+			// Sequelize approach: Validate entity_type exists first and fetch details for cache invalidation
 			const EntityType = Entity.sequelize.models.EntityType
 			const entityType = await EntityType.findOne({
 				where: {
 					id: data.entity_type_id,
 					tenant_code: tenantCode,
 				},
-				attributes: ['id'], // Only verify existence
+				attributes: ['id', 'value', 'model_names', 'organization_code'], // Fetch details needed for cache invalidation
 			})
 
 			if (!entityType) {
@@ -30,7 +30,13 @@ module.exports = class UserEntityData {
 
 			// Create entity with validated entity_type_id
 			data.tenant_code = tenantCode
-			return await Entity.create(data, { returning: true })
+			const createdEntity = await Entity.create(data, { returning: true })
+
+			// Return both the created entity and entityType details for cache invalidation
+			return {
+				entity: createdEntity,
+				entityTypeDetails: entityType,
+			}
 		} catch (error) {
 			throw error
 		}

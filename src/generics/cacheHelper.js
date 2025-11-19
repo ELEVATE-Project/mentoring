@@ -972,7 +972,7 @@ const notificationTemplates = {
 						type: 'email',
 						status: 'active',
 					},
-					allTenantCodes[0] // Use first tenant code for the query
+					allTenantCodes // Use first tenant code for the query
 				)
 			} catch (dbError) {
 				console.error(`Failed to fetch notification template ${templateCode} from database:`, dbError.message)

@@ -11,7 +11,6 @@ const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
 const cacheHelper = require('@generics/cacheHelper')
-const userCacheHelper = require('@helpers/userCacheHelper')
 
 module.exports = class MenteesHelper {
 	/**

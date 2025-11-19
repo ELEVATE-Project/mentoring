@@ -25,15 +25,26 @@ module.exports = class issuesHelper {
 	static async create(bodyData, decodedToken, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let userDetails = await cacheHelper.mentee.get(tenantCode, decodedToken.organization_code, decodedToken.id)
+			let userDetails = await cacheHelper.mentee.getCacheOnly(
+				tenantCode,
+				decodedToken.organization_code,
+				decodedToken.id
+			)
 			if (!userDetails) {
 				userDetails = await menteeExtensionQueries.getMenteeExtension(
 					decodedToken.id,
 					['name', 'user_id', 'email'],
+					false,
 					tenantCode
 				)
 			}
-			if (!userDetails) throw createUnauthorizedResponse('USER_NOT_FOUND')
+			if (!userDetails) {
+				return responses.failureResponse({
+					message: 'USER_NOT_FOUND',
+					statusCode: httpStatusCode.not_found,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 
 			const name = userDetails.name
 			const role = decodedToken.roles.some((role) => role.title === 'mentor') ? 'Mentor' : 'Mentee'
@@ -62,14 +73,22 @@ module.exports = class issuesHelper {
 			const tenantCodes = [tenantCode, defaults.tenantCode]
 			const orgCodes = [decodedToken.organization_code, defaults.orgCode]
 
-			// Get email template
+			// Get email template with cache-first approach and database fallback
 
 			if (process.env.ENABLE_EMAIL_FOR_REPORT_ISSUE === 'true') {
+				console.log(
+					`🔍 Issues.js - Fetching notification template: ${process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE}`
+				)
+				console.log(`🔍 Issues.js - Tenant codes: [${tenantCodes.join(', ')}]`)
+				console.log(`🔍 Issues.js - Org codes: [${orgCodes.join(', ')}]`)
+
 				const templateData = await cacheHelper.notificationTemplates.get(
 					tenantCodes,
 					orgCodes,
 					process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE
 				)
+
+				console.log(`🔍 Issues.js - Template data received:`, templateData ? 'FOUND' : 'NOT FOUND')
 
 				let metaItems = ''
 				if (bodyData.meta_data) {

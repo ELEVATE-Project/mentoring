@@ -139,13 +139,13 @@ module.exports = class MentorsHelper {
 				menteeUserId
 			)
 
-			if (!upcomingSessions.data.length) {
+			if (!upcomingSessions || !upcomingSessions.data || !upcomingSessions.data.length) {
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'UPCOMING_SESSION_FETCHED',
 					result: {
 						data: [],
-						count: upcomingSessions.count,
+						count: upcomingSessions ? upcomingSessions.count || 0 : 0,
 					},
 				})
 			}
