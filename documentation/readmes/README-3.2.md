@@ -35,10 +35,11 @@ The Mentor building block enables effective mentoring interactions between mento
 
 ## General Notes
 
--   All environment variables must be verified before deployment.
--   Execute migration scripts only after successful deployment of each respective service.
--   For Docker-based deployments, update the image tag to the latest version as specified for each service.
--   For PM2 deployments, use the specified branch name.
+-  All environment variables must be verified before deployment.
+-  Execute migration scripts only after successful deployment of each respective service.
+-  For Docker-based deployments, update the image tag to the latest version as specified for each service.
+-  For PM2 deployments, use the specified branch name.
+- Initiate the User Service deployment first, followed by the deployment of the other services.
 
 
 <br><br>
@@ -180,6 +181,12 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
     npm run db:init
 ```
 
+### Step 3 : Run script to update rocket chat config
+```bash
+    node 
+```
+
+
 ### Step 4: Restart the Service
    Restart the Mentoring Service to apply the latest configurations and updates.
 
@@ -241,8 +248,16 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
     npm run db:init
 ```
 
-### Step 4: Restart the Service
-   Restart the User Service to apply the latest configurations and updates.
+### Step 4: Execute Query
+Run the following query in the User Service database to disable the SCP feature: 
+```postgresql
+    UPDATE public.organization_features
+    SET enabled = false
+    WHERE feature_code = 'scp';
+```
+
+### Step 5: Restart the Service
+    Restart the User Service to apply the latest configurations and updates.
 
 
 **Version & Build Information**
@@ -251,6 +266,9 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 |---------------|------------------------------------------------------|
 | Git Branch    | `release-3.2.0`                                        |
 | Docker Image  | `shikshalokamqa/eleavte-user:3.3`            |
+
+
+
 #
 <br><br>
 ## **Deployment of the Mentoring frontend**
@@ -272,6 +290,39 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
 
 ### Step 3: Restart 
      Restart the Mentoring frontend to apply the latest configurations and updates.
+
+
+**Version & Build Information**
+
+| Item          | Value                                                |
+|---------------|------------------------------------------------------|
+| Git Branch    | `release-3.2.0`                                        |
+| Docker Image  | `shikshalokamqa/mentoring-mobile-app:3.3`            |
+
+#
+
+<br><br>
+## ** Project And Survey  Updates **
+
+### Step 1: Execute Migrations
+     The latest User Service will no longer have orgCodes with spaces or uppercase characters. Since these changes will also reflect in the user token details, the current Project and Survey services need to work with the updated format. To ensure compatibility, we needed to normalize the orgIds in the collections by running these migrations
+
+    Project
+    https://github.com/ELEVATE-Project/project-service/tree/staging/migrations/correctOrgIdValuesInCollections
+
+    https://github.com/ELEVATE-Project/project-service/tree/staging/migrations/correctScopeOrgValues
+
+
+    Survey
+    https://github.com/ELEVATE-Project/samiksha-service/tree/staging/migrations/correctScopeOrgValues
+    
+    https://github.com/ELEVATE-Project/samiksha-service/tree/staging/migrations/normalizeOrgidInCollections
+
+Create an individual file for each script (file-name.js) and execute them one by one using:
+
+```bash 
+    node file-name.js
+```
 
 
 **Version & Build Information**
