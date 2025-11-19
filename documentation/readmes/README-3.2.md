@@ -318,7 +318,7 @@ Run the following query in the User Service database to disable the SCP feature:
     
     https://github.com/ELEVATE-Project/samiksha-service/tree/staging/migrations/normalizeOrgidInCollections
 
-Create an individual file for each script (file-name.js) and execute them one by one using:
+Create an individual file for each script (under src/file-name.js) and execute them one by one using:
 
 ```bash 
     node file-name.js
