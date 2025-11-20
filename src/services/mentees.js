@@ -41,7 +41,7 @@ module.exports = class MenteesHelper {
 	 * @param {String} roles - user roles.
 	 * @returns {JSON} - profile details
 	 */
-	static async readOld(id, orgId, roles) {
+	static async read(id, orgId, roles) {
 		const menteeDetails = await userRequests.getUserDetails(id)
 		const mentee = await menteeQueries.getMenteeExtension(id)
 		delete mentee.user_id
@@ -96,64 +96,6 @@ module.exports = class MenteesHelper {
 			result: {
 				sessions_attended: totalSession,
 				...menteeDetails.data.result,
-				...processDbResponse,
-			},
-		})
-	}
-
-	static async read(id, orgId, roles) {
-		const menteeDetails = await menteeQueries.findOneFromView(id)
-		// const mentee = await menteeQueries.getMenteeExtension(id)
-		// delete mentee.user_id
-		// delete mentee.visible_to_organizations
-		// delete mentee.image
-
-		// console.log("mentee",mentee);
-		const defaultOrgId = await getDefaultOrgId()
-		if (!defaultOrgId)
-			return responses.failureResponse({
-				message: 'DEFAULT_ORG_ID_NOT_SET',
-				statusCode: httpStatusCode.bad_request,
-				responseCode: 'CLIENT_ERROR',
-			})
-		const userExtensionsModelName = await menteeQueries.getModelName()
-
-		let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities({
-			status: 'ACTIVE',
-			organization_id: {
-				[Op.in]: [orgId, defaultOrgId],
-			},
-			model_names: { [Op.contains]: [userExtensionsModelName] },
-		})
-
-		const validationData = removeDefaultOrgEntityTypes(entityTypes, orgId)
-		//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-
-		const processDbResponse = utils.processDbResponse(menteeDetails, validationData)
-
-		const menteePermissions = await permissions.getPermissions(roles)
-		if (!Array.isArray(menteeDetails.permissions)) {
-			menteeDetails.permissions = []
-		}
-		menteeDetails.permissions.push(...menteePermissions)
-
-		const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
-		menteeDetails.profile_mandatory_fields = profileMandatoryFields
-
-		if (!menteeDetails.organization) {
-			const orgDetails = await organisationExtensionQueries.findOneById(orgId)
-			menteeDetails['organization'] = {
-				id: orgId,
-				name: orgDetails.name,
-			}
-		}
-		return responses.successResponse({
-			statusCode: httpStatusCode.ok,
-			message: 'PROFILE_FTECHED_SUCCESSFULLY',
-			result: {
-				sessions_attended: 0,
-				sessions_attended: menteeDetails.session_attendance_count,
-				...menteeDetails,
 				...processDbResponse,
 			},
 		})

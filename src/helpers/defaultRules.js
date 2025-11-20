@@ -100,19 +100,11 @@ exports.defaultRulesFilter = async function defaultRulesFilter({
 	requesterOrganizationId,
 }) {
 	try {
-		const userDetails = await getUserDetails(requesterId, isAMentor(roles))
-
-		let defaultRoles = await utils.internalGet('DefaultRule_' + ruleType + '_' + requesterOrganizationId)
-		if (!defaultRoles) {
-			defaultRoles = await defaultRuleQueries.findAll({
-				type: ruleType,
-				organization_id: requesterOrganizationId,
-			})
-
-			await utils.internalSet('DefaultRule_' + ruleType + '_' + requesterOrganizationId, defaultRoles)
-		}
-
-		const validConfigs = getValidConfigs(defaultRoles, roles)
+		const [userDetails, defaultRules] = await Promise.all([
+			getUserDetails(requesterId, isAMentor(roles)),
+			defaultRuleQueries.findAll({ type: ruleType, organization_id: requesterOrganizationId }),
+		])
+		const validConfigs = getValidConfigs(defaultRules, roles)
 
 		if (validConfigs.length === 0) {
 			return ''

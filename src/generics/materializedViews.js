@@ -134,14 +134,7 @@ const materializedViewQueryBuilder = async (model, concreteFields, metaFields) =
 		const temporaryMaterializedViewName = `${common.materializedViewsPrefix}${tableName}_${generateRandomCode(8)}`
 		const concreteFieldsQuery = await concreteFields
 			.map((data) => {
-				// return `${data.key}::${data.type} as ${data.key}`
-				if (data.sql) {
-					// Use custom SQL for computed field
-					return `${data.sql.trim()} AS ${data.key}`
-				} else {
-					// Regular table field
-					return `"${tableName}"."${data.key}"::${data.type} AS ${data.key}`
-				}
+				return `${data.key}::${data.type} as ${data.key}`
 			})
 			.join(',\n')
 		const metaFieldsQuery =
@@ -316,25 +309,6 @@ const generateMaterializedView = async (modelEntityTypes) => {
 			.filter(Boolean)
 
 		const modifiedMetaFields = await metaAttributesTypeModifier(metaFields)
-
-		if (model.tableName == 'user_extensions') {
-			concreteFields.push({
-				key: 'session_attendance_count',
-				type: 'integer',
-				sql: `
-						(
-							SELECT COUNT(*) 
-							FROM session_attendees sa
-							WHERE sa.session_id IN (
-								SELECT se.session_id
-								FROM session_enrollments se
-								WHERE se.mentee_id = "${model.tableName}".user_id
-							)
-							AND sa.joined_at IS NOT NULL
-						)
-					`,
-			})
-		}
 
 		const { materializedViewGenerationQuery, temporaryMaterializedViewName } = await materializedViewQueryBuilder(
 			model,
