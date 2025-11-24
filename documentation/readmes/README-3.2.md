@@ -334,4 +334,4 @@ https://github.com/ELEVATE-Project/chat-communications/tree/develop
 https://docs.docker.com/engine/install/ubuntu/
 
 \- Docker Compose Docs: https://docs.docker.com/compose/
-</div>
+
