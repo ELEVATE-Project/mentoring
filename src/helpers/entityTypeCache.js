@@ -8,210 +8,236 @@ const cacheHelper = require('@generics/cacheHelper')
 const common = require('@constants/common')
 
 /**
- * Get entity types and entities with cache-first strategy and fallback
+ * Get entity types and entities with user-centric cache strategy and defaults fallback
  * @method
  * @name getEntityTypesAndEntitiesWithCache
  * @param {Object} originalFilter - complete original database filter
- * @param {Array} tenantCodes - tenant codes array
+ * @param {String} tenantCode - user tenant code (single value, not array)
+ * @param {String} orgCode - user organization code (single value, not array)
  * @param {String} modelName - model name (optional, for cache optimization)
  * @returns {JSON} - Entity types with entities
  */
-async function getEntityTypesAndEntitiesWithCache(originalFilter, tenantCodes, modelName = null) {
+async function getEntityTypesAndEntitiesWithCache(originalFilter, tenantCode, orgCode, modelName = null) {
 	try {
-		// If no modelName provided, use direct database query
+		// If no modelName provided, use direct database query with user-centric approach
 		if (!modelName) {
-			return await entityTypeQueries.findUserEntityTypesAndEntities(originalFilter, tenantCodes)
-		}
+			// Get defaults internally for database query
+			let defaults = null
+			try {
+				defaults = await getDefaults()
+			} catch (error) {
+				console.error('Failed to get defaults for getEntityTypesAndEntitiesWithCache:', error.message)
+			}
 
-		// Extract core filter components for cache key
-		const orgCodes = Array.isArray(originalFilter.organization_code?.[Op.in])
-			? originalFilter.organization_code[Op.in]
-			: [originalFilter.organization_code]
+			// First try with user tenant and org codes
+			let userFilter = {
+				...originalFilter,
+				organization_code: orgCode,
+			}
+			let dbResult = await entityTypeQueries.findUserEntityTypesAndEntities(userFilter, [tenantCode])
 
-		if (!orgCodes || orgCodes.length === 0) {
-			return await entityTypeQueries.findUserEntityTypesAndEntities(originalFilter, tenantCodes)
-		}
-
-		const defaults = await getDefaults()
-		if (!defaults.orgCode || !defaults.tenantCode) {
-			return await entityTypeQueries.findUserEntityTypesAndEntities(originalFilter, tenantCodes)
-		}
-
-		// Ensure arrays include defaults
-		const orgCodeArray = Array.isArray(orgCodes) ? [...orgCodes] : [orgCodes]
-		const tenantCodeArray = Array.isArray(tenantCodes) ? [...tenantCodes] : [tenantCodes]
-
-		if (!orgCodeArray.includes(defaults.orgCode)) {
-			orgCodeArray.push(defaults.orgCode)
-		}
-		if (!tenantCodeArray.includes(defaults.tenantCode)) {
-			tenantCodeArray.push(defaults.tenantCode)
-		}
-
-		// Try to get cached data using individual entity values from each org/tenant combination
-		let cachedEntities = []
-		let hasCachedData = false
-
-		// Get all entity values that might be in the filter
-		const entityValues = originalFilter.value && originalFilter.value[Op.in] ? originalFilter.value[Op.in] : [] // If no specific values, we'll skip cache and go to DB
-
-		// Check cache for each org/tenant/entity combination
-		for (const tenantCode of tenantCodeArray) {
-			for (const orgCode of orgCodeArray) {
-				for (const entityValue of entityValues) {
-					try {
-						const cachedEntity = await cacheHelper.entityTypes.get(
-							tenantCode,
-							orgCode,
-							modelName,
-							entityValue
-						)
-
-						if (cachedEntity) {
-							cachedEntities.push(cachedEntity)
-							hasCachedData = true
-						}
-					} catch (cacheError) {}
+			// If not found with user codes and defaults exist, try with default codes
+			if (
+				(!dbResult || dbResult.length === 0) &&
+				defaults &&
+				defaults.orgCode &&
+				defaults.tenantCode &&
+				(defaults.tenantCode !== tenantCode || defaults.orgCode !== orgCode)
+			) {
+				let defaultFilter = {
+					...originalFilter,
+					organization_code: defaults.orgCode,
 				}
+				dbResult = await entityTypeQueries.findUserEntityTypesAndEntities(defaultFilter, [defaults.tenantCode])
+			}
+
+			return dbResult || []
+		}
+
+		// Get entity values from filter for cache checking
+		const entityValues = originalFilter.value && originalFilter.value[Op.in] ? originalFilter.value[Op.in] : []
+
+		// If we have specific entity values, try to get them from cache first
+		if (entityValues.length > 0) {
+			let cachedEntities = []
+			let hasCachedData = false
+
+			// Check cache for each entity value using user codes
+			for (const entityValue of entityValues) {
+				try {
+					const cachedEntity = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName, entityValue)
+
+					if (cachedEntity) {
+						cachedEntities.push(cachedEntity)
+						hasCachedData = true
+					}
+				} catch (cacheError) {}
+			}
+
+			// If we found cached data, apply original filter logic and return
+			if (hasCachedData) {
+				const filteredData = cachedEntities.filter((entityType) => {
+					// Apply all original filter conditions
+					for (const [key, value] of Object.entries(originalFilter)) {
+						if (key === 'organization_code' || key === 'tenant_code') {
+							// Skip tenant/org filtering as cache is already scoped
+							continue
+						}
+						if (key === 'model_names' && value[Op.contains]) {
+							const requiredModels = value[Op.contains]
+							const entityModels = entityType.model_names || []
+							const hasRequiredModel = requiredModels.some((reqModel) => entityModels.includes(reqModel))
+							if (!hasRequiredModel) {
+								return false
+							}
+						} else if (key === 'value' && value[Op.in]) {
+							if (!value[Op.in].includes(entityType.value)) {
+								return false
+							}
+						} else if (Array.isArray(value)) {
+							if (!value.includes(entityType[key])) {
+								return false
+							}
+						} else {
+							if (entityType[key] !== value) {
+								return false
+							}
+						}
+					}
+					return true
+				})
+
+				return filteredData
 			}
 		}
 
-		// If we found cached data and it covers all requested entity values, apply original filter logic and return
-		if (hasCachedData && entityValues.length > 0) {
-			// Apply original filter conditions to cached data
-			const filteredData = cachedEntities.filter((entityType) => {
-				// Apply all original filter conditions
-				for (const [key, value] of Object.entries(originalFilter)) {
-					if (key === 'organization_code' || key === 'tenant_code') {
-						// Skip tenant/org filtering as cache is already scoped
-						continue
-					}
-					if (key === 'model_names' && value[Op.contains]) {
-						const requiredModels = value[Op.contains]
-						const entityModels = entityType.model_names || []
-						const hasRequiredModel = requiredModels.some((reqModel) => entityModels.includes(reqModel))
-						if (!hasRequiredModel) {
-							return false
-						}
-					} else if (key === 'value' && value[Op.in]) {
-						if (!value[Op.in].includes(entityType.value)) {
-							return false
-						}
-					} else if (Array.isArray(value)) {
-						if (!value.includes(entityType[key])) {
-							return false
-						}
-					} else {
-						if (entityType[key] !== value) {
-							return false
-						}
-					}
-				}
-				return true
-			})
+		// Cache miss - fetch from database with user-centric approach
+		console.log(`💾 EntityType cache miss, querying database with user codes: tenant:${tenantCode}:org:${orgCode}`)
 
-			return filteredData
+		// Get defaults internally for database query
+		let defaults = null
+		try {
+			defaults = await getDefaults()
+		} catch (error) {
+			console.error('Failed to get defaults for getEntityTypesAndEntitiesWithCache:', error.message)
 		}
 
-		// Cache miss or partial cache - fetch from database
-		const dbResult = await entityTypeQueries.findUserEntityTypesAndEntities(originalFilter, tenantCodes)
+		let dbResult = null
+		try {
+			// First try with user tenant and org codes
+			let userFilter = {
+				...originalFilter,
+				organization_code: orgCode,
+			}
+			dbResult = await entityTypeQueries.findUserEntityTypesAndEntities(userFilter, [tenantCode])
 
-		// Cache individual entities using entity value pattern
+			// If not found with user codes and defaults exist, try with default codes
+			if (
+				(!dbResult || dbResult.length === 0) &&
+				defaults &&
+				defaults.orgCode &&
+				defaults.tenantCode &&
+				(defaults.tenantCode !== tenantCode || defaults.orgCode !== orgCode)
+			) {
+				console.log(
+					`💾 EntityTypes not found with user codes, trying defaults: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
+				)
+
+				let defaultFilter = {
+					...originalFilter,
+					organization_code: defaults.orgCode,
+				}
+				dbResult = await entityTypeQueries.findUserEntityTypesAndEntities(defaultFilter, [defaults.tenantCode])
+			}
+		} catch (dbError) {
+			console.error(`Failed to fetch entity types from database:`, dbError.message)
+			return []
+		}
+
+		// Cache individual entities using user tenant/org context (regardless of where they were found)
 		if (dbResult && dbResult.length > 0) {
 			for (const entityType of dbResult) {
 				try {
-					// Cache each entity using the standard pattern: tenant:${tenantCode}:org:${orgCode}:entityTypes:model:${modelName}:${entityValue}
 					await cacheHelper.entityTypes.set(
-						entityType.tenant_code,
-						entityType.organization_code,
+						tenantCode, // Always cache under user context
+						orgCode, // Always cache under user context
 						modelName,
 						entityType.value,
 						entityType
 					)
 				} catch (cacheSetError) {}
 			}
+			console.log(
+				`💾 Cached ${dbResult.length} entity types under user context: tenant:${tenantCode}:org:${orgCode}`
+			)
 		}
 
-		return dbResult
+		return dbResult || []
 	} catch (error) {
-		return await entityTypeQueries.findUserEntityTypesAndEntities(originalFilter, tenantCodes)
+		console.error(`❌ Failed to get entity types with cache:`, error)
+		// Fallback to database query with user codes
+		try {
+			let userFilter = {
+				...originalFilter,
+				organization_code: orgCode,
+			}
+			return await entityTypeQueries.findUserEntityTypesAndEntities(userFilter, [tenantCode])
+		} catch (fallbackError) {
+			console.error(`❌ Fallback database query also failed:`, fallbackError)
+			return []
+		}
 	}
 }
 
 /**
- * Get entity types and entities for a specific model with unified caching
- * Uses lazy loading strategy - caches complete model data and filters in-memory
+ * Get entity types and entities for a specific model with user-centric caching and defaults fallback
+ * Uses user-specific tenant/org codes with automatic default fallback
  * @method
  * @name getEntityTypesAndEntitiesForModel
  * @param {String} modelName - model name to filter by
- * @param {String|Array} orgCodes - organization codes
- * @param {String|Array} tenantCodes - tenant codes
+ * @param {String} tenantCode - user tenant code (single value, not array)
+ * @param {String} orgCode - user organization code (single value, not array)
  * @param {Object} additionalFilters - additional filter conditions
  * @returns {JSON} - Entity types with entities for the model
  */
-async function getEntityTypesAndEntitiesForModel(modelName, orgCodes, tenantCodes, additionalFilters = {}) {
+async function getEntityTypesAndEntitiesForModel(modelName, tenantCode, orgCode, additionalFilters = {}) {
 	try {
-		const defaults = await getDefaults()
-		if (!defaults.orgCode) {
+		// Get defaults internally for database query
+		let defaults = null
+		try {
+			defaults = await getDefaults()
+		} catch (error) {
+			console.error('Failed to get defaults for getEntityTypesAndEntitiesForModel:', error.message)
+		}
+
+		if (!defaults || !defaults.orgCode || !defaults.tenantCode) {
 			return responses.failureResponse({
-				message: 'DEFAULT_ORG_CODE_NOT_SET',
+				message: 'DEFAULT_ORG_CODE_OR_TENANT_CODE_NOT_SET',
 				statusCode: httpStatusCode.bad_request,
 				responseCode: 'CLIENT_ERROR',
 			})
 		}
-		if (!defaults.tenantCode) {
-			return responses.failureResponse({
-				message: 'DEFAULT_TENANT_CODE_NOT_SET',
-				statusCode: httpStatusCode.bad_request,
-				responseCode: 'CLIENT_ERROR',
-			})
-		}
 
-		// Ensure orgCodes and tenantCodes are arrays and include defaults
-		const orgCodeArray = Array.isArray(orgCodes) ? orgCodes : [orgCodes]
-		const tenantCodeArray = Array.isArray(tenantCodes) ? tenantCodes : [tenantCodes]
+		console.log(`💾 Getting entity types for model ${modelName}: tenant:${tenantCode}:org:${orgCode}`)
 
-		if (!orgCodeArray.includes(defaults.orgCode)) {
-			orgCodeArray.push(defaults.orgCode)
-		}
-		if (!tenantCodeArray.includes(defaults.tenantCode)) {
-			tenantCodeArray.push(defaults.tenantCode)
-		}
-
-		// Try to get known entity types from cache first for ALL org/tenant combinations
+		// Try to get known entity types from cache first using user codes
 		const knownEntityValues = common.entityTypeModelNames // Common model names
 		const cachedEntities = []
-		const uncachedEntityValues = []
 
 		try {
-			// Check cache for each org/tenant/entity combination
-			for (const tenantCode of tenantCodeArray) {
-				for (const orgCode of orgCodeArray) {
-					for (const entityValue of knownEntityValues) {
-						try {
-							const cachedEntity = await cacheHelper.entityTypes.get(
-								tenantCode,
-								orgCode,
-								modelName,
-								entityValue
-							)
+			// Check cache for each entity value using user codes only
+			for (const entityValue of knownEntityValues) {
+				try {
+					const cachedEntity = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName, entityValue)
 
-							if (cachedEntity && cachedEntity.entities) {
-								cachedEntities.push(cachedEntity)
-							} else {
-								uncachedEntityValues.push(entityValue)
-							}
-						} catch (entityFetchError) {
-							uncachedEntityValues.push(entityValue)
-						}
+					if (cachedEntity && cachedEntity.entities) {
+						cachedEntities.push(cachedEntity)
 					}
-				}
+				} catch (entityFetchError) {}
 			}
 
-			// If we found cached entities, use them directly without database validation
+			// If we found cached entities, format and apply filters
 			if (cachedEntities.length > 0) {
-				// Ensure each cached entity has the correct format (same as database result)
-				// Database returns: [{id, value, label, entities: [...], ...}, ...]
 				let formattedCachedEntities = cachedEntities.map((cachedEntity) => ({
 					...cachedEntity,
 					entities: Array.isArray(cachedEntity.entities) ? cachedEntity.entities : [],
@@ -220,76 +246,103 @@ async function getEntityTypesAndEntitiesForModel(modelName, orgCodes, tenantCode
 				// Apply additional filters to cached results
 				if (additionalFilters && Object.keys(additionalFilters).length > 0) {
 					formattedCachedEntities = formattedCachedEntities.filter((entityType) => {
-						// Apply each additional filter
 						for (const [key, value] of Object.entries(additionalFilters)) {
 							if (Array.isArray(value)) {
-								// Array value filter
 								if (!value.includes(entityType[key])) {
 									return false
 								}
 							} else if (entityType[key] !== value) {
-								return false // This entity doesn't match the filter
+								return false
 							}
 						}
-						return true // All filters match
+						return true
 					})
 				}
 
-				return formattedCachedEntities // Returns array format matching database result
+				console.log(`💾 Found ${formattedCachedEntities.length} cached entity types for model ${modelName}`)
+				return formattedCachedEntities
 			}
 		} catch (cacheError) {}
 
-		// Cache miss - fetch from database
-		const allEntitiesFilter = {
-			status: 'ACTIVE',
-			organization_code: { [Op.in]: orgCodeArray },
-			model_names: { [Op.contains]: [modelName] },
-			// Don't include additionalFilters in database query - we'll filter cached results
-		}
-
-		const allEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-			allEntitiesFilter,
-			tenantCodeArray
+		// Cache miss - fetch from database with user-centric approach
+		console.log(
+			`💾 Entity types cache miss for model ${modelName}, querying database with user codes: tenant:${tenantCode}:org:${orgCode}`
 		)
 
-		// Cache individual entities for both value-based and model-based lookups for ALL org/tenant combinations
+		let allEntityTypes = null
 		try {
+			// First try with user tenant and org codes
+			const userFilter = {
+				status: 'ACTIVE',
+				organization_code: orgCode,
+				model_names: { [Op.contains]: [modelName] },
+			}
+			allEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(userFilter, [tenantCode])
+
+			// If not found with user codes and defaults exist, try with default codes
+			if (
+				(!allEntityTypes || allEntityTypes.length === 0) &&
+				defaults.orgCode &&
+				defaults.tenantCode &&
+				(defaults.tenantCode !== tenantCode || defaults.orgCode !== orgCode)
+			) {
+				console.log(
+					`💾 Entity types for model ${modelName} not found with user codes, trying defaults: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
+				)
+
+				const defaultFilter = {
+					status: 'ACTIVE',
+					organization_code: defaults.orgCode,
+					model_names: { [Op.contains]: [modelName] },
+				}
+				allEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(defaultFilter, [
+					defaults.tenantCode,
+				])
+			}
+		} catch (dbError) {
+			console.error(`Failed to fetch entity types for model ${modelName} from database:`, dbError.message)
+			return []
+		}
+
+		// Cache individual entities using user tenant/org context (regardless of where they were found)
+		if (allEntityTypes && allEntityTypes.length > 0) {
 			for (const entityType of allEntityTypes) {
 				try {
-					// Cache this entity under its specific tenant/org combination
 					await cacheHelper.entityTypes.set(
-						entityType.tenant_code,
-						entityType.organization_code,
+						tenantCode, // Always cache under user context
+						orgCode, // Always cache under user context
 						modelName,
 						entityType.value,
 						entityType
 					)
 				} catch (individualCacheError) {}
 			}
-		} catch (cacheError) {}
+			console.log(
+				`💾 Cached ${allEntityTypes.length} entity types for model ${modelName} under user context: tenant:${tenantCode}:org:${orgCode}`
+			)
+		}
 
-		// Apply additional filters to the cached results
-		let filteredEntityTypes = allEntityTypes
+		// Apply additional filters to the database results
+		let filteredEntityTypes = allEntityTypes || []
 		if (additionalFilters && Object.keys(additionalFilters).length > 0) {
-			filteredEntityTypes = allEntityTypes.filter((entityType) => {
-				// Apply each additional filter
+			filteredEntityTypes = filteredEntityTypes.filter((entityType) => {
 				for (const [key, value] of Object.entries(additionalFilters)) {
 					if (Array.isArray(value)) {
-						// Array value filter
 						if (!value.includes(entityType[key])) {
 							return false
 						}
 					} else if (entityType[key] !== value) {
-						return false // This entity doesn't match the filter
+						return false
 					}
 				}
-				return true // All filters match
+				return true
 			})
 		}
 
 		return filteredEntityTypes
 	} catch (error) {
-		throw error
+		console.error(`❌ Failed to get entity types for model ${modelName}:`, error)
+		return []
 	}
 }
 
@@ -316,18 +369,16 @@ async function clearModelCache(tenantCode, orgCode, modelNames = []) {
 // Removed applyInMemoryFilters - no longer needed with individual entity value caching
 
 /**
- * Get individual entity type by value (uses individual entity value caching)
+ * Get individual entity type by value with user-centric caching and defaults fallback
  * @method
  * @name getEntityTypeByValue
  * @param {String} modelName - model name
  * @param {String} entityValue - entity value to find
- * @param {String} tenantCode - tenant code
- * @param {String} orgCode - org code
- * @param {Array} orgCodeArray - all org codes to include
- * @param {Array} tenantCodeArray - all tenant codes to include
+ * @param {String} tenantCode - user tenant code
+ * @param {String} orgCode - user org code
  * @returns {Object|null} - entity type object or null if not found
  */
-async function getEntityTypeByValue(modelName, entityValue, tenantCode, orgCode, orgCodeArray, tenantCodeArray) {
+async function getEntityTypeByValue(modelName, entityValue, tenantCode, orgCode) {
 	// Use direct cache helper for individual entity value lookup
 	try {
 		const cachedEntity = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName, entityValue)
@@ -336,19 +387,51 @@ async function getEntityTypeByValue(modelName, entityValue, tenantCode, orgCode,
 		}
 	} catch (cacheError) {}
 
-	// Fallback to database query if not in cache
-	const filter = {
-		status: 'ACTIVE',
-		value: entityValue,
-		organization_code: { [Op.in]: orgCodeArray },
-		model_names: { [Op.contains]: [modelName] },
+	// Get defaults internally for database query
+	let defaults = null
+	try {
+		defaults = await getDefaults()
+	} catch (error) {
+		console.error('Failed to get defaults for getEntityTypeByValue:', error.message)
 	}
 
-	const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodeArray)
-	const found = entityTypes.length > 0 ? entityTypes[0] : null
+	// Fallback to database query if not in cache
+	let found = null
+	try {
+		// First try with user tenant and org codes
+		const userFilter = {
+			status: 'ACTIVE',
+			value: entityValue,
+			organization_code: orgCode,
+			model_names: { [Op.contains]: [modelName] },
+		}
+		let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(userFilter, [tenantCode])
+		found = entityTypes.length > 0 ? entityTypes[0] : null
 
+		// If not found with user codes and defaults exist, try with default codes
+		if (
+			!found &&
+			defaults &&
+			defaults.orgCode &&
+			defaults.tenantCode &&
+			(defaults.tenantCode !== tenantCode || defaults.orgCode !== orgCode)
+		) {
+			const defaultFilter = {
+				status: 'ACTIVE',
+				value: entityValue,
+				organization_code: defaults.orgCode,
+				model_names: { [Op.contains]: [modelName] },
+			}
+			entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(defaultFilter, [defaults.tenantCode])
+			found = entityTypes.length > 0 ? entityTypes[0] : null
+		}
+	} catch (dbError) {
+		console.error(`Failed to fetch entity type ${modelName}:${entityValue} from database:`, dbError.message)
+		return null
+	}
+
+	// Cache it under user context (regardless of where it was found)
 	if (found) {
-		// Cache it for future use
 		try {
 			await cacheHelper.entityTypes.set(tenantCode, orgCode, modelName, entityValue, found)
 		} catch (cacheError) {}

@@ -282,8 +282,8 @@ module.exports = class SessionsHelper {
 			const sessionModelName = await sessionQueries.getModelName()
 			const entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				sessionModelName,
-				[orgCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				orgCode
 			)
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
@@ -428,8 +428,8 @@ module.exports = class SessionsHelper {
 					let resourceTemplate = process.env.RESOURCE_ADD_EMAIL_TEMPLATE_CODE
 					// This is the template used to send email to session mentees when resource added
 					let templateData = await cacheHelper.notificationTemplates.get(
-						[tenantCode, defaults.tenantCode],
-						[orgCode, defaults.orgCode],
+						tenantCode,
+						orgCode,
 						resourceTemplate
 					)
 
@@ -761,8 +761,8 @@ module.exports = class SessionsHelper {
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				sessionModelName,
-				[orgCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				orgCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -1557,6 +1557,24 @@ module.exports = class SessionsHelper {
 				})
 			}
 
+			// Check accessibility after full processing
+			if (userId !== '' && isAMentor !== '') {
+				let isAccessible = await this.checkIfSessionIsAccessible(
+					processDbResponse,
+					userId,
+					isAMentor,
+					tenantCode,
+					orgCode
+				)
+				if (!isAccessible) {
+					return responses.failureResponse({
+						statusCode: httpStatusCode.forbidden,
+						message: 'SESSION_RESTRICTED',
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+			}
+
 			const defaults = await getDefaults()
 			if (!defaults.orgCode) {
 				return responses.failureResponse({
@@ -1713,23 +1731,6 @@ module.exports = class SessionsHelper {
 				)
 			}
 
-			// Check accessibility after full processing
-			if (userId !== '' && isAMentor !== '') {
-				let isAccessible = await this.checkIfSessionIsAccessible(
-					processDbResponse,
-					userId,
-					isAMentor,
-					tenantCode,
-					orgCode
-				)
-				if (!isAccessible) {
-					return responses.failureResponse({
-						statusCode: httpStatusCode.forbidden,
-						message: 'SESSION_RESTRICTED',
-						responseCode: 'CLIENT_ERROR',
-					})
-				}
-			}
 			// Cache the FINAL processed response (only for simple numeric IDs)
 			if (utils.isNumeric(id)) {
 				try {
@@ -2480,7 +2481,7 @@ module.exports = class SessionsHelper {
 
 			const tenantCodes = [tenantCode, defaults.tenantCode]
 			const orgCodes = [orgCode, defaults.orgCode]
-			const templateData = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, emailTemplateCode)
+			const templateData = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, emailTemplateCode)
 			let duration = moment.duration(moment.unix(session.end_date).diff(moment.unix(session.start_date)))
 			let elapsedMinutes = duration.asMinutes()
 
@@ -2628,7 +2629,7 @@ module.exports = class SessionsHelper {
 			const tenantCodes = [tenantCode, defaults.tenantCode]
 			const orgCodes = [orgCode, defaults.orgCode]
 
-			const templateData = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, emailTemplateCode)
+			const templateData = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, emailTemplateCode)
 
 			if (templateData) {
 				let duration = moment.duration(moment.unix(session.end_date).diff(moment.unix(session.start_date)))
@@ -3067,8 +3068,8 @@ module.exports = class SessionsHelper {
 			if (resourceInfo && resourceInfo.length > 0) {
 				let postResourceTemplate = process.env.POST_RESOURCE_EMAIL_TEMPLATE_CODE
 				let templateData = await cacheHelper.notificationTemplates.get(
-					tenantCodes,
-					orgCodes,
+					tenantCode,
+					orgCode,
 					postResourceTemplate
 				)
 
@@ -3716,7 +3717,6 @@ module.exports = class SessionsHelper {
 				},
 				tenantCode
 			)
-			console.log('======== mentees found:', mentees)
 			if (!mentees || mentees.length === 0) {
 				return responses.failureResponse({
 					message: 'USER_NOT_FOUND',

@@ -14,6 +14,9 @@ const sessionQueries = require('@database/queries/sessions')
 const permissionQueries = require('@database/queries/permissions')
 const rolePermissionMappingQueries = require('@database/queries/role-permission-mapping')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const kafkaCommunication = require('@generics/kafka-communication')
+// Removed SessionsHelper import to avoid circular dependency
+const formQueries = require('@database/queries/form')
 
 /** CONFIG */
 const CACHE_CONFIG = (() => {
@@ -39,7 +42,6 @@ function pickBool(v, d) {
 	if (typeof v === 'string') return ['1', 'true', 'yes'].includes(v.toLowerCase())
 	return d
 }
-
 function tenantKey(tenantCode, parts = []) {
 	return ['tenant', tenantCode, ...parts].join(':')
 }
@@ -367,6 +369,155 @@ const sessions = {
 	async reset(tenantCode, orgCode, sessionId, sessionData, customTtl = null) {
 		return this.set(tenantCode, orgCode, sessionId, sessionData, customTtl)
 	},
+
+	/**
+	 * Get session from cache only. Returns null if cache miss.
+	 * @param {string} tenantCode - Tenant code
+	 * @param {string} organizationCode - Organization code
+	 * @param {string} sessionId - Session ID
+	 * @returns {Promise<Object|null>} Session data from cache or null
+	 */
+	async getCacheOnly(tenantCode, organizationCode, sessionId) {
+		try {
+			const cacheKey = await buildKey({ tenantCode, orgCode: organizationCode, ns: 'sessions', id: sessionId })
+			const useInternal = nsUseInternal('sessions')
+			return await get(cacheKey, { useInternal })
+		} catch (error) {
+			console.error(`❌ [sessions.getCacheOnly] Error for session ${sessionId}:`, error)
+			return null
+		}
+	},
+
+	/**
+	 * Send missing session IDs to Kafka for background cache warming (fire-and-forget)
+	 * @private
+	 */
+	async _sendToKafkaBackground(sessionIds, tenantCode, organizationCode) {
+		if (sessionIds.length === 0) return
+
+		console.log(
+			`🚀 [getSessionKafka] Sending batch of ${sessionIds.length} sessions to Kafka for background cache warming`
+		)
+
+		// Create session batch array for optimized processing
+		const sessionBatch = sessionIds.map((sessionId) => ({
+			sessionId: sessionId,
+			tenantCode: tenantCode,
+			organizationCode: organizationCode,
+		}))
+
+		// Send single batch message instead of individual messages
+		try {
+			const batchMessage = {
+				tenantCode: tenantCode,
+				organizationCode: organizationCode,
+				sessionBatch: sessionBatch,
+			}
+
+			await kafkaCommunication.pushToKafka({
+				topic: process.env.SESSION_FETCH_TOPIC || 'dev.mentoring.session-fetch',
+				message: batchMessage,
+			})
+
+			console.log(`✅ [getSessionKafka] Batch message sent: ${sessionBatch.length} sessions`)
+		} catch (kafkaError) {
+			// Silent fail - background cache warming should not affect main flow
+			console.error(`⚠️ [getSessionKafka] Background Kafka batch send failed:`, kafkaError.message)
+		}
+	},
+
+	/**
+	 * Smart cache-first approach with immediate DB fetch + background Kafka cache warming
+	 * @param {string} tenantCode - Tenant code for multi-tenancy
+	 * @param {string} organizationCode - Organization code
+	 * @param {Array|string} sessionIds - Array of session IDs or single session ID
+	 * @returns {Promise<Array|Object>} Complete array of session objects or single session object
+	 */
+	async getSessionKafka(tenantCode, organizationCode, sessionIds) {
+		try {
+			// Handle single session ID case
+			if (typeof sessionIds === 'string') {
+				return await this.get(tenantCode, organizationCode, sessionIds)
+			}
+
+			// Handle array case - smart caching with immediate DB fetch
+			if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
+				return []
+			}
+
+			const foundSessions = []
+			const missingSessionIds = []
+
+			// Step 1: Check cache for each session ID
+			console.log(`🔍 [getSessionKafka] Checking cache for ${sessionIds.length} sessions`)
+			for (const sessionId of sessionIds) {
+				const cachedSession = await this.getCacheOnly(tenantCode, organizationCode, sessionId)
+				if (cachedSession) {
+					foundSessions.push(cachedSession)
+				} else {
+					missingSessionIds.push(sessionId)
+				}
+			}
+
+			// Step 2: If all found in cache, return immediately
+			if (missingSessionIds.length === 0) {
+				console.log(`💾 [getSessionKafka] All ${sessionIds.length} sessions found in cache`)
+				return foundSessions
+			}
+
+			console.log(
+				`⚡ [getSessionKafka] Cache hits: ${foundSessions.length}/${sessionIds.length}, fetching ${missingSessionIds.length} from DB`
+			)
+
+			// Step 3: Send missing session IDs to Kafka for background cache warming (fire-and-forget)
+			this._sendToKafkaBackground(missingSessionIds, tenantCode, organizationCode)
+
+			// Step 4: Fetch missing sessions from DB immediately using service method
+			const dbFetchedSessions = []
+			for (const sessionId of missingSessionIds) {
+				try {
+					console.log(`🔄 [getSessionKafka] Fetching session ${sessionId} from database`)
+					// Direct database query to avoid circular dependency
+					const sessionDetails = await sessionQueries.findOne({ id: sessionId }, tenantCode, { raw: true })
+
+					if (sessionDetails) {
+						// Cache the session data directly
+						await this.set(tenantCode, organizationCode, sessionId, sessionDetails)
+						dbFetchedSessions.push(sessionDetails)
+						console.log(`✅ [getSessionKafka] Session ${sessionId} fetched and cached`)
+					}
+				} catch (dbError) {
+					console.error(`❌ [getSessionKafka] Failed to fetch session ${sessionId} from DB:`, dbError.message)
+					// Continue with other sessions - don't fail entire operation
+				}
+			}
+
+			// Step 5: Merge cached sessions + DB fetched sessions
+			const finalResult = [...foundSessions, ...dbFetchedSessions]
+
+			console.log(
+				`📊 [getSessionKafka] Final result: ${finalResult.length}/${sessionIds.length} sessions (${foundSessions.length} cached, ${dbFetchedSessions.length} DB fetched)`
+			)
+
+			return finalResult
+		} catch (error) {
+			console.error(`❌ [getSessionKafka] Error processing session IDs:`, error)
+			// Fallback to regular cache method for all session IDs
+			const fallbackResults = []
+			for (const sessionId of Array.isArray(sessionIds) ? sessionIds : [sessionIds]) {
+				try {
+					const session = await this.get(tenantCode, organizationCode, sessionId)
+					if (session) fallbackResults.push(session)
+				} catch (fallbackError) {
+					console.error(
+						`❌ [getSessionKafka] Fallback failed for session ${sessionId}:`,
+						fallbackError.message
+					)
+				}
+			}
+			return typeof sessionIds === 'string' ? fallbackResults[0] || null : fallbackResults
+		}
+	},
 }
 
 /**
@@ -378,10 +529,10 @@ const entityTypes = {
 	async get(tenantCode, orgCode, modelName, entityValue) {
 		try {
 			const compositeId = `model:${modelName}:${entityValue}`
-
-			// Step 1: Check cache for user's tenant/org
-			const userKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'entityTypes', id: compositeId })
 			const useInternal = nsUseInternal('entityTypes')
+
+			// Step 1: Check user-specific cache first
+			const userKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'entityTypes', id: compositeId })
 			const cachedEntityType = await get(userKey, { useInternal })
 			if (cachedEntityType) {
 				console.log(
@@ -390,61 +541,70 @@ const entityTypes = {
 				return cachedEntityType
 			}
 
-			// Step 2: Check cache for default tenant/org
-			const defaults = await getDefaults()
-			if (
-				defaults.orgCode &&
-				defaults.tenantCode &&
-				(defaults.orgCode !== orgCode || defaults.tenantCode !== tenantCode)
-			) {
-				const defaultKey = await buildKey({
-					tenantCode: defaults.tenantCode,
-					orgCode: defaults.orgCode,
-					ns: 'entityTypes',
-					id: compositeId,
-				})
-				const defaultCachedEntityType = await get(defaultKey, { useInternal })
-				if (defaultCachedEntityType) {
-					console.log(
-						`💾 EntityType ${modelName}:${entityValue} retrieved from default cache: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
-					)
-					// Cache in user's tenant/org for future requests
-					await this.set(tenantCode, orgCode, modelName, entityValue, defaultCachedEntityType)
-					return defaultCachedEntityType
-				}
+			// Step 2: Get defaults internally for database query
+			let defaults = null
+			try {
+				defaults = await getDefaults()
+			} catch (error) {
+				console.error('Failed to get defaults for entityType cache:', error.message)
 			}
 
-			// Step 3: Cache miss - fallback to database query with both user and default tenant/org
+			// Step 3: Cache miss - query database with user codes first
 			console.log(
-				`💾 EntityType ${modelName}:${entityValue} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
+				`💾 EntityType ${modelName}:${entityValue} cache miss, querying database with user codes: tenant:${tenantCode}:org:${orgCode}`
 			)
 
-			if (!defaults.orgCode || !defaults.tenantCode) {
-				console.warn('⚠️ Default org/tenant codes not set, using only user tenant/org for database query')
+			let entityTypeFromDb = null
+			try {
+				// First try with user tenant and org codes
+				const filter = {
+					status: 'ACTIVE',
+					organization_code: orgCode,
+					model_names: { [Op.contains]: [modelName] },
+					value: entityValue,
+				}
+				entityTypeFromDb = await entityTypeQueries.findUserEntityTypesAndEntities(filter, [tenantCode])
+
+				// Step 4: If not found with user codes and defaults exist, try with default codes
+				if (
+					(!entityTypeFromDb || entityTypeFromDb.length === 0) &&
+					defaults &&
+					defaults.orgCode &&
+					defaults.tenantCode &&
+					(defaults.tenantCode !== tenantCode || defaults.orgCode !== orgCode)
+				) {
+					console.log(
+						`💾 EntityType ${modelName}:${entityValue} not found with user codes, trying defaults: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
+					)
+
+					const defaultFilter = {
+						status: 'ACTIVE',
+						organization_code: defaults.orgCode,
+						model_names: { [Op.contains]: [modelName] },
+						value: entityValue,
+					}
+					entityTypeFromDb = await entityTypeQueries.findUserEntityTypesAndEntities(defaultFilter, [
+						defaults.tenantCode,
+					])
+				}
+			} catch (dbError) {
+				console.error(`Failed to fetch entityType ${modelName}:${entityValue} from database:`, dbError.message)
+				return null
 			}
 
-			const filter = {
-				status: 'ACTIVE',
-				organization_code: {
-					[Op.in]: defaults.orgCode ? [orgCode, defaults.orgCode] : [orgCode],
-				},
-				model_names: { [Op.contains]: [modelName] },
-				value: entityValue,
-			}
-			const entityTypeFromDb = await entityTypeQueries.findUserEntityTypesAndEntities(
-				filter,
-				defaults.tenantCode ? [tenantCode, defaults.tenantCode] : [tenantCode]
-			)
-
+			// Step 5: Cache result under user tenant/org (regardless of where entityType was found)
 			if (entityTypeFromDb && entityTypeFromDb.length > 0) {
-				// Cache the fetched data for future requests in user's tenant/org
 				await this.set(tenantCode, orgCode, modelName, entityValue, entityTypeFromDb)
 				console.log(
-					`💾 EntityType ${modelName}:${entityValue} fetched from database and cached: tenant:${tenantCode}:org:${orgCode}`
+					`💾 EntityType ${modelName}:${entityValue} fetched from database and cached under user context: tenant:${tenantCode}:org:${orgCode}`
 				)
 				return entityTypeFromDb
 			}
 
+			// Step 6: EntityType not found in any location
+			console.log(
+				`❌ EntityType ${modelName}:${entityValue} not found in database for user: tenant:${tenantCode}:org:${orgCode} or defaults`
+			)
 			return null
 		} catch (error) {
 			console.error(`❌ Failed to get entityType ${modelName}:${entityValue} from cache/database:`, error)
@@ -485,18 +645,51 @@ const entityTypes = {
 	 */
 	async getAllEntityTypesForModel(tenantCode, orgCode, modelName) {
 		try {
-			// Use database query to get all entity types for a model without hardcoding values
-			const defaults = await getDefaults()
-			const tenantCodes = defaults.tenantCode ? [tenantCode, defaults.tenantCode] : [tenantCode]
-			const orgCodes = defaults.orgCode ? [orgCode, defaults.orgCode] : [orgCode]
-
-			const filter = {
-				status: 'ACTIVE',
-				organization_code: { [Op.in]: orgCodes },
-				model_names: { [Op.contains]: [modelName] },
+			// Get defaults internally for database query
+			let defaults = null
+			try {
+				defaults = await getDefaults()
+			} catch (error) {
+				console.error('Failed to get defaults for getAllEntityTypesForModel:', error.message)
 			}
 
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCodes)
+			console.log(`💾 Getting all entity types for model ${modelName}: tenant:${tenantCode}:org:${orgCode}`)
+
+			let entityTypes = null
+			try {
+				// First try with user tenant and org codes
+				const filter = {
+					status: 'ACTIVE',
+					organization_code: orgCode,
+					model_names: { [Op.contains]: [modelName] },
+				}
+				entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, [tenantCode])
+
+				// If not found with user codes and defaults exist, try with default codes
+				if (
+					(!entityTypes || entityTypes.length === 0) &&
+					defaults &&
+					defaults.orgCode &&
+					defaults.tenantCode &&
+					(defaults.tenantCode !== tenantCode || defaults.orgCode !== orgCode)
+				) {
+					console.log(
+						`💾 Entity types for model ${modelName} not found with user codes, trying defaults: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
+					)
+
+					const defaultFilter = {
+						status: 'ACTIVE',
+						organization_code: defaults.orgCode,
+						model_names: { [Op.contains]: [modelName] },
+					}
+					entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(defaultFilter, [
+						defaults.tenantCode,
+					])
+				}
+			} catch (dbError) {
+				console.error(`Failed to fetch entity types for model ${modelName} from database:`, dbError.message)
+				return []
+			}
 
 			// Cache each entity type individually using standard cache pattern
 			if (entityTypes && entityTypes.length > 0) {
@@ -507,6 +700,9 @@ const entityTypes = {
 						// Continue if caching fails for individual entity type
 					}
 				}
+				console.log(
+					`💾 Cached ${entityTypes.length} entity types for model ${modelName} under user context: tenant:${tenantCode}:org:${orgCode}`
+				)
 			}
 
 			return entityTypes || []
@@ -564,12 +760,95 @@ const entityTypes = {
  */
 const forms = {
 	/**
-	 * Get specific form by type and subtype
+	 * Get specific form by type and subtype with user-centric caching and defaults fallback
 	 */
 	async get(tenantCode, orgCode, type, subtype) {
-		const compositeId = `${type}:${subtype}`
-		const useInternal = nsUseInternal('forms')
-		return get(await buildKey({ tenantCode, orgCode: orgCode, ns: 'forms', id: compositeId }), { useInternal })
+		try {
+			const compositeId = `${type}:${subtype}`
+			const useInternal = nsUseInternal('forms')
+
+			// Step 1: Check user-specific cache first
+			const userCacheKey = await buildKey({
+				tenantCode,
+				orgCode,
+				ns: 'forms',
+				id: compositeId,
+			})
+			const cachedForm = await get(userCacheKey, { useInternal })
+			if (cachedForm) {
+				console.log(`💾 Form ${type}:${subtype} retrieved from user cache: tenant:${tenantCode}:org:${orgCode}`)
+				return cachedForm
+			}
+
+			// Step 2: Get defaults internally for database query
+			let defaults = null
+			try {
+				defaults = await getDefaults()
+			} catch (error) {
+				console.error('Failed to get defaults for form cache:', error.message)
+			}
+
+			// Step 3: Cache miss - query database with user codes first
+			console.log(
+				`💾 Form ${type}:${subtype} cache miss, querying database with user codes: tenant:${tenantCode}:org:${orgCode}`
+			)
+
+			let formFromDb = null
+			try {
+				// First try with user tenant and org codes
+				formFromDb = await formQueries.findOne(
+					{
+						type: type,
+						sub_type: subtype,
+						organization_code: orgCode,
+					},
+					tenantCode
+				)
+
+				// Step 4: If not found with user codes and defaults exist, try with default codes
+				if (
+					!formFromDb &&
+					defaults &&
+					defaults.orgCode &&
+					defaults.tenantCode &&
+					(defaults.tenantCode !== tenantCode || defaults.orgCode !== orgCode)
+				) {
+					console.log(
+						`💾 Form ${type}:${subtype} not found with user codes, trying defaults: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
+					)
+
+					formFromDb = await formQueries.findOne(
+						{
+							type: type,
+							sub_type: subtype,
+							organization_code: defaults.orgCode,
+						},
+						defaults.tenantCode
+					)
+				}
+			} catch (dbError) {
+				console.error(`Failed to fetch form ${type}:${subtype} from database:`, dbError.message)
+				return null
+			}
+
+			// Step 5: Cache result under user tenant/org (regardless of where form was found)
+			if (formFromDb) {
+				await this.set(tenantCode, orgCode, type, subtype, formFromDb)
+				console.log(
+					`💾 Form ${type}:${subtype} fetched from database and cached under user context: tenant:${tenantCode}:org:${orgCode}`
+				)
+				return formFromDb
+			}
+
+			// Step 6: Form not found in any location
+			console.log(
+				`❌ Form ${type}:${subtype} not found in database for user: tenant:${tenantCode}:org:${orgCode} or defaults`
+			)
+			return null
+		} catch (error) {
+			console.error(`❌ Failed to get form ${type}:${subtype} from cache/database:`, error)
+			return null
+		}
 	},
 
 	/**
@@ -753,6 +1032,151 @@ const mentor = {
 			return null
 		}
 	},
+
+	/**
+	 * Send missing user IDs to Kafka for background cache warming (fire-and-forget)
+	 * @private
+	 */
+	async _sendToKafkaBackground(userMappingData, tenantCode, organizationCode) {
+		if (!userMappingData || Object.keys(userMappingData).length === 0) return
+
+		console.log(
+			`🚀 [getMentorKafka] Sending batch of ${
+				Object.keys(userMappingData).length
+			} users to Kafka for background cache warming`
+		)
+
+		// Group users by mentor/mentee status for batch processing
+		const userBatches = {
+			mentors: [],
+			mentees: [],
+		}
+
+		Object.entries(userMappingData).forEach(([userId, userData]) => {
+			const userInfo = {
+				userId: userId,
+				organizationCode: userData.organization_code,
+				tenantCode: userData.tenant_code,
+			}
+
+			if (userData.is_mentor) {
+				userBatches.mentors.push(userInfo)
+			} else {
+				userBatches.mentees.push(userInfo)
+			}
+		})
+
+		// Send single batch message instead of individual messages
+		try {
+			const batchMessage = {
+				tenantCode: tenantCode,
+				organizationCode: organizationCode, // Primary organization code
+				userBatches: userBatches,
+			}
+
+			await kafkaCommunication.pushToKafka({
+				topic: process.env.USER_PROFILE_FETCH_TOPIC || 'dev.mentoring.user-profile-fetch',
+				message: batchMessage,
+			})
+
+			console.log(
+				`✅ [getMentorKafka] Batch message sent: ${userBatches.mentors.length} mentors, ${userBatches.mentees.length} mentees`
+			)
+		} catch (kafkaError) {
+			// Silent fail - background cache warming should not affect main flow
+			console.error(`⚠️ [getMentorKafka] Background Kafka batch send failed:`, kafkaError.message)
+		}
+	},
+
+	/**
+	 * Smart cache-first approach with immediate DB fetch + background Kafka cache warming
+	 * @param {string} tenantCode - Tenant code for multi-tenancy
+	 * @param {string} organizationCode - Organization code
+	 * @param {Array|string} userIds - Array of user IDs or single user ID
+	 * @returns {Promise<Array|Object>} Complete array of user profiles or single user profile
+	 */
+	async getMentorKafka(tenantCode, organizationCode, userIds) {
+		try {
+			// Handle single user ID case
+			if (typeof userIds === 'string') {
+				return await this.get(tenantCode, organizationCode, userIds)
+			}
+
+			// Handle array case - smart caching with immediate DB fetch
+			if (!Array.isArray(userIds) || userIds.length === 0) {
+				return []
+			}
+
+			const foundUsers = []
+			const missingUserIds = []
+
+			// Step 1: Check cache for each user ID
+			for (const userId of userIds) {
+				const cachedUser = await this.getCacheOnly(tenantCode, organizationCode, userId)
+				if (cachedUser) {
+					foundUsers.push(cachedUser)
+				} else {
+					missingUserIds.push(userId)
+				}
+			}
+
+			// Step 2: If all found in cache, return immediately
+			if (missingUserIds.length === 0) {
+				return foundUsers
+			}
+
+			// Step 4: Fetch missing users from DB immediately using getUsersByUserIds
+			const dbFetchedUsers = []
+			const userMentorEntries = []
+			if (missingUserIds.length > 0) {
+				try {
+					const usersFromDb = await userQueries.getUsersByUserIds(missingUserIds, {}, tenantCode, false)
+
+					if (usersFromDb && usersFromDb.length > 0) {
+						// Add fetched users to result
+						dbFetchedUsers.push(...usersFromDb)
+
+						// Create user ID to is_mentor mapping using map
+						userMentorEntries = usersFromDb.map((user) => [
+							user.user_id,
+							{
+								is_mentor: user.is_mentor || false,
+								organization_code: user.organization_code || user.organization_id,
+								tenant_code: user.tenant_code || tenantCode,
+							},
+						])
+
+						console.log(`✅ [getMentorKafka] ${usersFromDb.length} users fetched from DB`)
+					}
+				} catch (dbError) {
+					console.error(`❌ [getMentorKafka] Failed to fetch users from DB:`, dbError.message)
+					// Continue with cached results even if DB fetch fails
+				}
+			}
+
+			// Step 4: Send user mapping entries to Kafka for background cache warming (fire-and-forget)
+			const userMappingData = Object.fromEntries(userMentorEntries)
+			this._sendToKafkaBackground(userMappingData, tenantCode)
+
+			// Step 5: Merge cached users + DB fetched users
+			const finalResult = [...foundUsers, ...dbFetchedUsers]
+
+			return finalResult
+		} catch (error) {
+			console.error(`❌ [getMenteeKafka] Error processing user IDs:`, error)
+			// Fallback to regular cache method for all user IDs
+			const fallbackResults = []
+			for (const userId of Array.isArray(userIds) ? userIds : [userIds]) {
+				try {
+					const user = await this.get(tenantCode, organizationCode, userId)
+					if (user) fallbackResults.push(user)
+				} catch (fallbackError) {
+					console.error(`❌ [getMenteeKafka] Fallback failed for user ${userId}:`, fallbackError.message)
+				}
+			}
+			return typeof userIds === 'string' ? fallbackResults[0] || null : fallbackResults
+		}
+	},
 }
 
 /**
@@ -848,6 +1272,159 @@ const mentee = {
 			return null
 		}
 	},
+
+	/**
+	 * Send missing user IDs to Kafka for background cache warming (fire-and-forget)
+	 * @private
+	 */
+	async _sendToKafkaBackground(userMappingData, tenantCode) {
+		if (!userMappingData || Object.keys(userMappingData).length === 0) return
+
+		console.log(
+			`🚀 [getMenteeKafka] Sending batch of ${
+				Object.keys(userMappingData).length
+			} users to Kafka for background cache warming`
+		)
+
+		// Group users by mentor/mentee status for batch processing
+		const userBatches = {
+			mentors: [],
+			mentees: [],
+		}
+
+		// Get primary organization code from first user for batch message
+		let primaryOrgCode = tenantCode // fallback
+
+		Object.entries(userMappingData).forEach(([userId, userData]) => {
+			const userInfo = {
+				userId: userId,
+				organizationCode: userData.organization_code,
+				tenantCode: userData.tenant_code,
+			}
+
+			// Set primary org code from first user
+			if (primaryOrgCode === tenantCode) {
+				primaryOrgCode = userData.organization_code
+			}
+
+			if (userData.is_mentor) {
+				userBatches.mentors.push(userInfo)
+			} else {
+				userBatches.mentees.push(userInfo)
+			}
+		})
+
+		// Send single batch message instead of individual messages
+		try {
+			const batchMessage = {
+				tenantCode: tenantCode,
+				organizationCode: primaryOrgCode, // Primary organization code
+				userBatches: userBatches,
+			}
+
+			await kafkaCommunication.pushToKafka({
+				topic: process.env.USER_PROFILE_FETCH_TOPIC || 'dev.mentoring.user-profile-fetch',
+				message: batchMessage,
+			})
+
+			console.log(
+				`✅ [getMenteeKafka] Batch message sent: ${userBatches.mentors.length} mentors, ${userBatches.mentees.length} mentees`
+			)
+		} catch (kafkaError) {
+			// Silent fail - background cache warming should not affect main flow
+			console.error(`⚠️ [getMenteeKafka] Background Kafka batch send failed:`, kafkaError.message)
+		}
+	},
+
+	/**
+	 * Smart cache-first approach with immediate DB fetch + background Kafka cache warming
+	 * @param {string} tenantCode - Tenant code for multi-tenancy
+	 * @param {string} organizationCode - Organization code
+	 * @param {Array|string} userIds - Array of user IDs or single user ID
+	 * @returns {Promise<Array|Object>} Complete array of user profiles or single user profile
+	 */
+	async getMenteeKafka(tenantCode, organizationCode, userIds) {
+		try {
+			// Handle single user ID case
+			if (typeof userIds === 'string') {
+				return await this.get(tenantCode, organizationCode, userIds)
+			}
+
+			// Handle array case - smart caching with immediate DB fetch
+			if (!Array.isArray(userIds) || userIds.length === 0) {
+				return []
+			}
+
+			const foundUsers = []
+			const missingUserIds = []
+
+			// Step 1: Check cache for each user ID
+			for (const userId of userIds) {
+				const cachedUser = await this.getCacheOnly(tenantCode, organizationCode, userId)
+				if (cachedUser) {
+					foundUsers.push(cachedUser)
+				} else {
+					missingUserIds.push(userId)
+				}
+			}
+
+			// Step 2: If all found in cache, return immediately
+			if (missingUserIds.length === 0) {
+				return foundUsers
+			}
+
+			// Step 3: Fetch missing users from DB immediately using getUsersByUserIds
+			const dbFetchedUsers = []
+			let userMentorEntries = []
+			if (missingUserIds.length > 0) {
+				try {
+					console.log(`🔄 [getMenteeKafka] Fetching ${missingUserIds.length} users from database`)
+					const usersFromDb = await userQueries.getUsersByUserIds(
+						missingUserIds, // ids array
+						{}, // options - default attributes
+						tenantCode, // tenantCode
+						false // unscoped - use scoped query
+					)
+
+					if (usersFromDb && usersFromDb.length > 0) {
+						// Cache each fetched user individually
+						for (const user of usersFromDb) {
+							await this.set(tenantCode, organizationCode, user.user_id, user)
+						}
+
+						// Add fetched users to result
+						dbFetchedUsers.push(...usersFromDb)
+
+						// Create user ID to is_mentor mapping using map
+						const userMentorEntries = usersFromDb.map((user) => [user.user_id, user.is_mentor || false])
+						Object.assign(userIsMentorMap, Object.fromEntries(userMentorEntries))
+
+						console.log(`✅ [getMenteeKafka] ${usersFromDb.length} users fetched from DB and cached`)
+					}
+				} catch (dbError) {
+					console.error(`❌ [getMenteeKafka] Failed to fetch users from DB:`, dbError.message)
+					// Continue with cached results even if DB fetch fails
+				}
+			}
+
+			// Step 5: Merge cached users + DB fetched users
+			const finalResult = [...foundUsers, ...dbFetchedUsers]
+			return finalResult
+		} catch (error) {
+			console.error(`❌ [getMenteeKafka] Error processing user IDs:`, error)
+			// Fallback to regular cache method for all user IDs
+			const fallbackResults = []
+			for (const userId of Array.isArray(userIds) ? userIds : [userIds]) {
+				try {
+					const user = await this.get(tenantCode, organizationCode, userId)
+					if (user) fallbackResults.push(user)
+				} catch (fallbackError) {
+					console.error(`❌ [getMenteeKafka] Fallback failed for user ${userId}:`, fallbackError.message)
+				}
+			}
+			return typeof userIds === 'string' ? fallbackResults[0] || null : fallbackResults
+		}
+	},
 }
 
 /**
@@ -882,112 +1459,92 @@ const platformConfig = {
  * Pattern: tenant:${tenantCode}:org:${orgCode}:templateCode:code
  */
 const notificationTemplates = {
-	async get(tenantCodes, orgCodes, templateCode) {
+	async get(tenantCode, orgCode, templateCode) {
 		try {
 			const compositeId = `templateCode:${templateCode}`
-
-			// Ensure arrays
-			const tenantCodesArray = Array.isArray(tenantCodes) ? tenantCodes : [tenantCodes]
-			const orgCodesArray = Array.isArray(orgCodes) ? orgCodes : [orgCodes]
-
-			// First check user-specific cache combinations
 			const useInternal = nsUseInternal('notificationTemplates')
-			for (const tenantCode of tenantCodesArray) {
-				for (const orgCode of orgCodesArray) {
-					const userCacheKey = await buildKey({
-						tenantCode,
-						orgCode,
-						ns: 'notificationTemplates',
-						id: compositeId,
-					})
-					const cachedTemplate = await get(userCacheKey, { useInternal })
-					if (cachedTemplate) {
-						console.log(
-							`💾 NotificationTemplate ${templateCode} retrieved from user cache: tenant:${tenantCode}:org:${orgCode}`
-						)
-						return cachedTemplate
-					}
-				}
+
+			// Step 1: Check user-specific cache first
+			const userCacheKey = await buildKey({
+				tenantCode,
+				orgCode,
+				ns: 'notificationTemplates',
+				id: compositeId,
+			})
+			const cachedTemplate = await get(userCacheKey, { useInternal })
+			if (cachedTemplate) {
+				console.log(
+					`💾 NotificationTemplate ${templateCode} retrieved from user cache: tenant:${tenantCode}:org:${orgCode}`
+				)
+				return cachedTemplate
 			}
 
-			// Get defaults for fallback cache and database query
+			// Step 2: Get defaults internally for database query
 			let defaults = null
 			try {
 				defaults = await getDefaults()
 			} catch (error) {
 				console.error('Failed to get defaults for notification template cache:', error.message)
-				// Continue without defaults - will fall back to database query
 			}
 
-			// Check default cache if defaults are available
-			if (defaults && defaults.orgCode && defaults.tenantCode) {
-				const defaultCacheKey = await buildKey({
-					tenantCode: defaults.tenantCode,
-					orgCode: defaults.orgCode,
-					ns: 'notificationTemplates',
-					id: compositeId,
-				})
-				const defaultCachedTemplate = await get(defaultCacheKey, { useInternal })
-				if (defaultCachedTemplate) {
-					console.log(
-						`💾 NotificationTemplate ${templateCode} retrieved from default cache: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
-					)
-					// Cache in first user combination for faster future access
-					await this.set(tenantCodesArray[0], orgCodesArray[0], templateCode, defaultCachedTemplate)
-					return defaultCachedTemplate
-				}
-			}
+			// Step 3: Cache miss - query database with user codes first
 
-			// Cache miss - fallback to database query
-			console.log(
-				`💾 NotificationTemplate ${templateCode} cache miss, fetching from database with codes: tenants:[${tenantCodesArray.join(
-					','
-				)}] orgs:[${orgCodesArray.join(',')}]`
-			)
-
-			// Combine user codes with defaults for database query
-			let allOrgCodes = [...orgCodesArray]
-			let allTenantCodes = [...tenantCodesArray]
-
-			if (defaults && defaults.orgCode && defaults.tenantCode) {
-				if (!allOrgCodes.includes(defaults.orgCode)) {
-					allOrgCodes.push(defaults.orgCode)
-				}
-				if (!allTenantCodes.includes(defaults.tenantCode)) {
-					allTenantCodes.push(defaults.tenantCode)
-				}
-			}
-
-			// Use combination of user and default codes for database query
-			// Avoid circular dependency by using findOne instead of findOneEmailTemplate
 			let templateFromDb = null
 			try {
+				// First try with user tenant and org codes
 				templateFromDb = await notificationTemplateQueries.findOne(
 					{
 						code: templateCode,
-						organization_code: { [Op.in]: allOrgCodes },
+						organization_code: orgCode,
+						tenant_code: tenantCode,
 						type: 'email',
 						status: 'active',
 					},
-					allTenantCodes // Use first tenant code for the query
+					tenantCode
 				)
+
+				// Step 4: If not found with user codes and defaults exist, try with default codes
+				if (
+					!templateFromDb &&
+					defaults &&
+					defaults.orgCode &&
+					defaults.tenantCode &&
+					(defaults.tenantCode !== tenantCode || defaults.orgCode !== orgCode)
+				) {
+					console.log(
+						`💾 NotificationTemplate ${templateCode} not found with user codes, trying defaults: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
+					)
+
+					templateFromDb = await notificationTemplateQueries.findOne(
+						{
+							code: templateCode,
+							organization_code: defaults.orgCode,
+							tenant_code: defaults.tenantCode,
+							type: 'email',
+							status: 'active',
+						},
+						defaults.tenantCode
+					)
+				}
 			} catch (dbError) {
 				console.error(`Failed to fetch notification template ${templateCode} from database:`, dbError.message)
 				return null
 			}
 
+			// Step 5: Cache result under user tenant/org (regardless of where template was found)
 			if (templateFromDb) {
-				// Cache the result under the matching tenant/org combination
-				const matchingTenant = templateFromDb.tenant_code
-				const matchingOrg = templateFromDb.organization_code
-
-				await this.set(matchingTenant, matchingOrg, templateCode, templateFromDb)
+				await this.set(tenantCode, orgCode, templateCode, templateFromDb)
 				console.log(
-					`💾 NotificationTemplate ${templateCode} fetched from database and cached: tenant:${matchingTenant}:org:${matchingOrg}`
+					`💾 NotificationTemplate ${templateCode} fetched from database and cached under user context: tenant:${tenantCode}:org:${orgCode}`
 				)
+				return templateFromDb
 			}
 
-			return templateFromDb
+			// Step 6: Template not found in any location
+			console.log(
+				`❌ NotificationTemplate ${templateCode} not found in database for user: tenant:${tenantCode}:org:${orgCode} or defaults`
+			)
+			return null
 		} catch (error) {
 			console.error(`❌ Failed to get notificationTemplate ${templateCode} from cache/database:`, error)
 			return null
@@ -1029,7 +1586,6 @@ const displayProperties = {
 				{ useInternal }
 			)
 			if (orgSpecific) {
-				console.log(`💾 Display properties found in org-specific cache: tenant:${tenantCode}:org:${orgCode}`)
 				return orgSpecific
 			}
 
@@ -1038,21 +1594,10 @@ const displayProperties = {
 				useInternal,
 			})
 			if (tenantOnly) {
-				console.log(`💾 Display properties found in tenant-only cache: tenant:${tenantCode}`)
 				return tenantOnly
 			}
 
-			// Cache miss - fallback to building display properties from entity types
-			console.log(
-				`💾 Display properties cache miss for tenant:${tenantCode} org:${orgCode}, building from entity types`
-			)
-
-			// This is a complex fallback - display properties are typically built from entity types
-			// We'll return null here and let the calling service handle the fallback
-			// This ensures we don't duplicate the complex entity type processing logic
-			console.log(
-				`❌ Display properties cache miss for tenant:${tenantCode} org:${orgCode} - caller should handle fallback`
-			)
+			// Cache miss - return null and let calling service handle fallback
 			return null
 		} catch (error) {
 			console.error(`❌ Failed to get display properties from cache:`, error)
@@ -1061,7 +1606,7 @@ const displayProperties = {
 	},
 
 	async set(tenantCode, orgCode, propertiesData) {
-		// Cache at org-specific level
+		// Cache at org-specific level only
 		await setScoped({
 			tenantCode,
 			orgCode: orgCode,
@@ -1069,19 +1614,6 @@ const displayProperties = {
 			id: '',
 			value: propertiesData,
 		})
-
-		// Also cache at tenant-only level as fallback
-		await setScoped({
-			tenantCode,
-			orgCode: '',
-			ns: 'displayProperties',
-			id: '',
-			value: propertiesData,
-		})
-
-		console.log(
-			`💾 Display properties cached at both levels: tenant:${tenantCode}:org:${orgCode} and tenant:${tenantCode}`
-		)
 	},
 
 	async delete(tenantCode, orgCode) {
@@ -1093,10 +1625,6 @@ const displayProperties = {
 
 		await del(orgKey, { useInternal })
 		await del(tenantKey, { useInternal })
-
-		console.log(
-			`🗑️ Display properties cache deleted at both levels: tenant:${tenantCode}:org:${orgCode} and tenant:${tenantCode}`
-		)
 	},
 }
 

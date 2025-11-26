@@ -56,7 +56,7 @@ module.exports = class MentorsHelper {
 			let requestedMentorExtension = false
 			if (id !== '' && isAMentor !== '' && roles !== '') {
 				// Try cache first, fallback to direct query
-				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
+				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
 
 				if (!requestedMentorExtension) {
 					return responses.failureResponse({
@@ -89,7 +89,8 @@ module.exports = class MentorsHelper {
 					allow_filtering: true,
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
-				[tenantCode, defaults.tenantCode],
+				tenantCode,
+				orgCode,
 				sessionModelName
 			)
 
@@ -294,7 +295,7 @@ module.exports = class MentorsHelper {
 	static async share(id, userId, organizationCode, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let mentorsDetails = await cacheHelper.mentor.get(tenantCode, organizationCode, id, false)
+			let mentorsDetails = await cacheHelper.mentor.get(tenantCode, organizationCode, id)
 			if (!mentorsDetails) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.bad_request,
@@ -452,15 +453,15 @@ module.exports = class MentorsHelper {
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				mentorExtensionsModelName,
-				[orgCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				orgCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
 			}
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
-			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, orgCode)
 			let res = utils.validateInput(data, validationData, mentorExtensionsModelName, skipValidation)
 			if (!res.success) {
 				return responses.failureResponse({
@@ -517,7 +518,7 @@ module.exports = class MentorsHelper {
 	static async updateMentorExtension(data, userId, orgCode, tenantCode) {
 		try {
 			// Try cache first for current mentor data
-			let currentUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId, false)
+			let currentUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
 			if (!currentUser) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -561,8 +562,8 @@ module.exports = class MentorsHelper {
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				mentorExtensionsModelName,
-				[orgCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				orgCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -637,7 +638,7 @@ module.exports = class MentorsHelper {
 
 			if (updateCount === 0) {
 				// Try cache first for fallback data
-				let fallbackUpdatedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId, false)
+				let fallbackUpdatedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
 				if (!fallbackUpdatedUser) {
 					return responses.failureResponse({
 						statusCode: httpStatusCode.not_found,
@@ -688,7 +689,7 @@ module.exports = class MentorsHelper {
 	static async getMentorExtension(userId, organizationCode, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let mentor = await cacheHelper.mentor.get(tenantCode, organizationCode, userId, false)
+			let mentor = await cacheHelper.mentor.get(tenantCode, organizationCode, userId)
 			if (!mentor) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -700,6 +701,16 @@ module.exports = class MentorsHelper {
 
 			// We already have mentor data from the initial cache call, no need to fetch again
 			if (mentor.is_mentor) {
+				// Always generate fresh downloadable URL for image (cached URLs expire)
+				if (mentor.image) {
+					try {
+						mentor.image = await utils.getDownloadableUrl(mentor.image)
+					} catch (error) {
+						console.error(`Failed to get downloadable URL for cached mentor image:`, error)
+						mentor.image = null
+					}
+				}
+
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'MENTOR_EXTENSION_FETCHED',
@@ -710,6 +721,16 @@ module.exports = class MentorsHelper {
 			// Try mentee cache as fallback (user might have both roles)
 			const cachedUser = await cacheHelper.mentee.get(tenantCode, orgCode, userId, false)
 			if (cachedUser) {
+				// Always generate fresh downloadable URL for image (cached URLs expire)
+				if (cachedUser.image) {
+					try {
+						cachedUser.image = await utils.getDownloadableUrl(cachedUser.image)
+					} catch (error) {
+						console.error(`Failed to get downloadable URL for cached user image:`, error)
+						cachedUser.image = null
+					}
+				}
+
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'MENTOR_EXTENSION_FETCHED',
@@ -813,7 +834,8 @@ module.exports = class MentorsHelper {
 			}
 
 			// Try to get complete profile from cache first using getCacheOnly
-			const cachedProfile = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, id)
+			const cachedProfile = null
+			// await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, id)
 
 			// If we have cached data, use it efficiently
 			if (cachedProfile) {
@@ -868,7 +890,26 @@ module.exports = class MentorsHelper {
 							message: 'PROFILE_RESTRICTED',
 						})
 					}
+
+					// Always fetch is_connected from database as it changes based on who is calling
+					const connection = await connectionQueries.getConnection(userId, id, tenantCode)
+					cachedProfile.is_connected = Boolean(connection)
+
+					if (cachedProfile.is_connected) {
+						cachedProfile.connection_details = connection.meta
+					}
 				}
+
+				// Always generate fresh downloadable URL for image (cached URLs expire)
+				if (cachedProfile.image) {
+					try {
+						cachedProfile.image = await utils.getDownloadableUrl(cachedProfile.image)
+					} catch (error) {
+						console.error(`Failed to get downloadable URL for cached profile image:`, error)
+						cachedProfile.image = null
+					}
+				}
+
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'PROFILE_FETCHED_SUCCESSFULLY',
@@ -877,7 +918,7 @@ module.exports = class MentorsHelper {
 			}
 
 			// Get mentor extension data efficiently (avoid redundant queries)
-			let mentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id, false)
+			let mentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
 
 			// If user authentication is required, perform validation
 			if (userId !== '' && isAMentor !== '' && roles !== '') {
@@ -982,8 +1023,8 @@ module.exports = class MentorsHelper {
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				mentorExtensionsModelName,
-				[mentorOrgCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				mentorOrgCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -998,7 +1039,6 @@ module.exports = class MentorsHelper {
 			let displayProperties = await cacheHelper.displayProperties.get(tenantCode, orgCode)
 
 			if (!displayProperties) {
-				console.log(`🔨 Building display properties from entity types for tenant:${tenantCode} org:${orgCode}`)
 				// Build display properties from entity types
 				const sortedEntityType = await utils.sortData(validationData, 'meta.sequence')
 				displayProperties = [
@@ -1014,7 +1054,7 @@ module.exports = class MentorsHelper {
 					displayProperties.push({ key: entityType.value, ...entityType.meta })
 				}
 
-				// Cache at both org and tenant levels for better hit rates
+				// Cache at org level
 				try {
 					await cacheHelper.displayProperties.set(tenantCode, orgCode, displayProperties)
 				} catch (cacheError) {
@@ -1024,8 +1064,18 @@ module.exports = class MentorsHelper {
 
 			const mentorPermissions = await permissions.getPermissions(roles, tenantCode, orgCode)
 
-			// Add is_connected field (false for own profile read)
-			processDbResponse.is_connected = false
+			// Add is_connected field - check connection if userId is provided (viewing others' profile)
+			if (userId !== '') {
+				const connection = await connectionQueries.getConnection(userId, id, tenantCode)
+				processDbResponse.is_connected = Boolean(connection)
+
+				if (processDbResponse.is_connected) {
+					processDbResponse.connection_details = connection.meta
+				}
+			} else {
+				// For own profile read or when no userId provided
+				processDbResponse.is_connected = false
+			}
 
 			if (!Array.isArray(mentorProfile.permissions)) {
 				mentorProfile.permissions = []
@@ -1111,7 +1161,7 @@ module.exports = class MentorsHelper {
 				sessions_hosted: totalSessionHosted,
 				visible_to_organizations: mentorExtension.visible_to_organizations, // Add to match mentee read
 				settings: mentorExtension.settings, // Add settings to match mentee read
-				image: mentorExtension.image, // Add image to match mentee read
+				image: mentorExtension.image, // Keep original image (may already be downloadable URL)
 				sessions_attended: totalSessionsAttended, // Add sessions_attended
 				profile_mandatory_fields: processDbResponse.profile_mandatory_fields, // Ensure not overwritten
 				organization: mentorProfile.organization, // Ensure not overwritten
@@ -1320,8 +1370,8 @@ module.exports = class MentorsHelper {
 
 			let validationData = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				userExtensionsModelName,
-				[orgCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode],
+				tenantCode,
+				orgCode,
 				{ allow_filtering: true }
 			)
 			const filteredQuery = utils.validateAndBuildFilters(query, validationData)

@@ -42,12 +42,8 @@ module.exports = class ConnectionHelper {
 	 */
 	static async initiate(bodyData, userId, tenantCode, orgCode) {
 		try {
-			// Check if the target user exists using cache first, then fallback to database query
-			let userExists = await cacheHelper.mentee.getCacheOnly(tenantCode, orgCode, bodyData.user_id)
-
-			if (!userExists) {
-				userExists = await userExtensionQueries.getMenteeExtension(bodyData.user_id, [], false, tenantCode)
-			}
+			// Check if the target user exists using cache with automatic DB fallback
+			const userExists = await cacheHelper.mentee.get(tenantCode, orgCode, bodyData.user_id, false)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -79,44 +75,7 @@ module.exports = class ConnectionHelper {
 				tenantCode
 			)
 
-			// Invalidate cache for both users involved in the connection request
-			try {
-				// Get user extensions to determine org codes for cache invalidation
-				const [user1Extension, user2Extension] = await Promise.all([
-					userExtensionQueries.getMenteeExtension(userId, ['organization_code'], false, tenantCode),
-					userExtensionQueries.getMenteeExtension(bodyData.user_id, ['organization_code'], false, tenantCode),
-				])
-
-				if (user1Extension) {
-					try {
-						await cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-
-					try {
-						await cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-				}
-
-				if (user2Extension) {
-					try {
-						await cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-
-					try {
-						await cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-				}
-			} catch (cacheError) {
-				// Cache invalidation failure - continue operation
-			}
+			// Cache deletion removed: is_connected now fetched from DB in real-time
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -201,8 +160,8 @@ module.exports = class ConnectionHelper {
 			// Fetch entity types associated with the user
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				userExtensionsModelName,
-				[userDetails.organization_code, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				userDetails.organization_code
 			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, userDetails.organization_code)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
@@ -391,44 +350,7 @@ module.exports = class ConnectionHelper {
 
 			await this.sendConnectionAcceptNotification(bodyData.user_id, userId, orgCode, tenantCode)
 
-			// Invalidate cache for both users involved in the connection
-			try {
-				// Get user extensions to determine org codes for cache invalidation
-				const [user1Extension, user2Extension] = await Promise.all([
-					userExtensionQueries.getMenteeExtension(userId, ['organization_code'], false, tenantCode),
-					userExtensionQueries.getMenteeExtension(bodyData.user_id, ['organization_code'], false, tenantCode),
-				])
-
-				if (user1Extension) {
-					try {
-						await cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-
-					try {
-						await cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-				}
-
-				if (user2Extension) {
-					try {
-						await cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-
-					try {
-						await cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-				}
-			} catch (cacheError) {
-				// Cache invalidation failure - continue operation
-			}
+			// Cache deletion removed: is_connected now fetched from DB in real-time
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -474,44 +396,7 @@ module.exports = class ConnectionHelper {
 			// Send notification to the mentee who requested the connection
 			await this.sendConnectionRejectionNotification(bodyData.user_id, userId, orgCode, tenantCode)
 
-			// Invalidate cache for both users involved in the connection rejection
-			try {
-				// Get user extensions to determine org codes for cache invalidation
-				const [user1Extension, user2Extension] = await Promise.all([
-					userExtensionQueries.getMenteeExtension(userId, ['organization_code'], false, tenantCode),
-					userExtensionQueries.getMenteeExtension(bodyData.user_id, ['organization_code'], false, tenantCode),
-				])
-
-				if (user1Extension) {
-					try {
-						await cacheHelper.mentor.delete(tenantCode, user1Extension.organization_code, userId)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-
-					try {
-						await cacheHelper.mentee.delete(tenantCode, user1Extension.organization_code, userId)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-				}
-
-				if (user2Extension) {
-					try {
-						await cacheHelper.mentor.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-
-					try {
-						await cacheHelper.mentee.delete(tenantCode, user2Extension.organization_code, bodyData.user_id)
-					} catch (cacheError) {
-						// Cache invalidation failure - continue operation
-					}
-				}
-			} catch (cacheError) {
-				// Cache invalidation failure - continue operation
-			}
+			// Cache deletion removed: is_connected now fetched from DB in real-time
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -558,7 +443,8 @@ module.exports = class ConnectionHelper {
 					allow_filtering: true,
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
-				[defaults.tenantCode, tenantCode],
+				tenantCode,
+				orgCode,
 				userExtensionsModelName
 			)
 
@@ -685,7 +571,7 @@ module.exports = class ConnectionHelper {
 			const orgCodes = [orgCode, defaults.orgCode]
 
 			// Get email template
-			const templateData = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, templateCode)
+			const templateData = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, templateCode)
 
 			if (templateData) {
 				const menteeName = menteeDetails[0].name
@@ -767,7 +653,7 @@ module.exports = class ConnectionHelper {
 			const orgCodes = [orgCode, defaults.orgCode]
 
 			// Get email template
-			const templateData = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, templateCode)
+			const templateData = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, templateCode)
 
 			if (templateData) {
 				const menteeName = menteeDetails[0].name

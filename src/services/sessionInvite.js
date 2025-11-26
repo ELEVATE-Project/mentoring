@@ -111,8 +111,8 @@ module.exports = class UserInviteHelper {
 					const tenantCodes = [tenantCode, defaults.tenantCode]
 					// send mail to mentors on session creation if session created by manager
 					const templateData = await cacheHelper.notificationTemplates.get(
-						tenantCodes,
-						orgCodes,
+						tenantCode,
+						data.user.organization_code,
 						templateCode
 					)
 
@@ -598,8 +598,8 @@ module.exports = class UserInviteHelper {
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				sessionModelName,
-				[orgCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				orgCode
 			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,
@@ -869,8 +869,8 @@ module.exports = class UserInviteHelper {
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				sessionModelName,
-				[orgCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				orgCode
 			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,

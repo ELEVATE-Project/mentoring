@@ -83,8 +83,8 @@ module.exports = class issuesHelper {
 				console.log(`🔍 Issues.js - Org codes: [${orgCodes.join(', ')}]`)
 
 				const templateData = await cacheHelper.notificationTemplates.get(
-					tenantCodes,
-					orgCodes,
+					tenantCode,
+					orgCode,
 					process.env.REPORT_ISSUE_EMAIL_TEMPLATE_CODE
 				)
 

@@ -134,8 +134,8 @@ module.exports = class requestSessionsHelper {
 			const requestSessionModelName = await sessionRequestQueries.getModelName()
 			const entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				requestSessionModelName,
-				[organizationCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				organizationCode
 			)
 
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
@@ -686,8 +686,8 @@ module.exports = class requestSessionsHelper {
 			// Fetch entity types associated with the user
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				userExtensionsModelName,
-				[userDetails.organization_code, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				userDetails.organization_code
 			)
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			const processedUserDetails = utils.processDbResponse(userDetails, validationData)
@@ -870,7 +870,7 @@ async function emailForAcceptAndReject(
 	const orgCodes = [orgCode, defaults.orgCode]
 	const tenantCodes = [tenantCode, defaults.tenantCode]
 	// send mail to mentors on session creation if session created by manager
-	const templateData = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, emailTemplateCode)
+	const templateData = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, emailTemplateCode)
 
 	// If template data is available. create mail data and push to kafka
 	if (templateData) {

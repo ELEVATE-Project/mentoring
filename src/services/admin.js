@@ -43,7 +43,7 @@ class NotificationHelper {
 				return true
 			}
 
-			const template = await cacheHelper.notificationTemplates.get(tenantCodes, orgCode, templateCode)
+			const template = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, templateCode)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -86,7 +86,7 @@ class NotificationHelper {
 		try {
 			if (!sessions?.length || !templateCode) return true
 
-			const template = await cacheHelper.notificationTemplates.get(tenantCodes, orgCodes, templateCode)
+			const template = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, templateCode)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true

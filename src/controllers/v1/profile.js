@@ -113,7 +113,6 @@ module.exports = class Mentees {
 
 			return await menteesService.read(
 				req.decodedToken.id,
-				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
 				req.decodedToken.roles,
 				req.decodedToken.tenant_code

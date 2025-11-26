@@ -4,14 +4,11 @@ const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const feedbackHelper = require('./feedback')
 const utils = require('@generics/utils')
-const { elevateLog } = require('elevate-logger')
-
 const { UniqueConstraintError } = require('sequelize')
 const menteeQueries = require('@database/queries/userExtension')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const sessionQueries = require('@database/queries/sessions')
 const _ = require('lodash')
-const entityTypeQueries = require('@database/queries/entityType')
 const entityTypeCache = require('@helpers/entityTypeCache')
 const bigBlueButtonService = require('./bigBlueButton')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
@@ -31,7 +28,6 @@ const defaultSearchConfig = require('@configs/search.json')
 const cacheHelper = require('@generics/cacheHelper')
 const emailEncryption = require('@utils/emailEncryption')
 const communicationHelper = require('@helpers/communications')
-const menteeExtensionQueries = require('@database/queries/userExtension')
 const { checkIfUserIsAccessible } = require('@helpers/saasUserAccessibility')
 const connectionQueries = require('@database/queries/connection')
 const getOrgIdAndEntityTypes = require('@helpers/getOrgIdAndEntityTypewithEntitiesBasedOnPolicy')
@@ -47,11 +43,21 @@ module.exports = class MenteesHelper {
 	 * @param {String} roles - user roles.
 	 * @returns {JSON} - profile details
 	 */
-	static async read(id, organizationId, organizationCode, roles, tenantCode) {
+	static async read(id, organizationCode, roles, tenantCode) {
 		// Try to get complete profile from cache first (only when false)
 		const cachedProfile = await cacheHelper.mentee.getCacheOnly(tenantCode, organizationCode, id)
-		// If we have cached data , return complete response immediately
+		// If we have cached data, update image URL and return response
 		if (cachedProfile) {
+			// Always generate fresh downloadable URL for image (cached URLs expire)
+			if (cachedProfile.image) {
+				try {
+					cachedProfile.image = await utils.getDownloadableUrl(cachedProfile.image)
+				} catch (error) {
+					console.error(`Failed to get downloadable URL for cached profile image:`, error)
+					cachedProfile.image = null
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'PROFILE_FETCHED_SUCCESSFULLY',
@@ -92,8 +98,8 @@ module.exports = class MenteesHelper {
 
 		let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 			userExtensionsModelName,
-			[organizationCode, defaults.orgCode],
-			[tenantCode, defaults.tenantCode]
+			tenantCode,
+			organizationCode
 		)
 		if (entityTypes instanceof Error) {
 			throw entityTypes
@@ -198,7 +204,7 @@ module.exports = class MenteesHelper {
 			...processDbResponse,
 			visible_to_organizations: mentee.visible_to_organizations, // Add to match mentor read
 			settings: mentee.settings, // Add settings to match mentor read
-			image: mentee.image, // Add image to match mentor read
+			image: mentee.image, // Keep original image (may already be downloadable URL)
 			displayProperties,
 		}
 
@@ -564,8 +570,8 @@ module.exports = class MenteesHelper {
 
 		let validationData = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 			sessionModelName,
-			[organizationCode, defaults.orgCode],
-			[tenantCode, defaults.tenantCode]
+			tenantCode,
+			organizationCode
 		)
 
 		let filteredQuery = utils.validateAndBuildFilters(query, validationData, sessionModelName)
@@ -954,8 +960,8 @@ module.exports = class MenteesHelper {
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				userExtensionsModelName,
-				[organizationCode, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				organizationCode
 			)
 			if (entityTypes instanceof Error) {
 				throw entityTypes
@@ -1075,7 +1081,8 @@ module.exports = class MenteesHelper {
 			}
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
 				filter,
-				[tenantCode, defaults.tenantCode],
+				tenantCode,
+				organizationCode,
 				userExtensionsModelName
 			)
 			if (entityTypes instanceof Error) {
@@ -1209,6 +1216,16 @@ module.exports = class MenteesHelper {
 			// Try cache first for processed mentee extension data
 			const cachedMenteeExtension = await cacheHelper.mentee.get(tenantCode, organizationCode, userId, false)
 			if (cachedMenteeExtension) {
+				// Always generate fresh downloadable URL for image (cached URLs expire)
+				if (cachedMenteeExtension.image) {
+					try {
+						cachedMenteeExtension.image = await utils.getDownloadableUrl(cachedMenteeExtension.image)
+					} catch (error) {
+						console.error(`Failed to get downloadable URL for cached mentee image:`, error)
+						cachedMenteeExtension.image = null
+					}
+				}
+
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'MENTEE_EXTENSION_FETCHED',
@@ -1248,7 +1265,8 @@ module.exports = class MenteesHelper {
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
 				filter,
-				[tenantCode, defaults.tenantCode],
+				tenantCode,
+				organizationCode,
 				userExtensionsModelName
 			)
 
@@ -1483,7 +1501,8 @@ module.exports = class MenteesHelper {
 					status: common.ACTIVE_STATUS,
 					model_names: { [Op.overlap]: [userExtensionModelName] },
 				},
-				[tenantCode, defaults.tenantCode],
+				tenantCode,
+				organizationCode,
 				userExtensionModelName
 			)
 
@@ -1989,6 +2008,25 @@ module.exports = class MenteesHelper {
 						message: 'PROFILE_RESTRICTED',
 					})
 				}
+
+				// Always fetch is_connected from database as it changes based on who is calling
+				const connection = await connectionQueries.getConnection(userId, id, tenantCode)
+				cacheProfileDetails.is_connected = Boolean(connection)
+
+				if (cacheProfileDetails.is_connected) {
+					cacheProfileDetails.connection_details = connection.meta
+				}
+
+				// Always generate fresh downloadable URL for image (cached URLs expire)
+				if (cacheProfileDetails.image) {
+					try {
+						cacheProfileDetails.image = await utils.getDownloadableUrl(cacheProfileDetails.image)
+					} catch (error) {
+						console.error(`Failed to get downloadable URL for cached profile image:`, error)
+						cacheProfileDetails.image = null
+					}
+				}
+
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'PROFILE_FTECHED_SUCCESSFULLY',
@@ -2084,8 +2122,8 @@ module.exports = class MenteesHelper {
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				menteeExtensionsModelName,
-				[requestedUserExtension.organization_code, defaults.orgCode],
-				[tenantCode, defaults.tenantCode]
+				tenantCode,
+				requestedUserExtension.organization_code
 			)
 
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
@@ -2156,7 +2194,7 @@ module.exports = class MenteesHelper {
 				...processDbResponse,
 				visible_to_organizations: requestedUserExtension.visible_to_organizations, // Add to match mentor read
 				settings: requestedUserExtension.settings, // Add settings to match mentor read
-				image: requestedUserExtension.image, // Add image to match mentor read
+				image: requestedUserExtension.image, // Keep original image (may already be downloadable URL)
 				displayProperties,
 				Permissions: userPermissions,
 			}

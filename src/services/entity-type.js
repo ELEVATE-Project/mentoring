@@ -407,10 +407,13 @@ module.exports = class EntityHelper {
 				additionalFilters.value = entityType
 			}
 			// get entityTypes with entities data using cache
+			// Use first tenant/org as user context - cache helper handles defaults internally
+			const primaryTenantCode = tenantCodes[0] || defaults.tenantCode
+			const primaryOrgCode = orgCodes[0] || defaults.orgCode
 			let entityTypesWithEntities = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				Array.isArray(modelName) ? modelName[0] : modelName,
-				orgCodes,
-				tenantCodes,
+				primaryTenantCode,
+				primaryOrgCode,
 				additionalFilters
 			)
 			entityTypesWithEntities = JSON.parse(JSON.stringify(entityTypesWithEntities))
@@ -487,7 +490,6 @@ module.exports = class EntityHelper {
 							modelName,
 							entityToDelete.value
 						)
-						console.log(`Cleared cache for deleted entity: ${modelName}:${entityToDelete.value}`)
 					}
 				}
 			} catch (cacheError) {
