@@ -267,7 +267,7 @@ let enviromentVariables = {
 	DOWNLOAD_URL_EXPIRATION_DURATION: {
 		message: 'Required downloadable url expiration time',
 		optional: true,
-		default: 300000,
+		default: 86400,
 	},
 	SESSION_UPLOAD_EMAIL_TEMPLATE_CODE: {
 		message: 'Required email template name for bulk session upload by session manager',
