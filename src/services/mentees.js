@@ -170,12 +170,26 @@ module.exports = class MenteesHelper {
 		// Add missing computed fields to processDbResponse
 		processDbResponse.profile_mandatory_fields = profileMandatoryFields
 
-		// Add organization object
-		const orgDetails = await organisationExtensionQueries.findOne(
-			{ organization_code: organizationCode },
-			tenantCode,
-			{ attributes: ['name', 'organization_code', 'organization_id'] }
-		)
+		// Add organization object - try cache first, fallback to database
+		let orgDetails = null
+		// Try to get from cache if we have organization_id
+		if (processDbResponse.organization_id) {
+			orgDetails = await cacheHelper.organizations.get(
+				tenantCode,
+				organizationCode,
+				processDbResponse.organization_id
+			)
+		}
+
+		// Fallback to database if cache miss or error
+		if (!orgDetails) {
+			orgDetails = await organisationExtensionQueries.findOne(
+				{ organization_code: organizationCode },
+				tenantCode,
+				{ attributes: ['name', 'organization_code', 'organization_id'] }
+			)
+		}
+
 		processDbResponse.organization = {
 			id: orgDetails.organization_code,
 			name: orgDetails.name,
@@ -685,10 +699,34 @@ module.exports = class MenteesHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			const organizationName = menteeExtension
-				? (await userRequests.getOrgDetails({ organizationId: menteeExtension.organization_id, tenantCode }))
-						?.data?.result?.name
-				: ''
+			// Get organization name with cache-first approach
+			let organizationName = ''
+			if (menteeExtension?.organization_id) {
+				try {
+					// Try cache first using available orgCode
+					const cachedOrg = await cacheHelper.organizations.get(
+						tenantCode,
+						orgCode,
+						menteeExtension.organization_id
+					)
+
+					if (cachedOrg?.name) {
+						organizationName = cachedOrg.name
+					}
+				} catch (cacheError) {
+					console.warn('Organization cache lookup failed, falling back to database')
+				}
+
+				// Fallback to database if cache miss
+				if (!organizationName) {
+					const orgDetails = await organisationExtensionQueries.findOne(
+						{ organization_id: menteeExtension.organization_id },
+						tenantCode,
+						{ attributes: ['name', 'organization_code'], raw: true }
+					)
+					organizationName = orgDetails?.name || ''
+				}
+			}
 			if (!isAMentor && menteeExtension.is_mentor == true) {
 				throw responses.failureResponse({
 					statusCode: httpStatusCode.unauthorized,
@@ -1687,15 +1725,37 @@ module.exports = class MenteesHelper {
 						tenantCode
 				  )
 
-			const getOrgPolicy = await organisationExtensionQueries.findOne(
-				{
-					organization_id: userPolicyDetails.organization_id,
-				},
-				tenantCode,
-				{
-					attributes: ['external_mentee_visibility_policy', 'organization_id'],
+			// Get organization policy with cache-first approach
+			let getOrgPolicy = null
+
+			// Try cache first using available orgCode and organization_id
+			try {
+				const cachedOrg = await cacheHelper.organizations.get(
+					tenantCode,
+					orgCode,
+					userPolicyDetails.organization_id
+				)
+
+				// Check if cached data has the required policy attribute
+				if (cachedOrg && cachedOrg.hasOwnProperty('external_mentee_visibility_policy')) {
+					getOrgPolicy = cachedOrg
 				}
-			)
+			} catch (cacheError) {
+				console.warn('Organization cache lookup failed, falling back to database')
+			}
+
+			// Fallback to database if cache miss
+			if (!getOrgPolicy) {
+				getOrgPolicy = await organisationExtensionQueries.findOne(
+					{
+						organization_id: userPolicyDetails.organization_id,
+					},
+					tenantCode,
+					{
+						attributes: ['external_mentee_visibility_policy', 'organization_id', 'organization_code'],
+					}
+				)
+			}
 			// Throw error if mentor/mentee extension not found
 			if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
 				return responses.failureResponse({
@@ -1868,7 +1928,7 @@ module.exports = class MenteesHelper {
 	 * //   }
 	 * // }
 	 */
-	static async getCommunicationToken(id, tenantCode) {
+	static async getCommunicationToken(id, tenantCode, orgCode) {
 		try {
 			const token = await communicationHelper.login(id, tenantCode)
 
@@ -1880,8 +1940,17 @@ module.exports = class MenteesHelper {
 		} catch (error) {
 			if (error.message == 'unauthorized' || error.message.includes('USER_NOT_FOUND')) {
 				try {
-					// Get user details for signup (unscoped to include encrypted email field)
-					const user = await menteeQueries.getMenteeExtension(id, [], true, tenantCode)
+					// Step 1: Try to get user details from cache first for better performance
+					let user = null
+					let userOrgCode = null
+
+					user = await cacheHelper.mentor.get(tenantCode, orgCode, id)
+
+					// Step 2: Fallback to database if cache miss (include encrypted email field)
+					if (!user) {
+						user = await menteeQueries.getMenteeExtension(id, [], true, tenantCode)
+					}
+
 					if (!user) {
 						return responses.failureResponse({
 							statusCode: httpStatusCode.not_found,
@@ -1890,7 +1959,7 @@ module.exports = class MenteesHelper {
 						})
 					}
 
-					// Check if email exists, if not try to get from decoded token or generate one
+					// Step 3: Validate required email field
 					if (!user.email) {
 						return responses.failureResponse({
 							statusCode: httpStatusCode.bad_request,
@@ -1899,10 +1968,24 @@ module.exports = class MenteesHelper {
 						})
 					}
 
-					// Attempt signup with user details
-					await communicationHelper.create(id, user.name, user.email, user.image, tenantCode)
+					// Step 4: Generate downloadable image URL if user has image
+					let userImageUrl = null
+					if (user.image) {
+						try {
+							const imageResponse = await userRequests.getDownloadableUrl(user.image)
+							userImageUrl = imageResponse?.result
+							console.log(`💾 Generated downloadable image URL for user ${id}`)
+						} catch (imageError) {
+							console.log(`Failed to generate image URL for user ${id}:`, imageError.message)
+							// Continue without image - not a blocking error
+						}
+					}
 
-					// Retry login after successful signup
+					// Step 5: Attempt signup with user details including generated image URL
+					await communicationHelper.create(id, user.name, user.email, userImageUrl, tenantCode)
+					console.log(`💾 Created communication user for ${id} with ${userImageUrl ? 'image' : 'no image'}`)
+
+					// Step 6: Retry login after successful signup
 					const token = await communicationHelper.login(id, tenantCode)
 
 					return responses.successResponse({
@@ -2136,14 +2219,31 @@ module.exports = class MenteesHelper {
 
 			const connection = await connectionQueries.getConnection(userId, id, tenantCode)
 
-			const orgDetails = await organisationExtensionQueries.findOne(
-				{ organization_code: requestedUserExtension.organization_code },
-				tenantCode,
-				{ attributes: ['name', 'organization_code', 'organization_id'] }
-			)
+			// Get organization details with cache optimization
+			let orgDetails = null
+			try {
+				// Try cache first if we have organization_id
+				if (requestedUserExtension.organization_id) {
+					orgDetails = await cacheHelper.organizations.get(
+						tenantCode,
+						requestedUserExtension.organization_code,
+						requestedUserExtension.organization_id
+					)
+				}
+			} catch (cacheError) {
+				console.warn('Organization cache lookup failed, falling back to database query')
+			}
+
+			// Fallback to database if cache miss
+			if (!orgDetails) {
+				orgDetails = await organisationExtensionQueries.findOne(
+					{ organization_code: requestedUserExtension.organization_code },
+					tenantCode,
+					{ attributes: ['name', 'organization_code', 'organization_id'] }
+				)
+			}
 			processDbResponse['organization'] = {
 				id: orgDetails.organization_code,
-
 				name: orgDetails.name,
 			}
 

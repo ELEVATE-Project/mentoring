@@ -1,7 +1,7 @@
 'use strict'
 
 const entityTypeQueries = require('@database/queries/entityType')
-const cacheHelper = require('@cache/helper')
+const cacheHelper = require('@generics/cacheHelper')
 const responses = require('@helpers/responses')
 const httpStatusCode = require('@generics/http-status')
 const { Op } = require('sequelize')
@@ -20,11 +20,15 @@ module.exports = class UserHelper {
 			const orgCodeArray = Array.isArray(orgCodes) ? orgCodes : [orgCodes]
 
 			for (const orgCode of orgCodeArray) {
-				const key = `entityType:${tenantCode}:${orgCode}`
-				const cachedData = await cacheHelper.redisGet(key)
-
-				if (cachedData) {
-					cachedEntities.push(cachedData)
+				try {
+					// Use the modern cache helper's get method with proper fallback
+					const cacheKey = `entityType:${tenantCode}:${orgCode}`
+					const cachedData = await cacheHelper.get(cacheKey, { useInternal: false })
+					if (cachedData) {
+						cachedEntities.push(cachedData)
+					}
+				} catch (cacheError) {
+					console.log(`Cache miss for entityType: ${tenantCode}:${orgCode}`)
 				}
 			}
 

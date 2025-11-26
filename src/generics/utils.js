@@ -12,7 +12,6 @@ const moment = require('moment')
 const path = require('path')
 const md5 = require('md5')
 const fs = require('fs')
-const { RedisCache, InternalCache } = require('elevate-node-cache')
 const startCase = require('lodash/startCase')
 const common = require('@constants/common')
 const crypto = require('crypto')
@@ -120,25 +119,6 @@ function md5Hash(value) {
 	return md5(value)
 }
 
-function internalSet(key, value) {
-	return InternalCache.setKey(key, value)
-}
-function internalGet(key) {
-	return InternalCache.getKey(key)
-}
-function internalDel(key) {
-	return InternalCache.delKey(key)
-}
-
-function redisSet(key, value, exp) {
-	return RedisCache.setKey(key, value, exp)
-}
-function redisGet(key) {
-	return RedisCache.getKey(key)
-}
-function redisDel(key) {
-	return RedisCache.deleteKey(key)
-}
 const capitalize = (str) => {
 	return startCase(str)
 }
@@ -1306,12 +1286,6 @@ module.exports = {
 	getTimeZone,
 	utcFormat,
 	md5Hash,
-	internalSet,
-	internalDel,
-	internalGet,
-	redisSet,
-	redisGet,
-	redisDel,
 	extractEmailTemplate,
 	capitalize,
 	isAMentor,

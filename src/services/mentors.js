@@ -834,8 +834,8 @@ module.exports = class MentorsHelper {
 			}
 
 			// Try to get complete profile from cache first using getCacheOnly
-			const cachedProfile = null
-			// await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, id)
+			let cachedProfile = null
+			cachedProfile = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, id)
 
 			// If we have cached data, use it efficiently
 			if (cachedProfile) {
@@ -1107,24 +1107,31 @@ module.exports = class MentorsHelper {
 			}
 
 			if (!mentorProfile.organization) {
-				const orgDetails = await organisationExtensionQueries.findOne(
-					{ organization_code: mentorOrgCode },
-					tenantCode,
-					{
-						attributes: ['name', 'organization_id', 'organization_code'],
-					}
-				)
+				// Get organization details with cache-first approach
+				let orgDetails = null
 
-				// Cache the organization details
-				if (orgDetails && orgDetails.organization_code && orgDetails.organization_id) {
-					cacheHelper.organizations
-						.set(tenantCode, orgDetails.organization_code, orgDetails.organization_id, orgDetails)
-						.catch((cacheError) => {
-							console.error(
-								`❌ Failed to cache organization ${orgDetails.organization_id} in mentor share:`,
-								cacheError
-							)
-						})
+				// Try cache first if we have organization_id
+				try {
+					if (mentorProfile.organization_id) {
+						orgDetails = await cacheHelper.organizations.get(
+							tenantCode,
+							mentorOrgCode,
+							mentorProfile.organization_id
+						)
+					}
+				} catch (cacheError) {
+					console.warn('Organization cache lookup failed, falling back to database')
+				}
+
+				// Fallback to database if cache miss
+				if (!orgDetails) {
+					orgDetails = await organisationExtensionQueries.findOne(
+						{ organization_code: mentorOrgCode },
+						tenantCode,
+						{
+							attributes: ['name', 'organization_id', 'organization_code'],
+						}
+					)
 				}
 
 				mentorProfile['organization'] = {

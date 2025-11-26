@@ -201,7 +201,7 @@ module.exports = class admin {
 	 * @name warmUpCache
 	 * @param {Object} req - request data
 	 * @param {String} req.query.tenantCode - Tenant code to warm up (optional)
-	 * @param {String} req.query.orgId - Organization ID to warm up (optional)
+	 * @param {String} req.query.orgCode - Organization code to warm up (optional)
 	 * @returns {JSON} - Cache warm up response
 	 */
 	async warmUpCache(req) {
@@ -214,15 +214,16 @@ module.exports = class admin {
 				})
 			}
 
-			const { tenantCode, orgId } = req.query
+			const { tenantCode, orgCode } = req.query
 			const adminTenantCode = req.decodedToken.tenant_code
-			const adminOrgId = req.decodedToken.organization_id
+			const adminOrgCode = req.decodedToken.organization_code
+			const adminOrgId = req.decodedToken.org
 
 			return await adminService.warmUpCache({
 				tenantCode: tenantCode || adminTenantCode,
-				orgId: orgId || adminOrgId,
+				orgCode: orgCode || adminOrgCode,
 				adminTenantCode,
-				adminOrgId,
+				adminOrgCode,
 			})
 		} catch (error) {
 			console.error('Controller error in warmUpCache:', error)

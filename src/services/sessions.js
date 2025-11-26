@@ -12,11 +12,8 @@ const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const postSessionQueries = require('@database/queries/postSessionDetail')
-const entityTypeQueries = require('@database/queries/entityType')
 const entityTypeCache = require('@helpers/entityTypeCache')
 const cacheHelper = require('@generics/cacheHelper')
-const { get: getFromCache, buildKey } = require('@generics/cacheHelper')
-const entitiesQueries = require('@database/queries/entity')
 const { Op } = require('sequelize')
 const notificationQueries = require('@database/queries/notificationTemplate')
 
@@ -43,7 +40,6 @@ const fileUploadQueries = require('@database/queries/fileUpload')
 const { Queue } = require('bullmq')
 const fs = require('fs')
 const csv = require('csvtojson')
-const csvParser = require('csv-parser')
 const axios = require('axios')
 const messages = require('../locales/en.json')
 const { validateDefaultRulesFilter } = require('@helpers/defaultRules')
@@ -2272,13 +2268,6 @@ module.exports = class SessionsHelper {
 		tenantCode
 	) {
 		try {
-			console.log('====== ENROLL FUNCTION CALLED with:', {
-				sessionId,
-				userTokenData,
-				timeZone,
-				isAMentor,
-				isSelfEnrolled,
-			})
 			let email
 			let name
 			let userId
@@ -2429,10 +2418,8 @@ module.exports = class SessionsHelper {
 				time_zone: timeZone,
 				type: enrollmentType,
 			}
-			console.log('======attendee', attendee)
 			// Optimized: Use findOrCreate to handle enrollment atomically
 			const enrollmentResult = await sessionAttendeesQueries.findOrCreateAttendee(attendee, tenantCode)
-			console.log('======enrollmentResult', enrollmentResult)
 
 			if (enrollmentResult instanceof Error) {
 				return responses.failureResponse({
@@ -3751,7 +3738,6 @@ module.exports = class SessionsHelper {
 
 			// Wait for all enrollments to settle
 			const results = await Promise.allSettled(enrollPromises)
-			console.log('------results', results)
 			results.forEach((result, index) => {
 				if (result.status === 'fulfilled' && result.value.status === 'fulfilled') {
 					successIds.push(mentees[index].user_id) // Fix: Use user_id field consistently
@@ -4149,11 +4135,23 @@ module.exports = class SessionsHelper {
 				tenantCode
 			)
 
-			const orgDetails = await organisationExtensionQueries.findOne(
-				{ organization_code: organizationCode },
-				tenantCode,
-				{ attributes: ['name'] }
-			)
+			// Get organization details with cache-first approach
+			let orgDetails = null
+			try {
+				// Try cache first using available organizationId and organizationCode
+				orgDetails = await cacheHelper.organizations.get(tenantCode, organizationCode, organizationId)
+			} catch (cacheError) {
+				console.warn('Organization cache lookup failed, falling back to database')
+			}
+
+			// Fallback to database if cache miss
+			if (!orgDetails) {
+				orgDetails = await organisationExtensionQueries.findOne(
+					{ organization_code: organizationCode },
+					tenantCode,
+					{ attributes: ['name', 'organization_id', 'organization_code'] }
+				)
+			}
 
 			//push to queue
 			console.log('DEBUG job creation - organizationCode:', organizationCode, 'organizationId:', organizationId)

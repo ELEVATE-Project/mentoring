@@ -1487,23 +1487,22 @@ const notificationTemplates = {
 				console.error('Failed to get defaults for notification template cache:', error.message)
 			}
 
-			// Step 3: Cache miss - query database with user codes first
+			// Step 3: Cache miss - query database with prioritized fallback logic
 
 			let templateFromDb = null
 			try {
-				// First try with user tenant and org codes
+				// Try user tenant/org first
 				templateFromDb = await notificationTemplateQueries.findOne(
 					{
 						code: templateCode,
 						organization_code: orgCode,
-						tenant_code: tenantCode,
 						type: 'email',
 						status: 'active',
 					},
 					tenantCode
 				)
 
-				// Step 4: If not found with user codes and defaults exist, try with default codes
+				// If not found and defaults are different, try defaults
 				if (
 					!templateFromDb &&
 					defaults &&
@@ -1511,19 +1510,20 @@ const notificationTemplates = {
 					defaults.tenantCode &&
 					(defaults.tenantCode !== tenantCode || defaults.orgCode !== orgCode)
 				) {
-					console.log(
-						`💾 NotificationTemplate ${templateCode} not found with user codes, trying defaults: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
-					)
-
 					templateFromDb = await notificationTemplateQueries.findOne(
 						{
 							code: templateCode,
 							organization_code: defaults.orgCode,
-							tenant_code: defaults.tenantCode,
 							type: 'email',
 							status: 'active',
 						},
 						defaults.tenantCode
+					)
+				}
+
+				if (templateFromDb) {
+					console.log(
+						`💾 NotificationTemplate ${templateCode} found in database: tenant:${templateFromDb.tenant_code}:org:${templateFromDb.organization_code}`
 					)
 				}
 			} catch (dbError) {
@@ -1531,11 +1531,11 @@ const notificationTemplates = {
 				return null
 			}
 
-			// Step 5: Cache result under user tenant/org (regardless of where template was found)
+			// Step 4: Cache result under user tenant/org (regardless of where template was found)
 			if (templateFromDb) {
 				await this.set(tenantCode, orgCode, templateCode, templateFromDb)
 				console.log(
-					`💾 NotificationTemplate ${templateCode} fetched from database and cached under user context: tenant:${tenantCode}:org:${orgCode}`
+					`💾 NotificationTemplate ${templateCode} cached under user context: tenant:${tenantCode}:org:${orgCode}`
 				)
 				return templateFromDb
 			}

@@ -29,8 +29,6 @@ module.exports = class FormsHelper {
 			bodyData['organization_code'] = orgCode
 			const form = await formQueries.createForm(bodyData, tenantCode)
 
-			await utils.internalDel('formVersion')
-
 			await KafkaProducer.clearInternalCache('formVersion')
 
 			return responses.successResponse({
@@ -96,7 +94,6 @@ module.exports = class FormsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-			await utils.internalDel('formVersion')
 			await KafkaProducer.clearInternalCache('formVersion')
 
 			// Cache invalidation after successful update: just delete, don't re-set

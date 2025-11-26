@@ -14,6 +14,7 @@ const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
 const { Op } = require('sequelize')
+const cacheHelper = require('@generics/cacheHelper')
 
 const menteeQueries = require('@database/queries/userExtension')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
@@ -83,10 +84,34 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId, tena
 
 const getOrgDetails = async function ({ organizationId, tenantCode }) {
 	try {
-		const organizationDetails = await organisationExtensionQueries.findOne(
-			{ organization_id: organizationId },
-			tenantCode
-		)
+		// Try to use cache first, but handle circular dependency by lazy loading cacheHelper
+		let organizationDetails = null
+
+		try {
+			// Get full organization data (includes organization_code for cache key)
+			organizationDetails = await organisationExtensionQueries.findOne(
+				{ organization_id: organizationId },
+				tenantCode
+			)
+
+			// If we got the data, populate the cache for future use
+			if (organizationDetails?.organization_code) {
+				try {
+					await cacheHelper.organizations.set(
+						tenantCode,
+						organizationDetails.organization_code,
+						organizationId,
+						organizationDetails
+					)
+				} catch (setCacheError) {
+					console.warn('Failed to cache organization details:', setCacheError.message)
+				}
+			}
+		} catch (dbError) {
+			console.error('Database lookup failed for organization details:', dbError.message)
+			throw dbError
+		}
+
 		return {
 			success: true,
 			data: {
@@ -210,12 +235,7 @@ const fetchUserDetails = async ({ token, userId, tenantCode }) => {
 const getUserDetails = async (userId, tenantCode) => {
 	try {
 		// Only pass tenantCode if it exists
-		const userDetails = await menteeQueries.getMenteeExtension(
-			userId,
-			[],
-			false,
-			tenantCode || null // or just: tenantCode
-		)
+		const userDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
 
 		if (!userDetails) {
 			return {

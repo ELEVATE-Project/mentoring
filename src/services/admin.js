@@ -1783,7 +1783,7 @@ module.exports = class AdminService {
 	 * @param {Object} options - Warm up options
 	 * @returns {JSON} - Cache warm up response
 	 */
-	static async warmUpCache({ tenantCode, orgId, adminTenantCode, adminOrgId }) {
+	static async warmUpCache({ tenantCode, orgCode, adminTenantCode, adminOrgCode }) {
 		try {
 			const warmupResults = {
 				entityTypes: 0,
@@ -1795,7 +1795,7 @@ module.exports = class AdminService {
 
 			// Warm up EntityTypes cache
 			try {
-				await entityTypeHelper.warmUpEntityTypesCache(tenantCode, orgId)
+				await entityTypeHelper.warmUpEntityTypesCache(tenantCode, orgCode)
 				warmupResults.entityTypes = 1
 			} catch (error) {
 				console.error('EntityTypes cache warmup failed:', error)
@@ -1803,9 +1803,9 @@ module.exports = class AdminService {
 
 			// Warm up Organizations cache
 			try {
-				const orgData = await orgQueries.findOne({ organization_id: orgId }, tenantCode)
+				const orgData = await orgQueries.findOne({ organization_code: orgCode }, tenantCode)
 				if (orgData) {
-					await cacheHelper.organizations.set(tenantCode, orgId, orgId, orgData)
+					await cacheHelper.organizations.set(tenantCode, orgCode, orgCode, orgData)
 					warmupResults.organizations = 1
 				}
 			} catch (error) {
@@ -1814,9 +1814,9 @@ module.exports = class AdminService {
 
 			// Warm up Platform Config cache
 			try {
-				const configData = await formQueries.findOneForm({ code: 'platformConfig' }, tenantCode)
+				const configData = await formQueries.findOne({ code: 'platformConfig' }, tenantCode)
 				if (configData) {
-					await cacheHelper.platformConfig.set(tenantCode, orgId, configData)
+					await cacheHelper.platformConfig.set(tenantCode, orgCode, configData)
 					warmupResults.platformConfig = 1
 				}
 			} catch (error) {
@@ -1826,7 +1826,7 @@ module.exports = class AdminService {
 			// Warm up Permissions cache
 			try {
 				// Get all distinct roles from permissions table instead of hardcoding
-				const allPermissions = await permissionsQueries.findAll({}, tenantCode)
+				const allPermissions = await permissionsQueries.findAllPermissions({})
 				const uniqueRoles = [...new Set(allPermissions.map((perm) => perm.role))].filter(Boolean)
 
 				for (const role of uniqueRoles) {
@@ -1847,7 +1847,7 @@ module.exports = class AdminService {
 
 				for (const form of allForms) {
 					if (form.type && form.sub_type) {
-						await cacheHelper.forms.set(tenantCode, orgId, form.type, form.sub_type, form)
+						await cacheHelper.forms.set(tenantCode, orgCode, form.type, form.sub_type, form)
 						warmupResults.forms++
 					}
 				}
@@ -1857,14 +1857,14 @@ module.exports = class AdminService {
 
 			const totalWarmedUp = Object.values(warmupResults).reduce((sum, count) => sum + count, 0)
 
-			console.log(`💾 Cache warmup completed for tenant:${tenantCode}, org:${orgId} - ${totalWarmedUp} items`)
+			console.log(`💾 Cache warmup completed for tenant:${tenantCode}, org:${orgCode} - ${totalWarmedUp} items`)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'CACHE_WARMED_UP_SUCCESSFULLY',
 				result: {
 					tenantCode,
-					orgId,
+					orgCode,
 					warmupResults,
 					totalWarmedUp,
 					timestamp: new Date().toISOString(),
