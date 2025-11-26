@@ -44,7 +44,7 @@ module.exports = async function (req, res, next) {
 
 		// Check if config.json exists
 		if (fs.existsSync(configFilePath)) {
-			 console.log(" config exit");
+			console.log(' config exit')
 			// Read and parse the config.json file
 			const rawData = fs.readFileSync(configFilePath)
 			try {
@@ -110,7 +110,7 @@ module.exports = async function (req, res, next) {
 			}
 		}
 
- console.log(" decoded tokenen ",req.decodedToken);
+		console.log(' decoded tokenen ', req.decodedToken)
 
 		req.decodedToken.id =
 			typeof req.decodedToken?.id === 'number' ? req.decodedToken?.id?.toString() : req.decodedToken?.id
@@ -119,8 +119,8 @@ module.exports = async function (req, res, next) {
 				? req.decodedToken?.organization_id?.toString()
 				: req.decodedToken?.organization_id
 
-		console.log(" req decoded tokenen ",req.decodedToken);
-    if (!req.decodedToken[organizationKey]) {
+		console.log(' req decoded tokenen ', req.decodedToken)
+		if (!req.decodedToken[organizationKey]) {
 			throw createUnauthorizedResponse()
 		}
 		req.decodedToken.token = authHeader
@@ -153,7 +153,8 @@ module.exports = async function (req, res, next) {
 			const roleValidation = common.roleValidationPaths.some((path) => req.path.includes(path))
 
 			if (roleValidation) {
-				if (process.env.AUTH_METHOD === common.AUTH_METHOD.NATIVE) await nativeRoleValidation(decodedToken, authHeader)
+				if (process.env.AUTH_METHOD === common.AUTH_METHOD.NATIVE)
+					await nativeRoleValidation(decodedToken, authHeader)
 				else if (process.env.AUTH_METHOD === common.AUTH_METHOD.KEYCLOAK_PUBLIC_KEY)
 					await dbBasedRoleValidation(decodedToken)
 			}
@@ -339,7 +340,7 @@ async function authenticateUser(authHeader, req) {
 	return [decodedToken, false]
 }
 
-async function nativeRoleValidation(decodedToken,authHeader) {
+async function nativeRoleValidation(decodedToken, authHeader) {
 	const userProfile = await fetchUserProfile(authHeader)
 	decodedToken.data.roles = userProfile.user_roles
 	decodedToken.data.organization_id = userProfile.organization_id
