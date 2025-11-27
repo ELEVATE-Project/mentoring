@@ -187,7 +187,13 @@ EVENTS_TOPIC=qa.userCreate   # Ensure this matches the User Service configuratio
     npm run db:init
 ```
 
-### Step 4: Restart the Service
+### Step 4 : Run script to update the rocket chat settings
+```bash
+    cd src/scripts
+    node updateRCSettings.js
+```
+
+### Step 5: Restart the Service
    Restart the Mentoring Service to apply the latest configurations and updates.
 
 
@@ -266,6 +272,9 @@ Run the following query in the User Service database to disable the SCP feature:
 |---------------|------------------------------------------------------|
 | Git Branch    | `release-3.2.0`                                        |
 | Docker Image  | `shikshalokamqa/eleavte-user:3.3`            |
+
+
+
 #
 <br><br>
 ## **Deployment of the Mentoring frontend**
@@ -300,6 +309,35 @@ Run the following query in the User Service database to disable the SCP feature:
 
 <br><br>
 ## Project And Survey Changes
+
+### Step 1: Execute Migrations
+     The latest User Service will no longer have orgCodes with spaces or uppercase characters. Since these changes will also reflect in the user token details, the current Project and Survey services need to work with the updated format. To ensure compatibility, we needed to normalize the orgIds in the collections by running these migrations
+
+    Project
+    https://github.com/ELEVATE-Project/project-service/tree/staging/migrations/correctOrgIdValuesInCollections
+
+    https://github.com/ELEVATE-Project/project-service/tree/staging/migrations/correctScopeOrgValues
+
+
+    Survey
+    https://github.com/ELEVATE-Project/samiksha-service/tree/staging/migrations/correctScopeOrgValues
+    
+    https://github.com/ELEVATE-Project/samiksha-service/tree/staging/migrations/normalizeOrgidInCollections
+
+Create an individual file for each script (under src/file-name.js) and execute them one by one using:
+
+```bash 
+    node file-name.js
+```
+
+
+**Version & Build Information**
+
+| Item          | Value                                                |
+|---------------|------------------------------------------------------|
+| Git Branch    | `release-3.2.0`                                        |
+| Docker Image  | `shikshalokamqa/mentoring-mobile-app:3.3`            |
+
 
 ### Step 1: Execute Migrations
      The latest User Service will no longer have orgCodes with spaces or uppercase characters. Since these changes will also reflect in the user token details, the current Project and Survey services need to work with the updated format. To ensure compatibility, we needed to normalize the orgIds in the collections by running these migrations
