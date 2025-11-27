@@ -308,11 +308,18 @@ function restructureBody(requestBody, entityData, allowedKeys) {
 }
 
 function processDbResponse(responseBody, entityType) {
+	console.log(`🔍 [UTILS DEBUG] Processing DB response with ${entityType ? entityType.length : 0} entity types`)
+	console.log(`🔍 [UTILS DEBUG] Input responseBody:`, JSON.stringify(responseBody, null, 2))
+	console.log(`🔍 [UTILS DEBUG] Input entityTypes:`, JSON.stringify(entityType, null, 2))
+
 	// Check if the response body has a "meta" property
 	if (responseBody.meta) {
+		console.log(`🔍 [UTILS DEBUG] Found meta property in responseBody`)
 		entityType.forEach((entity) => {
 			const entityTypeValue = entity.value
+			console.log(`🔍 [UTILS DEBUG] Checking entity type: ${entityTypeValue}`)
 			if (responseBody?.meta?.hasOwnProperty(entityTypeValue)) {
+				console.log(`🔍 [UTILS DEBUG] Moving ${entityTypeValue} from meta to root level`)
 				// Move the key from responseBody.meta to responseBody root level
 				responseBody[entityTypeValue] = responseBody.meta[entityTypeValue]
 				// Delete the key from responseBody.meta
@@ -322,12 +329,20 @@ function processDbResponse(responseBody, entityType) {
 	}
 
 	const output = { ...responseBody } // Create a copy of the responseBody object
+	console.log(`🔍 [UTILS DEBUG] Starting entity type processing loop`)
+
 	// Iterate through each key in the output object
 	for (const key in output) {
+		console.log(`🔍 [UTILS DEBUG] Processing key: ${key}, value:`, JSON.stringify(output[key], null, 2))
+
 		// Check if the key corresponds to an entity type and is not null
 		if (entityType.some((entity) => entity.value === key) && output[key] !== null) {
+			console.log(`🔍 [UTILS DEBUG] Key ${key} matches an entity type and is not null`)
+
 			// Find the matching entity type for the current key
 			const matchingEntity = entityType.find((entity) => entity.value === key)
+			console.log(`🔍 [UTILS DEBUG] Matching entity for ${key}:`, JSON.stringify(matchingEntity, null, 2))
+
 			// Filter and map the matching entity values
 			const matchingValues = matchingEntity.entities
 				.filter((entity) => (Array.isArray(output[key]) ? output[key].includes(entity.value) : true))
@@ -335,12 +350,23 @@ function processDbResponse(responseBody, entityType) {
 					value: entity.value,
 					label: entity.label,
 				}))
+			console.log(`🔍 [UTILS DEBUG] Matching values for ${key}:`, JSON.stringify(matchingValues, null, 2))
+
 			// Check if there are matching values
-			if (matchingValues.length > 0)
-				output[key] = Array.isArray(output[key])
+			if (matchingValues.length > 0) {
+				const newValue = Array.isArray(output[key])
 					? matchingValues
 					: matchingValues.find((entity) => entity.value === output[key])
-			else if (Array.isArray(output[key])) output[key] = output[key].filter((item) => item.value && item.label)
+				console.log(`🔍 [UTILS DEBUG] Setting new value for ${key}:`, JSON.stringify(newValue, null, 2))
+				output[key] = newValue
+			} else if (Array.isArray(output[key])) {
+				const filteredValue = output[key].filter((item) => item.value && item.label)
+				console.log(
+					`🔍 [UTILS DEBUG] No matching values found, filtering array for ${key}:`,
+					JSON.stringify(filteredValue, null, 2)
+				)
+				output[key] = filteredValue
+			}
 		}
 
 		if (output.meta && output.meta[key] && entityType.some((entity) => entity.value === output.meta[key].value)) {
@@ -368,6 +394,10 @@ function processDbResponse(responseBody, entityType) {
 		// Remove the "meta" property from the output
 		delete output.meta
 	}
+
+	console.log(`🔍 [UTILS DEBUG] Final processed output:`, JSON.stringify(data, null, 2))
+	console.log(`🔍 [UTILS DEBUG] Final designation field:`, JSON.stringify(data.designation, null, 2))
+	console.log(`🔍 [UTILS DEBUG] Final area_of_expertise field:`, JSON.stringify(data.area_of_expertise, null, 2))
 
 	return data
 }
@@ -465,12 +495,30 @@ const validateRoleAccess = (roles, requiredRoles) => {
 }
 
 const removeDefaultOrgEntityTypes = (entityTypes, orgCode) => {
+	console.log(
+		`🔍 [REMOVE DEFAULT ORG DEBUG] Processing ${
+			entityTypes ? entityTypes.length : 0
+		} entity types for orgCode: ${orgCode}`
+	)
+	console.log(`🔍 [REMOVE DEFAULT ORG DEBUG] Input entity types:`, JSON.stringify(entityTypes, null, 2))
+
 	const entityTypeMap = new Map()
 	entityTypes.forEach((entityType) => {
-		if (!entityTypeMap.has(entityType.value)) entityTypeMap.set(entityType.value, entityType)
-		else if (entityType.organization_code === orgCode) entityTypeMap.set(entityType.value, entityType)
+		console.log(
+			`🔍 [REMOVE DEFAULT ORG DEBUG] Processing entity type: ${entityType.value}, org_code: ${entityType.organization_code}`
+		)
+		if (!entityTypeMap.has(entityType.value)) {
+			console.log(`🔍 [REMOVE DEFAULT ORG DEBUG] Adding new entity type: ${entityType.value}`)
+			entityTypeMap.set(entityType.value, entityType)
+		} else if (entityType.organization_code === orgCode) {
+			console.log(`🔍 [REMOVE DEFAULT ORG DEBUG] Replacing with org-specific entity type: ${entityType.value}`)
+			entityTypeMap.set(entityType.value, entityType)
+		}
 	})
-	return Array.from(entityTypeMap.values())
+
+	const result = Array.from(entityTypeMap.values())
+	console.log(`🔍 [REMOVE DEFAULT ORG DEBUG] Final result (${result.length} items):`, JSON.stringify(result, null, 2))
+	return result
 }
 const generateWhereClause = (tableName) => {
 	let whereClause = ''

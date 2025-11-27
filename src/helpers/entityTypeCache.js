@@ -218,23 +218,44 @@ async function getEntityTypesAndEntitiesForModel(modelName, tenantCode, orgCode,
 			})
 		}
 
-		console.log(`💾 Getting entity types for model ${modelName}: tenant:${tenantCode}:org:${orgCode}`)
+		console.log(
+			`🔍 [ENTITY CACHE DEBUG] Getting entity types for model ${modelName}: tenant:${tenantCode}:org:${orgCode}`
+		)
+		console.log(`🔍 [ENTITY CACHE DEBUG] Environment: ${process.env.NODE_ENV || 'unknown'}`)
+		console.log(
+			`🔍 [ENTITY CACHE DEBUG] Defaults orgCode: ${defaults?.orgCode}, tenantCode: ${defaults?.tenantCode}`
+		)
+		console.log(`🔍 [ENTITY CACHE DEBUG] Additional filters:`, JSON.stringify(additionalFilters, null, 2))
 
 		// Try to get known entity types from cache first using user codes
 		const knownEntityValues = common.entityTypeModelNames // Common model names
+		console.log(`🔍 [ENTITY CACHE DEBUG] Known entity values to check in cache:`, knownEntityValues)
 		const cachedEntities = []
 
 		try {
 			// Check cache for each entity value using user codes only
 			for (const entityValue of knownEntityValues) {
 				try {
+					console.log(`🔍 [ENTITY CACHE DEBUG] Checking cache for entityValue: ${entityValue}`)
 					const cachedEntity = await cacheHelper.entityTypes.get(tenantCode, orgCode, modelName, entityValue)
 
 					if (cachedEntity && cachedEntity.entities) {
+						console.log(
+							`🔍 [ENTITY CACHE DEBUG] Cache HIT for ${entityValue}:`,
+							JSON.stringify(cachedEntity, null, 2)
+						)
 						cachedEntities.push(cachedEntity)
+					} else {
+						console.log(`🔍 [ENTITY CACHE DEBUG] Cache MISS for ${entityValue}`)
 					}
-				} catch (entityFetchError) {}
+				} catch (entityFetchError) {
+					console.log(`🔍 [ENTITY CACHE DEBUG] Cache ERROR for ${entityValue}:`, entityFetchError.message)
+				}
 			}
+
+			console.log(
+				`🔍 [ENTITY CACHE DEBUG] Found ${cachedEntities.length} cached entities out of ${knownEntityValues.length} checked`
+			)
 
 			// If we found cached entities, format and apply filters
 			if (cachedEntities.length > 0) {
@@ -259,14 +280,20 @@ async function getEntityTypesAndEntitiesForModel(modelName, tenantCode, orgCode,
 					})
 				}
 
-				console.log(`💾 Found ${formattedCachedEntities.length} cached entity types for model ${modelName}`)
+				console.log(
+					`🔍 [ENTITY CACHE DEBUG] Returning ${formattedCachedEntities.length} cached entity types for model ${modelName}`
+				)
+				console.log(
+					`🔍 [ENTITY CACHE DEBUG] Final cached result:`,
+					JSON.stringify(formattedCachedEntities, null, 2)
+				)
 				return formattedCachedEntities
 			}
 		} catch (cacheError) {}
 
 		// Cache miss - fetch from database with user-centric approach
 		console.log(
-			`💾 Entity types cache miss for model ${modelName}, querying database with user codes: tenant:${tenantCode}:org:${orgCode}`
+			`🔍 [ENTITY CACHE DEBUG] Entity types cache miss for model ${modelName}, querying database with user codes: tenant:${tenantCode}:org:${orgCode}`
 		)
 
 		let allEntityTypes = null
@@ -277,7 +304,17 @@ async function getEntityTypesAndEntitiesForModel(modelName, tenantCode, orgCode,
 				organization_code: orgCode,
 				model_names: { [Op.contains]: [modelName] },
 			}
+			console.log(
+				`🔍 [ENTITY CACHE DEBUG] Querying database with user filter:`,
+				JSON.stringify(userFilter, null, 2)
+			)
+			console.log(`🔍 [ENTITY CACHE DEBUG] Querying database with tenantCodes:`, [tenantCode])
 			allEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(userFilter, [tenantCode])
+			console.log(
+				`🔍 [ENTITY CACHE DEBUG] Database query result (user codes) - found ${
+					allEntityTypes ? allEntityTypes.length : 0
+				} entity types`
+			)
 
 			// If not found with user codes and defaults exist, try with default codes
 			if (
@@ -287,7 +324,7 @@ async function getEntityTypesAndEntitiesForModel(modelName, tenantCode, orgCode,
 				(defaults.tenantCode !== tenantCode || defaults.orgCode !== orgCode)
 			) {
 				console.log(
-					`💾 Entity types for model ${modelName} not found with user codes, trying defaults: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
+					`🔍 [ENTITY CACHE DEBUG] Entity types for model ${modelName} not found with user codes, trying defaults: tenant:${defaults.tenantCode}:org:${defaults.orgCode}`
 				)
 
 				const defaultFilter = {
@@ -295,9 +332,25 @@ async function getEntityTypesAndEntitiesForModel(modelName, tenantCode, orgCode,
 					organization_code: defaults.orgCode,
 					model_names: { [Op.contains]: [modelName] },
 				}
+				console.log(
+					`🔍 [ENTITY CACHE DEBUG] Querying database with default filter:`,
+					JSON.stringify(defaultFilter, null, 2)
+				)
+				console.log(`🔍 [ENTITY CACHE DEBUG] Querying database with default tenantCodes:`, [
+					defaults.tenantCode,
+				])
 				allEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(defaultFilter, [
 					defaults.tenantCode,
 				])
+				console.log(
+					`🔍 [ENTITY CACHE DEBUG] Database query result (default codes) - found ${
+						allEntityTypes ? allEntityTypes.length : 0
+					} entity types`
+				)
+			} else if (!allEntityTypes || allEntityTypes.length === 0) {
+				console.log(`🔍 [ENTITY CACHE DEBUG] No entity types found and no default fallback available`)
+			} else {
+				console.log(`🔍 [ENTITY CACHE DEBUG] Using entity types found with user codes`)
 			}
 		} catch (dbError) {
 			console.error(`Failed to fetch entity types for model ${modelName} from database:`, dbError.message)
