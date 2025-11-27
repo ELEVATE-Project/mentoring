@@ -56,7 +56,7 @@ module.exports = class FilesHelper {
 		try {
 			let bucketName = process.env.CLOUD_STORAGE_BUCKETNAME
 			let response
-			let expiryInSeconds = parseInt(process.env.SIGNED_URL_EXPIRY_DURATION) || 300
+			let expiryInSeconds = parseInt(process.env.DOWNLOAD_URL_EXPIRATION_DURATION) || 300
 
 			// Ensure tenant isolation for file paths if tenantCode provided and path doesn't already have it
 			let filePath = path

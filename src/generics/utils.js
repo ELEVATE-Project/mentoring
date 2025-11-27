@@ -83,7 +83,7 @@ const extractEmailTemplate = (input, conditions) => {
 
 const getDownloadableUrl = async (filePath) => {
 	let bucketName = process.env.CLOUD_STORAGE_BUCKETNAME
-	let expiryInSeconds = parseInt(process.env.SIGNED_URL_EXPIRY_DURATION) || 300
+	let expiryInSeconds = parseInt(process.env.DOWNLOAD_URL_EXPIRATION_DURATION) || 300
 	let updatedExpiryTime = convertExpiryTimeToSeconds(expiryInSeconds)
 	let response = await cloudClient.getSignedUrl(bucketName, filePath, updatedExpiryTime, common.READ_ACCESS)
 	return Array.isArray(response) ? response[0] : response

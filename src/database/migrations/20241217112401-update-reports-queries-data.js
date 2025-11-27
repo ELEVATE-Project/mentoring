@@ -193,8 +193,7 @@ module.exports = {
                     SELECT
                         session_id,
                         mentee_id,
-                        joined_at,
-                        created_at
+                        joined_at
                     FROM
                         public.session_attendees
                 )
@@ -207,8 +206,7 @@ module.exports = {
                     Session.categories AS "categories",
                     Session.recommended_for AS "recommended_for",
                     CASE WHEN sa.joined_at IS NOT NULL THEN 'Yes' ELSE 'No' END AS "session_attended",
-                    ROUND(EXTRACT(EPOCH FROM (TO_TIMESTAMP(Session.end_date)-TO_TIMESTAMP(Session.start_date)))/60) AS "duration_of_sessions_attended_in_minutes",
-                    sa.created_at
+                    ROUND(EXTRACT(EPOCH FROM (TO_TIMESTAMP(Session.end_date)-TO_TIMESTAMP(Session.start_date)))/60) AS "duration_of_sessions_attended_in_minutes"
                 FROM
                     Session
                 LEFT JOIN
@@ -225,7 +223,7 @@ module.exports = {
                         OR :session_type = 'PRIVATE' AND Session.type = 'PRIVATE'
                     )
                     AND Session.deleted_at IS NULL
-                    DYNAMIC_AND_CLAUSE; order by Session.start_date ASC`,
+                    DYNAMIC_AND_CLAUSE;`,
 				organization_id: defaultOrgId,
 				status: 'ACTIVE',
 				created_at: Sequelize.literal('CURRENT_TIMESTAMP'),
@@ -243,7 +241,7 @@ module.exports = {
                 FROM
                     public.sessions AS Session
                 WHERE
-                    Session.started_at IS NOT NULL
+                    Session.status = 'COMPLETED'
                     AND Session.start_date > :start_date
                     AND Session.end_date < :end_date
                     AND (
@@ -367,7 +365,7 @@ module.exports = {
                 
                 FROM filtered_ownerships fo
                 JOIN public.sessions Session ON Session.id = fo.session_id  -- Renamed alias from session to Session
-                WHERE Session.started_at IS NOT NULL
+                WHERE Session.status = 'COMPLETED'
                 AND Session.start_date > :start_date  -- Start date filter
                 AND Session.end_date < :end_date    -- End date filter
                 AND (
@@ -440,7 +438,7 @@ module.exports = {
                 COUNT(DISTINCT CASE
                     WHEN (
                         so.type = 'MENTOR'
-                        AND session.started_at IS NOT NULL
+                        AND session.status = 'COMPLETED'
                         AND (
                             :session_type = 'All'
                             OR (:session_type = 'Public' AND session.type = 'PUBLIC')
@@ -454,7 +452,7 @@ module.exports = {
                 COUNT(DISTINCT CASE
                     WHEN (
                         so.type = 'MENTOR'
-                        AND session.started_at IS NOT NULL
+                        AND session.status = 'COMPLETED'
                         AND session.type = 'PUBLIC'
                         AND (:session_type = 'All' OR :session_type = 'Public')
                     )
@@ -465,7 +463,7 @@ module.exports = {
                 COUNT(DISTINCT CASE
                     WHEN (
                         so.type = 'MENTOR'
-                        AND session.started_at IS NOT NULL
+                        AND session.status = 'COMPLETED'
                         AND session.type = 'PRIVATE'
                         AND (:session_type = 'All' OR :session_type = 'Private')
                     )
@@ -543,8 +541,8 @@ module.exports = {
             
             FROM
                 (SELECT * FROM public.sessions 
-                 WHERE 
-                    public.sessions.start_date > :start_date 
+                 WHERE public.sessions.status = 'COMPLETED' 
+                   AND public.sessions.start_date > :start_date 
                    AND public.sessions.end_date < :end_date) AS Session
             JOIN
                 (SELECT *
@@ -589,7 +587,7 @@ module.exports = {
             
             FROM
                 (SELECT * FROM public.sessions 
-                 WHERE public.sessions.started_at IS NOT NULL
+                 WHERE public.sessions.status = 'COMPLETED' 
                    AND public.sessions.start_date > :start_date 
                    AND public.sessions.end_date < :end_date) AS Session
             JOIN
@@ -634,7 +632,7 @@ module.exports = {
                 -- Total sessions conducted (all types combined)
                 COUNT(*) FILTER (
                     WHERE so.type = 'MENTOR'
-                    AND  session.started_at IS NOT NULL
+                    AND session.status = 'COMPLETED'
                     AND (
                         :session_type = 'All'
                         OR :session_type = 'Public' AND session.type = 'PUBLIC'
@@ -645,7 +643,7 @@ module.exports = {
                 -- Public sessions conducted
                 COUNT(*) FILTER (
                     WHERE so.type = 'MENTOR'
-                    AND session.started_at IS NOT NULL
+                    AND session.status = 'COMPLETED'
                     AND :session_type IN ('All', 'Public')
                     AND session.type = 'PUBLIC'
                 ) AS public_sessions_conducted,
@@ -653,7 +651,7 @@ module.exports = {
                 -- Private sessions conducted
                 COUNT(*) FILTER (
                     WHERE so.type = 'MENTOR'
-                    AND session.started_at IS NOT NULL
+                    AND session.status = 'COMPLETED'
                     AND :session_type IN ('All', 'Private')
                     AND session.type = 'PRIVATE'
                 ) AS private_sessions_conducted,

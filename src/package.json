@@ -1,6 +1,6 @@
 {
 	"name": "com.shikshalokam.mentoring.mentoringservice",
-	"version": "1.0.0",
+	"version": "3.4",
 	"description": "A mentoring service for mentoring capability",
 	"main": "app.js",
 	"bin": {
@@ -37,7 +37,7 @@
 		"dotenv": "^10.0.0",
 		"elevate-logger": "3.0.2",
 		"elevate-node-cache": "^2.0.0",
-		"elevate-services-health-check": "^0.0.6",
+		"elevate-services-health-check": "^0.0.9",
 		"express": "^4.17.1",
 		"express-validator": "^5.3.1",
 		"fn-args": "^4.0.0",
