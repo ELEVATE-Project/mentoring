@@ -1,0 +1,224 @@
+{
+	"GET_/mentoring/v1/mentees/sessions": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"title": {
+									"type": "string"
+								},
+								"description": {
+									"type": "string"
+								},
+								"image": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								},
+								"user_id": {
+									"type": "string"
+								},
+								"status": {
+									"type": "string"
+								},
+								"start_date": {
+									"type": "string"
+								},
+								"end_date": {
+									"type": "string"
+								},
+								"meeting_info": {
+									"type": "object",
+									"properties": {
+										"platform": {
+											"type": "string"
+										},
+										"value": {
+											"type": "string"
+										}
+									}
+								},
+								"created_at": {
+									"type": "string"
+								},
+								"is_enrolled": {
+									"type": "boolean"
+								},
+								"mentor_name": {
+									"type": "string"
+								},
+								"organization_id": {
+									"type": "string"
+								}
+							},
+							"required": [
+								"id",
+								"title",
+								"description",
+								"image",
+								"user_id",
+								"status",
+								"start_date",
+								"end_date",
+								"meeting_info",
+								"created_at",
+								"is_enrolled",
+								"mentor_name",
+								"organization_id"
+							]
+						}
+					},
+					"count": {
+						"type": "number"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_/mentoring/v1/mentees/joinSession/{sessionId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"platform": {
+						"type": "string"
+					},
+					"link": {
+						"type": "string"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_/mentoring/v1/mentees/reports": {
+		"type": "object",
+		"properties": {
+			"response_code": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"total_session_enrolled": {
+						"type": "number"
+					},
+					"total_sessions_attended": {
+						"type": "number"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {}
+			}
+		}
+	},
+	"GET_/mentoring/v1/mentees/homeFeed": {
+		"type": "object",
+
+		"properties": {
+			"message": { "type": "string" },
+
+			"result": {
+				"type": "object",
+				"properties": {
+					"all_sessions": {
+						"type": "array"
+					},
+					"allSessions_count": {
+						"type": ["number", "integer"]
+					},
+					"my_sessions": {
+						"type": "array"
+					},
+					"my_sessions_count": {
+						"type": ["number", "integer"]
+					}
+				},
+				"required": ["all_sessions", "allSessions_count", "my_sessions", "my_sessions_count"],
+				"additionalProperties": true
+			},
+
+			"meta": {}
+		},
+
+		"required": ["message", "result"],
+
+		"additionalProperties": true
+	},
+	"GET_/mentoring/v1/mentees/list": {
+		"type": "object",
+
+		"properties": {
+			"message": { "type": "string" },
+
+			"result": {
+				"type": "object",
+				"properties": {
+					"data": {
+						"type": "array"
+					},
+					"count": {
+						"type": ["number", "integer"]
+					}
+				},
+				"required": ["data", "count"],
+				"additionalProperties": true
+			},
+
+			"meta": {}
+		},
+
+		"required": ["message", "result"],
+
+		"additionalProperties": true
+	}
+}
