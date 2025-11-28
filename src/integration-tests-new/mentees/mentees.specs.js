@@ -112,10 +112,6 @@ describe('mentees endpoints generated from api-doc.yaml', () => {
 			let req = request(BASE).get(url)
 			req = req.set('x-auth-token', userDetails.token)
 			const res = await req
-			require('fs').writeFileSync(
-				'homefeedres.json',
-				JSON.stringify({ body: res.body, token: userDetails.token }, null, 2)
-			)
 			expect(res.status).toBeGreaterThanOrEqual(200)
 			expect(res.status).toBeLessThan(300)
 			// validate response schema

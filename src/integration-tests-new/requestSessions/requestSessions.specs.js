@@ -11,7 +11,6 @@ beforeAll(async () => {
 	console.log('setting up global variables....')
 	userDetails = await commonHelper.logIn()
 
-	require('fs').writeFileSync('./debug.log', JSON.stringify(userDetails, null, 2), 'utf-8')
 	/*
    let profileCreate = await request(BASE).post('/mentoring/v1/profile/create').set('x-auth-token', userDetails.token).send({
       designation: ['beo', 'deo', 'testt'],

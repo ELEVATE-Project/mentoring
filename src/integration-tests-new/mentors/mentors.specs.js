@@ -11,7 +11,6 @@ beforeAll(async () => {
 	console.log('setting up global variables....')
 	userDetails = await commonHelper.mentorLogIn()
 
-	require('fs').writeFileSync('./debug.log', JSON.stringify(userDetails, null, 2), 'utf-8')
 	/*
    let profileCreate = await request(BASE).post('/mentoring/v1/profile/create').set('x-auth-token', userDetails.token).send({
       designation: ['beo', 'deo', 'testt'],
@@ -147,12 +146,6 @@ describe('mentors endpoints generated from api-doc.yaml', () => {
 			req = req.set('x-auth-token', userDetails.token)
 			const res = await req
 
-			require('fs').writeFileSync(
-				'./debug_list.log',
-				JSON.stringify({ body: res.body, status: res.status, token: userDetails.token }, null, 2),
-				'utf-8'
-			)
-
 			expect(res.status).toBeGreaterThanOrEqual(200)
 			expect(res.status).toBeLessThan(300)
 
@@ -181,11 +174,7 @@ describe('mentors endpoints generated from api-doc.yaml', () => {
 			const res = await req
 
 			expect(res.status).toBeGreaterThanOrEqual(200)
-			require('fs').writeFileSync(
-				'./debug_createdSessions.log',
-				JSON.stringify({ body: res.body, name: 'saish', token: userDetails.token }, null, 2),
-				'utf-8'
-			)
+
 			expect(res.status).toBeLessThan(300)
 			// validate response schema
 			const schema = schemas['GET_/mentoring/v1/mentors/createdSessions']
