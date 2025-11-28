@@ -1,6 +1,8 @@
 const httpStatusCode = require('@generics/http-status')
 const questionQueries = require('../database/queries/questions')
 const responses = require('@helpers/responses')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
+
 module.exports = class questionsHelper {
 	/**
 	 * Create questions.
@@ -75,7 +77,21 @@ module.exports = class questionsHelper {
 
 	static async read(questionId, tenantCode) {
 		try {
-			const filter = { id: questionId, tenant_code: tenantCode }
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
+			const filter = { id: questionId, tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] } }
 			const question = await questionQueries.findOneQuestion(filter)
 			if (!question) {
 				return responses.failureResponse({
