@@ -1,0 +1,267 @@
+{
+	"POST_mentoring_v1_entity-type_create": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"value": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"allow_filtering": {
+						"type": "boolean"
+					},
+					"data_type": {
+						"type": "string"
+					},
+					"created_by": {
+						"type": "string"
+					},
+					"updated_by": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"has_entities": {
+						"type": "boolean"
+					}
+				}
+			},
+			"field_0": {
+				"type": "string"
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_entity-type_read": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"id": {
+							"type": "number"
+						},
+						"value": {
+							"type": "string"
+						},
+						"label": {
+							"type": "string"
+						},
+						"status": {
+							"type": "string"
+						},
+						"created_by": {
+							"type": "string"
+						},
+						"updated_by": {
+							"type": "string"
+						},
+						"allow_filtering": {
+							"type": "boolean"
+						},
+						"data_type": {
+							"type": "string"
+						},
+						"created_at": {
+							"type": "string"
+						},
+						"updated_at": {
+							"type": "string"
+						},
+						"entities": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"id": {
+										"type": "number"
+									},
+									"entity_type_id": {
+										"type": "number"
+									},
+									"value": {
+										"type": "string"
+									},
+									"label": {
+										"type": "string"
+									},
+									"status": {
+										"type": "string"
+									},
+									"type": {
+										"type": "string"
+									},
+									"created_by": {
+										"type": "string"
+									},
+									"updated_by": {
+										"type": "string"
+									},
+									"created_at": {
+										"type": "string"
+									},
+									"updated_at": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"has_entities": {
+							"type": "boolean"
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"POST_mentoring_v1_entity-type_update_id": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"value": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"created_by": {
+						"type": "string"
+					},
+					"updated_by": {
+						"type": "string"
+					},
+					"allow_filtering": {
+						"type": "boolean"
+					},
+					"data_type": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"organization_id": {
+						"type": "string"
+					},
+					"has_entities": {
+						"type": "boolean"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"DELETE_mentoring_v1_entity-type_delete_id": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}

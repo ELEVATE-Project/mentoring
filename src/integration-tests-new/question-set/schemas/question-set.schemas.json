@@ -1,0 +1,176 @@
+{
+	"POST_/mentoring/v1/question-set/create": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"status": {
+						"type": "string"
+					},
+					"id": {
+						"type": "number"
+					},
+					"questions": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"code": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"meta": {
+						"type": "null"
+					},
+					"deleted_at": {
+						"type": "null"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"PATCH_/mentoring/v1/question-set/update/{QuestionSetId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"status": {
+						"type": "string"
+					},
+					"id": {
+						"type": "number"
+					},
+					"questions": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"code": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"meta": {
+						"type": "null"
+					},
+					"deleted_at": {
+						"type": "null"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"POST_/mentoring/v1/question-set/read/{QuestionSetId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"questions": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"code": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"meta": {
+						"type": "null"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}

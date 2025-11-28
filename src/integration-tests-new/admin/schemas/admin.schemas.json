@@ -1,0 +1,155 @@
+{
+	"DELETE_mentoring_v1_admin_userDelete": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"isAttendeesNotified": {
+						"type": "boolean"
+					},
+					"areUserDetailsCleared": {
+						"type": "boolean"
+					},
+					"isUnenrolledFromSessions": {
+						"type": "boolean"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_admin_triggerViewRebuild": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_admin_triggerViewRebuildInternal": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_admin_triggerPeriodicViewRefresh": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_admin_triggerPeriodicViewRefreshInternal": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}

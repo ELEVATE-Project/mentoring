@@ -1,0 +1,293 @@
+{
+	"POST_/mentoring/v1/questions/create": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"name": {
+						"type": "string"
+					},
+					"question": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string"
+					},
+					"options": {
+						"type": "null"
+					},
+					"no_of_stars": {
+						"type": "number"
+					},
+					"status": {
+						"type": "string"
+					},
+					"category": {
+						"type": "null"
+					},
+					"rendering_data": {
+						"type": "object",
+						"properties": {
+							"value": {
+								"type": "string"
+							},
+							"class": {
+								"type": "string"
+							},
+							"disabled": {
+								"type": "boolean"
+							},
+							"noOfstars": {
+								"type": "string"
+							},
+							"position": {
+								"type": "string"
+							},
+							"validation": {
+								"type": "object",
+								"properties": {
+									"required": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					},
+					"meta": {
+						"type": "null"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"PUT_/mentoring/v1/questions/update/{QuestionId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"name": {
+						"type": "string"
+					},
+					"question": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string"
+					},
+					"options": {
+						"type": "null"
+					},
+					"no_of_stars": {
+						"type": "number"
+					},
+					"status": {
+						"type": "string"
+					},
+					"category": {
+						"type": "null"
+					},
+					"rendering_data": {
+						"type": "object",
+						"properties": {
+							"value": {
+								"type": "string"
+							},
+							"class": {
+								"type": "string"
+							},
+							"disabled": {
+								"type": "boolean"
+							},
+							"noOfstars": {
+								"type": "string"
+							},
+							"position": {
+								"type": "string"
+							},
+							"validation": {
+								"type": "object",
+								"properties": {
+									"required": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					},
+					"meta": {
+						"type": "null"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_/mentoring/v1/questions/read/{QuestionId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"name": {
+						"type": "string"
+					},
+					"question": {
+						"type": "string"
+					},
+					"options": {
+						"type": "null"
+					},
+					"type": {
+						"type": "string"
+					},
+					"no_of_stars": {
+						"type": "number"
+					},
+					"status": {
+						"type": "string"
+					},
+					"category": {
+						"type": "null"
+					},
+					"rendering_data": {
+						"type": "object",
+						"properties": {
+							"value": {
+								"type": "string"
+							},
+							"class": {
+								"type": "string"
+							},
+							"disabled": {
+								"type": "boolean"
+							},
+							"noOfstars": {
+								"type": "string"
+							},
+							"position": {
+								"type": "string"
+							},
+							"validation": {
+								"type": "object",
+								"properties": {
+									"required": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					},
+					"meta": {
+						"type": "null"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}
