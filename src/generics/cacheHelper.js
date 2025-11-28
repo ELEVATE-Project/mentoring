@@ -677,8 +677,6 @@ const entityTypes = {
 				}
 			}
 
-			console.log(`💾 Getting all entity types for model ${modelName}: tenant:${tenantCode}:org:${orgCode}`)
-
 			let entityTypes = []
 			try {
 				// Step 1: Fetch from user tenant and org codes

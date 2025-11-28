@@ -1021,14 +1021,6 @@ module.exports = class MentorsHelper {
 				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
-			console.log(`🔍 [MENTOR READ DEBUG] Starting entityTypes processing for user ${id}`)
-			console.log(`🔍 [MENTOR READ DEBUG] Input params: tenantCode=${tenantCode}, mentorOrgCode=${mentorOrgCode}`)
-			console.log(`🔍 [MENTOR READ DEBUG] MentorExtensionsModelName: ${mentorExtensionsModelName}`)
-			console.log(
-				`🔍 [MENTOR READ DEBUG] Raw mentor extension data before processing:`,
-				JSON.stringify(mentorExtension, null, 2)
-			)
-
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				mentorExtensionsModelName,
 				tenantCode,
@@ -1038,30 +1030,10 @@ module.exports = class MentorsHelper {
 				throw entityTypes
 			}
 
-			console.log(
-				`🔍 [MENTOR READ DEBUG] Retrieved ${entityTypes ? entityTypes.length : 0} entityTypes from cache/db`
-			)
-			console.log(`🔍 [MENTOR READ DEBUG] EntityTypes data:`, JSON.stringify(entityTypes, null, 2))
-
 			// validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, mentorOrgCode)
-			console.log(
-				`🔍 [MENTOR READ DEBUG] ValidationData after removeDefaultOrgEntityTypes (${
-					validationData ? validationData.length : 0
-				} items):`,
-				JSON.stringify(validationData, null, 2)
-			)
 
 			const processDbResponse = utils.processDbResponse(mentorExtension, validationData)
-			console.log(`🔍 [MENTOR READ DEBUG] ProcessDbResponse result:`, JSON.stringify(processDbResponse, null, 2))
-			console.log(
-				`🔍 [MENTOR READ DEBUG] Designation field after processing:`,
-				JSON.stringify(processDbResponse.designation, null, 2)
-			)
-			console.log(
-				`🔍 [MENTOR READ DEBUG] Area_of_expertise field after processing:`,
-				JSON.stringify(processDbResponse.area_of_expertise, null, 2)
-			)
 			const totalSessionHosted = await sessionQueries.countHostedSessions(id, tenantCode)
 
 			// Try to get display properties from cache (with tenant/org fallback)

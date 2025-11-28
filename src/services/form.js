@@ -27,7 +27,7 @@ module.exports = class FormsHelper {
 		try {
 			bodyData['organization_id'] = orgId
 			bodyData['organization_code'] = orgCode
-			const form = await formQueries.createForm(bodyData, tenantCode)
+			const form = await formQueries.createForm(bodyData, tenantCode, orgCode)
 
 			await KafkaProducer.clearInternalCache('formVersion')
 

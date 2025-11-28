@@ -28,7 +28,7 @@ module.exports = class UserHelper {
 						cachedEntities.push(cachedData)
 					}
 				} catch (cacheError) {
-					console.log(`Cache miss for entityType: ${tenantCode}:${orgCode}`)
+					// Cache miss - will fetch from database
 				}
 			}
 

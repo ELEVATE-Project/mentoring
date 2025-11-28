@@ -96,13 +96,6 @@ module.exports = class MenteesHelper {
 			})
 		const userExtensionsModelName = await menteeQueries.getModelName()
 
-		console.log(`🔍 [MENTEE READ DEBUG] Starting entityTypes processing for user ${id}`)
-		console.log(
-			`🔍 [MENTEE READ DEBUG] Input params: tenantCode=${tenantCode}, organizationCode=${organizationCode}`
-		)
-		console.log(`🔍 [MENTEE READ DEBUG] UserExtensionsModelName: ${userExtensionsModelName}`)
-		console.log(`🔍 [MENTEE READ DEBUG] Raw mentee data before processing:`, JSON.stringify(mentee, null, 2))
-
 		let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 			userExtensionsModelName,
 			tenantCode,
@@ -112,31 +105,11 @@ module.exports = class MenteesHelper {
 			throw entityTypes
 		}
 
-		console.log(
-			`🔍 [MENTEE READ DEBUG] Retrieved ${entityTypes ? entityTypes.length : 0} entityTypes from cache/db`
-		)
-		console.log(`🔍 [MENTEE READ DEBUG] EntityTypes data:`, JSON.stringify(entityTypes, null, 2))
-
 		const validationData = removeDefaultOrgEntityTypes(entityTypes, organizationCode)
-		console.log(
-			`🔍 [MENTEE READ DEBUG] ValidationData after removeDefaultOrgEntityTypes (${
-				validationData ? validationData.length : 0
-			} items):`,
-			JSON.stringify(validationData, null, 2)
-		)
 
 		//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 
 		let processDbResponse = utils.processDbResponse(mentee, validationData)
-		console.log(`🔍 [MENTEE READ DEBUG] ProcessDbResponse result:`, JSON.stringify(processDbResponse, null, 2))
-		console.log(
-			`🔍 [MENTEE READ DEBUG] Designation field after processing:`,
-			JSON.stringify(processDbResponse.designation, null, 2)
-		)
-		console.log(
-			`🔍 [MENTEE READ DEBUG] Area_of_expertise field after processing:`,
-			JSON.stringify(processDbResponse.area_of_expertise, null, 2)
-		)
 
 		// Try to get display properties from cache (with tenant/org fallback)
 		let displayProperties = await cacheHelper.displayProperties.get(tenantCode, organizationCode)
