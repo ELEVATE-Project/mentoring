@@ -20,6 +20,11 @@ const { Op, QueryTypes } = require('sequelize')
 const { sequelize, Session, SessionAttendee, Connection, RequestSession } = require('@database/models/index')
 const { literal } = require('sequelize')
 const sessionRequestMappingQueries = require('@database/queries/requestSessionMapping')
+const permissionsQueries = require('@database/queries/permissions')
+const entityTypeHelper = require('@helpers/entityTypeCache')
+const orgQueries = require('@database/queries/organisationExtension')
+const formQueries = require('@database/queries/form')
+const cacheHelper = require('@generics/cacheHelper')
 // sessionOwnership removed - functionality replaced by direct Session queries
 
 // Generic notification helper class
@@ -38,7 +43,7 @@ class NotificationHelper {
 				return true
 			}
 
-			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCode, tenantCodes)
+			const template = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, templateCode)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -81,7 +86,7 @@ class NotificationHelper {
 		try {
 			if (!sessions?.length || !templateCode) return true
 
-			const template = await notificationTemplateQueries.findOneEmailTemplate(templateCode, orgCodes, tenantCodes)
+			const template = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, templateCode)
 			if (!template) {
 				console.log(`Template ${templateCode} not found`)
 				return true
@@ -378,6 +383,15 @@ module.exports = class AdminService {
 			// Always check and remove mentee extension (user can be both mentor and mentee)
 			try {
 				menteeDetailsRemoved = await menteeQueries.deleteMenteeExtension(userId, tenantCode) // userId = "1"
+
+				// Cache invalidation: Clear mentee cache after removal
+				if (menteeDetailsRemoved > 0) {
+					try {
+						await cacheHelper.mentee.delete(tenantCode, userInfo.organization_code, userId)
+					} catch (cacheError) {
+						console.error(`Cache deletion failed for mentee ${userId}:`, cacheError)
+					}
+				}
 			} catch (error) {
 				console.log('No mentee extension found or already removed:', error.message)
 			}
@@ -409,6 +423,13 @@ module.exports = class AdminService {
 						{ seats_remaining: literal('seats_remaining + 1') },
 						{ where: { id: session.id, tenant_code: tenantCode } }
 					)
+
+					// Cache invalidation: Clear session cache after seats_remaining update
+					try {
+						await cacheHelper.sessions.delete(tenantCode, organizationCode, session.id)
+					} catch (cacheError) {
+						console.error(`Cache deletion failed for session ${session.id}:`, cacheError)
+					}
 				}
 				result.isSeatsUpdate = true
 			} catch (error) {
@@ -647,6 +668,20 @@ module.exports = class AdminService {
 			await Promise.all(
 				usersUpcomingSessions.map(async (session) => {
 					await sessionQueries.updateEnrollmentCount(session.session_id, true, tenantCode)
+
+					// Cache invalidation: Clear session cache after enrollment count update
+					const sessionDetail = upcomingSessions.find((s) => s.id === session.session_id)
+					if (sessionDetail) {
+						try {
+							await cacheHelper.sessions.delete(
+								tenantCode,
+								sessionDetail.mentor_organization_id,
+								session.session_id
+							)
+						} catch (cacheError) {
+							console.error(`Cache deletion failed for session ${session.session_id}:`, cacheError)
+						}
+					}
 				})
 			)
 
@@ -1083,17 +1118,12 @@ module.exports = class AdminService {
 
 	static async notifyMentorAboutPrivateSessionCancellation(mentorId, sessionDetails, orgCodes, tenantCodes) {
 		try {
-			// Get mentor details
 			const mentorDetails = await mentorQueries.getMentorExtension(
 				mentorId,
 				['name', 'email'],
 				true,
 				tenantCodes[0] // Use primary tenant for database query
 			)
-			if (!mentorDetails) {
-				console.log('Mentor details not found for notification')
-				return false
-			}
 
 			const sessionDateTime = moment.unix(sessionDetails.start_date)
 
@@ -1151,7 +1181,7 @@ module.exports = class AdminService {
 		try {
 			// Get defaults for combined notification codes
 			const defaults = await getDefaults()
-			const userOrgCode = mentorInfo.organization_code || ''
+			const userOrgCode = mentorInfo.organization_code
 			const orgCodes = [userOrgCode, defaults.orgCode].filter(Boolean)
 			const tenantCodes = [tenantCode, defaults.tenantCode].filter(Boolean)
 
@@ -1185,6 +1215,18 @@ module.exports = class AdminService {
 
 			// 5. Handle sessions created by mentor - unenroll and notify attendees
 			const removedSessionsDetail = await sessionQueries.removeAndReturnMentorSessions(mentorUserId, tenantCode)
+
+			// Cache invalidation: Clear cache for removed sessions based on session id
+			if (removedSessionsDetail && removedSessionsDetail.length > 0) {
+				for (const session of removedSessionsDetail) {
+					try {
+						await cacheHelper.sessions.delete(tenantCode, userOrgCode, session.id)
+					} catch (cacheError) {
+						console.error(`Cache deletion failed for session ${session.id}:`, cacheError)
+					}
+				}
+			}
+
 			result.isAttendeesNotified = await this.unenrollAndNotifySessionAttendees(
 				removedSessionsDetail,
 				orgCodes,
@@ -1205,6 +1247,13 @@ module.exports = class AdminService {
 			// 7. Remove mentor from DB
 			result.mentorDetailsRemoved = await mentorQueries.removeMentorDetails(mentorUserId, tenantCode)
 
+			// Cache invalidation: Clear mentor cache after removal
+			try {
+				await cacheHelper.mentor.delete(tenantCode, userOrgCode, mentorUserId)
+			} catch (cacheError) {
+				console.error(`Cache deletion failed for mentor ${mentorUserId}:`, cacheError)
+			}
+
 			// 8. Mark created sessions as deleted
 			if (upcomingSessions.length > 0) {
 				const sessionIds = [...new Set(upcomingSessions.map((s) => s.id))]
@@ -1212,6 +1261,15 @@ module.exports = class AdminService {
 					{ deleted_at: new Date() },
 					{ where: { id: sessionIds, created_by: mentorUserId, tenant_code: tenantCode } }
 				)
+
+				// Cache invalidation: Clear session cache for deleted sessions
+				for (const sessionId of sessionIds) {
+					try {
+						await cacheHelper.sessions.delete(tenantCode, userOrgCode, sessionId)
+					} catch (cacheError) {
+						console.error(`Cache deletion failed for session ${sessionId}:`, cacheError)
+					}
+				}
 			}
 		} catch (error) {
 			console.error('Error in handleMentorDeletion:', error)
@@ -1273,7 +1331,7 @@ module.exports = class AdminService {
 			}
 
 			// Use combined codes for notifications (user + defaults)
-			await this.notifyAttendeesAboutSessionDeletion(sessionsToUpdate, orgCodes[0], tenantCodes[0])
+			await this.notifyAttendeesAboutSessionDeletion(sessionsToUpdate, orgCodes, tenantCodes)
 
 			// Use user's tenant code for database updates
 			const sessionIds = [...new Set(sessionsToUpdate.map((s) => s.id))]
@@ -1281,6 +1339,14 @@ module.exports = class AdminService {
 				{ mentor_name: common.USER_NOT_FOUND, mentor_id: null },
 				{ where: { id: sessionIds, tenant_code: userTenantCode } }
 			)
+
+			for (const sessionId of sessionIds) {
+				try {
+					await cacheHelper.sessions.delete(userTenantCode, userOrgCode, sessionId)
+				} catch (cacheError) {
+					console.error(`Cache deletion failed for session ${sessionId}:`, cacheError)
+				}
+			}
 
 			console.log(`Updated ${sessionIds.length} sessions with mentor removal`)
 			return true
@@ -1514,7 +1580,7 @@ module.exports = class AdminService {
 						attributes: ['name', 'email'],
 					},
 					false,
-					tenantCode
+					tenantCode[0]
 				)
 
 				if (attendeeDetails.length > 0) {
@@ -1538,5 +1604,378 @@ module.exports = class AdminService {
 			console.error('Error notifying attendees about session deletion:', error)
 			return false
 		}
+	}
+
+	/**
+	 * Cache Administration Methods
+	 */
+
+	/**
+	 * Get cache statistics and monitoring information
+	 * @method
+	 * @name getCacheStatistics
+	 * @param {String} tenantCode - Tenant code for stats
+	 * @param {String} organizationId - Organization ID for stats
+	 * @returns {JSON} - Cache statistics response
+	 */
+	static async getCacheStatistics(tenantCode, organizationId) {
+		try {
+			const redisClient = cacheHelper._internal.getRedisClient()
+			if (!redisClient) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.service_unavailable,
+					message: 'CACHE_SERVICE_UNAVAILABLE',
+					responseCode: 'SERVICE_ERROR',
+				})
+			}
+
+			// Get Redis info
+			const redisInfo = await redisClient.info()
+			const redisMemory = await redisClient.info('memory')
+			const keyspaceInfo = await redisClient.info('keyspace')
+
+			// Get key counts by namespace for the tenant
+			// Extract namespaces from cacheHelper instead of hardcoding
+			const namespaces = Object.keys(cacheHelper).filter(
+				(key) =>
+					typeof cacheHelper[key] === 'object' &&
+					cacheHelper[key] !== null &&
+					typeof cacheHelper[key].get === 'function'
+			)
+
+			const namespaceCounts = {}
+			for (const namespace of namespaces) {
+				try {
+					const pattern = `tenant:${tenantCode}:org:${organizationId}:${namespace}:*`
+					const keys = await redisClient.scan(0, 'MATCH', pattern, 'COUNT', 1000)
+					namespaceCounts[namespace] = Array.isArray(keys[1]) ? keys[1].length : 0
+				} catch (error) {
+					namespaceCounts[namespace] = 0
+				}
+			}
+
+			// Parse Redis info
+			const memoryUsed = this.parseRedisInfo(redisMemory, 'used_memory_human')
+			const memoryPeak = this.parseRedisInfo(redisMemory, 'used_memory_peak_human')
+			const connectedClients = this.parseRedisInfo(redisInfo, 'connected_clients')
+			const totalCommands = this.parseRedisInfo(redisInfo, 'total_commands_processed')
+			const keyspaceHits = this.parseRedisInfo(redisInfo, 'keyspace_hits')
+			const keyspaceMisses = this.parseRedisInfo(redisInfo, 'keyspace_misses')
+
+			const hitRate =
+				keyspaceHits + keyspaceMisses > 0
+					? ((keyspaceHits / (keyspaceHits + keyspaceMisses)) * 100).toFixed(2)
+					: '0'
+
+			const statistics = {
+				cacheEnabled: cacheHelper._internal.ENABLE_CACHE,
+				redisStats: {
+					memoryUsed,
+					memoryPeak,
+					connectedClients,
+					totalCommands,
+					keyspaceHits,
+					keyspaceMisses,
+					hitRate: `${hitRate}%`,
+				},
+				tenantStats: {
+					tenantCode,
+					organizationId,
+					namespaceCounts,
+					totalKeys: Object.values(namespaceCounts).reduce((sum, count) => sum + count, 0),
+				},
+				configuration: {
+					shards: cacheHelper._internal.SHARDS,
+					batchSize: cacheHelper._internal.BATCH,
+					cacheConfig: cacheHelper._internal.CACHE_CONFIG,
+				},
+				timestamp: new Date().toISOString(),
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CACHE_STATS_FETCHED_SUCCESSFULLY',
+				result: statistics,
+			})
+		} catch (error) {
+			console.error('Error getting cache statistics:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_STATS_FETCH_FAILED',
+				responseCode: 'SERVER_ERROR',
+				result: { error: error.message },
+			})
+		}
+	}
+
+	/**
+	 * Clear cache for specific namespace, tenant, or organization
+	 * @method
+	 * @name clearCache
+	 * @param {Object} options - Clear cache options
+	 * @returns {JSON} - Cache clear response
+	 */
+	static async clearCache({ namespace, tenantCode, orgId, adminTenantCode, adminOrgId }) {
+		try {
+			const redisClient = cacheHelper._internal.getRedisClient()
+			if (!redisClient) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.service_unavailable,
+					message: 'CACHE_SERVICE_UNAVAILABLE',
+					responseCode: 'SERVICE_ERROR',
+				})
+			}
+
+			let clearedKeys = 0
+			let patterns = []
+
+			if (namespace && namespace !== 'all') {
+				// Clear specific namespace
+				if (orgId && orgId !== 'all') {
+					patterns.push(`tenant:${tenantCode}:org:${orgId}:${namespace}:*`)
+				} else {
+					patterns.push(`tenant:${tenantCode}:*:${namespace}:*`)
+				}
+			} else if (orgId && orgId !== 'all') {
+				// Clear all cache for specific org
+				patterns.push(`tenant:${tenantCode}:org:${orgId}:*`)
+			} else {
+				// Clear all cache for tenant
+				patterns.push(`tenant:${tenantCode}:*`)
+			}
+
+			// Execute cache clearing
+			for (const pattern of patterns) {
+				const keys = await this.scanKeys(redisClient, pattern)
+				if (keys.length > 0) {
+					await redisClient.del(...keys)
+					clearedKeys += keys.length
+				}
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CACHE_CLEARED_SUCCESSFULLY',
+				result: {
+					clearedKeys,
+					patterns,
+					tenantCode,
+					orgId,
+					namespace,
+					timestamp: new Date().toISOString(),
+				},
+			})
+		} catch (error) {
+			console.error('Error clearing cache:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_CLEAR_FAILED',
+				responseCode: 'SERVER_ERROR',
+				result: { error: error.message },
+			})
+		}
+	}
+
+	/**
+	 * Warm up cache for tenant/organization
+	 * @method
+	 * @name warmUpCache
+	 * @param {Object} options - Warm up options
+	 * @returns {JSON} - Cache warm up response
+	 */
+	static async warmUpCache({ tenantCode, orgCode, adminTenantCode, adminOrgCode }) {
+		try {
+			const warmupResults = {
+				entityTypes: 0,
+				organizations: 0,
+				platformConfig: 0,
+				permissions: 0,
+				forms: 0,
+			}
+
+			// Warm up EntityTypes cache
+			try {
+				await entityTypeHelper.warmUpEntityTypesCache(tenantCode, orgCode)
+				warmupResults.entityTypes = 1
+			} catch (error) {
+				console.error('EntityTypes cache warmup failed:', error)
+			}
+
+			// Warm up Organizations cache
+			try {
+				const orgData = await orgQueries.findOne({ organization_code: orgCode }, tenantCode)
+				if (orgData) {
+					await cacheHelper.organizations.set(tenantCode, orgCode, orgCode, orgData)
+					warmupResults.organizations = 1
+				}
+			} catch (error) {
+				console.error('Organizations cache warmup failed:', error)
+			}
+
+			// Warm up Platform Config cache
+			try {
+				const configData = await formQueries.findOne({ code: 'platformConfig' }, tenantCode)
+				if (configData) {
+					await cacheHelper.platformConfig.set(tenantCode, orgCode, configData)
+					warmupResults.platformConfig = 1
+				}
+			} catch (error) {
+				console.error('Platform Config cache warmup failed:', error)
+			}
+
+			// Warm up Permissions cache
+			try {
+				// Get all distinct roles from permissions table instead of hardcoding
+				const allPermissions = await permissionsQueries.findAllPermissions({})
+				const uniqueRoles = [...new Set(allPermissions.map((perm) => perm.role))].filter(Boolean)
+
+				for (const role of uniqueRoles) {
+					const perms = await permissionsQueries.findAll({ role }, tenantCode)
+					if (perms && perms.length > 0) {
+						await cacheHelper.permissions.set(role, perms)
+						warmupResults.permissions++
+					}
+				}
+			} catch (error) {
+				console.error('Permissions cache warmup failed:', error)
+			}
+
+			// Warm up Forms cache (get all forms dynamically)
+			try {
+				// Get all forms from database instead of hardcoding specific forms
+				const allForms = await formQueries.findFormsByFilter({}, [tenantCode])
+
+				for (const form of allForms) {
+					if (form.type && form.sub_type) {
+						await cacheHelper.forms.set(tenantCode, orgCode, form.type, form.sub_type, form)
+						warmupResults.forms++
+					}
+				}
+			} catch (error) {
+				console.error('Forms cache warmup failed:', error)
+			}
+
+			const totalWarmedUp = Object.values(warmupResults).reduce((sum, count) => sum + count, 0)
+
+			console.log(`💾 Cache warmup completed for tenant:${tenantCode}, org:${orgCode} - ${totalWarmedUp} items`)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CACHE_WARMED_UP_SUCCESSFULLY',
+				result: {
+					tenantCode,
+					orgCode,
+					warmupResults,
+					totalWarmedUp,
+					timestamp: new Date().toISOString(),
+				},
+			})
+		} catch (error) {
+			console.error('Error warming up cache:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_WARMUP_FAILED',
+				responseCode: 'SERVER_ERROR',
+				result: { error: error.message },
+			})
+		}
+	}
+
+	/**
+	 * Get cache health and configuration
+	 * @method
+	 * @name getCacheHealth
+	 * @returns {JSON} - Cache health response
+	 */
+	static async getCacheHealth() {
+		try {
+			const redisClient = cacheHelper._internal.getRedisClient()
+			const health = {
+				cacheEnabled: cacheHelper._internal.ENABLE_CACHE,
+				redisConnected: false,
+				redisVersion: null,
+				uptime: null,
+				configuration: {
+					shards: cacheHelper._internal.SHARDS,
+					batchSize: cacheHelper._internal.BATCH,
+					enableCache: cacheHelper._internal.ENABLE_CACHE,
+					cacheConfig: cacheHelper._internal.CACHE_CONFIG,
+				},
+				namespaces: {},
+				status: 'unhealthy',
+			}
+
+			if (redisClient) {
+				try {
+					const redisInfo = await redisClient.info()
+					const redisVersion = this.parseRedisInfo(redisInfo, 'redis_version')
+					const uptime = this.parseRedisInfo(redisInfo, 'uptime_in_seconds')
+
+					health.redisConnected = true
+					health.redisVersion = redisVersion
+					health.uptime = `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`
+					health.status = 'healthy'
+
+					// Check namespace configurations
+					const namespaceConfig = cacheHelper._internal.CACHE_CONFIG.namespaces || {}
+					Object.keys(namespaceConfig).forEach((ns) => {
+						health.namespaces[ns] = {
+							enabled: namespaceConfig[ns].enabled !== false,
+							defaultTtl: namespaceConfig[ns].defaultTtl,
+							useInternal: namespaceConfig[ns].useInternal,
+						}
+					})
+				} catch (redisError) {
+					console.error('Redis health check failed:', redisError)
+					health.status = 'redis_error'
+				}
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'CACHE_HEALTH_CHECK_COMPLETED',
+				result: {
+					...health,
+					timestamp: new Date().toISOString(),
+				},
+			})
+		} catch (error) {
+			console.error('Error checking cache health:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_HEALTH_CHECK_FAILED',
+				responseCode: 'SERVER_ERROR',
+				result: { error: error.message },
+			})
+		}
+	}
+
+	/**
+	 * Helper method to scan Redis keys by pattern
+	 * @private
+	 */
+	static async scanKeys(redisClient, pattern) {
+		const keys = []
+		let cursor = '0'
+
+		do {
+			const result = await redisClient.scan(cursor, 'MATCH', pattern, 'COUNT', 1000)
+			cursor = result[0]
+			if (result[1] && result[1].length > 0) {
+				keys.push(...result[1])
+			}
+		} while (cursor !== '0')
+
+		return keys
+	}
+
+	/**
+	 * Helper method to parse Redis info strings
+	 * @private
+	 */
+	static parseRedisInfo(infoString, key) {
+		const lines = infoString.split('\r\n')
+		const line = lines.find((l) => l.startsWith(`${key}:`))
+		return line ? line.split(':')[1] : '0'
 	}
 }

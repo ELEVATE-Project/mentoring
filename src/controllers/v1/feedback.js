@@ -27,7 +27,8 @@ module.exports = class Feedback {
 			const feedbackFormData = await feedbackService.forms(
 				req.params.id,
 				req.decodedToken.roles,
-				req.decodedToken.tenant_code
+				req.decodedToken.tenant_code,
+				req.decodedToken.organization_code
 			)
 			return feedbackFormData
 		} catch (error) {
@@ -62,7 +63,8 @@ module.exports = class Feedback {
 				req.body,
 				req.decodedToken.id,
 				isAMentor,
-				req.decodedToken.tenant_code
+				req.decodedToken.tenant_code,
+				req.decodedToken.organization_code
 			)
 			return feedbackSubmitData
 		} catch (error) {

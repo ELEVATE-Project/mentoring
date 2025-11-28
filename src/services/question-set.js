@@ -3,6 +3,8 @@ const httpStatusCode = require('@generics/http-status')
 const questionSetQueries = require('../database/queries/question-set')
 const questionQueries = require('../database/queries/questions')
 const responses = require('@helpers/responses')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
+const { Op } = require('sequelize')
 
 module.exports = class questionsSetHelper {
 	/**
@@ -113,9 +115,23 @@ module.exports = class questionsSetHelper {
 
 	static async read(questionsSetId, questionSetCode, tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
 			const filter = {
 				id: questionsSetId,
-				tenant_code: tenantCode,
+				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 			}
 			if (questionSetCode) {
 				filter.code = questionSetCode

@@ -2,11 +2,10 @@ const Form = require('../models/index').Form
 const { Op } = require('sequelize')
 
 module.exports = class FormsData {
-	static async createForm(data, tenantCode) {
+	static async createForm(data, tenantCode, orgCode) {
 		try {
-			if (tenantCode) {
-				data.tenant_code = tenantCode
-			}
+			data.tenant_code = tenantCode
+			data.organization_code = orgCode
 			let form = await Form.create(data, { returning: true })
 			return form
 		} catch (error) {
