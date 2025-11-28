@@ -2,6 +2,7 @@ const httpStatusCode = require('@generics/http-status')
 const questionQueries = require('../database/queries/questions')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const { Op } = require('sequelize')
 
 module.exports = class questionsHelper {
 	/**
