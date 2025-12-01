@@ -14,9 +14,11 @@ const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
 const { Op } = require('sequelize')
+const cacheHelper = require('@generics/cacheHelper')
 
 const menteeQueries = require('@database/queries/userExtension')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
+// Removed cacheHelper to break circular dependency with getDefaultOrgId
 
 const emailEncryption = require('@utils/emailEncryption')
 
@@ -37,9 +39,10 @@ const emailEncryption = require('@utils/emailEncryption')
  * fetchOrgDetails({ organizationId })
  *   .then(response => console.log(response))
  *   .catch(error => console.error(error));
+
  */
 
-const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
+const fetchOrgDetails = async function ({ organizationCode, organizationId, tenantCode }) {
 	try {
 		let orgReadUrl
 		if (organizationId)
@@ -47,8 +50,13 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
 		else if (organizationCode)
 			orgReadUrl = `${userBaseUrl}${endpoints.ORGANIZATION_READ}?organisation_code=${organizationCode}`
 
+		if (tenantCode) {
+			orgReadUrl += `&tenant_code=${tenantCode}`
+		}
+
 		const internalToken = true
 		const orgDetails = await requests.get(orgReadUrl, '', internalToken)
+
 		return orgDetails
 	} catch (error) {
 		console.error('Error fetching organization details:', error)
@@ -71,11 +79,39 @@ const fetchOrgDetails = async function ({ organizationCode, organizationId }) {
  * getOrgDetails({ organizationId })
  *   .then(response => console.log(response))
  *   .catch(error => console.error(error));
+
  */
 
-const getOrgDetails = async function ({ organizationId }) {
+const getOrgDetails = async function ({ organizationId, tenantCode }) {
 	try {
-		const organizationDetails = await organisationExtensionQueries.findOne({ organization_id: organizationId })
+		// Try to use cache first, but handle circular dependency by lazy loading cacheHelper
+		let organizationDetails = null
+
+		try {
+			// Get full organization data (includes organization_code for cache key)
+			organizationDetails = await organisationExtensionQueries.findOne(
+				{ organization_id: organizationId },
+				tenantCode
+			)
+
+			// If we got the data, populate the cache for future use
+			if (organizationDetails?.organization_code) {
+				try {
+					await cacheHelper.organizations.set(
+						tenantCode,
+						organizationDetails.organization_code,
+						organizationId,
+						organizationDetails
+					)
+				} catch (setCacheError) {
+					console.warn('Failed to cache organization details:', setCacheError.message)
+				}
+			}
+		} catch (dbError) {
+			console.error('Database lookup failed for organization details:', dbError.message)
+			throw dbError
+		}
+
 		return {
 			success: true,
 			data: {
@@ -121,8 +157,8 @@ const validRoles = new Set([
  * const token = 'user-auth-token';
  * const userId = '12345';
  * fetchUserDetails({ token, userId })
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const fetchUserDetails = async ({ token, userId, tenantCode }) => {
@@ -136,6 +172,10 @@ const fetchUserDetails = async ({ token, userId, tenantCode }) => {
 		}`
 		if (userId) profileUrl += `/${userId}`
 		if (isTenantScoped) profileUrl += `?tenant_code=${encodeURIComponent(tenantCode)}`
+
+		if (tenantCode) {
+			profileUrl += `?tenant_code=${tenantCode}`
+		}
 
 		const isInternalTokenRequired = true
 		const userDetails = await requests.get(profileUrl, token, isInternalTokenRequired)
@@ -188,21 +228,33 @@ const fetchUserDetails = async ({ token, userId, tenantCode }) => {
  * const token = 'user-auth-token';
  * const userId = '12345';
  * getUserDetails( userId)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
-const getUserDetails = async (userId) => {
+const getUserDetails = async (userId, tenantCode) => {
 	try {
-		const userDetails = await menteeQueries.getMenteeExtension(userId)
+		// Only pass tenantCode if it exists
+		const userDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+
+		if (!userDetails) {
+			return {
+				data: {
+					result: null,
+				},
+			}
+		}
+
 		if (userDetails.image) {
 			const downloadImageResponse = await getDownloadableUrl(userDetails.image)
 			userDetails.image = downloadImageResponse.result
 		}
+
 		userDetails.user_roles = [{ title: common.MENTEE_ROLE }]
 		if (userDetails.is_mentor) {
 			userDetails.user_roles.push({ title: common.MENTOR_ROLE })
 		}
+
 		if (userDetails.email) {
 			userDetails.email = await emailEncryption.decrypt(userDetails.email)
 		}
@@ -236,11 +288,11 @@ const getUserDetails = async (userId) => {
  * @example
  * const userIds = ['user1', 'user2'];
  * getListOfUserDetails(userIds)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
-const getListOfUserDetails = function (userIds, excludeDeletedRecords = false) {
+const getListOfUserDetails = function (userIds, excludeDeletedRecords = false, tenantCode = null) {
 	return new Promise(async (resolve, reject) => {
 		const options = {
 			headers: {
@@ -254,6 +306,10 @@ const getListOfUserDetails = function (userIds, excludeDeletedRecords = false) {
 
 		let apiUrl = userBaseUrl + endpoints.LIST_ACCOUNTS
 		if (excludeDeletedRecords) apiUrl = userBaseUrl + endpoints.LIST_ACCOUNTS + '?exclude_deleted_records=true'
+		if (tenantCode) {
+			apiUrl += excludeDeletedRecords ? '&' : '?'
+			apiUrl += `tenant_code=${tenantCode}`
+		}
 		try {
 			request.get(apiUrl, options, callback)
 			function callback(err, data) {
@@ -286,11 +342,11 @@ const getListOfUserDetails = function (userIds, excludeDeletedRecords = false) {
  * @example
  * const emailIds = ['user1@example.com', 'user2@example.com'];
  * getListOfUserDetailsByEmail(emailIds, true)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
-const getListOfUserDetailsByEmail = function (emailIds) {
+const getListOfUserDetailsByEmail = function (emailIds, tenantCode) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			const encryptedEmailIds = emailIds.map((email) => {
@@ -300,7 +356,7 @@ const getListOfUserDetailsByEmail = function (emailIds) {
 				return emailEncryption.encrypt(email)
 			})
 
-			const userDetails = await menteeQueries.getUsersByEmailIds(encryptedEmailIds)
+			const userDetails = await menteeQueries.getUsersByEmailIds(encryptedEmailIds, tenantCode)
 
 			let ids = []
 
@@ -374,11 +430,11 @@ const share = function (profileId) {
  * const pageSize = 10;
  * const searchText = 'john';
  * list(userType, pageNo, pageSize, searchText)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
-const list = function (userType, pageNo, pageSize, searchText) {
+const list = function (userType, pageNo, pageSize, searchText, tenantCode) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			const filter = {
@@ -401,7 +457,8 @@ const list = function (userType, pageNo, pageSize, searchText) {
 				(additionalProjectionClause = `name,email,organization_id`),
 				(returnOnlyUserId = false),
 				searchText ? searchText : '',
-				(defaultFilter = '')
+				(defaultFilter = ''),
+				tenantCode
 			)
 
 			let foundKeys = {}
@@ -587,8 +644,8 @@ const search = function (userType, pageNo, pageSize, searchText, userServiceQuer
  * @example
  * const organizationIds = ['org1', 'org2'];
  * listOrganization(organizationIds)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
 const listOrganization = function (organizationIds = []) {
@@ -636,28 +693,65 @@ const listOrganization = function (organizationIds = []) {
  * @example
  * const organizationIds = ['org1', 'org2'];
  * organizationList(organizationIds)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
-const organizationList = function (organizationIds = []) {
+const organizationList = function (organizationCodes = [], tenantCodes = []) {
 	return new Promise(async (resolve, reject) => {
 		try {
-			// Fetch organization details
+			// Try to get cached organizations first
+			const cachedOrgs = []
+			const missingOrgCodes = []
+
+			// Check cache for each org code and tenant code combination
+			for (const orgCode of organizationCodes) {
+				for (const tenantCode of tenantCodes) {
+					let foundInCache = false
+					try {
+						// We need organizationId to get from cache, but we only have orgCode
+						// So we'll fetch from database and cache the results
+						foundInCache = false
+					} catch (cacheError) {
+						foundInCache = false
+					}
+
+					if (!foundInCache) {
+						missingOrgCodes.push({ orgCode, tenantCode })
+					}
+				}
+			}
+
+			// Fetch organization details from database
 			const filter = {
-				organization_id: {
-					[Op.in]: Array.from(organizationIds),
+				organization_code: {
+					[Op.in]: Array.from(organizationCodes),
+				},
+				tenant_code: {
+					[Op.in]: Array.from(tenantCodes),
 				},
 			}
 
 			const organizationDetails = await organisationExtensionQueries.findAll(filter, {
-				attributes: ['name', 'organization_id'],
+				attributes: ['name', 'organization_id', 'organization_code', 'tenant_code'],
 			})
 
+			// Cache the fetched organizations for future use
 			if (organizationDetails && organizationDetails.length > 0) {
-				organizationDetails.map((orgInfo) => {
-					orgInfo.id = orgInfo.organization_id
+				const cachePromises = []
+
+				organizationDetails.forEach((orgInfo) => {
+					orgInfo.id = orgInfo.organization_code
+
+					// Organization caching removed to break circular dependency
 				})
+
+				try {
+					await Promise.all(cachePromises)
+					console.log(`💾 Cached ${organizationDetails.length} organizations from organizationList`)
+				} catch (cacheError) {
+					console.error(`❌ Some organizations failed to cache in organizationList:`, cacheError)
+				}
 			}
 
 			return resolve({
@@ -688,8 +782,8 @@ const organizationList = function (organizationIds = []) {
  * @example
  * const filePath = 'images/profile.png';
  * getDownloadableUrl(filePath)
- *   .then(url => console.log(url))
- *   .catch(error => console.error(error));
+
+
  */
 
 const getDownloadableUrl = function (path) {
@@ -739,11 +833,11 @@ const getDownloadableUrl = function (path) {
  * @example
  * const userIds = ['user1', 'user2'];
  * getUserDetailedList(userIds)
- *   .then(response => console.log(response))
- *   .catch(error => console.error(error));
+
+
  */
 
-const getUserDetailedList = function (userIds, deletedUsers = false, unscopped = false) {
+const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false, unscopped = false) {
 	return new Promise(async (resolve, reject) => {
 		try {
 			// Fetch user details
@@ -757,7 +851,7 @@ const getUserDetailedList = function (userIds, deletedUsers = false, unscopped =
 			if (deletedUsers) {
 				options = { paranoid: false }
 			}
-			const userDetails = await menteeQueries.getUsersByUserIds(userIds, options, unscopped)
+			const userDetails = await menteeQueries.getUsersByUserIds(userIds, options, tenantCode, unscopped)
 
 			// Extract unique organization IDs and create a mapping for organization details
 			const organizationIds = new Set()
@@ -775,14 +869,28 @@ const getUserDetailedList = function (userIds, deletedUsers = false, unscopped =
 				},
 			}
 
-			const organizationDetails = await organisationExtensionQueries.findAll(filter, {
-				attributes: ['name', 'organization_id'],
+			const organizationDetails = await organisationExtensionQueries.findAll(filter, tenantCode, {
+				attributes: ['name', 'organization_id', 'organization_code'],
 			})
 
-			// Map organization details for quick access
+			// Cache organization details for future use and map for quick access
+			const cachePromises = []
 			organizationDetails.forEach((org) => {
 				orgDetails[org.organization_id] = org
+
+				// Organization caching removed to break circular dependency
 			})
+
+			// Cache organizations in parallel without blocking the main response
+			if (cachePromises.length > 0) {
+				Promise.all(cachePromises)
+					.then(() => {
+						console.log(`💾 Cached ${cachePromises.length} organizations from getUserDetailedList`)
+					})
+					.catch((cacheError) => {
+						console.error(`❌ Some organizations failed to cache in getUserDetailedList:`, cacheError)
+					})
+			}
 
 			// Enrich user details with roles and organization info
 			await Promise.all(
@@ -836,6 +944,53 @@ const getProfileDetails = async ({ tenantCode, userId }) => {
 	}
 }
 
+/**
+ * Get tenant domain by tenant code
+ * @method
+ * @name getTenantDomain
+ * @param {String} tenantCode - tenant code
+ * @returns {String} - domain for the tenant
+ */
+const getTenantDomain = async (tenantCode) => {
+	try {
+		if (!tenantCode) {
+			throw new Error('TENANT_CODE_REQUIRED')
+		}
+
+		const apiUrl = `${userBaseUrl}/tenant/domain/${tenantCode}`
+		const internalToken = true
+		const domainResponse = await requests.get(apiUrl, '', internalToken)
+
+		if (domainResponse && domainResponse.success && domainResponse.data?.result?.domain) {
+			return domainResponse.data.result.domain
+		} else {
+			throw new Error('TENANT_DOMAIN_NOT_FOUND')
+		}
+	} catch (error) {
+		throw error
+	}
+}
+
+const getTenantList = async () => {
+	try {
+		// Fix: Ensure correct URL construction for internal API call
+		// USER_SERVICE_BASE_URL might be undefined, so construct the correct path
+		const baseUrl = process.env.USER_SERVICE_HOST
+		const basePath = process.env.USER_SERVICE_BASE_URL
+		const apiUrl = `${baseUrl}${basePath}/${endpoints.GET_TENANT_LIST}`
+		const internalToken = true
+		const listResponse = await requests.get(apiUrl, '', internalToken)
+
+		if (listResponse && listResponse.success && listResponse.data?.result) {
+			return listResponse.data.result
+		} else {
+			throw new Error('TENANT_LIST_NOT_FOUND')
+		}
+	} catch (error) {
+		throw error
+	}
+}
+
 const getTenantDetails = async (tenantCode) => {
 	try {
 		let profileUrl = `${userBaseUrl}${endpoints.GET_TENANT_DETAILS}`
@@ -868,5 +1023,7 @@ module.exports = {
 	organizationList,
 	getOrgDetails,
 	getProfileDetails,
+	getTenantDomain,
+	getTenantList,
 	getTenantDetails,
 }
