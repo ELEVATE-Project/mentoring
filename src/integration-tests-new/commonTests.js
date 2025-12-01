@@ -19,14 +19,14 @@ const logIn = async () => {
 		await waitOn(opts)
 		let email = 'adithya' + crypto.randomBytes(5).toString('hex') + '@tunerlabs.com'
 		let password = faker.internet.password()
-		let res = await request.post('/user/v1/account/create').set('origin', 'default-qa.tekdinext.com').send({
+		let res = await request.post('/user/v1/account/create').set('origin', 'localhost').send({
 			name: 'adithya',
 			email: email,
 			password: 'PassworD@@@123',
 			role: common.MENTEE_ROLE,
 		})
 
-		res = await request.post('/user/v1/account/login').set('origin', 'default-qa.tekdinext.com').send({
+		res = await request.post('/user/v1/account/login').set('origin', 'localhost').send({
 			identifier: email,
 			password: 'PassworD@@@123',
 		})
@@ -40,20 +40,17 @@ const logIn = async () => {
 			global.request = defaults(supertest(baseURL))
 			global.request.set(defaultHeaders)
 			global.userId = res.body.result.user.id
-			/* .end(function (err, res) {
-				let successCodes = [200, 201, 202]
-				if (!successCodes.includes(res.statusCode)) {
-					console.log('Response Body', res.body)
-				}
-			}) */
-			return {
+
+			const userDetails = {
 				token: res.body.result.access_token,
 				refreshToken: res.body.result.refresh_token,
 				userId: res.body.result.user.id,
 				email: email,
 				password: password,
-				//firstname: firstname,
+				organizations: res.body.result.user.organizations,
 			}
+
+			return userDetails
 		} else {
 			console.error('Error while getting access token')
 			return false
@@ -76,7 +73,7 @@ const mentorLogIn = async () => {
 		let email = 'nevil' + crypto.randomBytes(5).toString('hex') + '@tunerlabs.com'
 		let password = faker.internet.password()
 
-		let res = await request.post('/user/v1/account/create').set('origin', 'default-qa.tekdinext.com').send({
+		let res = await request.post('/user/v1/account/create').set('origin', 'localhost').send({
 			name: 'Nevil',
 			email: email,
 			password: 'PassworD@@@123',
@@ -84,7 +81,7 @@ const mentorLogIn = async () => {
 			secretCode: 'secret-code',
 		})
 
-		res = await request.post('/user/v1/account/login').set('origin', 'default-qa.tekdinext.com').send({
+		res = await request.post('/user/v1/account/login').set('origin', 'localhost').send({
 			identifier: email,
 			password: 'PassworD@@@123',
 		})
@@ -96,20 +93,18 @@ const mentorLogIn = async () => {
 				'Content-Type': 'application/json',
 			}
 			global.request = defaults(supertest(baseURL))
-			global.request.set(defaultHeaders) /* .end(function (err, res) {
-				let successCodes = [200, 201, 202]
-				if (!successCodes.includes(res.statusCode)) {
-					console.log('Response Body', res.body)
-				}
-			}) */
+			global.request.set(defaultHeaders)
 			global.userId = res.body.result.user.id
-			return {
+
+			const mentorDetails = {
 				token: res.body.result.access_token,
 				refreshToken: res.body.result.refresh_token,
 				userId: res.body.result.user.id,
 				email: email,
 				password: password,
+				organizations: res.body.result.user.organizations,
 			}
+			return mentorDetails
 		} else {
 			console.error('Error while getting access token')
 			return false

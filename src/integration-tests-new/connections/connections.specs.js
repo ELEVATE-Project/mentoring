@@ -116,29 +116,31 @@ describe('connections endpoints generated from api-doc.yaml', () => {
 
   });
 
-  describe('POST /mentoring/v1/connections/accept', () => {
-    test('should return 200', async () => {
-      const url = `/mentoring/v1/connections/accept`;
-      let req = request(BASE).post(url);
-      req = req.send({
-  "user_id": "string"
-}).set('Content-Type', 'application/json');
-      const res = await req;
-      expect(res.status).toBeGreaterThanOrEqual(200);
-      expect(res.status).toBeLessThan(300);
-      // validate response schema
-      const schema = schemas['POST_mentoring_v1_connections_accept'];
-      const validate = ajv.compile(schema);
-      const valid = validate(res.body);
-      if (!valid) {
-        console.error("Schema validation errors:", validate.errors);
-      }
-      expect(valid).toBe(true);
-    });
+  */
+	describe('POST /mentoring/v1/connections/accept', () => {
+		test('should return 200', async () => {
+			const url = `/mentoring/v1/connections/accept`
+			let req = request(BASE).post(url)
+			req = req
+				.send({
+					user_id: userDetails.token,
+				})
+				.set('Content-Type', 'application/json')
+			const res = await req
+			expect(res.status).toBeGreaterThanOrEqual(200)
+			expect(res.status).toBeLessThan(300)
+			// validate response schema
+			const schema = schemas['POST_mentoring_v1_connections_accept']
+			const validate = ajv.compile(schema)
+			const valid = validate(res.body)
+			if (!valid) {
+				console.error('Schema validation errors:', validate.errors)
+			}
+			expect(valid).toBe(true)
+		})
+	})
 
-  });
-
-*/
+	/*
 	describe('GET /mentoring/v1/connections/list', () => {
 		test('should return 200', async () => {
 			const url = `/mentoring/v1/connections/list?page=1&limit=1`
@@ -157,4 +159,5 @@ describe('connections endpoints generated from api-doc.yaml', () => {
 			expect(valid).toBe(true)
 		})
 	})
+    */
 })

@@ -6,28 +6,14 @@ const TOKEN = process.env.TEST_BEARER_TOKEN || 'test-token'
 const ajv = new Ajv({ strict: false })
 const commonHelper = require('@commonTests')
 let userDetails = null
+let menteeDetails = null
 
 const schemas = require('./schemas/sessions.schemas.json')
 
 beforeAll(async () => {
 	console.log('setting up global variables....')
 	userDetails = await commonHelper.mentorLogIn()
-
-	let profileCreate = await request(BASE)
-		.post('/mentoring/v1/profile/update')
-		.set('x-auth-token', userDetails.token)
-		.send({
-			designation: ['beo', 'deo', 'testt'],
-			area_of_expertise: ['educational_leadership', 'sqaa'],
-			education_qualification: 'MBA',
-			tags: ['Experienced', 'Technical'],
-			visibility: 'visible',
-			organisation_ids: [1],
-			external_session_visibility: 'CURRENT',
-			external_mentor_visibility: 'ALL',
-		})
-
-	console.log(profileCreate.body, 'profileCreatebody')
+	menteeDetails = await commonHelper.logIn() // Log in a second user to act as a mentee
 })
 
 describe('sessions endpoints generated from api-doc.yaml', () => {
@@ -57,7 +43,7 @@ describe('sessions endpoints generated from api-doc.yaml', () => {
 				categories: [],
 				medium: [],
 				time_zone: 'Asia/Calcutta',
-				mentor_id: '2423',
+				mentor_id: userDetails.userId.toString(),
 			})
 
 			// Log the response to help with debugging
@@ -75,7 +61,7 @@ describe('sessions endpoints generated from api-doc.yaml', () => {
 			if (createdSessionId) {
 				const deleteUrl = `/mentoring/v1/sessions/update/${createdSessionId}`
 				// We don't need to assert the result of cleanup, but it's good practice to ensure it runs
-				await request(BASE).delete(deleteUrl).set('x-auth-token', userDetails.token)
+				//	await request(BASE).delete(deleteUrl).set('x-auth-token', userDetails.token)
 			}
 		})
 
@@ -91,6 +77,52 @@ describe('sessions endpoints generated from api-doc.yaml', () => {
 		test('GET /mentoring/v1/sessions/details/{sessionId} - should return 401/403 when unauthorized', async () => {
 			const url = `/mentoring/v1/sessions/details/${createdSessionId}`
 			const res = await request(BASE).get(url)
+			expect([401, 403]).toContain(res.status)
+		})
+
+		test('POST /mentoring/v1/sessions/enroll/{sessionId} - should return 200 on successful enrollment', async () => {
+			const url = `/mentoring/v1/sessions/enroll/${createdSessionId}`
+			let req = request(BASE).post(url)
+			req = req.set('x-auth-token', menteeDetails.token).set('timezone', 'Asia/Calcutta') // Use mentee's token and add timezone
+			const res = await req
+			expect(res.status).toBeGreaterThanOrEqual(200)
+			expect(res.status).toBeLessThan(300)
+			// validate response schema
+			const schema = schemas['POST_/mentoring/v1/sessions/enroll/{sessionId}']
+			const validate = ajv.compile(schema)
+			const valid = validate(res.body)
+			if (!valid) {
+				console.error('Schema validation errors:', validate.errors)
+			}
+			expect(valid).toBe(true)
+		})
+
+		test('POST /mentoring/v1/sessions/enroll/{sessionId} - should return 401/403 when unauthorized', async () => {
+			const url = `/mentoring/v1/sessions/enroll/${createdSessionId}`
+			const res = await request(BASE).post(url)
+			expect([401, 403]).toContain(res.status)
+		})
+
+		test('POST /mentoring/v1/sessions/unenroll/{sessionId} - should return 200 on successful unenrollment', async () => {
+			const url = `/mentoring/v1/sessions/unEnroll/${createdSessionId}` // Corrected to camelCase 'unEnroll'
+			let req = request(BASE).post(url)
+			req = req.set('x-auth-token', menteeDetails.token) // Use mentee's token to unenroll
+			const res = await req
+			expect(res.status).toBeGreaterThanOrEqual(200)
+			expect(res.status).toBeLessThan(300)
+			// validate response schema
+			const schema = schemas['POST_/mentoring/v1/sessions/unenroll/{sessionId}']
+			const validate = ajv.compile(schema)
+			const valid = validate(res.body)
+			if (!valid) {
+				console.error('Schema validation errors:', validate.errors)
+			}
+			expect(valid).toBe(true)
+		})
+
+		test('POST /mentoring/v1/sessions/unenroll/{sessionId} - should return 401/403 when unauthorized', async () => {
+			const url = `/mentoring/v1/sessions/unEnroll/${createdSessionId}` // Corrected to camelCase 'unEnroll'
+			const res = await request(BASE).post(url)
 			expect([401, 403]).toContain(res.status)
 		})
 	})
@@ -150,32 +182,9 @@ describe('sessions endpoints generated from api-doc.yaml', () => {
     
   });
 
-  describe('POST /mentoring/v1/sessions/enroll/{sessionId}', () => {
-    test('should return 200', async () => {
-      const url = `/mentoring/v1/sessions/enroll/1`;
-      let req = request(BASE).post(url);
-      req = req.set('x-auth-token', userDetails.token);
-      const res = await req;
-      expect(res.status).toBeGreaterThanOrEqual(200);
-      expect(res.status).toBeLessThan(300);
-      // validate response schema
-      const schema = schemas['POST_/mentoring/v1/sessions/enroll/{sessionId}'];
-      const validate = ajv.compile(schema);
-      const valid = validate(res.body);
-      if (!valid) {
-        console.error("Schema validation errors:", validate.errors);
-      }
-      expect(valid).toBe(true);
-    });
+  */
 
-    test('should return 401/403 when unauthorized', async () => {
-      const url = `/mentoring/v1/sessions/enroll/1`;
-      const res = await request(BASE).post(url);
-      expect([401,403]).toContain(res.status);
-    });
-
-    
-  });
+	/*
 
   describe('POST /mentoring/v1/sessions/unenroll/{sessionId}', () => {
     test('should return 200', async () => {
