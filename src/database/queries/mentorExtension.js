@@ -297,7 +297,6 @@ module.exports = class MentorExtensionQueries {
 
 			const replacements = {
 				...filter.replacements, // Add filter parameters to replacements
-				...(searchFilter.replacements || {}), // Add search filter replacements
 				search: `%${searchText}%`,
 			}
 
