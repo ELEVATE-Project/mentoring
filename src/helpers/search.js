@@ -113,10 +113,6 @@ exports.buildSearchFilter = async function buildSearchFilter({
 			whereClause = `AND (${whereClauses.join(' OR ')})`
 		}
 
-		if (tenantCode) {
-			const tenantFilter = ` AND tenant_code = :tenantCode`
-			whereClause = whereClause ? whereClause + tenantFilter : `AND tenant_code = :tenantCode`
-		}
 		const positionQuery = positionQueries.join(',\n    ')
 
 		const sortQuery = `
@@ -127,10 +123,6 @@ exports.buildSearchFilter = async function buildSearchFilter({
 
 		const replacements = {
 			search: search,
-		}
-
-		if (tenantCode) {
-			replacements.tenantCode = tenantCode
 		}
 
 		return {
