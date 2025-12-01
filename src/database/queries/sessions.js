@@ -796,6 +796,7 @@ exports.getUpcomingSessionsFromView = async (
 			limit: limit,
 			tenantCode: tenantCode,
 			...filter.replacements,
+			...(searchFilter.replacements || {}), // Add search filter replacements
 		}
 
 		if (filter && typeof filter === 'object') {

@@ -125,10 +125,19 @@ exports.buildSearchFilter = async function buildSearchFilter({
         END ASC
     `.trim()
 
+		const replacements = {
+			search: search,
+		}
+
+		if (tenantCode) {
+			replacements.tenantCode = tenantCode
+		}
+
 		return {
 			whereClause,
 			positionQuery,
 			sortQuery,
+			replacements,
 		}
 	} catch (error) {
 		console.log('Error:', error)
@@ -231,7 +240,8 @@ async function getEntityTypeFilter(modelName, config, search, searchOn, tenantCo
 			allow_filtering: true,
 			value: entityTypes,
 		},
-		[tenantCode, defaults.tenantCode],
+		tenantCode,
+		defaults.orgCode,
 		modelName
 	)
 
