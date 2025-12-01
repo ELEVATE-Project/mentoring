@@ -19,7 +19,7 @@ reviews:
     - scope is optional but recommended (e.g., admin, api, user, db)
     - description must be brief, imperative, and lowercase
     - no trailing period
-  Example: feat(admin): decrypt user email and phone before user event
+    Example: feat(admin): decrypt user email and phone before user event
   review_status: false
   full_review: true
   commit_status: true
