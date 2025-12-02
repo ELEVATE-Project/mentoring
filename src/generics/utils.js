@@ -389,7 +389,7 @@ function processQueryParametersWithExclusions(query) {
 	const queryArrays = {}
 	const excludedKeys = common.excludedQueryParams
 	for (const queryParam in query) {
-		if (query.hasOwnProperty(queryParam) && !excludedKeys.includes(queryParam)) {
+		if (Object.prototype.hasOwnProperty.call(query, queryParam) && !excludedKeys.includes(queryParam)) {
 			queryArrays[queryParam] = query[queryParam].split(',').map((item) => item.trim())
 		}
 	}

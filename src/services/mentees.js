@@ -1478,7 +1478,7 @@ module.exports = class MenteesHelper {
 				? [queryParams.sort_by, queryParams.order || 'ASC']
 				: [false, 'ASC']
 
-			if (queryParams.hasOwnProperty('organization_ids')) {
+			if (Object.prototype.hasOwnProperty.call(queryParams, 'organization_ids')) {
 				organization_ids = queryParams['organization_ids'].split(',')
 			}
 
@@ -1739,7 +1739,7 @@ module.exports = class MenteesHelper {
 				)
 
 				// Check if cached data has the required policy attribute
-				if (cachedOrg && cachedOrg.hasOwnProperty('external_mentee_visibility_policy')) {
+				if (cachedOrg && Object.prototype.hasOwnProperty.call(cachedOrg, 'external_mentee_visibility_policy')) {
 					getOrgPolicy = cachedOrg
 				}
 			} catch (cacheError) {
