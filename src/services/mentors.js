@@ -1331,17 +1331,17 @@ module.exports = class MentorsHelper {
 				: [false, 'ASC']
 
 			for (let key in queryParams) {
-				if (queryParams.hasOwnProperty(key) & ((key === 'email') | (key === 'name'))) {
+				if (queryParams.hasOwnProperty(key) && (key === 'email' || key === 'name')) {
 					userServiceQueries[key] = queryParams[key]
 				}
-				if (queryParams.hasOwnProperty(key) & (key === 'organization_codes')) {
+				if (queryParams.hasOwnProperty(key) && key === 'organization_codes') {
 					organization_codes = queryParams[key].split(',')
 				}
 
 				if (
-					queryParams.hasOwnProperty(key) &
-					(key === 'directory') &
-					((queryParams[key] == 'true') | (queryParams[key] == true))
+					queryParams.hasOwnProperty(key) &&
+					key === 'directory' &&
+					(queryParams[key] == 'true' || queryParams[key] == true)
 				) {
 					directory = true
 				}
