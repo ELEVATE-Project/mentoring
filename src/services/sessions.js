@@ -3692,8 +3692,7 @@ module.exports = class SessionsHelper {
 					sessionDetails,
 					effectiveMentorId, // mentorId
 					organizationCode,
-					tenantCode,
-					null
+					tenantCode
 				)
 					.then((response) => ({
 						id: menteeData.user_id,
