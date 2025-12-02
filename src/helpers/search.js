@@ -113,10 +113,6 @@ exports.buildSearchFilter = async function buildSearchFilter({
 			whereClause = `AND (${whereClauses.join(' OR ')})`
 		}
 
-		if (tenantCode) {
-			const tenantFilter = ` AND tenant_code = :tenantCode`
-			whereClause = whereClause ? whereClause + tenantFilter : `AND tenant_code = :tenantCode`
-		}
 		const positionQuery = positionQueries.join(',\n    ')
 
 		const sortQuery = `
@@ -231,7 +227,8 @@ async function getEntityTypeFilter(modelName, config, search, searchOn, tenantCo
 			allow_filtering: true,
 			value: entityTypes,
 		},
-		[tenantCode, defaults.tenantCode],
+		tenantCode,
+		defaults.orgCode,
 		modelName
 	)
 
