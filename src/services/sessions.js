@@ -3637,11 +3637,7 @@ module.exports = class SessionsHelper {
 	 * @method
 	 * @name addMentees
 	 * @param {String} sessionId 				- Session id.
-	 * @param {Array} menteeIds					- Array of mentee IDs
-	 * @param {String} timeZone					- Timezone
-	 * @param {String} organizationId			- Organization ID
-	 * @param {String} organizationCode			- Organization code
-	 * @param {String} tenantCode				- Tenant code
+	 * @param {Number} menteeIds				- Mentees id.
 	 * @returns {JSON} 							- Session details
 	 */
 
@@ -3712,9 +3708,9 @@ module.exports = class SessionsHelper {
 			const results = await Promise.allSettled(enrollPromises)
 			results.forEach((result, index) => {
 				if (result.status === 'fulfilled' && result.value.status === 'fulfilled') {
-					successIds.push(mentees[index].user_id)
+					successIds.push(mentees[index].user_id) // Fix: Use user_id field consistently
 				} else {
-					failedIds.push(mentees[index].user_id)
+					failedIds.push(mentees[index].user_id) // Fix: Use user_id field consistently
 				}
 			})
 
@@ -3861,7 +3857,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- unenroll status
 	 */
 
-	static async removeMentees(sessionId, menteeIds, orgCode, tenantCode) {
+	static async removeMentees(sessionId, menteeIds, orgCode, tenantCode, mentorId = null) {
 		try {
 			// check if session exists or not
 			const sessionDetails = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
