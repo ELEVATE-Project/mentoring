@@ -121,15 +121,10 @@ exports.buildSearchFilter = async function buildSearchFilter({
         END ASC
     `.trim()
 
-		const replacements = {
-			search: search,
-		}
-
 		return {
 			whereClause,
 			positionQuery,
 			sortQuery,
-			replacements,
 		}
 	} catch (error) {
 		console.log('Error:', error)
