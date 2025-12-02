@@ -1326,20 +1326,28 @@ module.exports = class MentorsHelper {
 			let organization_codes = []
 			let directory = false
 
+			console.log('🔍 MENTORS LIST DEBUG - queryParams received:', JSON.stringify(queryParams, null, 2))
+			console.log('🔍 MENTORS LIST DEBUG - queryParams type:', typeof queryParams)
+			console.log('🔍 MENTORS LIST DEBUG - queryParams constructor:', queryParams?.constructor?.name)
+			console.log(
+				'🔍 MENTORS LIST DEBUG - queryParams hasOwnProperty method exists:',
+				typeof queryParams?.hasOwnProperty
+			)
+
 			const [sortBy, order] = ['name'].includes(queryParams.sort_by)
 				? [queryParams.sort_by, queryParams.order || 'ASC']
 				: [false, 'ASC']
 
 			for (let key in queryParams) {
-				if (Object.prototype.hasOwnProperty.call(queryParams, key) && (key === 'email' || key === 'name')) {
+				if (queryParams.hasOwnProperty(key) && (key === 'email' || key === 'name')) {
 					userServiceQueries[key] = queryParams[key]
 				}
-				if (Object.prototype.hasOwnProperty.call(queryParams, key) && key === 'organization_codes') {
+				if (queryParams.hasOwnProperty(key) && key === 'organization_codes') {
 					organization_codes = queryParams[key].split(',')
 				}
 
 				if (
-					Object.prototype.hasOwnProperty.call(queryParams, key) &&
+					queryParams.hasOwnProperty(key) &&
 					key === 'directory' &&
 					(queryParams[key] == 'true' || queryParams[key] == true)
 				) {

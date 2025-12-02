@@ -386,10 +386,18 @@ const epochFormat = (date, format) => {
 	return moment.unix(date).utc().format(format)
 }
 function processQueryParametersWithExclusions(query) {
+	console.log('🔍 UTILS processQueryParametersWithExclusions DEBUG - query received:', JSON.stringify(query, null, 2))
+	console.log('🔍 UTILS processQueryParametersWithExclusions DEBUG - query type:', typeof query)
+	console.log('🔍 UTILS processQueryParametersWithExclusions DEBUG - query constructor:', query?.constructor?.name)
+	console.log(
+		'🔍 UTILS processQueryParametersWithExclusions DEBUG - query hasOwnProperty method exists:',
+		typeof query?.hasOwnProperty
+	)
+
 	const queryArrays = {}
 	const excludedKeys = common.excludedQueryParams
 	for (const queryParam in query) {
-		if (Object.prototype.hasOwnProperty.call(query, queryParam) && !excludedKeys.includes(queryParam)) {
+		if (query.hasOwnProperty(queryParam) && !excludedKeys.includes(queryParam)) {
 			queryArrays[queryParam] = query[queryParam].split(',').map((item) => item.trim())
 		}
 	}
