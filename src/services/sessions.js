@@ -867,7 +867,15 @@ module.exports = class SessionsHelper {
 
 					// Enroll newly added mentees by manager t the session
 					if (menteesToAdd.length > 0) {
-						await this.addMentees(sessionId, menteesToAdd, bodyData.time_zone, orgId, orgCode, tenantCode)
+						await this.addMentees(
+							sessionId,
+							menteesToAdd,
+							bodyData.time_zone,
+							orgId,
+							orgCode,
+							tenantCode,
+							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id
+						)
 					}
 
 					// unenroll mentees
@@ -3637,7 +3645,15 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- Session details
 	 */
 
-	static async addMentees(sessionId, menteeIds, timeZone, organizationId, organizationCode, tenantCode) {
+	static async addMentees(
+		sessionId,
+		menteeIds,
+		timeZone,
+		organizationId,
+		organizationCode,
+		tenantCode,
+		mentorId = null
+	) {
 		try {
 			// Check if session exists - use database query instead of cache for reliability
 			const sessionDetails = await sessionQueries.findById(sessionId, tenantCode)
