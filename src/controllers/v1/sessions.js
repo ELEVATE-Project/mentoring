@@ -166,10 +166,9 @@ module.exports = class Sessions {
 				true,
 				{},
 				null,
-				req.decodedToken.roles,
-				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
-				req.decodedToken.tenant_code
+				req.decodedToken.tenant_code,
+				req.decodedToken.roles
 			)
 			return enrolledSession
 		} catch (error) {
@@ -196,8 +195,8 @@ module.exports = class Sessions {
 				req.decodedToken,
 				true, // isSelfUnenrollment
 				{}, // session
-				tenantCode,
 				null, // mentorId
+				tenantCode,
 				orgCode
 			)
 			return unEnrolledSession

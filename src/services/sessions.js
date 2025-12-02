@@ -2225,10 +2225,9 @@ module.exports = class SessionsHelper {
 		isSelfEnrolled = true,
 		session = {},
 		mentorId = null,
-		roles,
-		orgId,
 		orgCode,
-		tenantCode
+		tenantCode,
+		roles
 	) {
 		try {
 			let email
@@ -2481,7 +2480,7 @@ module.exports = class SessionsHelper {
 	 * @name enroll
 	 * @param {String} sessionId 				- Session id.
 	 * @param {Object} userTokenData
-	 * @param {String} userTokenData._id 		- user id.
+	 * @param {String} userTokenData.id 		- user id.
 	 * @param {Boolean} isSelfEnrolled 			- true/false.
 	 * @param {Boolean} session 				- session details.
 	 * @returns {JSON} 							- UnEnroll session.
@@ -2492,8 +2491,8 @@ module.exports = class SessionsHelper {
 		userTokenData,
 		isSelfUnenrollment = true,
 		session = {},
-		tenantCode,
 		mentorId = null,
+		tenantCode,
 		orgCode
 	) {
 		try {
@@ -2505,7 +2504,7 @@ module.exports = class SessionsHelper {
 			// Else it will be available in userTokenData
 			if (isSelfUnenrollment) {
 				const userDetails = await mentorExtensionQueries.getMentorExtension(
-					userTokenData.user_id,
+					userTokenData.id || userTokenData.user_id, // cache uasge has user_id but token has id
 					['user_id', 'name', 'email'],
 					true,
 					tenantCode
@@ -2515,7 +2514,7 @@ module.exports = class SessionsHelper {
 				email = userDetails.email
 				name = userDetails.name
 			} else {
-				userId = userTokenData.user_id
+				userId = userTokenData.id || userTokenData.user_id // cache uasge has user_id but token has id
 				email = userTokenData.email
 				name = userTokenData.name
 				emailTemplateCode = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE // update with new template
@@ -2574,9 +2573,6 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const tenantCodes = [tenantCode, defaults.tenantCode]
-			const orgCodes = [orgCode, defaults.orgCode]
-
 			const templateData = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, emailTemplateCode)
 
 			if (templateData) {
@@ -2611,9 +2607,9 @@ module.exports = class SessionsHelper {
 
 			// Clear user cache since sessions_attended count changed
 			await this._clearUserCacheForSessionCountChange(
-				userTokenData.user_id,
+				userTokenData.id || userTokenData.user_id, // cache uasge has user_id but token has id
 				tenantCode,
-				updatedSession.organization_code,
+				session.mentor_organization_id,
 				'session_unenroll'
 			)
 
@@ -3671,31 +3667,30 @@ module.exports = class SessionsHelper {
 			// Enroll mentees
 			const successIds = []
 			const failedIds = []
-			const enrollPromises = mentees.map((menteeData, index) => {
-				return this.enroll(
+			const effectiveMentorId = mentorId ? mentorId : sessionDetails.mentor_id
+
+			const enrollPromises = mentees.map((menteeData) =>
+				this.enroll(
 					sessionId,
 					{ user_id: menteeData.user_id },
 					timeZone,
-					false, // isAMentor - false for mentees being added
-					false, // isSelfEnrolled - false for manager adding mentees
+					menteeData.is_mentor,
+					false,
 					sessionDetails,
-					null, // mentorId
-					[], // roles
-					organizationId,
+					effectiveMentorId, // mentorId
 					organizationCode,
 					tenantCode
 				)
-					.then((response) => {
-						return {
-							id: menteeData.user_id,
-							status: response.statusCode === httpStatusCode.created ? 'fulfilled' : 'rejected',
-							response: response,
-						}
-					})
-					.catch((error) => {
-						return { id: menteeData.user_id, status: 'rejected', error: error.message }
-					})
-			})
+					.then((response) => ({
+						id: menteeData.user_id,
+						status: response.statusCode === httpStatusCode.created ? 'fulfilled' : 'rejected',
+					}))
+					.catch((error) => ({
+						id: menteeData.user_id,
+						status: 'rejected',
+						error: error.message,
+					}))
+			)
 
 			// Wait for all enrollments to settle
 			const results = await Promise.allSettled(enrollPromises)
@@ -3889,8 +3884,8 @@ module.exports = class SessionsHelper {
 					menteeData,
 					false,
 					sessionDetails,
+					mentorId ? mentorId : sessionDetails.mentor_id,
 					tenantCode,
-					sessionDetails.mentor_id,
 					orgCode
 				)
 					.then((response) => {
