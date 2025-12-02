@@ -1326,14 +1326,6 @@ module.exports = class MentorsHelper {
 			let organization_codes = []
 			let directory = false
 
-			console.log('🔍 MENTORS LIST DEBUG - queryParams received:', JSON.stringify(queryParams, null, 2))
-			console.log('🔍 MENTORS LIST DEBUG - queryParams type:', typeof queryParams)
-			console.log('🔍 MENTORS LIST DEBUG - queryParams constructor:', queryParams?.constructor?.name)
-			console.log(
-				'🔍 MENTORS LIST DEBUG - queryParams hasOwnProperty method exists:',
-				typeof queryParams?.hasOwnProperty
-			)
-
 			const [sortBy, order] = ['name'].includes(queryParams.sort_by)
 				? [queryParams.sort_by, queryParams.order || 'ASC']
 				: [false, 'ASC']

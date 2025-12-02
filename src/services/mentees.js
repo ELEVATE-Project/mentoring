@@ -1474,14 +1474,6 @@ module.exports = class MenteesHelper {
 			}
 			let organization_ids = []
 
-			console.log('🔍 MENTEES LIST DEBUG - queryParams received:', JSON.stringify(queryParams, null, 2))
-			console.log('🔍 MENTEES LIST DEBUG - queryParams type:', typeof queryParams)
-			console.log('🔍 MENTEES LIST DEBUG - queryParams constructor:', queryParams?.constructor?.name)
-			console.log(
-				'🔍 MENTEES LIST DEBUG - queryParams hasOwnProperty method exists:',
-				typeof queryParams?.hasOwnProperty
-			)
-
 			const [sortBy, order] = ['name'].includes(queryParams.sort_by)
 				? [queryParams.sort_by, queryParams.order || 'ASC']
 				: [false, 'ASC']
@@ -1744,14 +1736,6 @@ module.exports = class MenteesHelper {
 					tenantCode,
 					orgCode,
 					userPolicyDetails.organization_id
-				)
-
-				console.log('🔍 MENTEES cachedOrg DEBUG - cachedOrg received:', JSON.stringify(cachedOrg, null, 2))
-				console.log('🔍 MENTEES cachedOrg DEBUG - cachedOrg type:', typeof cachedOrg)
-				console.log('🔍 MENTEES cachedOrg DEBUG - cachedOrg constructor:', cachedOrg?.constructor?.name)
-				console.log(
-					'🔍 MENTEES cachedOrg DEBUG - cachedOrg hasOwnProperty method exists:',
-					typeof cachedOrg?.hasOwnProperty
 				)
 
 				// Check if cached data has the required policy attribute
