@@ -376,15 +376,7 @@ module.exports = class SessionsHelper {
 
 			// If menteeIds are provided in the req body enroll them
 			if (menteeIdsToEnroll.length > 0) {
-				await this.addMentees(
-					data.id,
-					menteeIdsToEnroll,
-					bodyData.time_zone,
-					loggedInUserId,
-					orgId,
-					orgCode,
-					tenantCode
-				)
+				await this.addMentees(data.id, menteeIdsToEnroll, bodyData.time_zone, orgId, orgCode, tenantCode)
 			}
 
 			if (Array.isArray(bodyData?.resources) && bodyData.resources.length > 0) {
@@ -879,22 +871,16 @@ module.exports = class SessionsHelper {
 							sessionId,
 							menteesToAdd,
 							bodyData.time_zone,
-							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id,
 							orgId,
 							orgCode,
-							tenantCode
+							tenantCode,
+							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id
 						)
 					}
 
 					// unenroll mentees
 					if (menteesToRemove.length > 0) {
-						await this.removeMentees(
-							sessionId,
-							menteesToRemove,
-							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id,
-							orgCode,
-							tenantCode
-						)
+						await this.removeMentees(sessionId, menteesToRemove, orgCode, tenantCode)
 					}
 				}
 				if (bodyData?.resources && sessionDetail.status != common.LIVE_STATUS) {
@@ -3659,10 +3645,10 @@ module.exports = class SessionsHelper {
 		sessionId,
 		menteeIds,
 		timeZone,
-		mentorId = null,
 		organizationId,
 		organizationCode,
-		tenantCode
+		tenantCode,
+		mentorId = null
 	) {
 		try {
 			// Check if session exists - use database query instead of cache for reliability
@@ -3694,24 +3680,28 @@ module.exports = class SessionsHelper {
 			const successIds = []
 			const failedIds = []
 			const effectiveMentorId = mentorId ? mentorId : sessionDetails.mentor_id
-			const enrollPromises = mentees.map(
-				(menteeData) =>
-					this.enroll(
-						sessionId,
-						{ user_id: menteeData.user_id },
-						timeZone,
-						menteeData.is_mentor,
-						false,
-						sessionDetails,
-						effectiveMentorId, // mentorId
-						organizationCode,
-						tenantCode
-					)
-						.then((response) => ({
-							id: menteeData.user_id, // Fix: Use consistent user_id field
-							status: response.statusCode === httpStatusCode.created ? 'fulfilled' : 'rejected',
-						}))
-						.catch(() => ({ id: menteeData.user_id, status: 'rejected' })) // Fix: Use user_id consistently
+
+			const enrollPromises = mentees.map((menteeData) =>
+				this.enroll(
+					sessionId,
+					{ user_id: menteeData.user_id },
+					timeZone,
+					menteeData.is_mentor,
+					false,
+					sessionDetails,
+					effectiveMentorId, // mentorId
+					organizationCode,
+					tenantCode
+				)
+					.then((response) => ({
+						id: menteeData.user_id,
+						status: response.statusCode === httpStatusCode.created ? 'fulfilled' : 'rejected',
+					}))
+					.catch((error) => ({
+						id: menteeData.user_id,
+						status: 'rejected',
+						error: error.message,
+					}))
 			)
 
 			// Wait for all enrollments to settle
@@ -3867,7 +3857,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} 							- unenroll status
 	 */
 
-	static async removeMentees(sessionId, menteeIds, mentorId = null, orgCode, tenantCode) {
+	static async removeMentees(sessionId, menteeIds, orgCode, tenantCode, mentorId = null) {
 		try {
 			// check if session exists or not
 			const sessionDetails = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
