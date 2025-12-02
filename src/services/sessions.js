@@ -2526,7 +2526,7 @@ module.exports = class SessionsHelper {
 			// Else it will be available in userTokenData
 			if (isSelfUnenrollment) {
 				const userDetails = await mentorExtensionQueries.getMentorExtension(
-					userTokenData.id,
+					userTokenData.id || userTokenData.user_id, // cache uasge has user_id but token has id
 					['user_id', 'name', 'email'],
 					true,
 					tenantCode
@@ -2536,7 +2536,7 @@ module.exports = class SessionsHelper {
 				email = userDetails.email
 				name = userDetails.name
 			} else {
-				userId = userTokenData.id
+				userId = userTokenData.id || userTokenData.user_id // cache uasge has user_id but token has id
 				email = userTokenData.email
 				name = userTokenData.name
 				emailTemplateCode = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE // update with new template
@@ -2629,7 +2629,7 @@ module.exports = class SessionsHelper {
 
 			// Clear user cache since sessions_attended count changed
 			await this._clearUserCacheForSessionCountChange(
-				userTokenData.id,
+				userTokenData.id || userTokenData.user_id, // cache uasge has user_id but token has id
 				tenantCode,
 				session.mentor_organization_id,
 				'session_unenroll'
