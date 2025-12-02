@@ -2331,7 +2331,8 @@ module.exports = class SessionsHelper {
 				const sessionCreatorName = await menteeExtensionQueries.getMenteeExtension(
 					session.created_by,
 					['name'],
-					true
+					true,
+					tenantCode
 				)
 				creatorName = sessionCreatorName.name
 			}
