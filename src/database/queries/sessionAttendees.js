@@ -2,8 +2,6 @@ const SessionAttendee = require('@database/models/index').SessionAttendee
 const Session = require('@database/models/index').Session
 const { Op } = require('sequelize')
 
-const UserExtension = require('@database/models/index').UserExtension
-
 exports.create = async (data, tenantCode) => {
 	try {
 		data.tenant_code = tenantCode

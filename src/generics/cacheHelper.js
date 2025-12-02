@@ -670,7 +670,7 @@ const entityTypes = {
 			try {
 				defaults = await getDefaults()
 			} catch (error) {
-				console.error(tenantCode, orgCode, 'Failed to get defaults for getAllEntityTypesForModel:', error)
+				console.error('Failed to get defaults for getAllEntityTypesForModel:', error.message)
 				// Fallback defaults from environment variables
 				defaults = {
 					orgCode: process.env.DEFAULT_ORGANISATION_CODE || 'default_code',
