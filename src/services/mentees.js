@@ -2050,6 +2050,22 @@ module.exports = class MenteesHelper {
 
 	static async details(id, organizationCode, userId = '', isAMentor = '', roles = '', tenantCode) {
 		try {
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			// Try cache first using logged-in user's organization context
 			const cacheProfileDetails = await cacheHelper.mentee.getCacheOnly(tenantCode, organizationCode, id)
 			if (cacheProfileDetails) {
@@ -2059,9 +2075,9 @@ module.exports = class MenteesHelper {
 						ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 						requesterId: userId,
 						roles: roles,
-						requesterOrganizationCode: organizationCode,
+						requesterOrganizationCode: { [Op.in]: [organizationCode, defaults.orgCode] },
 						data: cacheProfileDetails,
-						tenantCode: tenantCode,
+						tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 					})
 					if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
 						return responses.failureResponse({
@@ -2139,9 +2155,9 @@ module.exports = class MenteesHelper {
 					ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 					requesterId: userId,
 					roles: roles,
-					requesterOrganizationCode: organizationCode,
+					requesterOrganizationCode: { [Op.in]: [organizationCode, defaults.orgCode] },
 					data: requestedUserExtension,
-					tenantCode: tenantCode,
+					tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				})
 				if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
 					return responses.failureResponse({
@@ -2187,21 +2203,6 @@ module.exports = class MenteesHelper {
 				'phone',
 				'settings',
 			])
-
-			const defaults = await getDefaults()
-			if (!defaults.orgCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-
-			if (!defaults.tenantCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
 
 			const menteeExtensionsModelName = await menteeQueries.getModelName()
 

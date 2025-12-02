@@ -178,9 +178,9 @@ module.exports = class DefaultRuleHelper {
 								ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 								requesterId: currentUserId,
 								roles: roles,
-								requesterOrganizationCode: orgCode,
+								requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
 								data: requestedUserExtension,
-								tenant_code: tenantCode,
+								tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 							})
 
 							if (!validateDefaultRules) {
@@ -210,9 +210,9 @@ module.exports = class DefaultRuleHelper {
 									ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 									requesterId: currentUserId,
 									roles: roles,
-									requesterOrganizationCode: orgCode,
+									requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
 									data: requestedUserExtension,
-									tenant_code: tenantCode,
+									tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 								})
 
 								if (!validateDefaultRules) {

@@ -2,14 +2,13 @@ const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const userRequests = require('@requests/user')
 const entityTypeService = require('@services/entity-type')
-const organisationExtensionQueries = require('@database/queries/organisationExtension')
-const cacheHelper = require('@generics/cacheHelper')
 const { Parser } = require('@json2csv/plainjs')
 const { Op } = require('sequelize')
+const { name } = require('body-parser')
 
 exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) => {
 	try {
-		const mentees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, tenantCode)
+		const mentees = await sessionAttendeesQueries.findMentees({ session_id: sessionId }, tenantCode)
 
 		// Early return if no mentees found
 		if (!mentees || mentees.length === 0) {
@@ -30,33 +29,18 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 				: []
 		}
 
-		const menteeIds = mentees.map((mentee) => mentee.mentee_id)
 		let menteeTypeMap = {}
+		const menteesMapData = []
 		mentees.forEach((mentee) => {
+			menteesMapData.push({ user_id: mentee.mentee_id, organization_code: mentee.organization_code })
 			const isDeleted = Boolean(mentee.deleted_at ?? mentee.deletedAt)
 			menteeTypeMap[mentee.mentee_id] = isDeleted ? '' : mentee.type
 		})
-		const options = {
-			attributes: {
-				exclude: [
-					'rating',
-					'stats',
-					'tags',
-					'configs',
-					'visible_to_organizations',
-					'external_session_visibility',
-					'external_mentee_visibility',
-					'experience',
-					'mentee_visibility',
-				],
-				include: ['email'], // Explicitly include email since it's excluded by default scope
-			},
-			paranoid: false,
-		}
-		let [enrolledUsers, attendeesAccounts] = await Promise.all([
-			menteeExtensionQueries.getUsersByUserIds(menteeIds, options, tenantCode),
-			userRequests.getUserDetailedList(menteeIds, tenantCode).then((result) => result.result),
-		])
+
+		// Fetch missing user details from DB if any
+		let enrolledUsers = await userRequests
+			.getUserDetailedListUsingCache(menteesMapData, tenantCode)
+			.then((result) => result.result)
 
 		enrolledUsers.forEach((user) => {
 			if (menteeTypeMap.hasOwnProperty(user.user_id)) {
@@ -101,63 +85,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 		// Check if processing actually returned processed data or error
 		if (processedUsers && !processedUsers.responseCode) {
 			enrolledUsers = processedUsers
-		} else {
-			// Continue with original data if processing fails
 		}
-
-		// Fetch organization details for each unique organization ID
-		const validOrgIds = uniqueOrgIds.filter((id) => id != null)
-		let organizationDetails = []
-		if (validOrgIds.length > 0) {
-			organizationDetails = await organisationExtensionQueries.findAll(
-				{
-					organization_id: {
-						[Op.in]: validOrgIds,
-					},
-				},
-				tenantCode,
-				{
-					attributes: ['name', 'organization_id', 'organization_code'],
-					raw: true,
-				}
-			)
-
-			// Cache organizations for future use (async, don't wait)
-			if (organizationDetails.length > 0) {
-				const cachePromises = organizationDetails
-					.map((org) => {
-						if (org.organization_code) {
-							return cacheHelper.organizations
-								.set(tenantCode, org.organization_code, org.organization_id, org)
-								.catch(() => {
-									// Silently handle cache errors
-								})
-						}
-					})
-					.filter(Boolean)
-
-				Promise.all(cachePromises).catch(() => {
-					// Silently handle cache errors
-				})
-			}
-		}
-
-		// Map organization details to users
-		enrolledUsers = enrolledUsers.map((user) => {
-			const org = organizationDetails.find((org) => org.organization_id == user.organization_id)
-			return {
-				...user,
-				organization: org ? { name: org.name } : null,
-			}
-		})
-
-		// Merge arrays based on user_id and id
-		const mergedUserArray = enrolledUsers.map((user) => {
-			const matchingUserDetails = attendeesAccounts.find((details) => details.user_id === user.user_id)
-			// Merge properties from user and matchingUserDetails
-
-			return matchingUserDetails ? { ...user, ...matchingUserDetails } : user
-		})
 
 		if (queryParams?.csv === 'true') {
 			const csv = parser.parse(
@@ -191,6 +119,10 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 			'languages',
 			'preferred_language',
 			'custom_entity_text',
+			'createdAt',
+			'updatedAt',
+			'deletedAt',
+			'deleted_at',
 		]
 
 		const cleanedAttendeesAccounts = enrolledUsers.map((user, index) => {

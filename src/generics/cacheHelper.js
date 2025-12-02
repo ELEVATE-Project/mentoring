@@ -28,7 +28,7 @@ const CACHE_CONFIG = (() => {
 	}
 })()
 
-const ENABLE_CACHE = pickBool(CACHE_CONFIG.enableCache, true)
+const ENABLE_CACHE = pickBool(CACHE_CONFIG.enableCache)
 const SHARDS = toInt(CACHE_CONFIG.shards, 32)
 const BATCH = toInt(CACHE_CONFIG.scanBatch, 1000)
 const SHARD_RETENTION_DAYS = toInt(CACHE_CONFIG.shardRetentionDays, 7)
@@ -37,10 +37,12 @@ function toInt(v, d) {
 	const n = parseInt(v, 10)
 	return Number.isFinite(n) ? n : d
 }
-function pickBool(v, d) {
+function pickBool(v) {
 	if (typeof v === 'boolean') return v
-	if (typeof v === 'string') return ['1', 'true', 'yes'].includes(v.toLowerCase())
-	return d
+	if (typeof v === 'string') {
+		return v.toLowerCase() === 'true'
+	}
+	return false
 }
 function tenantKey(tenantCode, parts = []) {
 	return ['tenant', tenantCode, ...parts].join(':')
@@ -73,7 +75,7 @@ function nsTtl(ns, callerTtl) {
  * Otherwise check namespace.useInternal, then global CACHE_CONFIG.useInternal, then false.
  */
 function nsUseInternal(ns, callerUseInternal) {
-	if (typeof callerUseInternal === 'boolean') return callerUseInternal
+	if (callerUseInternal && typeof callerUseInternal === 'boolean') return callerUseInternal
 	const nsCfg = CACHE_CONFIG.namespaces && CACHE_CONFIG.namespaces[ns]
 	if (nsCfg && typeof nsCfg.useInternal === 'boolean') return nsCfg.useInternal
 	if (typeof CACHE_CONFIG.useInternal === 'boolean') return CACHE_CONFIG.useInternal
@@ -320,6 +322,7 @@ const sessions = {
 		try {
 			const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'sessions', id: sessionId })
 			const useInternal = nsUseInternal('sessions')
+
 			const cachedSession = await get(cacheKey, { useInternal })
 			if (cachedSession) {
 				console.log(`💾 Session ${sessionId} retrieved from cache: tenant:${tenantCode}:org:${orgCode}`)
@@ -330,9 +333,7 @@ const sessions = {
 			console.log(
 				`💾 Session ${sessionId} cache miss, fetching from database: tenant:${tenantCode}:org:${orgCode}`
 			)
-			const sessionFromDb = await sessionQueries.findById(sessionId, tenantCode)
-			// Note: NOT caching here - let the service layer cache the enriched session
-			return sessionFromDb
+			return null
 		} catch (error) {
 			console.error(`❌ Failed to get session ${sessionId} from cache/database:`, error)
 			return null
@@ -669,7 +670,7 @@ const entityTypes = {
 			try {
 				defaults = await getDefaults()
 			} catch (error) {
-				console.error('Failed to get defaults for getAllEntityTypesForModel:', error.message)
+				console.error(tenantCode, orgCode, 'Failed to get defaults for getAllEntityTypesForModel:', error)
 				// Fallback defaults from environment variables
 				defaults = {
 					orgCode: process.env.DEFAULT_ORGANISATION_CODE || 'default_code',

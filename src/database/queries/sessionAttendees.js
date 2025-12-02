@@ -2,6 +2,8 @@ const SessionAttendee = require('@database/models/index').SessionAttendee
 const Session = require('@database/models/index').Session
 const { Op } = require('sequelize')
 
+const UserExtension = require('@database/models/index').UserExtension
+
 exports.create = async (data, tenantCode) => {
 	try {
 		data.tenant_code = tenantCode
@@ -288,6 +290,45 @@ exports.getCount = async (filter = {}, options = {}) => {
 			where: filter,
 			...options,
 		})
+	} catch (error) {
+		return error
+	}
+}
+
+exports.findMentees = async (filter, tenantCode, options = {}) => {
+	try {
+		if (!tenantCode) {
+			throw new Error('tenantCode is required')
+		}
+		filter.tenant_code = tenantCode
+
+		const whereClauses = []
+		const replacements = {}
+
+		for (const key in filter) {
+			whereClauses.push(`sa.${key} = :${key}`)
+			replacements[key] = filter[key]
+		}
+
+		const sql = `
+			SELECT 
+				sa.*,
+				ue.organization_code
+			FROM 
+				session_attendees sa
+			LEFT JOIN 
+				user_extensions ue
+			ON 
+				sa.mentee_id = ue.user_id and ue.tenant_code = sa.tenant_code
+			${whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''}
+		`
+
+		const results = await SessionAttendee.sequelize.query(sql, {
+			replacements,
+			type: SessionAttendee.sequelize.QueryTypes.SELECT,
+		})
+
+		return results
 	} catch (error) {
 		return error
 	}

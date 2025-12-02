@@ -837,6 +837,22 @@ module.exports = class MentorsHelper {
 			let cachedProfile = null
 			cachedProfile = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, id)
 
+			const defaults = await getDefaults()
+			if (!defaults.orgCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+			if (!defaults.tenantCode) {
+				return responses.failureResponse({
+					message: 'DEFAULT_TENANT_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			// If we have cached data, use it efficiently
 			if (cachedProfile) {
 				let requestedMentorExtension = false
@@ -848,9 +864,9 @@ module.exports = class MentorsHelper {
 						ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 						requesterId: userId,
 						roles: roles,
-						requesterOrganizationCode: orgCode,
+						requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
 						data: requestedMentorExtension,
-						tenantCode: tenantCode,
+						tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 					})
 					if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
 						return responses.failureResponse({
@@ -926,9 +942,9 @@ module.exports = class MentorsHelper {
 					ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 					requesterId: userId,
 					roles: roles,
-					requesterOrganizationCode: orgCode,
+					requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
 					data: mentorExtension,
-					tenantCode: tenantCode,
+					tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				})
 				if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
 					return responses.failureResponse({
@@ -1006,19 +1022,6 @@ module.exports = class MentorsHelper {
 
 			mentorExtension = utils.deleteProperties(mentorExtension, ['phone'])
 
-			const defaults = await getDefaults()
-			if (!defaults.orgCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			if (!defaults.tenantCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_TENANT_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(

@@ -15,12 +15,14 @@ const responses = require('@helpers/responses')
 const common = require('@constants/common')
 const { Op } = require('sequelize')
 const cacheHelper = require('@generics/cacheHelper')
+const usersHelper = require('@helpers/users')
 
 const menteeQueries = require('@database/queries/userExtension')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 // Removed cacheHelper to break circular dependency with getDefaultOrgId
 
 const emailEncryption = require('@utils/emailEncryption')
+const { forEach } = require('lodash')
 
 /**
  * @method fetchOrgDetails
@@ -929,6 +931,134 @@ const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false,
 	})
 }
 
+const getUserDetailedListUsingCache = function (usersMap, tenantCode, deletedUsers = false, unscopped = false) {
+	return new Promise(async (resolve, reject) => {
+		try {
+			// Fetch user details
+			if (usersMap.length == 0) {
+				return resolve({
+					result: [],
+				})
+			}
+
+			let options = {}
+			if (deletedUsers) {
+				options = { paranoid: false }
+			}
+
+			const usersInfo = await usersHelper.getMissingUserIdsAndCacheData(usersMap, tenantCode)
+
+			let userDetails = []
+
+			if (usersInfo.cacheFoundData && usersInfo.cacheFoundData.length > 0) {
+				userDetails = usersInfo.cacheFoundData
+			}
+			const missingUserIds = usersInfo.missingUserIds
+
+			if (missingUserIds.length > 0) {
+				const usersFromDb = await menteeQueries.getUsersByUserIds(
+					missingUserIds,
+					options,
+					tenantCode,
+					unscopped
+				)
+				userDetails = userDetails.concat(usersFromDb)
+			}
+
+			// Extract unique organization IDs and create a mapping for organization details
+			const organizations = []
+			const orgDetails = {}
+
+			if (userDetails && userDetails.length > 0) {
+				userDetails.forEach((user) => {
+					let orgObject = {
+						organization_id: user.organization_id,
+						organization_code: user.organization_code,
+					}
+					if (!organizations.find((org) => org.organization_id === orgObject.organization_id))
+						organizations.push(orgObject)
+				})
+			}
+
+			let missingOrgInfoInCache = []
+			for (const org of organizations) {
+				const orgCachedData = await cacheHelper.organizations.get(
+					tenantCode,
+					org.organization_code,
+					org.organization_id
+				)
+				if (orgCachedData) {
+					orgDetails[org.organization_id] = {
+						name: orgCachedData.name,
+						organization_id: orgCachedData.organization_id,
+						organization_code: orgCachedData.organization_code,
+					}
+				} else {
+					missingOrgInfoInCache.push(org)
+				}
+			}
+
+			if (missingOrgInfoInCache.length > 0) {
+				// Extract orgIds and orgCodes
+				const orgIds = missingOrgInfoInCache.map((item) => item.organization_id)
+				const orgCodes = missingOrgInfoInCache.map((item) => item.organization_code)
+
+				if (orgIds.length > 0 && orgCodes.length > 0) {
+					// Fetch organization details
+					const filter = {
+						organization_id: {
+							[Op.in]: Array.from(orgIds),
+						},
+						organization_code: {
+							[Op.in]: Array.from(orgCodes),
+						},
+					}
+
+					const organizationDetails = await organisationExtensionQueries.findAll(filter, tenantCode, {
+						attributes: ['name', 'organization_id', 'organization_code'],
+					})
+					// Cache organization details for future use and map for quick access
+					organizationDetails.forEach((org) => {
+						orgDetails[org.organization_id] = org
+						// Organization caching removed to break circular dependency
+					})
+				}
+			}
+
+			// Enrich user details with roles and organization info
+			await Promise.all(
+				userDetails.map(async function (user) {
+					if (user.deleted_at) return user
+					if (user.email) {
+						let decryptedEmail = await emailEncryption.decryptAndValidate(user.email)
+						if (decryptedEmail) {
+							user.email = decryptedEmail
+						}
+					}
+					if (user.image) {
+						const downloadImageResponse = await getDownloadableUrl(user.image)
+						user.image = downloadImageResponse.result
+					}
+					user.user_roles = [{ title: common.MENTEE_ROLE }]
+					if (user.is_mentor) {
+						user.user_roles.push({ title: common.MENTOR_ROLE })
+					}
+					// user.organization = orgDetails[user.organization_id] || null // Handle potential missing org
+					return user
+				})
+			)
+
+			const response = {
+				result: userDetails,
+			}
+
+			return resolve(response)
+		} catch (error) {
+			return reject(error)
+		}
+	})
+}
+
 const getProfileDetails = async ({ tenantCode, userId }) => {
 	try {
 		let profileUrl = `${userBaseUrl}${endpoints.GET_PROFILE_BY_ID}`
@@ -1026,4 +1156,5 @@ module.exports = {
 	getTenantDomain,
 	getTenantList,
 	getTenantDetails,
+	getUserDetailedListUsingCache,
 }
