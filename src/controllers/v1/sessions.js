@@ -423,7 +423,6 @@ module.exports = class Sessions {
 			const sessionDetails = await sessionService.removeMentees(
 				req.params.id, // session id
 				req.body.mentees, // Array of mentee ids
-				req.decodedToken.id,
 				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
