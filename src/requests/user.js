@@ -933,7 +933,7 @@ const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false,
 const getUserDetailedListUsingCache = async function (usersMap, tenantCode, deletedUsers = false, unscopped = false) {
 	try {
 		// Empty input short-circuit
-		if (!usersMap || usersMap.length === 0) {
+		if (!usersMap || !Array.isArray(usersMap) || usersMap.length === 0) {
 			return { result: [] }
 		}
 

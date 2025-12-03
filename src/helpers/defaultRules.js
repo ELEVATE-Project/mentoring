@@ -225,14 +225,15 @@ exports.validateDefaultRulesFilter = async function validateDefaultRulesFilter({
 	roles,
 	requesterOrganizationCode,
 	data,
-	tenantCode,
+	tenant_code,
 }) {
 	try {
 		const defaults = await getDefaults()
 		let orgCodes = { [Op.in]: [requesterOrganizationCode, defaults.orgCode] }
+		let tenantCodes = { [Op.in]: [tenant_code, defaults.tenantCode] }
 		const [userDetails, defaultRules] = await Promise.all([
-			getUserDetailsFromCache(requesterId, isAMentor(roles), tenantCode, requesterOrganizationCode),
-			defaultRuleQueries.findAll({ type: ruleType, organization_code: orgCodes }, tenantCode),
+			getUserDetailsFromCache(requesterId, isAMentor(roles), tenant_code, requesterOrganizationCode),
+			defaultRuleQueries.findAll({ type: ruleType, organization_code: orgCodes }, tenantCodes),
 		])
 
 		const validConfigs = getValidConfigs(defaultRules || [], roles)
