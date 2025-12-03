@@ -17,6 +17,7 @@ const ProjectRootDir = path.join(__dirname, '../')
 const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const fileUploadPath = require('@helpers/uploadFileToCloud')
 const { Op } = require('sequelize')
+const { queryForbiddenPatterns } = require('@constants/blacklistConfig')
 
 module.exports = class ReportsHelper {
 	/**
@@ -665,5 +666,111 @@ module.exports = class ReportsHelper {
 		const outputFilename = path.basename(outputFilePath)
 		const uploadRes = await fileUploadPath.uploadFileToCloud(outputFilename, inviteeFileDir, userId, orgCode)
 		return uploadRes.result.uploadDest
+	}
+
+	/**
+	 * Execute a raw SELECT SQL query passed by the user.
+	 *
+	 * ⚠️ Only SELECT queries are allowed.
+	 * Any attempt to run non-SELECT or multiple statements will be rejected.
+	 *
+	 * @param {Object} data - The input object.
+	 * @param {string} data.query - The raw SQL SELECT query string to execute.
+	 *
+	 * @returns {Promise<Object>} - Success response with query result.
+	 *
+	 * @throws {Error} - If the query is invalid, non-SELECT, or execution fails.
+	 */
+	static async fetchData(data, pageNo, pageSize) {
+		try {
+			const rawQuery = data.query?.trim()
+			if (!rawQuery || typeof rawQuery !== 'string') {
+				throw new Error('Query must be a valid string')
+			}
+
+			const lower = rawQuery.toLowerCase()
+			if (!lower.startsWith('select')) {
+				throw new Error('Only SELECT queries are allowed')
+			}
+
+			if (!this.isQuerySafe(rawQuery)) {
+				throw new Error('Query is not allowed or references restricted operations/tables')
+			}
+
+			// Validate pagination parameters
+			const validPageNo = Math.max(1, parseInt(pageNo) || 1)
+			const validPageSize = Math.min(Math.max(1, parseInt(pageSize) || 100), 1000)
+			const offset = common.getPaginationOffset(validPageNo, validPageSize)
+
+			// Use parameterized query with replacements
+			const paginatedQuery = `${rawQuery} LIMIT :limit OFFSET :offset`
+
+			const queryData = await sequelize.query(paginatedQuery, {
+				replacements: {
+					limit: validPageSize,
+					offset: offset,
+				},
+				type: sequelize.QueryTypes.SELECT,
+			})
+
+			// 1. Fetch paginated data
+			// const queryData = await sequelize.query(paginatedQuery, {
+			// 	type: sequelize.QueryTypes.SELECT,
+			// })
+
+			// 2. Return with metadata
+			return responses.successResponse({
+				statusCode: httpStatusCode.accepted,
+				message: 'DATA_FETCHED',
+				result: {
+					data: queryData,
+				},
+			})
+		} catch (err) {
+			console.error('Query execution error:', err)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.bad_request,
+				message: err.message || 'Invalid query',
+			})
+		}
+	}
+
+	static isQuerySafe(query) {
+		if (typeof query !== 'string') return false
+
+		const lowerQuery = query.toLowerCase()
+
+		// Quick reject for tokens that must not appear (preserve current blacklist semantics)
+		const immediateForbidden = ['--', ';', '/*', '*/', '#', '\\']
+		if (immediateForbidden.some((tok) => lowerQuery.includes(tok))) return false
+
+		// Normalize: strip comments and literals, collapse whitespace
+		let normalizedQuery = lowerQuery
+			.replace(/\/\*[\s\S]*?\*\//g, ' ')
+			.replace(/--.*$/gm, ' ')
+			.replace(/#[^\n]*/g, ' ')
+			// remove dollar-quoted and quoted string literals to avoid false positives inside strings
+			.replace(/\$[A-Za-z0-9_]*\$[\s\S]*?\$[A-Za-z0-9_]*\$/g, ' ')
+			.replace(/'(?:''|[^'])*'/g, ' ')
+			.replace(/"(?:\\"|[^"])*"/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim()
+
+		// Match forbidden patterns robustly:
+		// - letter-only words/phrases use word boundaries and flexible spacing
+		// - other patterns (punctuation, underscores, mixed chars) are tested literally
+		return !queryForbiddenPatterns.some((pattern) => {
+			const pat = String(pattern).toLowerCase().trim()
+			if (/^[a-z\s]+$/.test(pat)) {
+				const escaped = pat
+					.split(/\s+/)
+					.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+					.join('\\s+')
+				const regex = new RegExp(`\\b${escaped}\\b`, 'i')
+				return regex.test(normalizedQuery)
+			}
+			const escapedLiteral = pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+			return new RegExp(escapedLiteral, 'i').test(lowerQuery)
+		})
 	}
 }
