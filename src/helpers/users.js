@@ -11,7 +11,7 @@ module.exports = class UserServiceHelper {
 	 * @param {string} userId - The user ID to check requests for.
 	 * @returns {Promise<{connectionRequestCount: number, sessionRequestcount: number} | null>}
 	 */
-	static async findRequestCounts(userId) {
+	static async findRequestCounts(userId, tenantCode) {
 		try {
 			if (!userId) {
 				throw new Error('User ID is required')
@@ -19,11 +19,15 @@ module.exports = class UserServiceHelper {
 			let sessionRequestCount = 0,
 				connectionRequestCount = 0
 			if (process.env.ENABLE_CHAT) {
-				const chatRequest = await connectionQueries.getRequestsCount(userId)
+				const chatRequest = await connectionQueries.getRequestsCount(userId, tenantCode)
 				connectionRequestCount = chatRequest
 			}
 
-			const sessionRequest = await sessionRequestQueries.getCount(userId, [common.CONNECTIONS_STATUS.REQUESTED])
+			const sessionRequest = await sessionRequestQueries.getCount(
+				userId,
+				[common.CONNECTIONS_STATUS.REQUESTED],
+				tenantCode
+			)
 			sessionRequestCount = sessionRequest
 
 			return {
