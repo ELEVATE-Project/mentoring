@@ -1,0 +1,359 @@
+{
+	"POST_mentoring_v1_default-rule_create": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"id": {
+						"type": "number"
+					},
+					"type": {
+						"type": "string"
+					},
+					"target_field": {
+						"type": "string"
+					},
+					"is_target_from_sessions_mentor": {
+						"type": "boolean"
+					},
+					"requester_field": {
+						"type": "string"
+					},
+					"operator": {
+						"type": "string"
+					},
+					"requester_roles": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"requester_roles_config": {
+						"type": "object",
+						"properties": {
+							"exclude": {
+								"type": "string"
+							}
+						}
+					},
+					"created_by": {
+						"type": "string"
+					},
+					"updated_by": {
+						"type": "string"
+					},
+					"organization_id": {
+						"type": "string"
+					},
+					"field_configs": {
+						"type": "null"
+					},
+					"deleted_at": {
+						"type": "null"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							},
+							"required": ["id", "type", "version"]
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_default-rule_read": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"target_field": {
+									"type": "string"
+								},
+								"is_target_from_sessions_mentor": {
+									"type": "boolean"
+								},
+								"requester_field": {
+									"type": "string"
+								},
+								"field_configs": {
+									"type": "null"
+								},
+								"matching_operator": {
+									"type": "string"
+								},
+								"requester_roles": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								},
+								"role_config": {
+									"type": "object",
+									"properties": {
+										"exclude": {
+											"type": "boolean"
+										}
+									}
+								},
+								"organization_id": {
+									"type": "string"
+								},
+								"created_by": {
+									"type": "string"
+								},
+								"updated_by": {
+									"type": "string"
+								},
+								"created_at": {
+									"type": "string"
+								},
+								"updated_at": {
+									"type": "string"
+								},
+								"deleted_at": {
+									"type": "null"
+								}
+							}
+						}
+					},
+					"count": {
+						"type": "number"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							},
+							"required": ["id", "type", "version"]
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"PATCH_mentoring_v1_default-rule_update_id": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"id": {
+							"type": "number"
+						},
+						"type": {
+							"type": "string"
+						},
+						"target_field": {
+							"type": "string"
+						},
+						"is_target_from_sessions_mentor": {
+							"type": "boolean"
+						},
+						"requester_field": {
+							"type": "string"
+						},
+						"field_configs": {
+							"type": "null"
+						},
+						"operator": {
+							"type": "string"
+						},
+						"requester_roles": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"requester_roles_config": {
+							"type": "object",
+							"properties": {
+								"exclude": {
+									"type": "string"
+								}
+							}
+						},
+						"organization_id": {
+							"type": "string"
+						},
+						"created_by": {
+							"type": "string"
+						},
+						"updated_by": {
+							"type": "string"
+						},
+						"created_at": {
+							"type": "string"
+						},
+						"updated_at": {
+							"type": "string"
+						},
+						"deleted_at": {
+							"type": "null"
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							},
+							"required": ["id", "type", "version"]
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"DELETE_mentoring_v1_default-rule_delete_id": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							}
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}
