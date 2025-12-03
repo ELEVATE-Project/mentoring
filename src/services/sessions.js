@@ -147,9 +147,7 @@ module.exports = class SessionsHelper {
 
 			// Try cache first for mentor details, fallback to database if not found
 			let mentorDetails = await cacheHelper.mentor.get(tenantCode, orgCode, mentorIdToCheck)
-			if (!mentorDetails) {
-				mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorIdToCheck, [], false, tenantCode)
-			}
+
 			if (!mentorDetails) {
 				return responses.failureResponse({
 					message: 'INVALID_PERMISSION',
@@ -1503,7 +1501,6 @@ module.exports = class SessionsHelper {
 					let sessionAttendee = sessionDetailedResponse.mentees?.find(
 						(mentee) => String(mentee.id) === String(userId)
 					)
-
 					if (!sessionAttendee) {
 						let validateDefaultRules
 
@@ -1549,12 +1546,13 @@ module.exports = class SessionsHelper {
 					}
 
 					if (sessionDetailedResponse.image && sessionDetailedResponse.image.some(Boolean)) {
-						sessionDetailedResponse.image = sessionDetailedResponse.image.map(async (imgPath) => {
-							if (imgPath != '') {
-								return await utils.getDownloadableUrl(imgPath)
-							}
-						})
-						sessionDetailedResponse.image = await Promise.all(sessionDetailedResponse.image)
+						sessionDetailedResponse.image = await Promise.all(
+							sessionDetailedResponse.image.map(async (imgPath) => {
+								if (imgPath != '') {
+									return await utils.getDownloadableUrl(imgPath)
+								}
+							})
+						)
 					}
 
 					const canRetrieveMenteeList =
@@ -1787,12 +1785,13 @@ module.exports = class SessionsHelper {
 			}
 
 			if (processDbResponse.image && processDbResponse.image.some(Boolean)) {
-				processDbResponse.image = processDbResponse.image.map(async (imgPath) => {
-					if (imgPath != '') {
-						return await utils.getDownloadableUrl(imgPath)
-					}
-				})
-				processDbResponse.image = await Promise.all(processDbResponse.image)
+				processDbResponse.image = await Promise.all(
+					processDbResponse.image.map(async (imgPath) => {
+						if (imgPath != '') {
+							return await utils.getDownloadableUrl(imgPath)
+						}
+					})
+				)
 			}
 
 			const shouldIncludeMentees = isMenteesListRequested && canRetrieveMenteeList
@@ -2025,12 +2024,23 @@ module.exports = class SessionsHelper {
 			// If enrolled by the mentee get email and name from user service via api call.
 			// Else it will be available in userTokenData
 			if (isSelfEnrolled) {
-				const userDetails = await mentorExtensionQueries.getMentorExtension(
-					userTokenData.id || userTokenData.user_id,
-					['user_id', 'name', 'email'],
-					true,
-					tenantCode
-				)
+				const userDetails =
+					(await cacheHelper.mentee.getCacheOnly(
+						tenantCode,
+						orgCode,
+						userTokenData.id || userTokenData.user_id
+					)) ??
+					(await cacheHelper.mentor.getCacheOnly(
+						tenantCode,
+						orgCode,
+						userTokenData.id || userTokenData.user_id
+					)) ??
+					(await mentorExtensionQueries.getMentorExtension(
+						userTokenData.id || userTokenData.user_id,
+						['user_id', 'name', 'email'],
+						true,
+						tenantCode
+					))
 
 				userId = userDetails.user_id
 				email = userDetails.email
@@ -4266,7 +4276,14 @@ module.exports = class SessionsHelper {
 			}
 
 			// Delegate to feedback service
-			return await feedbackService.submit(sessionId, feedbackData, userId, isAMentor, tenantCode)
+			return await feedbackService.submit(
+				sessionId,
+				feedbackData,
+				userId,
+				isAMentor,
+				tenantCode,
+				organizationCode
+			)
 		} catch (error) {
 			throw error
 		}

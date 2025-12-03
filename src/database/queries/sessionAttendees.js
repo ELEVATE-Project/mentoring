@@ -293,7 +293,7 @@ exports.getCount = async (filter = {}, options = {}) => {
 	}
 }
 
-exports.findMentees = async (filter, tenantCode, options = {}) => {
+exports.findMentees = async (filter, tenantCode) => {
 	try {
 		if (!tenantCode) {
 			throw new Error('tenantCode is required')
@@ -303,9 +303,12 @@ exports.findMentees = async (filter, tenantCode, options = {}) => {
 		const whereClauses = []
 		const replacements = {}
 
+		let whiteList = ['session_id', 'mentee_id', 'type', 'tenant_code']
 		for (const key in filter) {
-			whereClauses.push(`sa.${key} = :${key}`)
-			replacements[key] = filter[key]
+			if (whiteList.includes(key)) {
+				whereClauses.push(`sa.${key} = :${key}`)
+				replacements[key] = filter[key]
+			}
 		}
 
 		const sql = `
@@ -320,6 +323,10 @@ exports.findMentees = async (filter, tenantCode, options = {}) => {
 				sa.mentee_id = ue.user_id and ue.tenant_code = sa.tenant_code
 			${whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''}
 		`
+		for (const key in filter) {
+			whereClauses.push(`sa.${key} = :${key}`)
+			replacements[key] = filter[key]
+		}
 
 		const results = await SessionAttendee.sequelize.query(sql, {
 			replacements,
