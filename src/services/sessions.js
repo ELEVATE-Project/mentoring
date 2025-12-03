@@ -874,13 +874,20 @@ module.exports = class SessionsHelper {
 							orgId,
 							orgCode,
 							tenantCode,
-							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id
+							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id,
+							sessionDetail
 						)
 					}
 
 					// unenroll mentees
 					if (menteesToRemove.length > 0) {
-						await this.removeMentees(sessionId, menteesToRemove, orgCode, tenantCode)
+						await this.removeMentees(
+							sessionId,
+							menteesToRemove,
+							orgCode,
+							tenantCode,
+							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id
+						)
 					}
 				}
 				if (bodyData?.resources && sessionDetail.status != common.LIVE_STATUS) {
@@ -2513,7 +2520,7 @@ module.exports = class SessionsHelper {
 			// Else it will be available in userTokenData
 			if (isSelfUnenrollment) {
 				const userDetails = await mentorExtensionQueries.getMentorExtension(
-					userTokenData.id || userTokenData.user_id, // cache uasge has user_id but token has id
+					userTokenData.id || userTokenData.user_id, // cache usage has user_id but token has id
 					['user_id', 'name', 'email'],
 					true,
 					tenantCode
@@ -2523,7 +2530,7 @@ module.exports = class SessionsHelper {
 				email = userDetails.email
 				name = userDetails.name
 			} else {
-				userId = userTokenData.id || userTokenData.user_id // cache uasge has user_id but token has id
+				userId = userTokenData.id || userTokenData.user_id // cache usage has user_id but token has id
 				email = userTokenData.email
 				name = userTokenData.name
 				emailTemplateCode = process.env.MENTOR_SESSION_DELETE_BY_MANAGER_EMAIL_TEMPLATE // update with new template
@@ -2618,7 +2625,7 @@ module.exports = class SessionsHelper {
 			await this._clearUserCacheForSessionCountChange(
 				userTokenData.id || userTokenData.user_id, // cache uasge has user_id but token has id
 				tenantCode,
-				session.mentor_organization_id,
+				orgCode,
 				'session_unenroll'
 			)
 
@@ -3639,6 +3646,12 @@ module.exports = class SessionsHelper {
 	 * @name addMentees
 	 * @param {String} sessionId 				- Session id.
 	 * @param {Number} menteeIds				- Mentees id.
+	 * @param {String} timeZone					- Time zone.
+	 * @param {String} organizationId			- Organization id.
+	 * @param {String} organizationCode			- Organization code.
+	 * @param {String} tenantCode				- Tenant code.
+	 * @param {String} mentorId					- Mentor id (optional).
+	 * @param {Object} sessionDetails			- Pre-fetched session details (optional, for optimization).
 	 * @returns {JSON} 							- Session details
 	 */
 
@@ -3649,17 +3662,21 @@ module.exports = class SessionsHelper {
 		organizationId,
 		organizationCode,
 		tenantCode,
-		mentorId = null
+		mentorId = null,
+		sessionDetails = null
 	) {
 		try {
-			// Check if session exists - use database query instead of cache for reliability
-			const sessionDetails = await sessionQueries.findById(sessionId, tenantCode)
-			if (!sessionDetails) {
-				return responses.failureResponse({
-					message: 'SESSION_NOT_FOUND',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
+			// Use provided sessionDetails or query if not provided
+			let sessionData = sessionDetails
+			if (!sessionData) {
+				sessionData = await sessionQueries.findById(sessionId, tenantCode)
+				if (!sessionData) {
+					return responses.failureResponse({
+						message: 'SESSION_NOT_FOUND',
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
 			}
 
 			// Fetch mentee details
@@ -3680,7 +3697,7 @@ module.exports = class SessionsHelper {
 			// Enroll mentees
 			const successIds = []
 			const failedIds = []
-			const effectiveMentorId = mentorId ? mentorId : sessionDetails.mentor_id
+			const effectiveMentorId = mentorId ? mentorId : sessionData.mentor_id
 
 			const enrollPromises = mentees.map((menteeData) =>
 				this.enroll(
@@ -3689,7 +3706,7 @@ module.exports = class SessionsHelper {
 					timeZone,
 					menteeData.is_mentor,
 					false,
-					sessionDetails,
+					sessionData,
 					effectiveMentorId, // mentorId
 					organizationCode,
 					tenantCode
