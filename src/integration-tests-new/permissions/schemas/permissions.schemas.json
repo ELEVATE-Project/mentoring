@@ -1,0 +1,180 @@
+{
+	"POST_mentoring_v1_permissions_create": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"Id": {
+						"type": "number"
+					},
+					"status": {
+						"type": "string"
+					},
+					"module": {
+						"type": "string"
+					},
+					"request_type": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"POST_mentoring_v1_permissions_update_id": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"Id": {
+						"type": "number"
+					},
+					"status": {
+						"type": "string"
+					},
+					"module": {
+						"type": "string"
+					},
+					"request_type": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"DELETE_mentoring_v1_permissions_delete_id": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_permissions_list_page_page_limit_limit_search_search": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"results": {
+						"type": "object",
+						"properties": {
+							"data": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "number"
+										},
+										"code": {
+											"type": "string"
+										},
+										"module": {
+											"type": "string"
+										},
+										"request_type": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"api_path": {
+											"type": "string"
+										},
+										"status": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"count": {
+								"type": "number"
+							}
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}

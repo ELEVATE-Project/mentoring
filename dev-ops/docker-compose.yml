@@ -1,101 +1,182 @@
 version: '3'
 services:
+
+  redis:
+    image: 'redis:7.0.0'
+    restart: 'always'
+    ports:
+      - '6379:6379'
+    networks:
+      - elevate_net
+    logging:
+      driver: none
+    healthcheck:
+     test: ["CMD", "redis-cli", "ping"]
+     interval: 5s
+     timeout: 5s
+     retries: 20
+
   zookeeper:
-    image: 'bitnami/zookeeper:3.8.0'
+    image: 'confluentinc/cp-zookeeper:7.3.0'
     ports:
       - '2181:2181'
     environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
+      - ZOOKEEPER_CLIENT_PORT=2181
+      - ZOOKEEPER_TICK_TIME=2000
     networks:
       - elevate_net
-    volumes:
-      - zookeeper-data:/bitnami/zookeeper
     logging:
       driver: none
+
   kafka:
-    image: 'bitnami/kafka:3.1.0'
+    image: 'confluentinc/cp-kafka:7.3.0'
     ports:
       - '9092:9092'
     environment:
-      - KAFKA_BROKER_ID=1
-      - KAFKA_CFG_LISTENERS=CLIENT://:9092,EXTERNAL://:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka:9092,EXTERNAL://localhost:9093
-      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=CLIENT
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Listeners configured for CI internal docker networking
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
       - zookeeper
     networks:
       - elevate_net
-    volumes:
-      - kafka-data:/bitnami/kafka
+    healthcheck:
+      test: kafka-topics --bootstrap-server localhost:9092 --list || exit 1
+      interval: 10s
+      timeout: 30s
+      retries: 10
     logging:
       driver: none
-  mongo:
-    image: 'mongo:4.4.14'
-    restart: 'always'
+
+  # NEW: Citus DB (Fresh instance, no volumes)
+  citus:
+    image: citusdata/citus:13.0
+    container_name: citus_db
     ports:
-      - '27017:27017'
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: 'postgres'
+      POSTGRES_PASSWORD: 'postgres'
+      POSTGRES_HOST_AUTH_METHOD: 'trust'
     networks:
       - elevate_net
-    volumes:
-      - mongo-data:/data/db
-    logging:
-      driver: none
-  redis:
-    image: 'redis:7.0.0'
-    restart: 'always'
-    expose:
-      - '6379'
-    networks:
-      - elevate_net
-    logging:
-      driver: none
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------- APPLICATION SERVICES ----------------
+
   mentoring:
-    build: '../'
-    image: elevate/mentoring:1.0
+    build: '../' # Preserved from your old file
+    image: elevate/mentoring:2.4
     volumes:
       - ../src/:/var/src
     ports:
       - '3000:3000'
-    command: [ 'node', 'app.js' ]
+      - '9229:9229'
+    command: >
+      sh -c "npm run db:init && 
+             npm run db:seed:all && 
+             npm run dev"
     environment:
-      - MONGODB_URL=mongodb://mongo:27017/elevate-mentoring
       - KAFKA_URL=kafka:9092
-      - USER_SERIVCE_HOST=http://user:3001
+      - USER_SERVICE_HOST=http://user:3001
       - REDIS_HOST=redis://redis:6379
+      - SCHEDULER_SERVICE_HOST=http://scheduler:4000
+      - DEV_DATABASE_URL=postgres://postgres:postgres@citus:5432/elevate-mentoring
+      - ENABLE_CHAT=false
     depends_on:
-      - kafka
-      - mongo
+      kafka:
+        condition: service_healthy
+      citus:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - elevate_net
-    env_file:
-      - integration_test.mentoring.env
+
   user:
-    build: '../../user/'
-    image: elevate/user:1.0
+    build: '../../user/' # Preserved from your old file
+    image: elevate/user:2.4
     volumes:
       - ../../user/src/:/var/src
     ports:
       - '3001:3001'
-    command: [ 'nodemon', 'app.js' ]
+     # - '9229:9229'
+    command: >
+      sh -c "sleep 20 && 
+             npm run db:init && 
+             npm run db:seed:all && 
+             nodemon --trace-warnings app.js"
     environment:
-      - MONGODB_URL=mongodb://mongo:27017/elevate-mentoring
       - KAFKA_URL=kafka:9092
       - REDIS_HOST=redis://redis:6379
+      - DEV_DATABASE_URL=postgres://postgres:postgres@citus:5432/mentoring_user
+      - SCHEDULER_SERVICE_HOST=http://scheduler:4000
+      - ENABLE_EMAIL_OTP_VERIFICATION=false
+    depends_on:
+      kafka:
+        condition: service_healthy
+      citus:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      scheduler:
+        condition: service_started
+    networks:
+      - elevate_net
+
+  # NEW: Added Scheduler
+  scheduler:
+    build: '../../scheduler/' # Assumed sibling folder structure
+    image: elevate/scheduler:1.0
+    volumes:
+      - ../../scheduler/src/:/var/src
+    ports:
+      - '4000:4000'
+    command: ['nodemon', '--trace-warnings', 'app.js']
+    environment:
+      - KAFKA_URL=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - elevate_net
+
+  # NEW: Added Communications
+  communications:
+    build: '../../chat-communications/' # Assumed sibling folder structure
+    image: elevate/chat-communications:1.0
+    volumes:
+      - ../../chat-communications/src/:/var/src
+    ports:
+      - '3123:3123'
+    command: ['nodemon', '--trace-warnings', 'app.js']
+    environment:
+      # Note: Rocketchat is not included in this CI file, this URL might need mocking in tests
+      - CHAT_PLATFORM_URL=http://rocketchat:3969 
+      - REDIS_HOST=redis://redis:6379/1
+      - DEV_DATABASE_URL=postgres://postgres:postgres@citus:5432/communications-local
+      - SCHEDULER_SERVICE_HOST=http://scheduler:4000
     depends_on:
       - kafka
-      - mongo
       - redis
     networks:
       - elevate_net
-    env_file:
-      - integration_test.user.env
+
 networks:
   elevate_net:
     external: false
+
 volumes:
   zookeeper-data:
   kafka-data:
-  mongo-data:
+  # No DB volumes here = Fresh DB every time

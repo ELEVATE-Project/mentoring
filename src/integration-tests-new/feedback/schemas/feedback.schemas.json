@@ -1,0 +1,90 @@
+{
+	"GET_/mentoring/v1/feedback/forms/{SessionId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"form": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"name": {
+									"type": "string"
+								},
+								"options": {
+									"type": "null"
+								},
+								"type": {
+									"type": "string"
+								},
+								"no_of_stars": {
+									"type": "number"
+								},
+								"status": {
+									"type": "string"
+								},
+								"category": {
+									"type": "null"
+								},
+								"rendering_data": {
+									"type": "object",
+									"properties": {
+										"validators": {
+											"type": "object",
+											"properties": {
+												"required": {
+													"type": "boolean"
+												}
+											}
+										},
+										"disable": {
+											"type": "boolean"
+										},
+										"visible": {
+											"type": "boolean"
+										},
+										"class": {
+											"type": "string"
+										}
+									}
+								},
+								"meta": {
+									"type": "object",
+									"properties": {}
+								},
+								"created_at": {
+									"type": "string"
+								},
+								"updated_at": {
+									"type": "string"
+								},
+								"deleted_at": {
+									"type": "null"
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {}
+			}
+		}
+	},
+	"POST_/mentoring/v1/feedback/submit/{SessionId}": {}
+}
