@@ -633,7 +633,7 @@ module.exports = class SessionsHelper {
 			// }
 
 			// Handle both cached objects and Sequelize model instances
-			const sessionData = sessionDetail.dataValues || sessionDetail
+			const sessionData = sessionDetail
 
 			if (sessionData.status == common.COMPLETED_STATUS && bodyData?.resources) {
 				const completedDate = moment(sessionData.completed_at)
@@ -1501,6 +1501,7 @@ module.exports = class SessionsHelper {
 					let sessionAttendee = sessionDetailedResponse.mentees?.find(
 						(mentee) => String(mentee.id) === String(userId)
 					)
+
 					if (!sessionAttendee) {
 						let validateDefaultRules
 
@@ -1509,7 +1510,7 @@ module.exports = class SessionsHelper {
 								ruleType: common.DEFAULT_RULES.SESSION_TYPE,
 								requesterId: userId,
 								roles: roles,
-								requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
+								requesterOrganizationCode: orgCode,
 								data: sessionDetailedResponse,
 								tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 							})
@@ -1600,7 +1601,6 @@ module.exports = class SessionsHelper {
 				},
 				tenantCode
 			)
-
 			if (!sessionAttendee) {
 				let validateDefaultRules
 				if (userId != sessionDetails.mentor_id) {
@@ -1608,7 +1608,7 @@ module.exports = class SessionsHelper {
 						ruleType: common.DEFAULT_RULES.SESSION_TYPE,
 						requesterId: userId,
 						roles: roles,
-						requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
+						requesterOrganizationCode: orgCode,
 						data: sessionDetails,
 						tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 					})
@@ -2095,7 +2095,7 @@ module.exports = class SessionsHelper {
 					ruleType: common.DEFAULT_RULES.SESSION_TYPE,
 					requesterId: userId,
 					roles: roles,
-					requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
+					requesterOrganizationCode: orgCode,
 					data: session,
 					tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				})
@@ -2833,18 +2833,18 @@ module.exports = class SessionsHelper {
 							to: attendee.attendeeEmail,
 							subject: templateData.subject,
 							body: utils.composeEmailBody(templateData.body, {
-								mentorName: sessionDetail.mentor_name,
-								sessionTitle: sessionDetail.title,
+								mentorName: sessionDetails.mentor_name,
+								sessionTitle: sessionDetails.title,
 								sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetail.id,
 								startDate: utils.getTimeZone(
-									sessionDetail.start_date,
+									sessionDetails.start_date,
 									common.dateFormat,
-									sessionDetail.time_zone
+									sessionDetails.time_zone
 								),
 								startTime: utils.getTimeZone(
-									sessionDetail.start_date,
+									sessionDetails.start_date,
 									common.timeFormat,
-									sessionDetail.time_zone
+									sessionDetails.time_zone
 								),
 							}),
 						},

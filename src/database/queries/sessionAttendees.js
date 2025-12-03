@@ -1,6 +1,14 @@
 const SessionAttendee = require('@database/models/index').SessionAttendee
 const Session = require('@database/models/index').Session
-const { Op } = require('sequelize')
+const { Op, col } = require('sequelize')
+const UserExtension = require('@database/models/index').UserExtension
+
+// Define association if not already defined
+SessionAttendee.belongsTo(UserExtension, {
+	foreignKey: 'mentee_id',
+	targetKey: 'user_id',
+	as: 'userExtension',
+})
 
 exports.create = async (data, tenantCode) => {
 	try {
@@ -293,40 +301,32 @@ exports.getCount = async (filter = {}, options = {}) => {
 	}
 }
 
-exports.findMentees = async (filter, tenantCode) => {
+exports.findMentees = async (filter, tenantCode, options = {}) => {
 	try {
 		if (!tenantCode) {
 			throw new Error('tenantCode is required')
 		}
+
 		filter.tenant_code = tenantCode
 
-		const whereClauses = []
-		const replacements = {}
+		const { where: optionsWhere, ...otherOptions } = options
 
-		let whiteList = ['session_id', 'mentee_id', 'type', 'tenant_code']
-		for (const key in filter) {
-			if (whiteList.includes(key)) {
-				whereClauses.push(`sa.${key} = :${key}`)
-				replacements[key] = filter[key]
-			}
-		}
-
-		const sql = `
-			SELECT 
-				sa.*,
-				ue.organization_code
-			FROM 
-				session_attendees sa
-			LEFT JOIN 
-				user_extensions ue
-			ON 
-				sa.mentee_id = ue.user_id and ue.tenant_code = sa.tenant_code
-			${whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''}
-		`
-
-		const results = await SessionAttendee.sequelize.query(sql, {
-			replacements,
-			type: SessionAttendee.sequelize.QueryTypes.SELECT,
+		const results = await SessionAttendee.findAll({
+			where: {
+				...optionsWhere,
+				...filter,
+			},
+			attributes: ['*', [col('userExtension.organization_code'), 'organization_code']],
+			include: [
+				{
+					model: UserExtension,
+					as: 'userExtension',
+					attributes: [],
+					required: false,
+				},
+			],
+			...otherOptions,
+			raw: true,
 		})
 
 		return results

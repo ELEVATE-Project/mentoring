@@ -178,7 +178,7 @@ module.exports = class DefaultRuleHelper {
 								ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 								requesterId: currentUserId,
 								roles: roles,
-								requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
+								requesterOrganizationCode: orgCode,
 								data: requestedUserExtension,
 								tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 							})
@@ -210,7 +210,7 @@ module.exports = class DefaultRuleHelper {
 									ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 									requesterId: currentUserId,
 									roles: roles,
-									requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
+									requesterOrganizationCode: orgCode,
 									data: requestedUserExtension,
 									tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
 								})

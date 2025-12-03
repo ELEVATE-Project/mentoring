@@ -6,6 +6,8 @@ const common = require('@constants/common')
 
 const { isAMentor } = require('@generics/utils')
 const cacheHelper = require('@generics/cacheHelper')
+const { getDefaults } = require('@helpers/getDefaultOrgId')
+const { Op } = require('sequelize')
 
 const operatorMapping = new Map([
 	['equals', '='],
@@ -226,9 +228,11 @@ exports.validateDefaultRulesFilter = async function validateDefaultRulesFilter({
 	tenantCode,
 }) {
 	try {
+		const defaults = await getDefaults()
+		let orgCodes = { [Op.in]: [requesterOrganizationCode, defaults.orgCode] }
 		const [userDetails, defaultRules] = await Promise.all([
-			getUserDetailsFromCache(requesterId, isAMentor(roles), tenantCode, requesterOrganizationCode[0]),
-			defaultRuleQueries.findAll({ type: ruleType, organization_code: requesterOrganizationCode }, tenantCode),
+			getUserDetailsFromCache(requesterId, isAMentor(roles), tenantCode, requesterOrganizationCode),
+			defaultRuleQueries.findAll({ type: ruleType, organization_code: orgCodes }, tenantCode),
 		])
 
 		const validConfigs = getValidConfigs(defaultRules || [], roles)

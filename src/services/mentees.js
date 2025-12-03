@@ -2075,7 +2075,7 @@ module.exports = class MenteesHelper {
 						ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 						requesterId: userId,
 						roles: roles,
-						requesterOrganizationCode: { [Op.in]: [organizationCode, defaults.orgCode] },
+						requesterOrganizationCode: organizationCode,
 						data: cacheProfileDetails,
 						tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 					})
@@ -2155,7 +2155,7 @@ module.exports = class MenteesHelper {
 					ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 					requesterId: userId,
 					roles: roles,
-					requesterOrganizationCode: { [Op.in]: [organizationCode, defaults.orgCode] },
+					requesterOrganizationCode: organizationCode,
 					data: requestedUserExtension,
 					tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				})

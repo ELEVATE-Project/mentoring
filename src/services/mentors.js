@@ -864,7 +864,7 @@ module.exports = class MentorsHelper {
 						ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 						requesterId: userId,
 						roles: roles,
-						requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
+						requesterOrganizationCode: orgCode,
 						data: requestedMentorExtension,
 						tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 					})
@@ -942,7 +942,7 @@ module.exports = class MentorsHelper {
 					ruleType: common.DEFAULT_RULES.MENTOR_TYPE,
 					requesterId: userId,
 					roles: roles,
-					requesterOrganizationCode: { [Op.in]: [orgCode, defaults.orgCode] },
+					requesterOrganizationCode: orgCode,
 					data: mentorExtension,
 					tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
 				})
