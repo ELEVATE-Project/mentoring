@@ -1512,7 +1512,7 @@ module.exports = class SessionsHelper {
 								roles: roles,
 								requesterOrganizationCode: orgCode,
 								data: sessionDetailedResponse,
-								tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+								tenant_code: tenantCode,
 							})
 						}
 						if (validateDefaultRules?.error && validateDefaultRules?.error?.missingField) {
@@ -1610,7 +1610,7 @@ module.exports = class SessionsHelper {
 						roles: roles,
 						requesterOrganizationCode: orgCode,
 						data: sessionDetails,
-						tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+						tenant_code: tenantCode,
 					})
 				}
 				if (validateDefaultRules?.error && validateDefaultRules?.error?.missingField) {
@@ -2097,7 +2097,7 @@ module.exports = class SessionsHelper {
 					roles: roles,
 					requesterOrganizationCode: orgCode,
 					data: session,
-					tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+					tenant_code: tenantCode,
 				})
 			}
 			if (validateDefaultRules?.error && validateDefaultRules?.error?.missingField) {
