@@ -1,0 +1,452 @@
+{
+	"GET_/mentoring/v1/sessions/list": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"count": {
+						"type": "number"
+					},
+					"data": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"title": {
+									"type": "string"
+								},
+								"mentor_id": {
+									"type": "string"
+								},
+								"description": {
+									"type": "string"
+								},
+								"status": {
+									"type": "string"
+								},
+								"start_date": {
+									"type": "string"
+								},
+								"end_date": {
+									"type": "string"
+								},
+								"image": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								},
+								"created_at": {
+									"type": "string"
+								},
+								"meeting_info.value": {
+									"type": "string"
+								},
+								"meeting_info.platform": {
+									"type": "string"
+								},
+								"mentor_name": {
+									"type": "string"
+								},
+								"organization_id": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"GET_/mentoring/v1/sessions/details/{sessionId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"title": {
+						"type": "string"
+					},
+					"mentor_id": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"start_date": {
+						"type": "string"
+					},
+					"end_date": {
+						"type": "string"
+					},
+					"image": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"session_reschedule_count": {
+						"type": "number"
+					},
+					"time_zone": {
+						"type": "string"
+					},
+					"started_at": {
+						"type": "string"
+					},
+					"completed_at": {
+						"type": "string"
+					},
+					"is_feedback_skipped": {
+						"type": "boolean"
+					},
+					"mentee_feedback_question_set": {
+						"type": "string"
+					},
+					"mentor_feedback_question_set": {
+						"type": "string"
+					},
+					"meeting_info": {
+						"type": "object",
+						"properties": {
+							"value": {
+								"type": "string"
+							},
+							"platform": {
+								"type": "string"
+							}
+						}
+					},
+					"meta": {
+						"type": "object",
+						"properties": {}
+					},
+					"visibility": {
+						"type": "string"
+					},
+					"organization_ids": {
+						"type": "string"
+					},
+					"mentor_organization_id": {
+						"type": "string"
+					},
+					"seats_remaining": {
+						"type": "number"
+					},
+					"seats_limit": {
+						"type": "number"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"is_enrolled": {
+						"type": "boolean"
+					},
+					"mentor_name": {
+						"type": "string"
+					},
+					"organization_id": {
+						"type": "array",
+						"items": {
+							"type": "number"
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {}
+			}
+		}
+	},
+	"GET_/mentoring/v1/sessions/share/{sessionId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"share_link": {
+						"type": "string"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {}
+			}
+		}
+	},
+	"POST_/mentoring/v1/sessions/enroll/{sessionId}": {},
+	"POST_/mentoring/v1/sessions/unenroll/{sessionId}": {},
+	"GET_/mentoring/v1/sessions/start/{sessionId}": {},
+	"POST_/mentoring/v1/sessions/update": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"title": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"start_date": {
+						"type": "string"
+					},
+					"end_date": {
+						"type": "string"
+					},
+					"recommended_for": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"categories": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"medium": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"image": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"mentor_id": {
+						"type": "string"
+					},
+					"mentor_name": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"is_feedback_skipped": {
+						"type": "boolean"
+					},
+					"mentee_feedback_question_set": {
+						"type": "string"
+					},
+					"mentor_feedback_question_set": {
+						"type": "string"
+					},
+					"id": {
+						"type": "number"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"DELETE_/mentoring/v1/sessions/update/{sessionId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {}
+			}
+		}
+	},
+	"POST_/mentoring/v1/sessions/update/{sessionId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"title": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"start_date": {
+						"type": "string"
+					},
+					"end_date": {
+						"type": "string"
+					},
+					"recommended_for": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"categories": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"medium": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"image": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"mentor_id": {
+						"type": "string"
+					},
+					"mentor_name": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"is_feedback_skipped": {
+						"type": "boolean"
+					},
+					"mentee_feedback_question_set": {
+						"type": "string"
+					},
+					"mentor_feedback_question_set": {
+						"type": "string"
+					},
+					"id": {
+						"type": "number"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_/mentoring/v1/sessions/getRecording/{sessionId}": {},
+	"PATCH_/mentoring/v1/sessions/completed/{sessionId}": {},
+	"PATCH_/mentoring/v1/sessions/updateRecordingUrl/{internalSessionId}": {}
+}

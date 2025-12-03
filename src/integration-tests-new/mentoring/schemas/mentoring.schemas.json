@@ -1,0 +1,71 @@
+{
+	"GET_mentoring_health": {
+		"type": "object",
+		"properties": {
+			"id": {
+				"type": "string"
+			},
+			"ver": {
+				"type": "string"
+			},
+			"ts": {
+				"type": "string"
+			},
+			"params": {
+				"type": "object",
+				"properties": {
+					"resmsgid": {
+						"type": "string"
+					},
+					"msgid": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"err": {
+						"type": "null"
+					},
+					"errMsg": {
+						"type": "null"
+					}
+				}
+			},
+			"status": {
+				"type": "number"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"version": {
+						"type": "string"
+					},
+					"healthy": {
+						"type": "boolean"
+					},
+					"checks": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"name": {
+									"type": "string"
+								},
+								"healthy": {
+									"type": "boolean"
+								},
+								"err": {
+									"type": "string"
+								},
+								"errMsg": {
+									"type": "string"
+								}
+							},
+							"required": ["name", "healthy", "err", "errMsg"]
+						}
+					}
+				}
+			}
+		}
+	}
+}
