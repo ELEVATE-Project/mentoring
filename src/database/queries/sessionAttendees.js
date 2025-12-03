@@ -323,10 +323,6 @@ exports.findMentees = async (filter, tenantCode) => {
 				sa.mentee_id = ue.user_id and ue.tenant_code = sa.tenant_code
 			${whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''}
 		`
-		for (const key in filter) {
-			whereClauses.push(`sa.${key} = :${key}`)
-			replacements[key] = filter[key]
-		}
 
 		const results = await SessionAttendee.sequelize.query(sql, {
 			replacements,

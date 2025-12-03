@@ -602,7 +602,7 @@ module.exports = class SessionsHelper {
 
 			// Try cache first for session details
 			let sessionDetail =
-				(await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)) ??
+				(await cacheHelper.sessions.get(tenantCode, sessionId)) ??
 				(await sessionQueries.findById(sessionId, tenantCode))
 
 			if (!sessionDetail) {
@@ -839,7 +839,7 @@ module.exports = class SessionsHelper {
 
 					// Cache invalidation: Remove deleted session from cache
 					try {
-						await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
+						await cacheHelper.sessions.delete(tenantCode, sessionId)
 					} catch (cacheError) {
 						// Cache invalidation failure - continue operation
 					}
@@ -994,7 +994,7 @@ module.exports = class SessionsHelper {
 
 				// Cache invalidation: Delete old cache - will be set on next read
 				try {
-					await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
+					await cacheHelper.sessions.delete(tenantCode, sessionId)
 				} catch (cacheError) {
 					// Cache invalidation failure - continue operation
 				}
@@ -1427,7 +1427,7 @@ module.exports = class SessionsHelper {
 			}
 
 			// Invalidate session cache after successful update
-			await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
+			await cacheHelper.sessions.delete(tenantCode, sessionId)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
@@ -1458,7 +1458,7 @@ module.exports = class SessionsHelper {
 			}
 
 			let sessionDetailedResponse = null
-			sessionDetailedResponse = await cacheHelper.sessions.get(tenantCode, orgCode, id)
+			sessionDetailedResponse = await cacheHelper.sessions.get(tenantCode, id)
 
 			const isMenteesListRequested = queryParams?.get_mentees === 'true'
 
@@ -1657,7 +1657,13 @@ module.exports = class SessionsHelper {
 
 			// check for accessibility
 			if (userId !== '' && isAMentor !== '') {
-				let isAccessible = await this.checkIfSessionIsAccessible(sessionDetails, userId, isAMentor, tenantCode)
+				let isAccessible = await this.checkIfSessionIsAccessible(
+					sessionDetails,
+					userId,
+					isAMentor,
+					tenantCode,
+					orgCode
+				)
 
 				// Throw access error
 				if (!isAccessible) {
@@ -1669,13 +1675,13 @@ module.exports = class SessionsHelper {
 			}
 
 			const canRetrieveMenteeList = userId == sessionDetails.created_by || userId == sessionDetails.mentor_id
-			sessionDetails.mentees = await getEnrolledMentees(id, {}, userId, tenantCode)
+			sessionDetails.mentees = await getEnrolledMentees(sessionDetails.id, {}, userId, tenantCode)
 
 			let sessionAccessorDetails
 			if (isInvited || sessionDetails.is_assigned || !mentorExtension) {
 				const managerDetails =
-					cacheHelper.mentee.getCacheOnly(tenantCode, orgCode, sessionDetails.created_by) ??
-					cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, sessionDetails.created_by) ??
+					(await cacheHelper.mentee.getCacheOnly(tenantCode, orgCode, sessionDetails.created_by)) ??
+					(await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, sessionDetails.created_by)) ??
 					(await menteeExtensionQueries.getMenteeExtension(
 						sessionDetails.created_by,
 						[
@@ -1769,9 +1775,9 @@ module.exports = class SessionsHelper {
 					const cacheCopy = { ...processDbResponse }
 					delete cacheCopy.is_enrolled
 					delete cacheCopy.enrolment_type
-					console.log('Caching session details for id --- ', id)
-					await cacheHelper.sessions.set(tenantCode, orgCode, cacheCopy.id, cacheCopy)
+					await cacheHelper.sessions.set(tenantCode, cacheCopy.id, cacheCopy)
 				} catch (cacheError) {
+					console.log('Error in caching session details:', cacheError)
 					// Continue without caching - don't fail the request
 				}
 			}
@@ -2256,7 +2262,7 @@ module.exports = class SessionsHelper {
 
 			// Invalidate session cache after enrollment (seats_remaining changed)
 			try {
-				await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
+				await cacheHelper.sessions.delete(tenantCode, sessionId)
 			} catch (cacheError) {
 				// Cache invalidation failure - continue operation
 			}
@@ -2321,7 +2327,7 @@ module.exports = class SessionsHelper {
 			// Optimized: Get session with mentor details in single query instead of separate calls
 			if (!session || Object.keys(session).length === 0) {
 				session =
-					(await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)) ??
+					(await cacheHelper.sessions.get(tenantCode, sessionId)) ??
 					(await sessionQueries.findById(sessionId, tenantCode))
 			}
 
@@ -2404,7 +2410,7 @@ module.exports = class SessionsHelper {
 
 			// Invalidate session cache after unenrollment (seats_remaining changed)
 			try {
-				await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
+				await cacheHelper.sessions.delete(tenantCode, sessionId)
 			} catch (cacheError) {
 				// Cache invalidation failure - continue operation
 			}
@@ -2765,7 +2771,7 @@ module.exports = class SessionsHelper {
 			let sessionDetails
 
 			if (tenantCode && orgCode) {
-				sessionDetails = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
+				sessionDetails = await cacheHelper.sessions.get(tenantCode, sessionId)
 			}
 			if (!sessionDetails) {
 				sessionDetails = await sessionQueries.findById(sessionId, tenantCode)
@@ -2919,7 +2925,7 @@ module.exports = class SessionsHelper {
 		try {
 			// Try cache first for session details
 			let session =
-				(await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)) ??
+				(await cacheHelper.sessions.get(tenantCode, sessionId)) ??
 				(await sessionQueries.findById(sessionId, tenantCode))
 			if (!session) {
 				return responses.failureResponse({
@@ -3512,7 +3518,7 @@ module.exports = class SessionsHelper {
 
 			// Invalidate session cache after adding mentees (seats_remaining changed)
 			try {
-				await cacheHelper.sessions.delete(tenantCode, organizationCode, sessionId)
+				await cacheHelper.sessions.delete(tenantCode, sessionId)
 			} catch (cacheError) {
 				// Cache invalidation failure - continue operation
 			}
@@ -3648,7 +3654,7 @@ module.exports = class SessionsHelper {
 		try {
 			// check if session exists or not
 			const sessionDetails =
-				(await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)) ??
+				(await cacheHelper.sessions.get(tenantCode, sessionId)) ??
 				(await sessionQueries.findById(sessionId, tenantCode))
 
 			if (!sessionDetails || Object.keys(sessionDetails).length === 0) {
@@ -3717,7 +3723,7 @@ module.exports = class SessionsHelper {
 
 			// Invalidate session cache after removing mentees (seats_remaining changed)
 			try {
-				await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
+				await cacheHelper.sessions.delete(tenantCode, sessionId)
 			} catch (cacheError) {
 				// Cache invalidation failure - continue operation
 			}
@@ -4176,20 +4182,7 @@ module.exports = class SessionsHelper {
 	}
 	static async getResources(sessionId, tenantCode) {
 		let resourceInfo = await resourceQueries.find({ session_id: sessionId }, tenantCode)
-
 		if (resourceInfo && resourceInfo.length > 0) {
-			await Promise.all(
-				resourceInfo.map(async function (resource) {
-					if (resource && resource.link) {
-						if (/^http/i.test(resource.link)) {
-							return resource
-						} else {
-							resource.link = await utils.getDownloadableUrl(resource.link)
-							return resource
-						}
-					}
-				})
-			)
 			return resourceInfo
 		} else {
 			return []
@@ -4218,8 +4211,10 @@ module.exports = class SessionsHelper {
 				if (isExternalLink) return resource
 
 				// Otherwise generate downloadable URL
-				resource.link = await utils.getDownloadableUrl(resource.link)
-				return resource
+				return {
+					...resource,
+					link: await utils.getDownloadableUrl(resource.link),
+				}
 			})
 		)
 

@@ -931,99 +931,108 @@ const getUserDetailedList = function (userIds, tenantCode, deletedUsers = false,
 }
 
 const getUserDetailedListUsingCache = async function (usersMap, tenantCode, deletedUsers = false, unscopped = false) {
-	// Empty input short-circuit
-	if (!usersMap || usersMap.length === 0) {
-		return { result: [] }
-	}
-
-	let options = deletedUsers ? { paranoid: false } : {}
-
-	// Get user data: cached + missing list
-	const usersInfo = await usersHelper.getMissingUserIdsAndCacheData(usersMap, tenantCode)
-
-	let userDetails = [...(usersInfo.cacheFoundData || [])]
-
-	// Fetch missing user records from DB
-	if (usersInfo.missingUserIds.length > 0) {
-		const usersFromDb = await menteeQueries.getUsersByUserIds(
-			usersInfo.missingUserIds,
-			options,
-			tenantCode,
-			unscopped
-		)
-		userDetails.push(...usersFromDb)
-	}
-
-	// ---- Organization Mapping ----
-	const organizations = [
-		...new Map(
-			userDetails.map((u) => [
-				u.organization_id,
-				{ organization_id: u.organization_id, organization_code: u.organization_code },
-			])
-		).values(),
-	]
-
-	const orgDetails = {}
-	const missingOrgInfoInCache = []
-
-	const cacheResults = await Promise.all(
-		organizations.map(async (org) => ({
-			org,
-			orgCachedData: await cacheHelper.organizations.get(tenantCode, org.organization_code, org.organization_id),
-		}))
-	)
-
-	for (const { org, orgCachedData } of cacheResults) {
-		if (orgCachedData) {
-			orgDetails[org.organization_id] = {
-				name: orgCachedData.name,
-				organization_id: orgCachedData.organization_id,
-				organization_code: orgCachedData.organization_code,
-			}
-		} else {
-			missingOrgInfoInCache.push(org)
+	try {
+		// Empty input short-circuit
+		if (!usersMap || usersMap.length === 0) {
+			return { result: [] }
 		}
-	}
 
-	// Fetch missing organization records
-	if (missingOrgInfoInCache.length > 0) {
-		const organizationDetails = await organisationExtensionQueries.findAll(
-			{
-				organization_id: { [Op.in]: missingOrgInfoInCache.map((i) => i.organization_id) },
-				organization_code: { [Op.in]: missingOrgInfoInCache.map((i) => i.organization_code) },
-			},
-			tenantCode,
-			{ attributes: ['name', 'organization_id', 'organization_code'] }
+		let options = deletedUsers ? { paranoid: false } : {}
+
+		// Get user data: cached + missing list
+		const usersInfo = await usersHelper.getMissingUserIdsAndCacheData(usersMap, tenantCode)
+
+		let userDetails = [...(usersInfo.cacheFoundData || [])]
+
+		// Fetch missing user records from DB
+		if (usersInfo.missingUserIds.length > 0) {
+			const usersFromDb = await menteeQueries.getUsersByUserIds(
+				usersInfo.missingUserIds,
+				options,
+				tenantCode,
+				unscopped
+			)
+			userDetails.push(...usersFromDb)
+		}
+
+		// ---- Organization Mapping ----
+		const organizations = [
+			...new Map(
+				userDetails.map((u) => [
+					u.organization_id,
+					{ organization_id: u.organization_id, organization_code: u.organization_code },
+				])
+			).values(),
+		]
+
+		const orgDetails = {}
+		const missingOrgInfoInCache = []
+
+		const cacheResults = await Promise.all(
+			organizations.map(async (org) => ({
+				org,
+				orgCachedData: await cacheHelper.organizations.get(
+					tenantCode,
+					org.organization_code,
+					org.organization_id
+				),
+			}))
 		)
 
-		organizationDetails.forEach((org) => {
-			orgDetails[org.organization_id] = org
-		})
+		for (const { org, orgCachedData } of cacheResults) {
+			if (orgCachedData) {
+				orgDetails[org.organization_id] = {
+					name: orgCachedData.name,
+					organization_id: orgCachedData.organization_id,
+					organization_code: orgCachedData.organization_code,
+				}
+			} else {
+				missingOrgInfoInCache.push(org)
+			}
+		}
+
+		// Fetch missing organization records
+		if (missingOrgInfoInCache.length > 0) {
+			const organizationDetails = await organisationExtensionQueries.findAll(
+				{
+					organization_id: { [Op.in]: missingOrgInfoInCache.map((i) => i.organization_id) },
+					organization_code: { [Op.in]: missingOrgInfoInCache.map((i) => i.organization_code) },
+				},
+				tenantCode,
+				{ attributes: ['name', 'organization_id', 'organization_code'] }
+			)
+
+			organizationDetails.forEach((org) => {
+				orgDetails[org.organization_id] = org
+			})
+		}
+
+		// ---- Enrich Users ----
+		await Promise.all(
+			userDetails.map(async (user) => {
+				if (!user.deleted_at && user.email) {
+					user.email = await emailEncryption.decryptAndValidate(user.email)
+				}
+
+				if (user.image) {
+					const downloadImageResponse = await getDownloadableUrl(user.image)
+					user.image = downloadImageResponse.result
+				}
+
+				user.user_roles = [{ title: common.MENTEE_ROLE }]
+				if (user.is_mentor) user.user_roles.push({ title: common.MENTOR_ROLE })
+
+				user.organization = orgDetails[user.organization_id] || null
+
+				return user
+			})
+		)
+
+		return { result: userDetails }
+	} catch (error) {
+		console.error('[getUserDetailedListUsingCache] Error:', error)
+		throw error
 	}
-
-	// ---- Enrich Users ----
-	await Promise.all(
-		userDetails.map(async (user) => {
-			if (!user.deleted_at && user.email) {
-				user.email = await emailEncryption.decryptAndValidate(user.email)
-			}
-
-			if (user.image) {
-				const downloadImageResponse = await getDownloadableUrl(user.image)
-				user.image = downloadImageResponse.result
-			}
-
-			user.user_roles = [{ title: common.MENTEE_ROLE }]
-			if (user.is_mentor) user.user_roles.push({ title: common.MENTOR_ROLE })
-
-			user.organization = orgDetails[user.organization_id] || null
-
-			return user
-		})
-	)
-
-	return { result: userDetails }
 }
 
 const getProfileDetails = async ({ tenantCode, userId }) => {
