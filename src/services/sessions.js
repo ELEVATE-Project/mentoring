@@ -1621,7 +1621,11 @@ module.exports = class SessionsHelper {
 					})
 				}
 
-				if (!validateDefaultRules && userId != sessionDetails.mentor_id) {
+				if (
+					!validateDefaultRules &&
+					userId != sessionDetails.mentor_id &&
+					userId != sessionDetails.created_by
+				) {
 					return responses.failureResponse({
 						message: 'SESSION_NOT_FOUND',
 						statusCode: httpStatusCode.bad_request,
