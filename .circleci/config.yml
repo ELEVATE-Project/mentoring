@@ -21,6 +21,9 @@ jobs:
           paths:
             - ./src/node_modules
       - run:
+          name: Configure git to use HTTPS for user service
+          command: git config --global url."https://github.com/".insteadOf "git@github.com:"
+      - run:
           name: Cloning user service
           command: cd ../ && git clone https://github.com/ELEVATE-Project/user.git --branch dev --single-branch
       - restore_cache:
