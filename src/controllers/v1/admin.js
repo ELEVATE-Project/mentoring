@@ -11,6 +11,7 @@ const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
 const userExtensionQueries = require('@database/queries/userExtension')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class admin {
 	/**
@@ -117,4 +118,148 @@ module.exports = class admin {
 	// 		return error
 	// 	}
 	// }
+
+	/**
+	 * Cache Administration APIs
+	 */
+
+	/**
+	 * Get cache statistics and monitoring info
+	 * @method
+	 * @name getCacheStats
+	 * @param {Object} req - request data
+	 * @returns {JSON} - Cache statistics response
+	 */
+	async getCacheStats(req) {
+		try {
+			if (!req.decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)) {
+				return responses.failureResponse({
+					message: 'UNAUTHORIZED_REQUEST',
+					statusCode: httpStatusCode.unauthorized,
+					responseCode: 'UNAUTHORIZED',
+				})
+			}
+
+			const tenantCode = req.decodedToken.tenant_code
+			const organizationId = req.decodedToken.organization_id
+
+			return await adminService.getCacheStatistics(tenantCode, organizationId)
+		} catch (error) {
+			console.error('Controller error in getCacheStats:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_STATS_FETCH_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
+		}
+	}
+
+	/**
+	 * Clear cache for specific namespace or tenant
+	 * @method
+	 * @name clearCache
+	 * @param {Object} req - request data
+	 * @param {String} req.query.namespace - Namespace to clear (optional)
+	 * @param {String} req.query.tenantCode - Tenant code to clear (optional)
+	 * @param {String} req.query.orgId - Organization ID to clear (optional)
+	 * @returns {JSON} - Cache clear response
+	 */
+	async clearCache(req) {
+		try {
+			if (!req.decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)) {
+				return responses.failureResponse({
+					message: 'UNAUTHORIZED_REQUEST',
+					statusCode: httpStatusCode.unauthorized,
+					responseCode: 'UNAUTHORIZED',
+				})
+			}
+
+			const { namespace, tenantCode, orgId } = req.query
+			const adminTenantCode = req.decodedToken.tenant_code
+			const adminOrgId = req.decodedToken.organization_id
+
+			return await adminService.clearCache({
+				namespace,
+				tenantCode: tenantCode || adminTenantCode,
+				orgId: orgId || adminOrgId,
+				adminTenantCode,
+				adminOrgId,
+			})
+		} catch (error) {
+			console.error('Controller error in clearCache:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_CLEAR_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
+		}
+	}
+
+	/**
+	 * Warm up cache for specific tenant/org
+	 * @method
+	 * @name warmUpCache
+	 * @param {Object} req - request data
+	 * @param {String} req.query.tenantCode - Tenant code to warm up (optional)
+	 * @param {String} req.query.orgCode - Organization code to warm up (optional)
+	 * @returns {JSON} - Cache warm up response
+	 */
+	async warmUpCache(req) {
+		try {
+			if (!req.decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)) {
+				return responses.failureResponse({
+					message: 'UNAUTHORIZED_REQUEST',
+					statusCode: httpStatusCode.unauthorized,
+					responseCode: 'UNAUTHORIZED',
+				})
+			}
+
+			const { tenantCode, orgCode } = req.query
+			const adminTenantCode = req.decodedToken.tenant_code
+			const adminOrgCode = req.decodedToken.organization_code
+			const adminOrgId = req.decodedToken.org
+
+			return await adminService.warmUpCache({
+				tenantCode: tenantCode || adminTenantCode,
+				orgCode: orgCode || adminOrgCode,
+				adminTenantCode,
+				adminOrgCode,
+			})
+		} catch (error) {
+			console.error('Controller error in warmUpCache:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_WARMUP_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
+		}
+	}
+
+	/**
+	 * Get cache configuration and health
+	 * @method
+	 * @name getCacheHealth
+	 * @param {Object} req - request data
+	 * @returns {JSON} - Cache health response
+	 */
+	async getCacheHealth(req) {
+		try {
+			if (!req.decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)) {
+				return responses.failureResponse({
+					message: 'UNAUTHORIZED_REQUEST',
+					statusCode: httpStatusCode.unauthorized,
+					responseCode: 'UNAUTHORIZED',
+				})
+			}
+
+			return await adminService.getCacheHealth()
+		} catch (error) {
+			console.error('Controller error in getCacheHealth:', error)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'CACHE_HEALTH_CHECK_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
+		}
+	}
 }

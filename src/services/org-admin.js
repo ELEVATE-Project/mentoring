@@ -15,6 +15,7 @@ const questionSetQueries = require('../database/queries/question-set')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class OrgAdminService {
 	/**
@@ -142,6 +143,13 @@ module.exports = class OrgAdminService {
 				orgCode
 			)
 
+			// Invalidate mentor cache after role change (mentor -> mentee)
+			try {
+				await cacheHelper.mentor.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate mentor cache after role change:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'USER_ROLE_UPDATED',
@@ -230,6 +238,14 @@ module.exports = class OrgAdminService {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Invalidate mentee cache after role change (mentee -> mentor)
+			try {
+				await cacheHelper.mentee.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate mentee cache after role change:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'USER_ROLE_UPDATED',
@@ -245,12 +261,16 @@ module.exports = class OrgAdminService {
 
 	static async setOrgPolicies(decodedToken, policies, tenantCode) {
 		try {
-			const orgPolicies = await organisationExtensionQueries.upsert({
-				organization_id: decodedToken.organization_id,
-				...policies,
-				created_by: decodedToken.id,
-				updated_by: decodedToken.id,
-			})
+			const orgPolicies = await organisationExtensionQueries.upsert(
+				{
+					organization_id: decodedToken.organization_id,
+					organization_code: decodedToken.organization_code,
+					...policies,
+					created_by: decodedToken.id,
+					updated_by: decodedToken.id,
+				},
+				tenantCode
+			)
 			const orgPolicyUpdated =
 				new Date(orgPolicies.dataValues.created_at).getTime() !==
 				new Date(orgPolicies.dataValues.updated_at).getTime()
@@ -297,6 +317,15 @@ module.exports = class OrgAdminService {
 				// )
 			}
 
+			// Proper cache invalidation and update for set policy
+
+			// Delete old cache first if it exists
+			await cacheHelper.organizations.delete(
+				tenantCode,
+				decodedToken.organization_code,
+				decodedToken.organization_id
+			)
+
 			delete orgPolicies.dataValues.deleted_at
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -310,7 +339,13 @@ module.exports = class OrgAdminService {
 
 	static async getOrgPolicies(decodedToken, tenantCode) {
 		try {
-			const orgPolicies = await organisationExtensionQueries.getById(decodedToken.organization_id)
+			// Try to get from cache first
+			let orgPolicies = await cacheHelper.organizations.get(
+				tenantCode,
+				decodedToken.organization_code,
+				decodedToken.organization_id
+			)
+
 			if (orgPolicies) {
 				delete orgPolicies.deleted_at
 				return responses.successResponse({
@@ -318,9 +353,17 @@ module.exports = class OrgAdminService {
 					message: 'ORG_POLICIES_FETCHED_SUCCESSFULLY',
 					result: { ...orgPolicies },
 				})
-			} else {
-				throw new Error(`No organisation extension found for organization_id ${decodedToken.organization_id}`)
 			}
+
+			// If not in cache, fetch from database
+			orgPolicies = await organisationExtensionQueries.getById(decodedToken.organization_code, tenantCode)
+
+			delete orgPolicies.deleted_at
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'ORG_POLICIES_FETCHED_SUCCESSFULLY',
+				result: { ...orgPolicies },
+			})
 		} catch (error) {
 			throw new Error(`Error reading organisation policies: ${error.message}`)
 		}
@@ -485,9 +528,26 @@ module.exports = class OrgAdminService {
 				updateData.visible_to_organizations.push(orgId)
 			}
 
-			if (utils.validateRoleAccess(bodyData.roles, common.MENTOR_ROLE))
+			if (utils.validateRoleAccess(bodyData.roles, common.MENTOR_ROLE)) {
 				await mentorQueries.updateMentorExtension(bodyData.user_id, updateData, {}, {}, false, tenantCode)
-			else await menteeQueries.updateMenteeExtension(bodyData.user_id, updateData, {}, {}, tenantCode)
+
+				// Cache invalidation: Clear mentor cache after organization update
+				try {
+					await cacheHelper.mentor.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
+				} catch (cacheError) {
+					console.error(`Cache deletion failed for mentor ${bodyData.user_id} after org update:`, cacheError)
+				}
+			} else {
+				await menteeQueries.updateMenteeExtension(bodyData.user_id, updateData, {}, {}, tenantCode)
+
+				// Cache invalidation: Clear mentee cache after organization update
+				try {
+					await cacheHelper.mentee.delete(tenantCode, bodyData.organization_code, bodyData.user_id)
+				} catch (cacheError) {
+					console.error(`Cache deletion failed for mentee ${bodyData.user_id} after org update:`, cacheError)
+				}
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'UPDATE_ORG_SUCCESSFULLY',
@@ -524,7 +584,8 @@ module.exports = class OrgAdminService {
 				})
 			for (let key in userIds) {
 				const userId = userIds[key]
-				const mentorDetails = await mentorQueries.getMentorExtension(userId, [], false, tenantCode)
+				// Try cache first using logged-in user's organization context
+				let mentorDetails = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
 				if (mentorDetails?.user_id) {
 					// Deactivate upcoming sessions of user as mentor
 					const removedSessionsDetail = await sessionQueries.deactivateAndReturnMentorSessions(
@@ -542,7 +603,8 @@ module.exports = class OrgAdminService {
 				}
 
 				//unenroll from upcoming session
-				const menteeDetails = await menteeQueries.getMenteeExtension(userId, [], false, tenantCode)
+				// Try cache first using logged-in user's organization context
+				let menteeDetails = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
 				if (menteeDetails?.user_id) {
 					await adminService.unenrollFromUpcomingSessions(userId, tenantCode)
 					deactivatedIdsList.push(userId)
@@ -614,6 +676,18 @@ module.exports = class OrgAdminService {
 				await menteeQueries.addVisibleToOrg(orgId, deltaOrganizationIds, tenantCode)
 			} else if (action === common.POP) {
 				await menteeQueries.removeVisibleToOrg(orgId, deltaOrganizationIds, tenantCode)
+			}
+
+			// Invalidate organization cache for the affected organization
+			try {
+				// Get organization details to extract orgCode for cache invalidation
+				const organizationDetails = await userRequests.fetchOrgDetails({ organizationId: orgId, tenantCode })
+				if (organizationDetails.success && organizationDetails.data && organizationDetails.data.result) {
+					const orgCode = organizationDetails.data.result.organization_code || orgId
+					await cacheHelper.organizations.delete(tenantCode, orgCode, orgId)
+				}
+			} catch (cacheError) {
+				console.error(`Failed to invalidate organization cache after updateRelatedOrgs:`, cacheError)
 			}
 
 			return responses.successResponse({
@@ -698,7 +772,7 @@ module.exports = class OrgAdminService {
 			})
 
 		const newData = { uploads: { session_csv_path: filepath } }
-		if (orgId != defaults.orgCode) {
+		if (orgCode != defaults.orgCode) {
 			let result = await organisationExtensionQueries.update(newData, orgCode, tenantCode)
 			if (!result) {
 				return responses.failureResponse({
@@ -707,6 +781,21 @@ module.exports = class OrgAdminService {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Invalidate organization cache after CSV upload
+			try {
+				const organizationDetails = await userRequests.fetchOrgDetails({
+					organizationCode: orgCode,
+					tenantCode,
+				})
+				if (organizationDetails.success && organizationDetails.data && organizationDetails.data.result) {
+					const orgId = organizationDetails.data.result.id
+					await cacheHelper.organizations.delete(tenantCode, orgCode, orgId)
+				}
+			} catch (cacheError) {
+				console.error(`Failed to invalidate organization cache after CSV upload:`, cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
 				message: 'CSV_UPLOADED_SUCCESSFULLY',
@@ -746,6 +835,15 @@ module.exports = class OrgAdminService {
 				responseCode: 'CLIENT_ERROR',
 			})
 		}
+
+		// Invalidate organization cache after theme update
+		try {
+			const orgId = organizationDetails.data.result.id
+			await cacheHelper.organizations.delete(tenantCode, orgCode, orgId)
+		} catch (cacheError) {
+			console.error(`Failed to invalidate organization cache after theme update:`, cacheError)
+		}
+
 		return responses.successResponse({
 			statusCode: httpStatusCode.ok,
 			message: 'ORG_THEME_UPDATED_SUCCESSFULLY',
@@ -766,7 +864,28 @@ module.exports = class OrgAdminService {
 				statusCode: httpStatusCode.bad_request,
 				responseCode: 'CLIENT_ERROR',
 			})
-		let organizationDetails = await organisationExtensionQueries.getById(
+
+		// Try to get organization details and theme from cache first
+		let organizationDetails = null
+		try {
+			const organizationInfo = await userRequests.fetchOrgDetails({ organizationCode: orgCode, tenantCode })
+			if (organizationInfo.success && organizationInfo.data && organizationInfo.data.result) {
+				const orgId = organizationInfo.data.result.id
+				organizationDetails = await cacheHelper.organizations.get(tenantCode, orgCode, orgId)
+				if (organizationDetails) {
+					return responses.successResponse({
+						statusCode: httpStatusCode.ok,
+						message: 'ORG_THEME_FETCHED_SUCCESSFULLY',
+						result: organizationDetails.theme,
+					})
+				}
+			}
+		} catch (cacheError) {
+			console.warn('Failed to get organization theme from cache:', cacheError)
+		}
+
+		// If not in cache, fetch from database
+		organizationDetails = await organisationExtensionQueries.getById(
 			{ [Op.in]: [defaults.orgCode, orgCode] },
 			{ [Op.in]: [defaults.tenantCode, tenantCode] }
 		)
@@ -777,6 +896,17 @@ module.exports = class OrgAdminService {
 				statusCode: httpStatusCode.bad_request,
 				responseCode: 'CLIENT_ERROR',
 			})
+		}
+
+		// Cache the organization details for future use
+		try {
+			const organizationInfo = await userRequests.fetchOrgDetails({ organizationCode: orgCode, tenantCode })
+			if (organizationInfo.success && organizationInfo.data && organizationInfo.data.result) {
+				const orgId = organizationInfo.data.result.id
+				await cacheHelper.organizations.set(tenantCode, orgCode, orgId, organizationDetails)
+			}
+		} catch (cacheError) {
+			console.error(`❌ Failed to cache organization after theme fetch:`, cacheError)
 		}
 
 		return responses.successResponse({

@@ -1,5 +1,6 @@
 'use strict'
 const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeCache = require('@helpers/entityTypeCache')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const entityQueries = require('@database/queries/entity')
 const { Op } = require('sequelize')
@@ -112,10 +113,6 @@ exports.buildSearchFilter = async function buildSearchFilter({
 			whereClause = `AND (${whereClauses.join(' OR ')})`
 		}
 
-		if (tenantCode) {
-			const tenantFilter = ` AND tenant_code = :tenantCode`
-			whereClause = whereClause ? whereClause + tenantFilter : `AND tenant_code = :tenantCode`
-		}
 		const positionQuery = positionQueries.join(',\n    ')
 
 		const sortQuery = `
@@ -124,10 +121,15 @@ exports.buildSearchFilter = async function buildSearchFilter({
         END ASC
     `.trim()
 
+		const replacements = {
+			search: search,
+		}
+
 		return {
 			whereClause,
 			positionQuery,
 			sortQuery,
+			replacements,
 		}
 	} catch (error) {
 		console.log('Error:', error)
@@ -222,7 +224,7 @@ async function getEntityTypeFilter(modelName, config, search, searchOn, tenantCo
 		entityTypes = config.fields.filter((field) => field.isAnEntityType === true).map((field) => field.name)
 	}
 
-	entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+	entityTypes = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
 		{
 			status: 'ACTIVE',
 			organization_code: defaults.orgCode,
@@ -230,7 +232,9 @@ async function getEntityTypeFilter(modelName, config, search, searchOn, tenantCo
 			allow_filtering: true,
 			value: entityTypes,
 		},
-		{ [Op.in]: [tenantCode, defaults.tenantCode] }
+		tenantCode,
+		defaults.orgCode,
+		modelName
 	)
 
 	const entityTypeIds = entityTypes.map((entityType) => entityType.id)

@@ -3,6 +3,7 @@ const menteeExtensionQueries = require('@database/queries/userExtension')
 const userRequests = require('@requests/user')
 const entityTypeService = require('@services/entity-type')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
+const cacheHelper = require('@generics/cacheHelper')
 const { Parser } = require('@json2csv/plainjs')
 const { Op } = require('sequelize')
 
@@ -86,14 +87,23 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 
 		// Process entity types to add value labels
 		const uniqueOrgIds = [...new Set(enrolledUsers.map((user) => user.organization_id))]
-		enrolledUsers = await entityTypeService.processEntityTypesToAddValueLabels(
+		const modelName = await menteeExtensionQueries.getModelName()
+
+		const processedUsers = await entityTypeService.processEntityTypesToAddValueLabels(
 			enrolledUsers,
 			uniqueOrgIds,
-			[await menteeExtensionQueries.getModelName()],
+			[modelName],
 			'organization_id',
 			[],
 			[tenantCode]
 		)
+
+		// Check if processing actually returned processed data or error
+		if (processedUsers && !processedUsers.responseCode) {
+			enrolledUsers = processedUsers
+		} else {
+			// Continue with original data if processing fails
+		}
 
 		// Fetch organization details for each unique organization ID
 		const validOrgIds = uniqueOrgIds.filter((id) => id != null)
@@ -107,10 +117,29 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 				},
 				tenantCode,
 				{
-					attributes: ['name', 'organization_id'],
+					attributes: ['name', 'organization_id', 'organization_code'],
 					raw: true,
 				}
 			)
+
+			// Cache organizations for future use (async, don't wait)
+			if (organizationDetails.length > 0) {
+				const cachePromises = organizationDetails
+					.map((org) => {
+						if (org.organization_code) {
+							return cacheHelper.organizations
+								.set(tenantCode, org.organization_code, org.organization_id, org)
+								.catch(() => {
+									// Silently handle cache errors
+								})
+						}
+					})
+					.filter(Boolean)
+
+				Promise.all(cachePromises).catch(() => {
+					// Silently handle cache errors
+				})
+			}
 		}
 
 		// Map organization details to users
