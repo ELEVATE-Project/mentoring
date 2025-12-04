@@ -90,7 +90,7 @@ services:
       - REDIS_HOST=redis://redis:6379
       # Note: This host will not exist, but is kept for env consistency
       - SCHEDULER_SERVICE_HOST=http://scheduler:4000
-      - DEV_DATABASE_URL=postgres://postgres:postgres@citus:5432/elevate-mentoring
+      - DEV_DATABASE_URL=postgres://postgres:postgres@citus:5432/mentoring-local
       - ENABLE_CHAT=false
       - ADMIN_SECRET_CODE=ADMIN_SECRET_CODE
     depends_on:
