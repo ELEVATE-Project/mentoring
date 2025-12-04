@@ -36,7 +36,7 @@ module.exports = class UserInviteHelper {
 				const defaultOrgCode = data.user.defaultOrganiztionCode
 				const defaultTenantCode = data.user.defaultTenantCode
 
-				const mentor = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+				const mentor = await cacheHelper.mentee.get(tenantCode, userId)
 				if (!mentor) throw createUnauthorizedResponse('USER_NOT_FOUND')
 
 				const isMentor = mentor.is_mentor

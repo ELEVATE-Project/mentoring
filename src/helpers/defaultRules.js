@@ -110,9 +110,9 @@ async function getUserDetails(userId, isAMentor, tenantCode) {
 async function getUserDetailsFromCache(userId, isAMentor, tenantCode, organisationCodes) {
 	try {
 		if (isAMentor) {
-			return await cacheHelper.mentor.get(tenantCode, organisationCodes, userId)
+			return await cacheHelper.mentor.get(tenantCode, userId)
 		} else {
-			return await cacheHelper.mentee.get(tenantCode, organisationCodes, userId)
+			return await cacheHelper.mentee.get(tenantCode, userId)
 		}
 	} catch (error) {
 		console.log(error)

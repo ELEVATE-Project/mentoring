@@ -56,7 +56,7 @@ module.exports = class MentorsHelper {
 			let requestedMentorExtension = false
 			if (id !== '' && isAMentor !== '' && roles !== '') {
 				// Try cache first, fallback to direct query
-				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
+				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, id)
 
 				if (!requestedMentorExtension) {
 					return responses.failureResponse({
@@ -295,7 +295,7 @@ module.exports = class MentorsHelper {
 	static async share(id, userId, organizationCode, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let mentorsDetails = await cacheHelper.mentor.get(tenantCode, organizationCode, id)
+			let mentorsDetails = await cacheHelper.mentor.get(tenantCode, id)
 			if (!mentorsDetails) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.bad_request,
@@ -518,7 +518,7 @@ module.exports = class MentorsHelper {
 	static async updateMentorExtension(data, userId, orgCode, tenantCode) {
 		try {
 			// Try cache first for current mentor data
-			let currentUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+			let currentUser = await cacheHelper.mentor.get(tenantCode, userId)
 			if (!currentUser) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -638,7 +638,7 @@ module.exports = class MentorsHelper {
 
 			if (updateCount === 0) {
 				// Try cache first for fallback data
-				let fallbackUpdatedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+				let fallbackUpdatedUser = await cacheHelper.mentor.get(tenantCode, userId)
 				if (!fallbackUpdatedUser) {
 					return responses.failureResponse({
 						statusCode: httpStatusCode.not_found,
@@ -662,7 +662,7 @@ module.exports = class MentorsHelper {
 			if (userId && orgCode) {
 				try {
 					// Delete old cache first
-					await cacheHelper.mentor.delete(tenantCode, orgCode, userId)
+					await cacheHelper.mentor.delete(tenantCode, userId)
 				} catch (cacheError) {
 					console.error(`❌ Failed to update mentor cache after update:`, cacheError)
 				}
@@ -689,7 +689,7 @@ module.exports = class MentorsHelper {
 	static async getMentorExtension(userId, organizationCode, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let mentor = await cacheHelper.mentor.get(tenantCode, organizationCode, userId)
+			let mentor = await cacheHelper.mentor.get(tenantCode, userId)
 			if (!mentor) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -719,7 +719,7 @@ module.exports = class MentorsHelper {
 			}
 
 			// Try mentee cache as fallback (user might have both roles)
-			const cachedUser = await cacheHelper.mentee.get(tenantCode, orgCode, userId, false)
+			const cachedUser = await cacheHelper.mentee.get(tenantCode, userId)
 			if (cachedUser) {
 				// Always generate fresh downloadable URL for image (cached URLs expire)
 				if (cachedUser.image) {
@@ -792,7 +792,7 @@ module.exports = class MentorsHelper {
 			// Cache invalidation: Clear mentor cache after deletion
 			if (mentorExtension && mentorExtension.organization_code) {
 				try {
-					await cacheHelper.mentor.delete(tenantCode, mentorExtension.organization_code, userId)
+					await cacheHelper.mentor.delete(tenantCode, userId)
 				} catch (cacheError) {
 					console.error(`Cache deletion failed for mentor ${userId}:`, cacheError)
 				}
@@ -819,23 +819,7 @@ module.exports = class MentorsHelper {
 	 */
 	static async read(id, orgCode, userId = '', isAMentor = '', roles = '', tenantCode) {
 		try {
-			// Get mentor profile first to ensure we have organization_code
-			let mentorProfile = await userRequests.getUserDetails(id, tenantCode)
-			if (!mentorProfile.data.result) {
-				return responses.failureResponse({
-					statusCode: httpStatusCode.not_found,
-					message: 'MENTORS_NOT_FOUND',
-				})
-			}
-
-			// Set orgCode if not provided
-			if (!orgCode) {
-				orgCode = mentorProfile.data.result.organization_code
-			}
-
-			// Try to get complete profile from cache first using getCacheOnly
-			let cachedProfile = null
-			cachedProfile = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, id)
+			let cachedProfile = await cacheHelper.mentor.getCacheOnly(tenantCode, id)
 
 			const defaults = await getDefaults()
 			if (!defaults.orgCode) {
@@ -922,8 +906,19 @@ module.exports = class MentorsHelper {
 						cachedProfile.image = await utils.getDownloadableUrl(cachedProfile.image)
 					} catch (error) {
 						console.error(`Failed to get downloadable URL for cached profile image:`, error)
-						cachedProfile.image = null
 					}
+				}
+
+				let communications = null
+				if (mentorExtension?.meta?.communications_user_id) {
+					try {
+						const chat = await communicationHelper.login(id, tenantCode)
+						communications = chat
+					} catch (error) {}
+				}
+				processDbResponse.meta = {
+					...processDbResponse.meta,
+					communications,
 				}
 
 				return responses.successResponse({
@@ -934,7 +929,7 @@ module.exports = class MentorsHelper {
 			}
 
 			// Get mentor extension data efficiently (avoid redundant queries)
-			let mentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
+			let mentorExtension = await cacheHelper.mentor.get(tenantCode, id)
 
 			// If user authentication is required, perform validation
 			if (userId !== '' && isAMentor !== '' && roles !== '') {
@@ -986,32 +981,6 @@ module.exports = class MentorsHelper {
 				}
 			}
 
-			const mentorOrgCode = mentorProfile.data.result.organization_code
-
-			// If no mentor extension found, but user has admin/mentor roles, check if user extension exists and update it
-			if (!mentorExtension && roles && roles.some((role) => role.title === 'admin' || role.title === 'mentor')) {
-				// Try to get user extension without is_mentor filter (unscoped call - cannot cache)
-				const userExtension = await mentorQueries.getMentorExtension(id, [], true, tenantCode)
-				if (userExtension) {
-					// Update using unscoped updateMentorExtension with custom filter to bypass is_mentor constraint
-					await mentorQueries.updateMentorExtension(
-						id,
-						{ is_mentor: true },
-						{},
-						{ user_id: id },
-						true,
-						tenantCode
-					)
-
-					// Cache invalidation: Delete old cache after mentor extension update
-					try {
-						await cacheHelper.mentor.delete(tenantCode, orgCode, id)
-					} catch (cacheError) {
-						console.error(`Cache deletion failed for mentor ${id} after update:`, cacheError)
-					}
-				}
-			}
-
 			if (!mentorProfile.data.result || !mentorExtension) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -1022,6 +991,7 @@ module.exports = class MentorsHelper {
 
 			mentorExtension = utils.deleteProperties(mentorExtension, ['phone'])
 
+			const mentorOrgCode = mentorExtension.organization_code
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
@@ -1094,9 +1064,6 @@ module.exports = class MentorsHelper {
 				mentorProfile.permissions.push(...permissionsArray)
 			}
 
-			const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
-			mentorProfile.profile_mandatory_fields = profileMandatoryFields
-
 			let communications = null
 
 			if (mentorExtension?.meta?.communications_user_id) {
@@ -1149,15 +1116,15 @@ module.exports = class MentorsHelper {
 			processDbResponse.profile_mandatory_fields = profileMandatoryFieldsRead
 
 			// Conditionally fetch profile details if token exists
-			let userProfile = {}
-			if (tenantCode && id) {
-				const profileResponse = await userRequests.getProfileDetails({ tenantCode, userId: id })
-				// If profileResponse.data.result exists, include it; otherwise, keep userProfile empty
-				if (profileResponse.data.result) {
-					userProfile = profileResponse.data.result
-				}
-				// No failure response; proceed with available data
-			}
+			// let userProfile = {}
+			// if (tenantCode && id) {
+			// const profileResponse = await userRequests.getProfileDetails({ tenantCode, userId: id })
+			// If profileResponse.data.result exists, include it; otherwise, keep userProfile empty
+			// if (profileResponse.data.result) {
+			// userProfile = profileResponse.data.result
+			// }
+			// No failure response; proceed with available data
+			// }
 			// Construct the final profile response (INCLUDE sessions_attended for read endpoint)
 			const totalSessionsAttended = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
 			const finalProfile = {
@@ -1180,8 +1147,13 @@ module.exports = class MentorsHelper {
 			}
 
 			try {
+				const cacheCopy = { ...finalProfile }
+				delete cacheCopy.image
+				delete cacheCopy.is_connected
+				delete cacheCopy.connection_details
+				delete cacheCopy.meta?.communications
 				console.log(`💾 Caching complete mentor profile response for ${id}`)
-				await cacheHelper.mentor.set(tenantCode, orgCode, id, finalProfile)
+				await cacheHelper.mentor.set(tenantCode, id, cacheCopy)
 			} catch (cacheError) {
 				console.error(`❌ Failed to cache mentor profile ${id}:`, cacheError)
 			}
@@ -1670,7 +1642,7 @@ module.exports = class MentorsHelper {
 		try {
 			// Always query mentee extension for mentor list filtering policy
 			// Even if user is also a mentor/admin, we need their mentee visibility policy
-			const userPolicyDetails = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+			const userPolicyDetails = await cacheHelper.mentee.get(tenantCode, userId)
 
 			// Throw error if mentor/mentee extension not found
 			if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {

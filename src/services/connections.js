@@ -43,7 +43,7 @@ module.exports = class ConnectionHelper {
 	static async initiate(bodyData, userId, tenantCode, orgCode) {
 		try {
 			// Check if the target user exists using cache with automatic DB fallback
-			const userExists = await cacheHelper.mentee.get(tenantCode, orgCode, bodyData.user_id, false)
+			const userExists = await cacheHelper.mentee.get(tenantCode, bodyData.user_id)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -540,7 +540,7 @@ module.exports = class ConnectionHelper {
 			)
 
 			// Get mentor details using getCacheOnly first, then fallback to database query
-			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, mentorId)
+			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, mentorId)
 
 			if (!mentorDetails) {
 				mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
@@ -623,7 +623,7 @@ module.exports = class ConnectionHelper {
 			)
 
 			// Get mentor details using getCacheOnly first, then fallback to database query
-			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, mentorId)
+			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, mentorId)
 
 			if (!mentorDetails) {
 				mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], false, tenantCode)

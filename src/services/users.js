@@ -355,13 +355,13 @@ module.exports = class UserHelper {
 
 			// Invalidate cache after role change - separate try-catch for each cache
 			try {
-				await cacheHelper.mentee.delete(tenantCode, userExtensionData.organization.code, userExtensionData.id)
+				await cacheHelper.mentee.delete(tenantCode, userExtensionData.id)
 			} catch (cacheError) {
 				console.error(`❌ Failed to invalidate mentee cache after role change:`, cacheError)
 			}
 
 			try {
-				await cacheHelper.mentor.delete(tenantCode, userExtensionData.organization.code, userExtensionData.id)
+				await cacheHelper.mentor.delete(tenantCode, userExtensionData.id)
 			} catch (cacheError) {
 				console.error(`❌ Failed to invalidate mentor cache after role change:`, cacheError)
 			}
@@ -394,11 +394,7 @@ module.exports = class UserHelper {
 						userExtensionData.id
 					)
 				} else {
-					await cacheHelper.mentor.delete(
-						tenantCode,
-						userExtensionData.organization.code,
-						userExtensionData.id
-					)
+					await cacheHelper.mentor.delete(tenantCode, userExtensionData.id)
 				}
 			} catch (cacheError) {
 				console.error(`❌ Failed to invalidate user cache after update:`, cacheError)
