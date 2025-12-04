@@ -2,7 +2,6 @@
 const httpStatusCode = require('@generics/http-status')
 const entityTypeQueries = require('../database/queries/entityType')
 const { Op } = require('sequelize')
-const { getDefaults } = require('@helpers/getDefaultOrgId')
 const responses = require('@helpers/responses')
 const cacheHelper = require('@generics/cacheHelper')
 const common = require('@constants/common')
@@ -21,12 +20,10 @@ async function getEntityTypesAndEntitiesWithCache(originalFilter, tenantCode, or
 	try {
 		// If no modelName provided, use direct database query with user-centric approach
 		if (!modelName) {
-			// Get defaults internally for database query
-			let defaults = null
-			try {
-				defaults = await getDefaults()
-			} catch (error) {
-				console.error('Failed to get defaults for getEntityTypesAndEntitiesWithCache:', error.message)
+			// Get defaults from environment variables only
+			const defaults = {
+				orgCode: process.env.DEFAULT_ORGANISATION_CODE,
+				tenantCode: process.env.DEFAULT_TENANT_CODE,
 			}
 
 			// Step 1: ALWAYS fetch from user tenant and org codes
@@ -121,12 +118,10 @@ async function getEntityTypesAndEntitiesWithCache(originalFilter, tenantCode, or
 
 		// Cache miss - fetch from database with user-centric approach
 
-		// Get defaults internally for database query
-		let defaults = null
-		try {
-			defaults = await getDefaults()
-		} catch (error) {
-			console.error('Failed to get defaults for getEntityTypesAndEntitiesWithCache:', error.message)
+		// Get defaults from environment variables only
+		const defaults = {
+			orgCode: process.env.DEFAULT_ORGANISATION_CODE,
+			tenantCode: process.env.DEFAULT_TENANT_CODE,
 		}
 
 		let dbResult = null
@@ -209,12 +204,10 @@ async function getEntityTypesAndEntitiesWithCache(originalFilter, tenantCode, or
  */
 async function getEntityTypesAndEntitiesForModel(modelName, tenantCode, orgCode, additionalFilters = {}) {
 	try {
-		// Get defaults internally for database query
-		let defaults = null
-		try {
-			defaults = await getDefaults()
-		} catch (error) {
-			console.error('Failed to get defaults for getEntityTypesAndEntitiesForModel:', error.message)
+		// Get defaults from environment variables only
+		const defaults = {
+			orgCode: process.env.DEFAULT_ORGANISATION_CODE,
+			tenantCode: process.env.DEFAULT_TENANT_CODE,
 		}
 
 		if (!defaults || !defaults.orgCode || !defaults.tenantCode) {
@@ -394,12 +387,10 @@ async function getEntityTypeByValue(modelName, entityValue, tenantCode, orgCode)
 		}
 	} catch (cacheError) {}
 
-	// Get defaults internally for database query
-	let defaults = null
-	try {
-		defaults = await getDefaults()
-	} catch (error) {
-		console.error('Failed to get defaults for getEntityTypeByValue:', error.message)
+	// Get defaults from environment variables only
+	const defaults = {
+		orgCode: process.env.DEFAULT_ORGANISATION_CODE,
+		tenantCode: process.env.DEFAULT_TENANT_CODE,
 	}
 
 	// Fallback to database query if not in cache

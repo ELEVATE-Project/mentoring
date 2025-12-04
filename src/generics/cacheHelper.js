@@ -13,7 +13,6 @@ const notificationTemplateQueries = require('@database/queries/notificationTempl
 const sessionQueries = require('@database/queries/sessions')
 const permissionQueries = require('@database/queries/permissions')
 const rolePermissionMappingQueries = require('@database/queries/role-permission-mapping')
-const { getDefaults } = require('@helpers/getDefaultOrgId')
 const kafkaCommunication = require('@generics/kafka-communication')
 // Removed SessionsHelper import to avoid circular dependency
 const formQueries = require('@database/queries/form')
@@ -541,17 +540,10 @@ const entityTypes = {
 				return cachedEntityType
 			}
 
-			// Step 2: Get defaults internally for database query
-			let defaults = null
-			try {
-				defaults = await getDefaults()
-			} catch (error) {
-				console.error('Failed to get defaults for entityType cache:', error.message)
-				// Fallback defaults from environment variables
-				defaults = {
-					orgCode: process.env.DEFAULT_ORGANISATION_CODE || 'default_code',
-					tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-				}
+			// Step 2: Get defaults from environment variables only
+			const defaults = {
+				orgCode: process.env.DEFAULT_ORGANISATION_CODE,
+				tenantCode: process.env.DEFAULT_TENANT_CODE,
 			}
 
 			// Step 3: Cache miss - query database with user codes first
@@ -664,17 +656,10 @@ const entityTypes = {
 	 */
 	async getAllEntityTypesForModel(tenantCode, orgCode, modelName) {
 		try {
-			// Get defaults internally for database query
-			let defaults = null
-			try {
-				defaults = await getDefaults()
-			} catch (error) {
-				console.error('Failed to get defaults for getAllEntityTypesForModel:', error.message)
-				// Fallback defaults from environment variables
-				defaults = {
-					orgCode: process.env.DEFAULT_ORGANISATION_CODE || 'default_code',
-					tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-				}
+			// Get defaults from environment variables only
+			const defaults = {
+				orgCode: process.env.DEFAULT_ORGANISATION_CODE,
+				tenantCode: process.env.DEFAULT_TENANT_CODE,
 			}
 
 			let entityTypes = []
@@ -816,17 +801,10 @@ const forms = {
 				return cachedForm
 			}
 
-			// Step 2: Get defaults internally for database query
-			let defaults = null
-			try {
-				defaults = await getDefaults()
-			} catch (error) {
-				console.error('Failed to get defaults for form cache:', error.message)
-				// Fallback defaults from environment variables
-				defaults = {
-					orgCode: process.env.DEFAULT_ORGANISATION_CODE || 'default_code',
-					tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-				}
+			// Step 2: Get defaults from environment variables only
+			const defaults = {
+				orgCode: process.env.DEFAULT_ORGANISATION_CODE,
+				tenantCode: process.env.DEFAULT_TENANT_CODE,
 			}
 
 			// Step 3: Cache miss - query database with user codes first
@@ -1520,17 +1498,10 @@ const notificationTemplates = {
 				return cachedTemplate
 			}
 
-			// Step 2: Get defaults internally for database query
-			let defaults = null
-			try {
-				defaults = await getDefaults()
-			} catch (error) {
-				console.error('Failed to get defaults for notification template cache:', error.message)
-				// Fallback defaults from environment variables
-				defaults = {
-					orgCode: process.env.DEFAULT_ORGANISATION_CODE || 'default_code',
-					tenantCode: process.env.DEFAULT_TENANT_CODE || 'default',
-				}
+			// Step 2: Get defaults from environment variables only
+			const defaults = {
+				orgCode: process.env.DEFAULT_ORGANISATION_CODE,
+				tenantCode: process.env.DEFAULT_TENANT_CODE,
 			}
 
 			// Step 3: Cache miss - query database with prioritized fallback logic
