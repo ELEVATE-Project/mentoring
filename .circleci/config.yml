@@ -20,17 +20,15 @@ jobs:
           key: mentoring-dependency-cache-{{checksum "src/package.json"}}
           paths:
             - ./src/node_modules
-      
-      # --- FIX STARTS HERE ---
-      - run:
-          name: Disable SSH rewrite for public repo clone
-          # CircleCI forces HTTPS -> SSH in the checkout step. We must undo this to clone a public repo via HTTPS.
-          command: git config --global --unset url."ssh://git@github.com".insteadOf || true
-      # --- FIX ENDS HERE ---
 
+      # 1. Disable SSH Rewrite (Crucial for public repos)
+      - run:
+          name: Disable SSH rewrite for public repo clones
+          command: git config --global --unset url."ssh://git@github.com".insteadOf || true
+
+      # 2. Clone USER service
       - run:
           name: Cloning user service
-          # Now this HTTPS link will actually stay HTTPS
           command: cd ../ && git clone https://github.com/ELEVATE-Project/user.git --branch dev --single-branch
       - restore_cache:
           key: user-dependency-cache-{{ checksum "../user/src/package.json" }}
@@ -41,10 +39,26 @@ jobs:
           key: user-dependency-cache-{{checksum "../user/src/package.json"}}
           paths:
             - ../user/src/node_modules
+
+      # 3. [NEW] Clone SCHEDULER service (Required by User service)
+      - run:
+          name: Cloning scheduler service
+          # Verify the repo URL is correct
+          command: cd ../ && git clone https://github.com/ELEVATE-Project/scheduler.git --branch dev --single-branch || echo "Scheduler clone failed or repo not found"
+
+      # 4. [NEW] Clone COMMUNICATIONS service (Required by docker-compose build)
+      - run:
+          name: Cloning communications service
+          # Verify the repo URL is correct
+          command: cd ../ && git clone https://github.com/ELEVATE-Project/chat-communications.git --branch dev --single-branch || echo "Communications clone failed or repo not found"
+
+      # 5. Start Containers
       - run:
           name: Starting the docker containers
+          # Now that folders exist, the 'build' context in docker-compose will work
           command: |-
-            cd dev-ops/ && docker-compose up -d && sleep 30
+            cd dev-ops/ && docker-compose up && sleep 30
+      
       - run:
           name: Running integration tests
           command: |-
