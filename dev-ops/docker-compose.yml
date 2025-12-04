@@ -73,7 +73,7 @@ services:
   # ---------------- APPLICATION SERVICES ----------------
 
   mentoring:
-    build: '../' # Preserved from your old file
+    build: '../'
     image: elevate/mentoring:2.4
     volumes:
       - ../src/:/var/src
@@ -88,9 +88,11 @@ services:
       - KAFKA_URL=kafka:9092
       - USER_SERVICE_HOST=http://user:3001
       - REDIS_HOST=redis://redis:6379
+      # Note: This host will not exist, but is kept for env consistency
       - SCHEDULER_SERVICE_HOST=http://scheduler:4000
       - DEV_DATABASE_URL=postgres://postgres:postgres@citus:5432/elevate-mentoring
       - ENABLE_CHAT=false
+      - ADMIN_SECRET_CODE=ADMIN_SECRET_CODE
     depends_on:
       kafka:
         condition: service_healthy
@@ -102,13 +104,12 @@ services:
       - elevate_net
 
   user:
-    build: '../../user/' # Preserved from your old file
+    build: '../../user/'
     image: elevate/user:2.4
     volumes:
       - ../../user/src/:/var/src
     ports:
       - '3001:3001'
-     # - '9229:9229'
     command: >
       sh -c "sleep 20 && 
              npm run db:init && 
@@ -118,8 +119,10 @@ services:
       - KAFKA_URL=kafka:9092
       - REDIS_HOST=redis://redis:6379
       - DEV_DATABASE_URL=postgres://postgres:postgres@citus:5432/mentoring_user
+      # Note: This host will not exist, but is kept for env consistency
       - SCHEDULER_SERVICE_HOST=http://scheduler:4000
       - ENABLE_EMAIL_OTP_VERIFICATION=false
+      - ADMIN_SECRET_CODE=ADMIN_SECRET_CODE
     depends_on:
       kafka:
         condition: service_healthy
@@ -127,48 +130,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      scheduler:
-        condition: service_started
-    networks:
-      - elevate_net
-
-  # NEW: Added Scheduler
-  scheduler:
-    build: '../../scheduler/' # Assumed sibling folder structure
-    image: elevate/scheduler:1.0
-    volumes:
-      - ../../scheduler/src/:/var/src
-    ports:
-      - '4000:4000'
-    command: ['nodemon', '--trace-warnings', 'app.js']
-    environment:
-      - KAFKA_URL=kafka:9092
-    depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - elevate_net
-
-  # NEW: Added Communications
-  communications:
-    build: '../../chat-communications/' # Assumed sibling folder structure
-    image: elevate/chat-communications:1.0
-    volumes:
-      - ../../chat-communications/src/:/var/src
-    ports:
-      - '3123:3123'
-    command: ['nodemon', '--trace-warnings', 'app.js']
-    environment:
-      # Note: Rocketchat is not included in this CI file, this URL might need mocking in tests
-      - CHAT_PLATFORM_URL=http://rocketchat:3969 
-      - REDIS_HOST=redis://redis:6379/1
-      - DEV_DATABASE_URL=postgres://postgres:postgres@citus:5432/communications-local
-      - SCHEDULER_SERVICE_HOST=http://scheduler:4000
-    depends_on:
-      - kafka
-      - redis
+      # REMOVED: scheduler dependency
     networks:
       - elevate_net
 
@@ -179,4 +141,3 @@ networks:
 volumes:
   zookeeper-data:
   kafka-data:
-  # No DB volumes here = Fresh DB every time
