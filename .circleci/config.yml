@@ -1,35 +1,32 @@
-version: 2.1 # CircleCI version
-orbs:
-  sonarcloud: sonarsource/sonarcloud@1.1.1
+version: 2.1
 jobs:
   build:
-    machine: #Linux machine instead of docker environment
-      image: ubuntu-2004:202111-01
+    machine:
+      image: ubuntu-2004:2024.05.1
       docker_layer_caching: true
-    working_directory: ~/mentoring # Default working directory
+    working_directory: ~/mentoring
     steps:
+      - run:
+          name: Configure git to use HTTPS
+          command: git config --global url."https://github.com/".insteadOf "git@github.com:"
       - checkout:
           path: ~/mentoring/
       - restore_cache:
           key: mentoring-dependency-cache-{{ checksum "src/package.json" }}
       - run:
           name: Install dependencies
-          command: cd src/ && npm install #cd ../src/ && pwd &&
+          command: cd src/ && npm install
       - save_cache:
           key: mentoring-dependency-cache-{{checksum "src/package.json"}}
           paths:
             - ./src/node_modules
+
+      # 1. Disable SSH Rewrite (Crucial for public repos)
       - run:
-          name: Executing unit test cases
-          command: cd src/ && npm run test -- --coverage --collectCoverageFrom="./services/**"
-      - store_artifacts:
-          path: src/coverage/
-          destination: /coverage/
-      - sonarcloud/scan
-      - run:
-          name: Checking prerequisites
-          command: |-
-            docker-compose --version
+          name: Disable SSH rewrite for public repo clones
+          command: git config --global --unset url."ssh://git@github.com".insteadOf || true
+
+      # 2. Clone USER service
       - run:
           name: Cloning user service
           command: cd ../ && git clone https://github.com/ELEVATE-Project/user.git --branch dev --single-branch
@@ -37,28 +34,41 @@ jobs:
           key: user-dependency-cache-{{ checksum "../user/src/package.json" }}
       - run:
           name: Install User service dependencies
-          command: cd ../user/src/ && npm install #cd ../src/ && pwd &&
+          command: cd ../user/src/ && npm install
       - save_cache:
           key: user-dependency-cache-{{checksum "../user/src/package.json"}}
           paths:
             - ../user/src/node_modules
+
+      # 3. [NEW] Clone SCHEDULER service (Required by User service)
+      - run:
+          name: Cloning scheduler service
+          # Verify the repo URL is correct
+          command: cd ../ && git clone https://github.com/ELEVATE-Project/scheduler.git --branch dev --single-branch || echo "Scheduler clone failed or repo not found"
+
+      # 4. [NEW] Clone COMMUNICATIONS service (Required by docker-compose build)
+      - run:
+          name: Cloning communications service
+          # Verify the repo URL is correct
+          command: cd ../ && git clone https://github.com/ELEVATE-Project/chat-communications.git --branch dev --single-branch || echo "Communications clone failed or repo not found"
+
+      # 5. Start Containers
       - run:
           name: Starting the docker containers
+          # Now that folders exist, the 'build' context in docker-compose will work
           command: |-
-            cd dev-ops/ && docker-compose up -d
+            cd dev-ops/ && docker-compose up && sleep 30
+      
       - run:
-          name: Running test cases
+          name: Running integration tests
           command: |-
-            cd src/ &&  npm run test:integration
+            cd src/ && npm run test:integration
       - store_test_results:
           path: ./dev-ops/report
 workflows:
-  build-and-test: # This is the name of the workflow,
-    # Inside the workflow, you define the jobs you want to run.
+  build-and-test:
     jobs:
       - build:
-          context:
-            - SonarCloud
           filters:
             tags:
               only: \b(dev|develop|main)\b

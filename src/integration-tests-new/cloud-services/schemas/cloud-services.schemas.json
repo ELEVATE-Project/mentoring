@@ -1,0 +1,29 @@
+{
+	"GET_mentoring_v1_cloud-services_getSignedUrl": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"signed_url": {
+						"type": "string"
+					},
+					"file_path": {
+						"type": "string"
+					},
+					"dest_file_path": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_cloud-services_getDownloadableUrl": {}
+}
