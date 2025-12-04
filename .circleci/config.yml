@@ -6,17 +6,22 @@ jobs:
       docker_layer_caching: true
     working_directory: ~/mentoring
     steps:
-      - run:
-          name: Remove GitHub SSH rewrite
-          command: |
-            git config --global --unset-all url.ssh://git@github.com/.insteadOf || true
-
-      - run:
-          name: Configure git to use HTTPS
-          command: git config --global url."https://github.com/".insteadOf "git@github.com:"
-
       - checkout:
           path: ~/mentoring/
+
+      # ---------------------------------------------------------
+      # KEY FIX: Run this AFTER checkout to remove CircleCI's
+      # automatic SSH-forcing configuration.
+      # ---------------------------------------------------------
+      - run:
+          name: Force HTTPS for public repos (Fix SSH Deploy Key conflict)
+          command: |
+            # This deletes any "insteadOf" lines from the git config
+            # effectively disabling the rewrite from HTTPS to SSH.
+            sed -i '/insteadOf/d' ~/.gitconfig
+            
+            # Verify the cleanup (optional, for debugging)
+            git config --global --list
 
       - restore_cache:
           key: mentoring-dependency-cache-{{ checksum "src/package.json" }}
@@ -31,13 +36,10 @@ jobs:
             - ./src/node_modules
 
       - run:
-          name: Configure git to use HTTPS for user service
-          command: git config --global url."https://github.com/".insteadOf "git@github.com:"
-
-      - run:
           name: Cloning user service
           command: |
             cd ../ && \
+            # Now that the config is clean, this will use actual HTTPS (no auth required)
             git clone https://github.com/ELEVATE-Project/user.git --branch dev --single-branch
 
       - restore_cache:
@@ -72,5 +74,3 @@ workflows:
           filters:
             tags:
               only: \b(dev|develop|main)\b
-
-
