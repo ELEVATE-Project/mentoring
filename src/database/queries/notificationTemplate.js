@@ -1,6 +1,5 @@
 const NotificationTemplate = require('@database/models/index').NotificationTemplate
 const { Op } = require('sequelize')
-const { getDefaults } = require('@helpers/getDefaultOrgId')
 const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
 // Removed cacheHelper import to break circular dependency
@@ -97,20 +96,9 @@ module.exports = class NotificationTemplateData {
 		try {
 			// Direct database query - cache logic moved to caller level
 
-			const defaults = await getDefaults()
-			if (!defaults.orgCode) {
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
-			if (!defaults.tenantCode) {
-				return responses.failureResponse({
-					message: 'DEFAULT_TENANT_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
+			const defaults = {
+				orgCode: process.env.DEFAULT_ORGANISATION_CODE,
+				tenantCode: process.env.DEFAULT_TENANT_CODE,
 			}
 
 			// Handle different parameter formats that callers might use
