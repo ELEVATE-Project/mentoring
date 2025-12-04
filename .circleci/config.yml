@@ -1,53 +1,72 @@
-version: 2.1 # CircleCI version
+version: 2.1
 jobs:
   build:
-    machine: #Linux machine instead of docker environment
+    machine:
       image: ubuntu-2004:2024.05.1
       docker_layer_caching: true
-    working_directory: ~/mentoring # Default working directory
+    working_directory: ~/mentoring
     steps:
+      - run:
+          name: Remove GitHub SSH rewrite
+          command: |
+            git config --global --unset-all url.ssh://git@github.com/.insteadOf || true
+
       - run:
           name: Configure git to use HTTPS
           command: git config --global url."https://github.com/".insteadOf "git@github.com:"
+
       - checkout:
           path: ~/mentoring/
+
       - restore_cache:
           key: mentoring-dependency-cache-{{ checksum "src/package.json" }}
+
       - run:
           name: Install dependencies
-          command: cd src/ && npm install #cd ../src/ && pwd &&
+          command: cd src/ && npm install
+
       - save_cache:
           key: mentoring-dependency-cache-{{checksum "src/package.json"}}
           paths:
             - ./src/node_modules
+
       - run:
           name: Configure git to use HTTPS for user service
           command: git config --global url."https://github.com/".insteadOf "git@github.com:"
+
       - run:
           name: Cloning user service
-          command: cd ../ && git clone https://github.com/ELEVATE-Project/user.git --branch dev --single-branch
+          command: |
+            cd ../ && \
+            git clone https://github.com/ELEVATE-Project/user.git --branch dev --single-branch
+
       - restore_cache:
           key: user-dependency-cache-{{ checksum "../user/src/package.json" }}
+
       - run:
           name: Install User service dependencies
-          command: cd ../user/src/ && npm install #cd ../src/ && pwd &&
+          command: cd ../user/src/ && npm install
+
       - save_cache:
           key: user-dependency-cache-{{checksum "../user/src/package.json"}}
           paths:
             - ../user/src/node_modules
+
       - run:
           name: Starting the docker containers
-          command: |-
+          command: |
             cd dev-ops/ && docker-compose up -d && sleep 30
+
       - run:
           name: Running integration tests
-          command: |-
+          command: |
             cd src/ && npm run test:integration
+
       - store_test_results:
           path: ./dev-ops/report
+
 workflows:
-  build-and-test: # This is the name of the workflow,
-    # Inside the workflow, you define the jobs you want to run.
+  build-and-test:
     jobs:
       - build:
           filters:
