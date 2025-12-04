@@ -467,8 +467,11 @@ module.exports = class SessionsHelper {
 
 			const processDbResponse = utils.processDbResponse(data.toJSON(), validationData)
 
-			processDbResponse['resources'] = await this.getResources(data.id, tenantCode)
-			processDbResponse['resources'] = await this.getResourceAccessibleUrl(processDbResponse['resources'])
+			processDbResponse['resources'] = []
+			if (bodyData?.resources && bodyData.resources.length > 0) {
+				processDbResponse['resources'] = bodyData?.resources
+				processDbResponse['resources'] = await this.getResourceAccessibleUrl(processDbResponse['resources'])
+			}
 
 			// Set notification schedulers for the session
 			// Deep clone to avoid unintended modifications to the original object.
@@ -2077,22 +2080,6 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const defaults = await getDefaults()
-			if (!defaults.orgCode) {
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
-			if (!defaults.tenantCode) {
-				return responses.failureResponse({
-					message: 'DEFAULT_TENANT_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
-
 			let validateDefaultRules
 			if (isSelfEnrolled) {
 				validateDefaultRules = await validateDefaultRulesFilter({
@@ -2235,8 +2222,6 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const tenantCodes = [tenantCode, defaults.tenantCode]
-			const orgCodes = [orgCode, defaults.orgCode]
 			const templateData = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, emailTemplateCode)
 			let duration = moment.duration(moment.unix(session.end_date).diff(moment.unix(session.start_date)))
 			let elapsedMinutes = duration.asMinutes()

@@ -3,7 +3,6 @@ const menteeExtensionQueries = require('@database/queries/userExtension')
 const userRequests = require('@requests/user')
 const entityTypeService = require('@services/entity-type')
 const { Parser } = require('@json2csv/plainjs')
-const { Op } = require('sequelize')
 
 exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) => {
 	try {

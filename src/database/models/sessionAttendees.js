@@ -64,6 +64,11 @@ module.exports = (sequelize, DataTypes) => {
 				deleted_at: null,
 			},
 		})
+		SessionAttendee.belongsTo(models.UserExtension, {
+			foreignKey: 'mentee_id',
+			targetKey: 'user_id',
+			as: 'userExtension',
+		})
 	}
 
 	return SessionAttendee

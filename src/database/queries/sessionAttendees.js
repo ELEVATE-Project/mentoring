@@ -3,13 +3,6 @@ const Session = require('@database/models/index').Session
 const { Op, col } = require('sequelize')
 const UserExtension = require('@database/models/index').UserExtension
 
-// Define association if not already defined
-SessionAttendee.belongsTo(UserExtension, {
-	foreignKey: 'mentee_id',
-	targetKey: 'user_id',
-	as: 'userExtension',
-})
-
 exports.create = async (data, tenantCode) => {
 	try {
 		data.tenant_code = tenantCode
@@ -316,13 +309,15 @@ exports.findMentees = async (filter, tenantCode, options = {}) => {
 				...optionsWhere,
 				...filter,
 			},
-			attributes: ['*', [col('userExtension.organization_code'), 'organization_code']],
 			include: [
 				{
 					model: UserExtension,
 					as: 'userExtension',
-					attributes: [],
+					attributes: ['organization_code'],
 					required: false,
+					on: {
+						tenant_code: { [Op.eq]: col('SessionAttendee.tenant_code') },
+					},
 				},
 			],
 			...otherOptions,
