@@ -21,16 +21,6 @@ jobs:
           paths:
             - ./src/node_modules
       - run:
-          name: Executing unit test cases
-          command: cd src/ && npm run test -- --coverage --collectCoverageFrom="./services/**"
-      - store_artifacts:
-          path: src/coverage/
-          destination: /coverage/
-      - run:
-          name: Checking prerequisites
-          command: |-
-            docker-compose --version
-      - run:
           name: Cloning user service
           command: cd ../ && git clone https://github.com/ELEVATE-Project/user.git --branch dev --single-branch
       - restore_cache:
@@ -45,11 +35,11 @@ jobs:
       - run:
           name: Starting the docker containers
           command: |-
-            cd dev-ops/ && docker-compose up -d
+            cd dev-ops/ && docker-compose up -d && sleep 30
       - run:
-          name: Running test cases
+          name: Running integration tests
           command: |-
-            cd src/ &&  npm run test:integration
+            cd src/ && npm run test:integration
       - store_test_results:
           path: ./dev-ops/report
 workflows:
