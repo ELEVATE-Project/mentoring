@@ -1674,7 +1674,7 @@ module.exports = class SessionsHelper {
 			}
 
 			const canRetrieveMenteeList = userId == sessionDetails.created_by || userId == sessionDetails.mentor_id
-			sessionDetails.mentees = await getEnrolledMentees(sessionDetails.id, {}, userId, tenantCode)
+			sessionDetails.mentees = await getEnrolledMentees(sessionDetails.id, {}, tenantCode)
 
 			let sessionAccessorDetails
 			if (isInvited || sessionDetails.is_assigned || !mentorExtension) {
@@ -2404,7 +2404,7 @@ module.exports = class SessionsHelper {
 			}
 
 			// Clear user cache since sessions_attended count changed
-			await this._clearUserCache(userTokenData.user_id, tenantCode, orgCode)
+			await this._clearUserCache(userId, tenantCode, orgCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
@@ -2488,6 +2488,11 @@ module.exports = class SessionsHelper {
 					{ share_link: shareLink },
 					tenantCode
 				)
+			}
+			try {
+				await cacheHelper.sessions.delete(tenantCode, sessionId)
+			} catch (cacheError) {
+				// Cache invalidation failure - continue operation
 			}
 			return responses.successResponse({
 				message: 'SESSION_LINK_GENERATED_SUCCESSFULLY',
@@ -2821,19 +2826,14 @@ module.exports = class SessionsHelper {
 				if (isSessionCached) {
 					sessionAttendees = sessionDetails.mentees
 				} else {
-					sessionAttendees = await sessionAttendeesQueries.findAll(
-						{
-							session_id: sessionId,
-						},
-						tenantCode
-					)
+					sessionAttendees = await getEnrolledMentees(sessionId, {}, tenantCode)
 				}
 
 				sessionAttendees.forEach(async (attendee) => {
 					const payload = {
 						type: 'email',
 						email: {
-							to: attendee.attendeeEmail,
+							to: attendee.email,
 							subject: templateData.subject,
 							body: utils.composeEmailBody(templateData.body, {
 								mentorName: sessionDetails.mentor_name,
@@ -3416,7 +3416,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const enrolledMentees = await getEnrolledMentees(sessionId, queryParams, userID, tenantCode)
+			const enrolledMentees = await getEnrolledMentees(sessionId, queryParams, tenantCode)
 
 			if (queryParams?.csv === 'true') {
 				const timestamp = moment().format('YYYY-MM-DD_HH-mm-ss')
