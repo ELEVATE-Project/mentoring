@@ -700,7 +700,7 @@ module.exports = class SessionsHelper {
 
 			// Use direct database query instead of cache
 			let mentorExtension =
-				(await cacheHelper.mentor.getCacheOnly(tenantCode, userId)) ??
+				(await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, userId)) ??
 				(await mentorExtensionQueries.getMentorExtension(userId, [], false, tenantCode))
 			if (!mentorExtension) {
 				return responses.failureResponse({
@@ -933,7 +933,7 @@ module.exports = class SessionsHelper {
 					await sessionQueries.addOwnership(sessionId, bodyData.mentor_id)
 					mentorUpdated = true
 					const newMentor =
-						(await cacheHelper.mentor.getCacheOnly(tenantCode, bodyData.mentor_id)) ??
+						(await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, bodyData.mentor_id)) ??
 						(await mentorExtensionQueries.getMentorExtension(bodyData.mentor_id, ['name'], true))
 					if (newMentor?.name) {
 						bodyData.mentor_name = newMentor.name
@@ -2136,9 +2136,9 @@ module.exports = class SessionsHelper {
 
 			if (mentorId || session.mentor_id) {
 				const mentorDetails =
-					(await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, session.mentor_id)) ??
+					(await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, mentorId || session.mentor_id)) ??
 					(await mentorExtensionQueries.getMentorExtension(
-						mentorId ? mentorId : session.mentor_id,
+						mentorId || session.mentor_id,
 						['name'],
 						true,
 						tenantCode
@@ -3567,7 +3567,7 @@ module.exports = class SessionsHelper {
 			const defaults = await getDefaults()
 
 			const userDetails =
-				(await cacheHelper.mentor.getCacheOnly(tenantCode, sessionDetail.mentor_id)) ??
+				(await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, sessionDetail.mentor_id)) ??
 				(await mentorExtensionQueries.getMentorExtension(
 					sessionDetail.mentor_id,
 					['name', 'email'],
@@ -4197,8 +4197,8 @@ module.exports = class SessionsHelper {
 
 				await adminService.unenrollAndNotifySessionAttendees(
 					removedSessionsDetail,
-					{ [Op.in]: [mentor.organization_code, defaults.orgCode] },
-					{ [Op.in]: [tenantCode, defaults.tenantCode] },
+					{ [Op.in]: [mentor.organization_code] },
+					{ [Op.in]: [tenantCode] },
 					tenantCode,
 					mentor.organization_code
 				)
