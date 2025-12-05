@@ -1,6 +1,5 @@
 const SessionAttendee = require('@database/models/index').SessionAttendee
-const Session = require('@database/models/index').Session
-const { Op } = require('sequelize')
+const { Op, col } = require('sequelize')
 
 exports.create = async (data, tenantCode) => {
 	try {
