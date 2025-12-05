@@ -58,10 +58,9 @@ module.exports = class SessionsHelper {
 	 * @param {String|Array} userIds - user ID(s) whose session counts changed
 	 * @param {String} tenantCode - tenant code
 	 * @param {String} orgCode - organization code
-	 * @param {String} action - action performed (create, enroll, unenroll, etc.)
 	 * @returns {Promise<void>}
 	 */
-	static async _clearUserCache(userIds, tenantCode, orgCode, action = 'session_change') {
+	static async _clearUserCache(userIds, tenantCode, orgCode) {
 		try {
 			// Ensure userIds is an array
 			const userIdArray = Array.isArray(userIds) ? userIds : [userIds]
@@ -849,12 +848,7 @@ module.exports = class SessionsHelper {
 					}
 
 					// Clear mentor cache since sessions_hosted count changed (session deleted)
-					await this._clearUserCacheForSessionCountChange(
-						sessionDetail.mentor_id,
-						tenantCode,
-						orgCode,
-						'session_delete'
-					)
+					await this._clearUserCache(sessionDetail.mentor_id, tenantCode, orgCode)
 
 					// Delete scheduled jobs associated with deleted session
 					for (let jobIndex = 0; jobIndex < sessionRelatedJobIds.length; jobIndex++) {
@@ -946,12 +940,7 @@ module.exports = class SessionsHelper {
 					}
 					this.setMentorPassword(sessionId, bodyData.mentor_id, tenantCode)
 
-					await this._clearUserCache(
-						[bodyData.mentor_id],
-						tenantCode,
-						sessionDetail.organization_code,
-						'mentor_change'
-					)
+					await this._clearUserCache([bodyData.mentor_id], tenantCode, sessionDetail.organization_code)
 				}
 
 				if (sessionDetail.status === common.LIVE_STATUS) {
@@ -2276,7 +2265,7 @@ module.exports = class SessionsHelper {
 			}
 
 			// Clear user cache since sessions_attended count changed
-			await this._clearUserCache(userId, tenantCode, orgCode, 'session_enroll')
+			await this._clearUserCache(userId, tenantCode, orgCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -2420,7 +2409,7 @@ module.exports = class SessionsHelper {
 			}
 
 			// Clear user cache since sessions_attended count changed
-			await this._clearUserCache(userTokenData.user_id, tenantCode, orgCode, 'session_unenroll')
+			await this._clearUserCache(userTokenData.user_id, tenantCode, orgCode)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
@@ -3763,7 +3752,7 @@ module.exports = class SessionsHelper {
 
 			// Clear user caches for all successfully removed mentees since sessions_attended count changed
 			if (successIds.length > 0) {
-				await this._clearUserCache(successIds, tenantCode, orgCode, 'bulk_mentee_removal')
+				await this._clearUserCache(successIds, tenantCode, orgCode)
 			}
 
 			return responses.successResponse({
@@ -4182,12 +4171,7 @@ module.exports = class SessionsHelper {
 					mentor.organization_code
 				)
 
-				await this._clearUserCache(
-					[mentor.user_id],
-					tenantCode,
-					mentor.organization_code,
-					'remove_sessions_by_mentor'
-				)
+				await this._clearUserCache([mentor.user_id], tenantCode, mentor.organization_code)
 				return mentorId
 			})
 		)
@@ -4226,12 +4210,7 @@ module.exports = class SessionsHelper {
 					mentor.organization_code
 				)
 
-				await this._clearUserCache(
-					[mentor.user_id],
-					tenantCode,
-					mentor.organization_code,
-					'remove_sessions_by_org'
-				)
+				await this._clearUserCache([mentor.user_id], tenantCode, mentor.organization_code)
 				return mentor.user_id
 			})
 		)
