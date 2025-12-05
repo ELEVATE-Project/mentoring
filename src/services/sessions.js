@@ -3451,10 +3451,12 @@ module.exports = class SessionsHelper {
 		sessionDetails = null
 	) {
 		try {
+			if (!sessionDetails) {
+				sessionDetails =
+					(await cacheHelper.sessions.get(tenantCode, sessionId)) ??
+					(await sessionQueries.findById(sessionId, tenantCode))
+			}
 			// Check if session exists - use database query instead of cache for reliability
-			const sessionDetails =
-				(await cacheHelper.sessions.get(tenantCode, sessionId)) ??
-				(await sessionQueries.findById(sessionId, tenantCode))
 			if (!sessionDetails) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
