@@ -1424,11 +1424,6 @@ module.exports = class SessionsHelper {
 				}
 			}
 
-			try {
-				// Invalidate session cache after successful update
-				await cacheHelper.sessions.delete(tenantCode, sessionId)
-			} catch (error) {}
-
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
 				message: message,
@@ -2135,7 +2130,7 @@ module.exports = class SessionsHelper {
 				const sessionCreatorName =
 					(await cacheHelper.mentee.getCacheOnly(tenantCode, orgCode, session.created_by)) ??
 					(await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, session.created_by)) ??
-					(await menteeExtensionQueries.getMenteeExtension(session.created_by, ['name'], true))
+					(await menteeExtensionQueries.getMenteeExtension(session.created_by, ['name'], true, tenantCode))
 				creatorName = sessionCreatorName.name
 			}
 
@@ -2766,12 +2761,10 @@ module.exports = class SessionsHelper {
 
 	static async completed(sessionId, isBBB, tenantCode, orgCode) {
 		try {
-			let sessionDetails
-
-			let isSesionCached = false
-			sessionDetails = await cacheHelper.sessions.get(tenantCode, sessionId)
+			let isSessionCached = false
+			let sessionDetails = await cacheHelper.sessions.get(tenantCode, sessionId)
 			if (sessionDetails) {
-				isSesionCached = true
+				isSessionCached = true
 			} else {
 				sessionDetails = await sessionQueries.findById(sessionId, tenantCode)
 			}
@@ -2785,7 +2778,7 @@ module.exports = class SessionsHelper {
 			}
 
 			let resourceInfo
-			if (isSesionCached) {
+			if (isSessionCached) {
 				// Update session status in cache
 				resourceInfo = sessionDetails.resources?.filter(
 					(resource) => resource.type === common.SESSION_POST_RESOURCE_TYPE
@@ -2825,7 +2818,7 @@ module.exports = class SessionsHelper {
 				)
 
 				let sessionAttendees
-				if (isSesionCached) {
+				if (isSessionCached) {
 					sessionAttendees = sessionDetails.mentees
 				} else {
 					sessionAttendees = await sessionAttendeesQueries.findAll(
