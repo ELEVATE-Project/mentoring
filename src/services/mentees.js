@@ -2321,7 +2321,16 @@ module.exports = class MenteesHelper {
 
 			// Cache the complete details response
 			try {
-				await cacheHelper.mentee.set(tenantCode, id, finalDetailsResponse)
+				let cacheCopy = { ...finalDetailsResponse }
+				delete cacheCopy.connection_details
+				delete cacheCopy.image
+				delete cacheCopy.is_connected
+
+				if (finalDetailsResponse.is_mentor) {
+					await cacheHelper.mentor.set(tenantCode, id, cacheCopy)
+				} else {
+					await cacheHelper.mentee.set(tenantCode, id, cacheCopy)
+				}
 			} catch (cacheError) {
 				console.error(`❌ Failed to cache mentee details ${id}:`, cacheError)
 			}

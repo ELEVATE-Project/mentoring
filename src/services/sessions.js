@@ -2564,13 +2564,11 @@ module.exports = class SessionsHelper {
 				(await sessionQueries.findById(sessionId, tenantCode))
 
 			if (!session) {
-				return resolve(
-					responses.failureResponse({
-						message: 'SESSION_NOT_FOUND',
-						statusCode: httpStatusCode.bad_request,
-						responseCode: 'CLIENT_ERROR',
-					})
-				)
+				return responses.failureResponse({
+					message: 'SESSION_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
 			}
 
 			if (session.mentor_id !== mentor.user_id) {
@@ -2857,7 +2855,7 @@ module.exports = class SessionsHelper {
 							body: utils.composeEmailBody(templateData.body, {
 								mentorName: sessionDetails.mentor_name,
 								sessionTitle: sessionDetails.title,
-								sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetail.id,
+								sessionLink: process.env.PORTAL_BASE_URL + '/session-detail/' + sessionDetails.id,
 								startDate: utils.getTimeZone(
 									sessionDetails.start_date,
 									common.dateFormat,

@@ -705,7 +705,7 @@ module.exports = class ConnectionHelper {
 				return responses.failureResponse({
 					responseCode: 'CLIENT_ERROR',
 					statusCode: httpStatusCode.not_found,
-					message: USER_NOT_FOUND,
+					message: 'USER_NOT_FOUND',
 				})
 			}
 
