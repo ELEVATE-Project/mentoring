@@ -467,8 +467,11 @@ module.exports = class SessionsHelper {
 
 			const processDbResponse = utils.processDbResponse(data.toJSON(), validationData)
 
-			processDbResponse['resources'] = await this.getResources(data.id, tenantCode)
-			processDbResponse['resources'] = await this.getResourceAccessibleUrl(processDbResponse['resources'])
+			processDbResponse['resources'] = []
+			if (bodyData?.resources && bodyData.resources.length > 0) {
+				processDbResponse['resources'] = bodyData?.resources
+				processDbResponse['resources'] = await this.getResourceAccessibleUrl(processDbResponse['resources'])
+			}
 
 			// Set notification schedulers for the session
 			// Deep clone to avoid unintended modifications to the original object.
@@ -632,11 +635,8 @@ module.exports = class SessionsHelper {
 			// 	triggerSessionMeetinkAddEmail = true
 			// }
 
-			// Handle both cached objects and Sequelize model instances
-			const sessionData = sessionDetail
-
-			if (sessionData.status == common.COMPLETED_STATUS && bodyData?.resources) {
-				const completedDate = moment(sessionData.completed_at)
+			if (sessionDetail.status == common.COMPLETED_STATUS && bodyData?.resources) {
+				const completedDate = moment(sessionDetail.completed_at)
 				const currentDate = moment.utc()
 				let diffInMinutes = currentDate.diff(completedDate, 'minutes')
 				if (diffInMinutes > process.env.POST_RESOURCE_DELETE_TIMEOUT) {
@@ -649,7 +649,7 @@ module.exports = class SessionsHelper {
 			}
 
 			if (bodyData.type) {
-				if (sessionData.type != bodyData.type) {
+				if (sessionDetail.type != bodyData.type) {
 					return responses.failureResponse({
 						message: 'CANNOT_EDIT_MENTOR_AND_TYPE',
 						statusCode: httpStatusCode.bad_request,
@@ -668,7 +668,7 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			if (sessionData.created_by !== userId) {
+			if (sessionDetail.created_by !== userId) {
 				return responses.failureResponse({
 					message: 'CANNOT_EDIT_DELETE_LIVE_SESSION',
 					statusCode: httpStatusCode.bad_request,
@@ -678,7 +678,7 @@ module.exports = class SessionsHelper {
 			// If type is passed store it in upper case
 			bodyData.type && (bodyData.type = bodyData.type.toUpperCase())
 			// session can be edited by only the creator
-			if (sessionData.created_by != userId) {
+			if (sessionDetail.created_by != userId) {
 				return responses.failureResponse({
 					message: 'INVALID_PERMISSION',
 					statusCode: httpStatusCode.bad_request,
@@ -686,12 +686,14 @@ module.exports = class SessionsHelper {
 				})
 			}
 			if (
-				(sessionData.mentor_id && sessionData.created_by && sessionData.mentor_id !== sessionData.created_by) ||
+				(sessionDetail.mentor_id &&
+					sessionDetail.created_by &&
+					sessionDetail.mentor_id !== sessionDetail.created_by) ||
 				bodyData.mentee
 			) {
 				isSessionCreatedByManager = true
 				// If session is created by manager update userId with mentor_id
-				userId = sessionData.mentor_id
+				userId = sessionDetail.mentor_id
 			}
 			if (bodyData.mentor_id) {
 				userId = bodyData.mentor_id
@@ -711,7 +713,7 @@ module.exports = class SessionsHelper {
 			let isEditingAllowedAtAnyTime = process.env.SESSION_EDIT_WINDOW_MINUTES == 0
 
 			const currentDate = moment.utc()
-			const startDate = moment.unix(sessionData.start_date)
+			const startDate = moment.unix(sessionDetail.start_date)
 			let elapsedMinutes = startDate.diff(currentDate, 'minutes')
 
 			if (!isEditingAllowedAtAnyTime && elapsedMinutes < process.env.SESSION_EDIT_WINDOW_MINUTES) {
@@ -770,7 +772,7 @@ module.exports = class SessionsHelper {
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			if (bodyData.status == common.VALID_STATUS) {
-				bodyData.status = sessionData.status
+				bodyData.status = sessionDetail.status
 			}
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 			if (!method === common.DELETE_METHOD) {
@@ -828,9 +830,9 @@ module.exports = class SessionsHelper {
 			let mentorUpdated = false
 
 			let message
-			const sessionRelatedJobIds = common.notificationJobIdPrefixes.map((element) => element + sessionData.id)
+			const sessionRelatedJobIds = common.notificationJobIdPrefixes.map((element) => element + sessionDetail.id)
 			if (method == common.DELETE_METHOD) {
-				if (sessionData.status == common.PUBLISHED_STATUS) {
+				if (sessionDetail.status == common.PUBLISHED_STATUS) {
 					await sessionQueries.deleteSession(
 						{
 							id: sessionId,
@@ -847,7 +849,12 @@ module.exports = class SessionsHelper {
 					}
 
 					// Clear mentor cache since sessions_hosted count changed (session deleted)
-					await this._clearUserCache(sessionData.mentor_id, tenantCode, orgCode, 'session_delete')
+					await this._clearUserCacheForSessionCountChange(
+						sessionDetail.mentor_id,
+						tenantCode,
+						orgCode,
+						'session_delete'
+					)
 
 					// Delete scheduled jobs associated with deleted session
 					for (let jobIndex = 0; jobIndex < sessionRelatedJobIds.length; jobIndex++) {
@@ -864,7 +871,7 @@ module.exports = class SessionsHelper {
 			} else {
 				// If the api is called for updating the session details execution flow enters to this  else block
 				// If request body contains mentees field enroll/unenroll mentees from the session
-				if (bodyData.mentees && sessionData.status != common.LIVE_STATUS) {
+				if (bodyData.mentees && sessionDetail.status != common.LIVE_STATUS) {
 					// Fetch mentees currently enrolled to the session
 					const sessionAttendees = await sessionAttendeesQueries.findAll(
 						{
@@ -2081,22 +2088,6 @@ module.exports = class SessionsHelper {
 			if (!session) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
-
-			const defaults = await getDefaults()
-			if (!defaults.orgCode) {
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			}
-			if (!defaults.tenantCode) {
-				return responses.failureResponse({
-					message: 'DEFAULT_TENANT_CODE_NOT_SET',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
