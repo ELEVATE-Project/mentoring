@@ -6,7 +6,7 @@ const { Parser } = require('@json2csv/plainjs')
 
 exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) => {
 	try {
-		const mentees = await sessionAttendeesQueries.findMentees({ session_id: sessionId }, tenantCode)
+		const mentees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, tenantCode)
 
 		// Early return if no mentees found
 		if (!mentees || mentees.length === 0) {
@@ -30,7 +30,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, userID, tenantCode) 
 		let menteeTypeMap = {}
 		const menteesMapData = []
 		mentees.forEach((mentee) => {
-			menteesMapData.push({ user_id: mentee.mentee_id, organization_code: mentee.organization_code })
+			menteesMapData.push({ user_id: mentee.mentee_id })
 			const isDeleted = Boolean(mentee.deleted_at ?? mentee.deletedAt)
 			menteeTypeMap[mentee.mentee_id] = isDeleted ? '' : mentee.type
 		})
