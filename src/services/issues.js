@@ -23,11 +23,9 @@ module.exports = class issuesHelper {
 	static async create(bodyData, decodedToken, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let userDetails = await cacheHelper.mentee.getCacheOnly(
-				tenantCode,
-				decodedToken.organization_code,
-				decodedToken.id
-			)
+			let userDetails =
+				(await cacheHelper.mentee.getCacheOnly(tenantCode, decodedToken.id)) ??
+				(await cacheHelper.mentor.getCacheOnly(tenantCode, decodedToken.id))
 			if (!userDetails) {
 				userDetails = await menteeExtensionQueries.getMenteeExtension(
 					decodedToken.id,
