@@ -316,6 +316,7 @@ exports.findMentees = async (filter, tenantCode, options = {}) => {
 					attributes: ['organization_code'],
 					required: false,
 					on: {
+						user_id: { [Op.eq]: col('SessionAttendee.mentee_id') },
 						tenant_code: { [Op.eq]: col('SessionAttendee.tenant_code') },
 					},
 				},
