@@ -454,7 +454,7 @@ const sessions = {
 			// Step 1: Check cache for each session ID
 			console.log(`🔍 [getSessionKafka] Checking cache for ${sessionIds.length} sessions`)
 			for (const sessionId of sessionIds) {
-				const cachedSession = await this.getCacheOnly(tenantCode, organizationCode, sessionId)
+				const cachedSession = await this.getCacheOnly(tenantCode, sessionId)
 				if (cachedSession) {
 					foundSessions.push(cachedSession)
 				} else {
@@ -1015,7 +1015,6 @@ const mentor = {
 			const cacheKey = await buildKey({ tenantCode, ns: 'mentor', id: mentorId })
 			const useInternal = nsUseInternal('mentor')
 			await set(cacheKey, sanitizedData, 86400, { useInternal }) // 1 day TTL
-			console.log(`💾 Mentor profile ${mentorId} cached: tenant:${tenantCode}`)
 		} catch (error) {
 			console.error(`❌ Failed to cache mentor profile ${mentorId}:`, error)
 		}
@@ -1155,7 +1154,7 @@ const mentor = {
 
 			// Step 1: Check cache for each user ID
 			for (const userId of userIds) {
-				const cachedUser = await this.getCacheOnly(tenantCode, organizationCode, userId)
+				const cachedUser = await this.getCacheOnly(tenantCode, userId)
 				if (cachedUser) {
 					foundUsers.push(cachedUser)
 				} else {
@@ -1402,7 +1401,7 @@ const mentee = {
 
 			// Step 1: Check cache for each user ID
 			for (const userId of userIds) {
-				const cachedUser = await this.getCacheOnly(tenantCode, organizationCode, userId)
+				const cachedUser = await this.getCacheOnly(tenantCode, userId)
 				if (cachedUser) {
 					foundUsers.push(cachedUser)
 				} else {

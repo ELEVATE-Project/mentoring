@@ -686,7 +686,7 @@ module.exports = class MentorsHelper {
 	 * @param {String} organizationCode - Organization code from token context.
 	 * @returns {Promise<Object>} - Mentor extension details.
 	 */
-	static async getMentorExtension(userId, organizationCode, tenantCode) {
+	static async getMentorExtension(userId, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
 			let mentor = await cacheHelper.mentor.get(tenantCode, userId)
@@ -696,8 +696,6 @@ module.exports = class MentorsHelper {
 					message: 'MENTOR_EXTENSION_NOT_FOUND',
 				})
 			}
-
-			const orgCode = mentor.organization_code
 
 			// We already have mentor data from the initial cache call, no need to fetch again
 			if (mentor.is_mentor) {
@@ -910,14 +908,14 @@ module.exports = class MentorsHelper {
 				}
 
 				let communications = null
-				if (mentorExtension?.meta?.communications_user_id) {
+				if (cachedProfile?.meta?.communications_user_id) {
 					try {
 						const chat = await communicationHelper.login(id, tenantCode)
 						communications = chat
 					} catch (error) {}
 				}
-				processDbResponse.meta = {
-					...processDbResponse.meta,
+				cachedProfile.meta = {
+					...cachedProfile.meta,
 					communications,
 				}
 
@@ -981,13 +979,13 @@ module.exports = class MentorsHelper {
 				}
 			}
 
-			if (!mentorProfile.data.result || !mentorExtension) {
+			if (!mentorExtension) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
 					message: 'MENTORS_NOT_FOUND',
 				})
 			}
-			mentorProfile = utils.deleteProperties(mentorProfile.data.result, ['created_at', 'updated_at'])
+			mentorExtension = utils.deleteProperties(mentorExtension, ['created_at', 'updated_at'])
 
 			mentorExtension = utils.deleteProperties(mentorExtension, ['phone'])
 
@@ -1051,17 +1049,17 @@ module.exports = class MentorsHelper {
 				processDbResponse.is_connected = false
 			}
 
-			if (!Array.isArray(mentorProfile.permissions)) {
-				mentorProfile.permissions = []
+			if (!Array.isArray(mentorExtension.permissions)) {
+				mentorExtension.permissions = []
 			}
 
 			// Handle both array response (success) and response object (error)
 			if (Array.isArray(mentorPermissions)) {
-				mentorProfile.permissions.push(...mentorPermissions)
+				mentorExtension.permissions.push(...mentorPermissions)
 			} else {
 				// It's the error response object, extract the permissions array
 				const permissionsArray = mentorPermissions.result?.permissions || []
-				mentorProfile.permissions.push(...permissionsArray)
+				mentorExtension.permissions.push(...permissionsArray)
 			}
 
 			let communications = null
@@ -1077,17 +1075,17 @@ module.exports = class MentorsHelper {
 				communications,
 			}
 
-			if (!mentorProfile.organization) {
+			if (!mentorExtension.organization) {
 				// Get organization details with cache-first approach
 				let orgDetails = null
 
 				// Try cache first if we have organization_id
 				try {
-					if (mentorProfile.organization_id) {
+					if (mentorExtension.organization_id) {
 						orgDetails = await cacheHelper.organizations.get(
 							tenantCode,
 							mentorOrgCode,
-							mentorProfile.organization_id
+							mentorExtension.organization_id
 						)
 					}
 				} catch (cacheError) {
@@ -1105,7 +1103,7 @@ module.exports = class MentorsHelper {
 					)
 				}
 
-				mentorProfile['organization'] = {
+				mentorExtension['organization'] = {
 					id: mentorOrgCode,
 					name: orgDetails?.name,
 				}
@@ -1115,25 +1113,13 @@ module.exports = class MentorsHelper {
 			const profileMandatoryFieldsRead = await utils.validateProfileData(processDbResponse, validationData)
 			processDbResponse.profile_mandatory_fields = profileMandatoryFieldsRead
 
-			// Conditionally fetch profile details if token exists
-			// let userProfile = {}
-			// if (tenantCode && id) {
-			// const profileResponse = await userRequests.getProfileDetails({ tenantCode, userId: id })
-			// If profileResponse.data.result exists, include it; otherwise, keep userProfile empty
-			// if (profileResponse.data.result) {
-			// userProfile = profileResponse.data.result
-			// }
-			// No failure response; proceed with available data
-			// }
 			// Construct the final profile response (INCLUDE sessions_attended for read endpoint)
 			const totalSessionsAttended = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
 			const finalProfile = {
 				user_id: id, // Add user_id to match mentee read response
-				...mentorProfile,
+				...mentorExtension,
 				...processDbResponse,
-				...userProfile, // Include userProfile only if token was provided
 				meta: {
-					...(userProfile.meta || {}),
 					...(processDbResponse.meta || {}),
 				},
 				sessions_hosted: totalSessionHosted,
@@ -1142,7 +1128,7 @@ module.exports = class MentorsHelper {
 				image: mentorExtension.image, // Keep original image (may already be downloadable URL)
 				sessions_attended: totalSessionsAttended, // Add sessions_attended
 				profile_mandatory_fields: processDbResponse.profile_mandatory_fields, // Ensure not overwritten
-				organization: mentorProfile.organization, // Ensure not overwritten
+				organization: mentorExtension.organization, // Ensure not overwritten
 				displayProperties,
 			}
 

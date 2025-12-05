@@ -45,7 +45,7 @@ module.exports = class MenteesHelper {
 	 */
 	static async read(id, organizationCode, roles, tenantCode) {
 		// Try to get complete profile from cache first (only when false)
-		const cachedProfile = await cacheHelper.mentee.getCacheOnly(tenantCode, organizationCode, id)
+		const cachedProfile = await cacheHelper.mentee.getCacheOnly(tenantCode, id)
 		// If we have cached data, update image URL and return response
 		if (cachedProfile) {
 			// Always generate fresh downloadable URL for image (cached URLs expire)
@@ -246,11 +246,11 @@ module.exports = class MenteesHelper {
 			delete cacheCopy.connection_details
 			delete cacheCopy.meta?.communications
 
-			if (mentee.is_mentor) {
-				await cacheHelper.mentor.set(tenantCode, id, finalProfile)
-			} else {
-				await cacheHelper.mentee.set(tenantCode, id, finalProfile)
-			}
+			// // if (mentee.is_mentor) {
+			// 	await cacheHelper.mentor.set(tenantCode, id, finalProfile)
+			// } else {
+			await cacheHelper.mentee.set(tenantCode, id, finalProfile)
+			// }
 		} catch (cacheError) {
 			console.error(`❌ Failed to cache mentee profile ${id}:`, cacheError)
 		}
@@ -707,7 +707,7 @@ module.exports = class MenteesHelper {
 	static async filterSessionsBasedOnSaasPolicy(userId, isAMentor, tenantCode, orgCode) {
 		try {
 			// Try cache first, then fallback to database for policy checking
-			let menteeExtension = await cacheHelper.mentee.getCacheOnly(tenantCode, orgCode, userId)
+			let menteeExtension = await cacheHelper.mentee.getCacheOnly(tenantCode, userId)
 
 			if (!menteeExtension) {
 				menteeExtension = await menteeQueries.getMenteeExtension(
@@ -2084,7 +2084,7 @@ module.exports = class MenteesHelper {
 			}
 
 			// Try cache first using logged-in user's organization context
-			const cacheProfileDetails = await cacheHelper.mentee.getCacheOnly(tenantCode, organizationCode, id)
+			const cacheProfileDetails = await cacheHelper.mentee.getCacheOnly(tenantCode, id)
 			if (cacheProfileDetails) {
 				if (cacheProfileDetails.is_mentor == true) {
 					// Get mentor visibility and org id

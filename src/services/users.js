@@ -203,7 +203,7 @@ module.exports = class UserHelper {
 		const userExtensionData = this.#getExtensionData(userDetails.data.result, orgExtension)
 		const createOrUpdateResult = isNewUser
 			? await this.#createUser(userExtensionData, decodedToken.tenant_code)
-			: await this.#updateUser(userExtensionData, decodedToken)
+			: await this.#updateUser(userExtensionData, decodedToken, targetHasMentorRole)
 		if (createOrUpdateResult.statusCode != httpStatusCode.ok) return createOrUpdateResult
 		else
 			return responses.successResponse({
@@ -315,7 +315,7 @@ module.exports = class UserHelper {
 
 	static #checkOrgChange = (existingOrgId, newOrgId) => existingOrgId !== newOrgId
 
-	static async #updateUser(userExtensionData, decodedToken) {
+	static async #updateUser(userExtensionData, decodedToken, targetHasMentorRole) {
 		const isAMentee = userExtensionData.roles.some((role) => role.title === common.MENTEE_ROLE)
 		const isAMentor = userExtensionData.roles.some((role) => role.title === common.MENTOR_ROLE)
 		const roleChangePayload = {
@@ -351,17 +351,21 @@ module.exports = class UserHelper {
 		if (isRoleChanged) {
 			//If role is changed, the role change, org policy changes for that user
 			//and additional data update of the user is done by orgAdmin's roleChange workflow
-			const roleChangeResult = await orgAdminService.roleChange(roleChangePayload, userExtensionData, tenantCode)
+			const roleChangeResult = await orgAdminService.roleChange(
+				roleChangePayload,
+				userExtensionData,
+				userExtensionData.tenant_code
+			)
 
 			// Invalidate cache after role change - separate try-catch for each cache
 			try {
-				await cacheHelper.mentee.delete(tenantCode, userExtensionData.id)
+				await cacheHelper.mentee.delete(userExtensionData.tenant_code, userExtensionData.id)
 			} catch (cacheError) {
 				console.error(`❌ Failed to invalidate mentee cache after role change:`, cacheError)
 			}
 
 			try {
-				await cacheHelper.mentor.delete(tenantCode, userExtensionData.id)
+				await cacheHelper.mentor.delete(userExtensionData.tenant_code, userExtensionData.id)
 			} catch (cacheError) {
 				console.error(`❌ Failed to invalidate mentor cache after role change:`, cacheError)
 			}
@@ -376,25 +380,25 @@ module.exports = class UserHelper {
 						userExtensionData,
 						userExtensionData.id,
 						userExtensionData.organization.code,
-						decodedToken.tenant_code
+						userExtensionData.tenant_code
 				  )
 				: await mentorsService.updateMentorExtension(
 						userExtensionData,
 						userExtensionData.id,
 						userExtensionData.organization.code,
-						decodedToken.tenant_code
+						userExtensionData.tenant_code
 				  )
 
 			// Invalidate cache after user update
 			try {
 				if (isAMentee) {
 					await cacheHelper.mentee.delete(
-						tenantCode,
+						userExtensionData.tenant_code,
 						userExtensionData.organization.code,
 						userExtensionData.id
 					)
 				} else {
-					await cacheHelper.mentor.delete(tenantCode, userExtensionData.id)
+					await cacheHelper.mentor.delete(userExtensionData.tenant_code, userExtensionData.id)
 				}
 			} catch (cacheError) {
 				console.error(`❌ Failed to invalidate user cache after update:`, cacheError)
@@ -423,7 +427,7 @@ module.exports = class UserHelper {
 				tenantCode
 			)
 
-			userExists = menteeExtension !== null
+			const userExists = menteeExtension !== null
 			return !userExists // Return true if user does not exist
 		} catch (error) {
 			throw error
