@@ -1,0 +1,302 @@
+{
+	"POST_/mentoring/v1/form/create": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"type": {
+						"type": "string"
+					},
+					"sub_type": {
+						"type": "string"
+					},
+					"data": {
+						"type": "object",
+						"properties": {
+							"template_name": {
+								"type": "string"
+							},
+							"fields": {
+								"type": "object",
+								"properties": {
+									"controls": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"properties": {
+												"name": {
+													"type": "string"
+												},
+												"label": {
+													"type": "string"
+												},
+												"value": {
+													"type": "string"
+												},
+												"class": {
+													"type": "string"
+												},
+												"type": {
+													"type": "string"
+												},
+												"position": {
+													"type": "string"
+												},
+												"validators": {
+													"type": "object",
+													"properties": {
+														"required": {
+															"type": "boolean"
+														},
+														"min_length": {
+															"type": "number"
+														}
+													}
+												},
+												"disabled": {
+													"type": "boolean"
+												},
+												"show_select_all": {
+													"type": "boolean"
+												}
+											},
+											"required": [
+												"name",
+												"label",
+												"value",
+												"class",
+												"type",
+												"position",
+												"validators",
+												"disabled",
+												"show_select_all"
+											]
+										}
+									}
+								}
+							}
+						}
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"organization_id": {
+						"type": "string"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"PUT_/mentoring/v1/form/update/{formId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"POST_/mentoring/v1/form/read/{formId}": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"type": {
+						"type": "string"
+					},
+					"sub_type": {
+						"type": "string"
+					},
+					"data": {
+						"type": "object",
+						"properties": {
+							"template_name": {
+								"type": "string"
+							},
+							"fields": {
+								"type": "object",
+								"properties": {
+									"controls": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"properties": {
+												"name": {
+													"type": "string"
+												},
+												"label": {
+													"type": "string"
+												},
+												"value": {
+													"type": "string"
+												},
+												"class": {
+													"type": "string"
+												},
+												"type": {
+													"type": "string"
+												},
+												"position": {
+													"type": "string"
+												},
+												"validators": {
+													"type": "object",
+													"properties": {
+														"required": {
+															"type": "boolean"
+														},
+														"min_length": {
+															"type": "number"
+														}
+													}
+												},
+												"disabled": {
+													"type": "boolean"
+												},
+												"show_select_all": {
+													"type": "boolean"
+												}
+											},
+											"required": [
+												"name",
+												"label",
+												"value",
+												"class",
+												"type",
+												"position",
+												"validators",
+												"disabled",
+												"show_select_all"
+											]
+										}
+									}
+								}
+							}
+						}
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"organization_id": {
+						"type": "string"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}
