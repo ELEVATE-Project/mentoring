@@ -23,6 +23,7 @@ module.exports = (sequelize, DataTypes) => {
 			model_names: { type: DataTypes.ARRAY(DataTypes.STRING) },
 			required: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
 			regex: { type: DataTypes.STRING, allowNull: true, defaultValue: null },
+			report_filter: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
 		},
 		{ sequelize, modelName: 'EntityType', tableName: 'entity_types', freezeTableName: true, paranoid: true }
 	)

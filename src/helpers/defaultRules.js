@@ -5,6 +5,7 @@ const menteeQueries = require('@database/queries/userExtension')
 const common = require('@constants/common')
 
 const { isAMentor } = require('@generics/utils')
+const utils = require('@generics/utils')
 
 const operatorMapping = new Map([
 	['equals', '='],
@@ -103,7 +104,6 @@ exports.defaultRulesFilter = async function defaultRulesFilter({
 			getUserDetails(requesterId, isAMentor(roles)),
 			defaultRuleQueries.findAll({ type: ruleType, organization_id: requesterOrganizationId }),
 		])
-
 		const validConfigs = getValidConfigs(defaultRules, roles)
 
 		if (validConfigs.length === 0) {

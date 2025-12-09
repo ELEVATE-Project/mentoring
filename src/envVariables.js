@@ -404,6 +404,31 @@ let enviromentVariables = {
 		optional: true,
 		default: 'internalmentoring',
 	},
+	DB_POOL_MAX_CONNECTIONS: {
+		message: 'Required DB Pool Max number of connections',
+		optional: true,
+		default: 15,
+	},
+	DB_POOL_IDLE_TIMEOUT: {
+		message: 'Required DB Pool Idle timeout in milliseconds',
+		optional: true,
+		default: 10000,
+	},
+	DB_POOL_ACQUIRE_TIMEOUT: {
+		message: 'Required DB Pool Acquire timeout in milliseconds',
+		optional: true,
+		default: 30000,
+	},
+	USER_EXTENSION_REFRESH_VIEW_INTERVAL: {
+		message: 'Required User extension refresh view internal in milliseconds',
+		optional: true,
+		default: 30000,
+	},
+	SESSION_REFRESH_VIEW_INTERVAL: {
+		message: 'Required Session refresh view internal in milliseconds',
+		optional: true,
+		default: 30000,
+	},
 }
 
 let success = true

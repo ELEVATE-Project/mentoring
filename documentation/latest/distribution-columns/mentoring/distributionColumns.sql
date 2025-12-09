@@ -4,7 +4,6 @@ SELECT create_distributed_table('entity_types', 'organization_id');
 SELECT create_distributed_table('feedbacks', 'user_id');
 SELECT create_distributed_table('forms', 'organization_id');
 SELECT create_distributed_table('issues', 'id');
-SELECT create_distributed_table('mentor_extensions', 'user_id');
 SELECT create_distributed_table('notification_templates', 'organization_id');
 SELECT create_distributed_table('organization_extension', 'organization_id');
 SELECT create_distributed_table('post_session_details', 'session_id');

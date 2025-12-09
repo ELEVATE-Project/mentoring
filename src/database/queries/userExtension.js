@@ -156,7 +156,7 @@ module.exports = class MenteeExtensionQueries {
 			} else {
 				mentee = await MenteeExtension.findOne(queryOptions)
 			}
-			if (mentee.email) {
+			if (mentee && mentee.email) {
 				mentee.email = await emailEncryption.decrypt(mentee.email.toLowerCase())
 			}
 			return mentee
@@ -196,6 +196,10 @@ module.exports = class MenteeExtensionQueries {
 					external_mentee_visibility: null,
 					mentee_visibility: null,
 					deleted_at: Date.now(),
+					name: null,
+					email: null,
+					phone: null,
+					image: null,
 				},
 				{
 					where: {
@@ -344,8 +348,9 @@ module.exports = class MenteeExtensionQueries {
 			throw error
 		}
 	}
-	static async findOneFromView(userId) {
+	static async findOneFromView(userId, attributes = []) {
 		try {
+			const columns = attributes.length > 0 ? attributes.join(', ') : '*'
 			let query = `
 				SELECT *
 				FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
@@ -395,11 +400,13 @@ module.exports = class MenteeExtensionQueries {
 
 			let projectionClause = `
 				user_id,
-				mentee_visibility,
+				name,
+				email,
 				organization_id,
 				designation,
 				area_of_expertise,
 				education_qualification,
+				mentee_visibility,
 				custom_entity_text::JSONB AS custom_entity_text,
 				meta::JSONB AS meta
 			`

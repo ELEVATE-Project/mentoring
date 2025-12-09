@@ -108,9 +108,17 @@ const triggerPeriodicViewRefresh = async () => {
 
 		let offset = process.env.REFRESH_VIEW_INTERVAL / modelNames.length
 		modelNames.map((model, index) => {
+			let refreshInterval = process.env.REFRESH_VIEW_INTERVAL
+			if (model == 'UserExtension') {
+				refreshInterval = process.env.USER_EXTENSION_REFRESH_VIEW_INTERVAL
+				offset = refreshInterval / modelNames.length
+			} else if (model == 'Session') {
+				refreshInterval = process.env.SESSION_REFRESH_VIEW_INTERVAL
+				offset = refreshInterval / modelNames.length
+			}
 			createSchedulerJob(
 				'repeatable_view_job' + model,
-				process.env.REFRESH_VIEW_INTERVAL,
+				refreshInterval,
 				'repeatable_view_job' + model,
 				true,
 				mentoringBaseurl + '/mentoring/v1/admin/triggerPeriodicViewRefreshInternal?model_name=' + model,

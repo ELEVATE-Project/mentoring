@@ -222,8 +222,19 @@ module.exports = class EntityHelper {
 				},
 			}
 
+			let entityTypesWithEntities
+			const modelNames = Array.isArray(modelName) ? modelName : [modelName]
+			const cacheKey = `ENTITY_TYPES_orgs_${orgIds.join(',')}_models_${modelNames.join(',')}`
+
+			let entityCacheData = await utils.internalGet(cacheKey)
+			if (entityCacheData) {
+				entityTypesWithEntities = entityCacheData
+			} else {
+				entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
+				await utils.internalSet(cacheKey, entityTypesWithEntities)
+			}
 			// get entityTypes with entities data
-			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter)
+
 			entityTypesWithEntities = JSON.parse(JSON.stringify(entityTypesWithEntities))
 			if (!entityTypesWithEntities.length > 0) {
 				return responseData

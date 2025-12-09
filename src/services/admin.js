@@ -22,15 +22,8 @@ module.exports = class AdminHelper {
 	 * @returns {JSON} - List of users
 	 */
 
-	static async userDelete(decodedToken, userId) {
+	static async userDelete(userId) {
 		try {
-			if (!decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)) {
-				return responses.failureResponse({
-					message: 'UNAUTHORIZED_REQUEST',
-					statusCode: httpStatusCode.unauthorized,
-					responseCode: 'UNAUTHORIZED',
-				})
-			}
 			let result = {}
 
 			const mentor = await mentorQueries.getMentorExtension(userId)

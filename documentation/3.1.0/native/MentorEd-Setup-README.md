@@ -185,22 +185,22 @@ Before setting up the application, the dependencies should be installed and veri
     - **Ubuntu/Linux/MacOS**
 
         ```
-        git clone -b release-3.1.0 https://github.com/ELEVATE-Project/mentoring.git && \
-        git clone -b release-3.1.0 https://github.com/ELEVATE-Project/user.git && \
-        git clone -b release-3.1.0 https://github.com/ELEVATE-Project/notification.git && \
-        git clone -b release-3.1.0 https://github.com/ELEVATE-Project/interface-service.git && \
-        git clone -b release-3.1.0 https://github.com/ELEVATE-Project/scheduler.git && \
+        git clone -b master https://github.com/ELEVATE-Project/mentoring.git && \
+        git clone -b master https://github.com/ELEVATE-Project/user.git && \
+        git clone -b master https://github.com/ELEVATE-Project/notification.git && \
+        git clone -b main https://github.com/ELEVATE-Project/interface-service.git && \
+        git clone -b master https://github.com/ELEVATE-Project/scheduler.git && \
         git clone -b release-3.1.1 https://github.com/ELEVATE-Project/mentoring-mobile-app.git
         ```
 
     - **Windows**
 
         ```
-        git clone -b release-3.1.0 https://github.com/ELEVATE-Project/mentoring.git & ^
-        git clone -b release-3.1.0 https://github.com/ELEVATE-Project/user.git & ^
-        git clone -b release-3.1.0 https://github.com/ELEVATE-Project/notification.git & ^
-        git clone -b release-3.1.0 https://github.com/ELEVATE-Project/interface-service.git & ^
-        git clone -b release-3.1.0 https://github.com/ELEVATE-Project/scheduler.git & ^
+        git clone -b master https://github.com/ELEVATE-Project/mentoring.git & ^
+        git clone -b master https://github.com/ELEVATE-Project/user.git & ^
+        git clone -b master https://github.com/ELEVATE-Project/notification.git & ^
+        git clone -b main https://github.com/ELEVATE-Project/interface-service.git & ^
+        git clone -b master https://github.com/ELEVATE-Project/scheduler.git & ^
         git clone -b release-3.1.1 https://github.com/ELEVATE-Project/mentoring-mobile-app.git
         ```
 
@@ -433,19 +433,21 @@ Before setting up the application, the dependencies should be installed and veri
 
 10. **Run Service Scripts**
 
+    Please make sure that all services are up and running before proceeding.
+
     - **Ubuntu/Linux/MacOS**
 
         ```
         cd user/src/scripts && node insertDefaultOrg.js && node viewsScript.js && \
         node -r module-alias/register uploadSampleCSV.js && cd ../../.. && \
-        cd mentoring/src/scripts && node psqlFunction.js && node viewsScript.js && cd ../../..
+        cd mentoring/src/scripts && node psqlFunction.js && node viewsScript.js &&  node -r module-alias/register sessionUploadScript.js && cd ../../..
         ```
 
     - **Windows**
         ```
         cd user/src/scripts & node insertDefaultOrg.js & node viewsScript.js & ^
         node -r module-alias/register uploadSampleCSV.js & cd ../../.. && ^
-        cd mentoring/src/scripts & node psqlFunction.js & node viewsScript.js & cd ../../..
+        cd mentoring/src/scripts & node psqlFunction.js & node viewsScript.js & node -r module-alias/register sessionUploadScript.js & cd ../../..
         ```
 
 11. **Start The Portal**
@@ -598,11 +600,14 @@ There ar few forms required for mentoting application to run, to add those fallo
 
     2. **Run The `insert_sample_forms` Script File:**
 
-    - **Ubuntu/Linux/Mac**
+    - **Ubuntu/Linux**
+        ```
+        ./sample-data/mentoring/insert_sample_forms.sh mentoring postgres://postgres:postgres@localhost:9700/mentoring
+        ```
+    - **Mac**
         ```
         ./sample-data/mentoring/insert_sample_forms.sh mentoring postgres://postgres:postgres@localhost:5432/mentoring
         ```
-
     - **Windows**
 
         ```
@@ -649,4 +654,4 @@ After successfully running the script mentioned above, the following user accoun
 | ------------------------ | ---------- | ------------------ |
 | aaravpatel@example.com   | Password1@ | Mentee             |
 | arunimareddy@example.com | Password1@ | Mentor             |
-| devikasingh@example.com  | Password1@ | Organization Admin |
+| devikasingh@example.com  | Password1@ | Organization Admin, Session Manager |

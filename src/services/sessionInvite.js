@@ -23,6 +23,7 @@ const { Op } = require('sequelize')
 const moment = require('moment')
 const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const menteeExtensionQueries = require('@database/queries/userExtension')
+const uploadToCloud = require('@helpers/uploadFileToCloud')
 
 module.exports = class UserInviteHelper {
 	static async uploadSession(data) {
@@ -59,7 +60,7 @@ module.exports = class UserInviteHelper {
 				if (createResponse.success == false) console.log(':::::::::', createResponse.message)
 				const outputFilename = path.basename(createResponse.result.outputFilePath)
 				// upload output file to cloud
-				const uploadRes = await this.uploadFileToCloud(outputFilename, inviteeFileDir, userId, orgId)
+				const uploadRes = await uploadToCloud.uploadFileToCloud(outputFilename, inviteeFileDir, userId, orgId)
 				const output_path = uploadRes.result.uploadDest
 				const update = {
 					output_path,
@@ -1051,53 +1052,6 @@ module.exports = class UserInviteHelper {
 		}
 	}
 
-	static async uploadFileToCloud(fileName, folderPath, userId = '', orgId, dynamicPath = '') {
-		try {
-			const getSignedUrl = await fileService.getSignedUrl(fileName, userId, orgId, dynamicPath)
-			if (!getSignedUrl.result) {
-				throw new Error('FAILED_TO_GENERATE_SIGNED_URL')
-			}
-
-			const fileUploadUrl = getSignedUrl.result.signedUrl
-			const filePath = `${folderPath}/${fileName}`
-			const fileData = fs.readFileSync(filePath, 'utf-8')
-
-			const result = await new Promise((resolve, reject) => {
-				try {
-					request(
-						{
-							url: fileUploadUrl,
-							method: 'put',
-							headers: {
-								'x-ms-blob-type': common.azureBlobType,
-								'Content-Type': 'multipart/form-data',
-							},
-							body: fileData,
-						},
-						(error, response, body) => {
-							if (error) reject(error)
-							else resolve(response.statusCode)
-						}
-					)
-				} catch (error) {
-					reject(error)
-				}
-			})
-
-			return {
-				success: true,
-				result: {
-					uploadDest: getSignedUrl.result.destFilePath,
-				},
-			}
-		} catch (error) {
-			return {
-				success: false,
-				message: error.message,
-			}
-		}
-	}
-
 	static async sendSessionManagerEmail(templateData, userData, sessionUploadURL = null, subjectComposeData = {}) {
 		try {
 			const payload = {
@@ -1110,6 +1064,7 @@ module.exports = class UserInviteHelper {
 							: templateData.subject,
 					body: utils.composeEmailBody(templateData.body, {
 						name: userData.name,
+						file_link: sessionUploadURL,
 					}),
 				},
 			}

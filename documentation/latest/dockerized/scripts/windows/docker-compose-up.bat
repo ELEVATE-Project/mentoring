@@ -8,7 +8,7 @@ set "notification_env=%cd%\notification_env"
 set "mentoring_env=%cd%\mentoring_env"
 
 rem Run docker-compose
-docker-compose -f docker-compose-mentoring.yml up
+docker-compose -f docker-compose-mentoring.yml up -d
 
 rem Optionally, clear environment variables after use
 set "users_env="

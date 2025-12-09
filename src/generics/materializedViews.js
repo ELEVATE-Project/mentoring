@@ -4,8 +4,10 @@ const { sequelize } = require('@database/models/index')
 const utils = require('@generics/utils')
 const common = require('@constants/common')
 const { getDefaultOrgId } = require('@helpers/getDefaultOrgId')
-const searchConfig = require('@configs/search.json')
+const defaultSearchConfig = require('@configs/search.json')
 const indexQueries = require('@generics/mViewsIndexQueries')
+
+const searchConfig = require('@root/config.json')
 
 let refreshInterval
 const groupByModelNames = async (entityTypes) => {
@@ -320,7 +322,12 @@ const generateMaterializedView = async (modelEntityTypes) => {
 		if (randomViewName) await deleteMaterializedView(randomViewName)
 		await createIndexesOnAllowFilteringFields(model, modelEntityTypes, allFields)
 		await createViewUniqueIndexOnPK(model)
-		await createViewGINIndexOnSearch(model, searchConfig, allFields)
+
+		let search_config = defaultSearchConfig
+		if (searchConfig.search) {
+			search_config = { search: searchConfig.search }
+		}
+		await createViewGINIndexOnSearch(model, search_config, allFields)
 		await executeIndexQueries(model.name)
 	} catch (err) {
 		console.log(err)
@@ -384,6 +391,21 @@ const modelNameCollector = async (entityTypes) => {
 const refreshMaterializedView = async (modelName) => {
 	try {
 		const model = require('@database/models/index')[modelName]
+
+		// Check if a REFRESH MATERIALIZED VIEW query is already running
+		const [activeQueries] = await sequelize.query(`
+		SELECT * FROM pg_stat_activity
+		WHERE query LIKE 'REFRESH MATERIALIZED VIEW CONCURRENTLY ${common.materializedViewsPrefix}${model.tableName}%'
+		  AND state = 'active';
+	  `)
+
+		// If there are active refresh queries, skip refreshing the materialized view
+		if (activeQueries.length > 0) {
+			console.log('A materialized view refresh is already in progress. Skipping.')
+			return
+		}
+
+		// If no active refresh queries, proceed with refreshing the materialized view
 		const [result, metadata] = await sequelize.query(
 			`REFRESH MATERIALIZED VIEW CONCURRENTLY ${common.materializedViewsPrefix}${model.tableName}`
 		)
@@ -440,7 +462,6 @@ const checkAndCreateMaterializedViews = async () => {
 	await Promise.all(
 		entityTypesGroupedByModel.map(async (modelEntityTypes) => {
 			const model = require('@database/models/index')[modelEntityTypes.modelName]
-
 			const mViewExits = result.some(
 				({ matviewname }) => matviewname === common.materializedViewsPrefix + model.tableName
 			)

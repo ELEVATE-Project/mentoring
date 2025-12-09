@@ -22,10 +22,10 @@ const entityTypeService = require('@services/entity-type')
 const responses = require('@helpers/responses')
 const permissions = require('@helpers/getPermissions')
 const { buildSearchFilter } = require('@helpers/search')
-const searchConfig = require('@configs/search.json')
+const defaultSearchConfig = require('@configs/search.json')
 const emailEncryption = require('@utils/emailEncryption')
 const { defaultRulesFilter, validateDefaultRulesFilter } = require('@helpers/defaultRules')
-
+const searchConfig = require('@root/config.json')
 module.exports = class MentorsHelper {
 	/**
 	 * upcomingSessions.
@@ -601,7 +601,7 @@ module.exports = class MentorsHelper {
 	 * @param {Boolean} isAMentor 				- user mentor or not.
 	 * @returns {JSON} 							- profile details
 	 */
-	static async read(id, orgId, userId = '', isAMentor = '', roles = '') {
+	static async read(id, orgId, userId = '', isAMentor = '', roles = '', tenantCode) {
 		try {
 			let requestedMentorExtension = false
 			if (userId !== '' && isAMentor !== '' && roles !== '') {
@@ -710,14 +710,36 @@ module.exports = class MentorsHelper {
 			const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
 			mentorProfile.profile_mandatory_fields = profileMandatoryFields
 
+			if (!mentorProfile.organization) {
+				const orgDetails = await organisationExtensionQueries.findOne(
+					{ organization_id: orgId },
+					{ attributes: ['name'] }
+				)
+				mentorProfile['organization'] = {
+					id: orgId,
+					name: orgDetails.name,
+				}
+			}
+			// Conditionally fetch profile details if token exists
+			let userProfile = {}
+			if (tenantCode) {
+				const profileResponse = await userRequests.getProfileDetails({ tenantCode, userId: id })
+				// If profileResponse.data.result exists, include it; otherwise, keep userProfile empty
+				if (profileResponse.data.result) {
+					userProfile = profileResponse.data.result
+				}
+				// No failure response; proceed with available data
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
-				message: 'PROFILE_FTECHED_SUCCESSFULLY',
+				message: 'PROFILE_FETCHED_SUCCESSFULLY',
 				result: {
 					sessions_attended: totalSession,
 					sessions_hosted: totalSessionHosted,
 					...mentorProfile,
 					...processDbResponse,
+					...userProfile, // Include userProfile only if token was provided
 				},
 			})
 		} catch (error) {
@@ -864,11 +886,15 @@ module.exports = class MentorsHelper {
 
 			const saasFilter = await this.filterMentorListBasedOnSaasPolicy(userId, isAMentor, organization_ids)
 
+			let search_config = defaultSearchConfig
+			if (searchConfig.search) {
+				search_config = { search: searchConfig.search }
+			}
 			let searchFilter
 			if (!hasValidEmails) {
 				searchFilter = await buildSearchFilter({
 					searchOn: searchOn ? searchOn.split(',') : false,
-					searchConfig: searchConfig.search.mentor,
+					searchConfig: search_config.search.mentor,
 					search: searchText,
 					modelName: mentorExtensionsModelName,
 				})
@@ -899,6 +925,7 @@ module.exports = class MentorsHelper {
 				})
 			}
 
+			// Fetch mentor data
 			let extensionDetails = await mentorQueries.getMentorsByUserIdsFromView(
 				[],
 				pageNo,
@@ -908,11 +935,11 @@ module.exports = class MentorsHelper {
 				additionalProjectionString,
 				false,
 				searchFilter,
-				hasValidEmails ? emailIds : searchText, //array for email search
+				hasValidEmails ? emailIds : searchText,
 				defaultRuleFilter
 			)
-
-			if (extensionDetails.count == 0 || extensionDetails.data.length == 0) {
+			// Early return for empty results
+			if (extensionDetails.count === 0 || extensionDetails.data.length === 0) {
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
 					message: 'MENTOR_LIST',
@@ -923,41 +950,52 @@ module.exports = class MentorsHelper {
 				})
 			}
 
-			const mentorIds = extensionDetails.data.map((item) => item.user_id)
+			//Enrich with organization details
+			//Extract unique organization_ids
+			const organizationIds = [...new Set(extensionDetails.data.map((user) => user.organization_id))]
 
-			const userDetails = await userRequests.getListOfUserDetails(mentorIds, true, false)
+			//Query organization table (only if there are IDs to query)
+			let organizationDetails = []
+			if (organizationIds.length > 0) {
+				const orgFilter = {
+					organization_id: {
+						[Op.in]: organizationIds,
+					},
+				}
+				organizationDetails = await organisationExtensionQueries.findAll(orgFilter, {
+					attributes: ['name', 'organization_id'],
+					raw: true, // Ensure plain objects
+				})
+			}
 
+			//Create a map of organization_id to organization details
+			const orgMap = {}
+			organizationDetails.forEach((org) => {
+				orgMap[org.organization_id] = {
+					id: org.organization_id,
+					name: org.name,
+				}
+			})
+
+			//Attach organization details and decrypt email for each user
+			extensionDetails.data = await Promise.all(
+				extensionDetails.data.map(async (user) => ({
+					...user,
+					id: user.user_id, // Add 'id' key, to be removed later
+					email: user.email ? await emailEncryption.decrypt(user.email) : null, // Decrypt email
+					organization: orgMap[user.organization_id] || null,
+				}))
+			)
+
+			//Process entity types (reuse organizationIds)
 			if (extensionDetails.data.length > 0) {
-				const uniqueOrgIds = [...new Set(extensionDetails.data.map((obj) => obj.organization_id))]
 				extensionDetails.data = await entityTypeService.processEntityTypesToAddValueLabels(
 					extensionDetails.data,
-					uniqueOrgIds,
+					organizationIds,
 					mentorExtensionsModelName,
 					'organization_id'
 				)
 			}
-
-			// Create a map from userDetails.result for quick lookups
-			const userDetailsMap = new Map(userDetails.result.map((userDetail) => [userDetail.id, userDetail]))
-
-			// Map over extensionDetails.data to merge with the corresponding userDetail
-			extensionDetails.data = extensionDetails.data
-				.map((extensionDetail) => {
-					const user_id = `${extensionDetail.user_id}`
-					if (userDetailsMap.has(user_id)) {
-						let userDetail = userDetailsMap.get(user_id)
-						// Merge userDetail with extensionDetail, prioritize extensionDetail properties
-						userDetail = { ...userDetail, ...extensionDetail }
-						delete userDetail.user_id
-						delete userDetail.mentor_visibility
-						delete userDetail.mentee_visibility
-						delete userDetail.organization_id
-						delete userDetail.meta
-						return userDetail
-					}
-					return null
-				})
-				.filter((extensionDetail) => extensionDetail !== null)
 
 			if (directory) {
 				let foundKeys = {}
@@ -995,7 +1033,7 @@ module.exports = class MentorsHelper {
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
-				message: userDetails.message,
+				message: 'MENTOR_LIST',
 				result: extensionDetails,
 			})
 		} catch (error) {
