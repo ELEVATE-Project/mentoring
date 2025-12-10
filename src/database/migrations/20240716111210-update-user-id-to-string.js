@@ -20,10 +20,10 @@ module.exports = {
 				type: Sequelize.STRING,
 				allowNull: false,
 			})
-			await queryInterface.changeColumn('session_ownerships', 'user_id', {
-				type: Sequelize.STRING,
-				allowNull: false,
-			})
+			// await queryInterface.changeColumn('session_ownerships', 'user_id', {
+			// 	type: Sequelize.STRING,
+			// 	allowNull: false,
+			// })
 			await queryInterface.changeColumn('user_extensions', 'user_id', {
 				type: Sequelize.STRING,
 				allowNull: false,

@@ -123,6 +123,10 @@ module.exports = {
 			custom_entity_text: {
 				type: Sequelize.JSON,
 			},
+			tenant_code: {
+				type: Sequelize.STRING,
+				allowNull: false,
+			},
 			created_at: {
 				allowNull: false,
 				type: Sequelize.DATE,

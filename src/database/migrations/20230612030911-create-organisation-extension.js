@@ -9,6 +9,11 @@ module.exports = {
 				primaryKey: true,
 				type: Sequelize.INTEGER,
 			},
+			tenant_code: {
+				type: Sequelize.STRING,
+				allowNull: false,
+				primaryKey: true,
+			},
 			session_visibility_policy: {
 				type: Sequelize.STRING,
 			},

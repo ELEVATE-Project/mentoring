@@ -337,6 +337,8 @@ module.exports = {
 					organization_id: defaultOrgId,
 					updated_at: new Date(),
 					created_at: new Date(),
+					organization_code: process.env.DEFAULT_ORGANIZATION_CODE,
+					tenant_code: process.env.DEFAULT_TENANT_CODE,
 				},
 			],
 			{}

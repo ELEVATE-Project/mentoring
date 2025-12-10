@@ -42,15 +42,33 @@ module.exports = async () => {
 	)
 }
 
+/*
 async function startConsumer(kafkaClient) {
-	const consumer = kafkaClient.consumer({ groupId: process.env.KAFKA_GROUP_ID })
+	const consumer = kafkaClient.consumer({ groupId: process.env.KAFKA_GROUP_ID,
+	sessionTimeout: 45000,
+    heartbeatInterval: 3000,
+	},)
+
+	    // ADD HERE — consumer lifecycle debug logs
+    consumer.on(consumer.events.HEARTBEAT, () => {
+        console.log("Kafka Consumer: Heartbeat OK");
+    });
+
+    consumer.on(consumer.events.REBALANCING, (e) => {
+        console.log(`Kafka Consumer: Rebalancing (messages may be missed) | reason=${e.payload.reason}`);
+    });
+
+    consumer.on(consumer.events.GROUP_JOIN, (e) => {
+        console.log(`Kafka Consumer: Group join — partitions assigned = ${JSON.stringify(e.payload.memberAssignment)}`);
+    });
 
 	await consumer.connect()
 	await consumer.subscribe({ topics: [process.env.EVENTS_TOPIC, process.env.CLEAR_INTERNAL_CACHE] })
 
 	await consumer.run({
-		eachMessage: async ({ topic, partition, message }) => {
+		eachMessage: async ({ topic, partition, message, heartbeat }) => {
 			try {
+				console.log({ topic, partition, message , heartbeat},'<---{ topic, partition, message }')
 				const rawValue = message.value?.toString()
 				const offset = message.offset
 				if (!rawValue) {
@@ -77,7 +95,7 @@ async function startConsumer(kafkaClient) {
 						response = await rolechangeConsumer.messageReceived(payload)
 					}
 					if (payload.eventType === 'create' || payload.eventType === 'bulk-create') {
-						response = await createuserConsumer.messageReceived(payload)
+						response = await createuserConsumer.messageReceived(payload,heartbeat)
 					}
 					if (payload.eventType === 'delete') {
 						response = await deleteuserConsumer.messageReceived(payload)
@@ -102,6 +120,7 @@ async function startConsumer(kafkaClient) {
 				}
 				logger.info(`Kafk event handling response : ${response}`)
 			} catch (err) {
+				console.log(err,'err 106')
 				logger.error(`Error in Kafka message handler for topic ${topic}`, {
 					topic,
 					partition,
@@ -109,6 +128,138 @@ async function startConsumer(kafkaClient) {
 					err: err?.stack || err?.message || String(err),
 				})
 			}
+		},
+	})
+}
+
+*/
+
+async function startConsumer(kafkaClient) {
+	const consumer = kafkaClient.consumer({
+		groupId: process.env.KAFKA_GROUP_ID,
+		sessionTimeout: 45000, // allows slow handlers
+		heartbeatInterval: 3000,
+	})
+
+	// Lifecycle logs (important)
+	consumer.on(consumer.events.GROUP_JOIN, (e) => {
+		logger.info(`Kafka Consumer: Group join — partitions assigned = ${JSON.stringify(e.payload?.memberAssignment)}`)
+	})
+
+	consumer.on(consumer.events.REBALANCING, (e) => {
+		logger.warn(`Kafka Consumer: Rebalancing triggered — ${e.payload.reason}`)
+	})
+
+	consumer.on(consumer.events.HEARTBEAT, () => {
+		logger.debug('Kafka Consumer: Heartbeat OK')
+	})
+
+	await consumer.connect()
+	logger.info('Kafka Consumer: Connected to broker')
+
+	const topics = [process.env.EVENTS_TOPIC, process.env.CLEAR_INTERNAL_CACHE]
+
+	await consumer.subscribe({ topics })
+	logger.info(`Kafka Consumer: Subscribed to topics = ${JSON.stringify(topics)}`)
+
+	//------------------------------------------------------------------
+	// EACH BATCH VERSION (FIXES HEARTBEAT + MISSED MESSAGES)
+	//------------------------------------------------------------------
+	await consumer.run({
+		autoCommit: true, // safe because processing is fast per message
+		eachBatch: async ({ batch, heartbeat, resolveOffset, commitOffsetsIfNecessary, isRunning, isStale }) => {
+			logger.info(
+				`Kafka Batch: Received batch | topic=${batch.topic} | partition=${batch.partition} | size=${batch.messages.length}`
+			)
+
+			for (const message of batch.messages) {
+				if (!isRunning() || isStale()) {
+					logger.warn('Kafka Batch: Consumer is no longer running or batch is stale, stopping processing.')
+					break
+				}
+
+				const rawValue = message.value?.toString()
+				const offset = message.offset
+				const topic = batch.topic
+				const partition = batch.partition
+
+				logger.info(`Kafka Batch: Message | topic=${topic} | partition=${partition} | offset=${offset}`)
+
+				if (!rawValue) {
+					logger.warn(`Kafka Batch: Empty message skipped`)
+					resolveOffset(offset)
+					continue
+				}
+
+				let payload
+				try {
+					payload = JSON.parse(rawValue)
+				} catch (e) {
+					logger.warn('Kafka Batch: Invalid JSON, skipping', {
+						offset,
+						err: e.message,
+					})
+					resolveOffset(offset)
+					continue
+				}
+
+				//--------------------------------------------------------
+				// ROUTE MESSAGE TO CORRECT HANDLER
+				//--------------------------------------------------------
+				let response
+
+				try {
+					if (topic === process.env.EVENTS_TOPIC && payload) {
+						if (payload.eventType === 'roleChange') {
+							response = await rolechangeConsumer.messageReceived(payload)
+						}
+
+						if (payload.eventType === 'create' || payload.eventType === 'bulk-create') {
+							response = await createuserConsumer.messageReceived(payload)
+						}
+
+						if (payload.eventType === 'delete') {
+							response = await deleteuserConsumer.messageReceived(payload)
+						}
+
+						if (payload.eventType === 'update' || payload.eventType === 'bulk-update') {
+							response = await updateuserConsumer.messageReceived(payload)
+						}
+
+						// organization events
+						if (
+							payload.entity === 'organization' &&
+							(payload.eventType === 'create' ||
+								payload.eventType === 'update' ||
+								payload.eventType === 'deactivate')
+						) {
+							response = await organizationConsumer.messageReceived(payload)
+						}
+					} else if (topic === process.env.CLEAR_INTERNAL_CACHE && payload?.type === 'CLEAR_INTERNAL_CACHE') {
+						response = await utils.internalDel(payload.value)
+					}
+
+					logger.info(`Kafka Batch: Handler response for offset=${offset} => ${JSON.stringify(response)}`)
+				} catch (handlerErr) {
+					logger.error(`Kafka Batch: Error handling message`, {
+						offset,
+						err: handlerErr.stack || handlerErr.message,
+					})
+				}
+
+				//--------------------------------------------------------
+				// MARK MESSAGE AS PROCESSED
+				//--------------------------------------------------------
+				resolveOffset(offset)
+
+				//--------------------------------------------------------
+				// HEARTBEAT TO PREVENT TIMEOUT
+				//--------------------------------------------------------
+				await heartbeat()
+			}
+
+			// commit offsets once per batch
+			await commitOffsetsIfNecessary()
 		},
 	})
 }
