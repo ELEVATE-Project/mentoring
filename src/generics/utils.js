@@ -12,7 +12,6 @@ const moment = require('moment')
 const path = require('path')
 const md5 = require('md5')
 const fs = require('fs')
-const { RedisCache, InternalCache } = require('elevate-node-cache')
 const startCase = require('lodash/startCase')
 const common = require('@constants/common')
 const crypto = require('crypto')
@@ -120,25 +119,6 @@ function md5Hash(value) {
 	return md5(value)
 }
 
-function internalSet(key, value) {
-	return InternalCache.setKey(key, value)
-}
-function internalGet(key) {
-	return InternalCache.getKey(key)
-}
-function internalDel(key) {
-	return InternalCache.delKey(key)
-}
-
-function redisSet(key, value, exp) {
-	return RedisCache.setKey(key, value, exp)
-}
-function redisGet(key) {
-	return RedisCache.getKey(key)
-}
-function redisDel(key) {
-	return RedisCache.deleteKey(key)
-}
 const capitalize = (str) => {
 	return startCase(str)
 }
@@ -348,6 +328,7 @@ function processDbResponse(responseBody, entityType) {
 		if (entityType.some((entity) => entity.value === key) && output[key] !== null) {
 			// Find the matching entity type for the current key
 			const matchingEntity = entityType.find((entity) => entity.value === key)
+
 			// Filter and map the matching entity values
 			const matchingValues = matchingEntity.entities
 				.filter((entity) => (Array.isArray(output[key]) ? output[key].includes(entity.value) : true))
@@ -355,12 +336,17 @@ function processDbResponse(responseBody, entityType) {
 					value: entity.value,
 					label: entity.label,
 				}))
+
 			// Check if there are matching values
-			if (matchingValues.length > 0)
-				output[key] = Array.isArray(output[key])
+			if (matchingValues.length > 0) {
+				const newValue = Array.isArray(output[key])
 					? matchingValues
 					: matchingValues.find((entity) => entity.value === output[key])
-			else if (Array.isArray(output[key])) output[key] = output[key].filter((item) => item.value && item.label)
+				output[key] = newValue
+			} else if (Array.isArray(output[key])) {
+				const filteredValue = output[key].filter((item) => item.value && item.label)
+				output[key] = filteredValue
+			}
 		}
 
 		if (output.meta && output.meta[key] && entityType.some((entity) => entity.value === output.meta[key].value)) {
@@ -487,10 +473,15 @@ const validateRoleAccess = (roles, requiredRoles) => {
 const removeDefaultOrgEntityTypes = (entityTypes, orgCode) => {
 	const entityTypeMap = new Map()
 	entityTypes.forEach((entityType) => {
-		if (!entityTypeMap.has(entityType.value)) entityTypeMap.set(entityType.value, entityType)
-		else if (entityType.organization_code === orgCode) entityTypeMap.set(entityType.value, entityType)
+		if (!entityTypeMap.has(entityType.value)) {
+			entityTypeMap.set(entityType.value, entityType)
+		} else if (entityType.organization_code === orgCode) {
+			entityTypeMap.set(entityType.value, entityType)
+		}
 	})
-	return Array.from(entityTypeMap.values())
+
+	const result = Array.from(entityTypeMap.values())
+	return result
 }
 const generateWhereClause = (tableName) => {
 	let whereClause = ''
@@ -1306,12 +1297,6 @@ module.exports = {
 	getTimeZone,
 	utcFormat,
 	md5Hash,
-	internalSet,
-	internalDel,
-	internalGet,
-	redisSet,
-	redisGet,
-	redisDel,
 	extractEmailTemplate,
 	capitalize,
 	isAMentor,

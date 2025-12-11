@@ -123,6 +123,25 @@ let enviromentVariables = {
 		message: 'Redis Host Url',
 		optional: false,
 	},
+	REDIS_PORT: {
+		message: 'Redis Port',
+		optional: true,
+		default: '6379',
+	},
+	REDIS_PASSWORD: {
+		message: 'Redis Password',
+		optional: true,
+	},
+	CACHE_ENABLED: {
+		message: 'Enable/Disable Redis Cache',
+		optional: true,
+		default: 'true',
+	},
+	CACHE_SHARDS: {
+		message: 'Number of Redis Cache Shards',
+		optional: true,
+		default: '32',
+	},
 	ENABLE_EMAIL_FOR_REPORT_ISSUE: {
 		message: 'Required true or false',
 		optional: true,

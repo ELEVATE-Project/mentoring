@@ -113,7 +113,6 @@ module.exports = class Mentees {
 
 			return await menteesService.read(
 				req.decodedToken.id,
-				req.decodedToken.organization_id,
 				req.decodedToken.organization_code,
 				req.decodedToken.roles,
 				req.decodedToken.tenant_code
@@ -157,7 +156,11 @@ module.exports = class Mentees {
 	 */
 	async getCommunicationToken(req) {
 		try {
-			return await menteesService.getCommunicationToken(req.decodedToken.id, req.decodedToken.tenant_code) // params since read will be public for mentees
+			return await menteesService.getCommunicationToken(
+				req.decodedToken.id,
+				req.decodedToken.tenant_code,
+				req.decodedToken.organization_code
+			) // params since read will be public for mentees
 		} catch (error) {
 			return error
 		}

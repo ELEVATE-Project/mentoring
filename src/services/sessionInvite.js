@@ -11,19 +11,24 @@ const userRequests = require('@requests/user')
 const sessionService = require('@services/sessions')
 const ProjectRootDir = path.join(__dirname, '../')
 const fileUploadQueries = require('@database/queries/fileUpload')
-const notificationTemplateQueries = require('@database/queries/notificationTemplate')
 const kafkaCommunication = require('@generics/kafka-communication')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const sessionQueries = require('@database/queries/sessions')
-const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeCache = require('@helpers/entityTypeCache')
 const { Op } = require('sequelize')
 const moment = require('moment')
 const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const menteeExtensionQueries = require('@database/queries/userExtension')
 const uploadToCloud = require('@helpers/uploadFileToCloud')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class UserInviteHelper {
 	static async uploadSession(data) {
+		console.log(`🚀 [UPLOAD SESSION START] Beginning bulk session upload process`)
+		console.log(
+			`📊 [UPLOAD DATA] User: ${data.user.userId}, Org: ${data.user.organization_code}, Tenant: ${data.user.tenant_code}`
+		)
+		console.log(`📁 [FILE INFO] Path: ${data.fileDetails.input_path}`)
 		return new Promise(async (resolve, reject) => {
 			try {
 				const filePath = data.fileDetails.input_path
@@ -36,21 +41,57 @@ module.exports = class UserInviteHelper {
 				const defaultOrgCode = data.user.defaultOrganiztionCode
 				const defaultTenantCode = data.user.defaultTenantCode
 
-				const mentor = await menteeExtensionQueries.getMenteeExtension(userId, ['is_mentor'], false, tenantCode)
-				if (!mentor) throw createUnauthorizedResponse('USER_NOT_FOUND')
+				console.log(`👤 [USER LOOKUP] Getting user details for ID: ${userId}`)
+				const mentor = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+				if (!mentor) {
+					console.log(`❌ [USER NOT FOUND] User ${userId} not found in cache`)
+					throw createUnauthorizedResponse('USER_NOT_FOUND')
+				}
+				console.log(`✅ [USER FOUND] User: ${mentor.name}, Is Mentor: ${mentor.is_mentor}`)
+				console.log(`📧 [EMAIL CHECK] mentor.email: ${mentor.email}`)
+				console.log(`📋 [USER KEYS] mentor object keys: [${Object.keys(mentor).join(', ')}]`)
+
+				// If email is missing from cache, get fresh user data from database
+				let userWithEmail = mentor
+				if (!mentor.email) {
+					console.log(`⚠️ [EMAIL MISSING] Email not in cache, fetching fresh user data from database`)
+					const userQueries = require('@database/queries/userExtension')
+					userWithEmail = await userQueries.getMenteeExtension(userId, [], false, tenantCode)
+					console.log(`📧 [FRESH EMAIL CHECK] Fresh user email: ${userWithEmail?.email}`)
+					console.log(
+						`📋 [FRESH USER KEYS] Fresh user keys: [${Object.keys(userWithEmail || {}).join(', ')}]`
+					)
+
+					// If still no email, log detailed info
+					if (!userWithEmail?.email) {
+						console.log(`❌ [CRITICAL] User ${userId} has no email in database either!`)
+						console.log(`🔍 [DEBUG] Full fresh user object:`, JSON.stringify(userWithEmail, null, 2))
+					}
+				}
 
 				const isMentor = mentor.is_mentor
 
 				// download file to local directory
+				console.log(`⬇️ [DOWNLOAD START] Downloading CSV file: ${filePath}`)
 				const response = await this.downloadCSV(filePath)
-				if (!response.success) throw new Error('FAILED_TO_DOWNLOAD')
+				if (!response.success) {
+					console.log(`❌ [DOWNLOAD FAILED] Failed to download CSV file`)
+					throw new Error('FAILED_TO_DOWNLOAD')
+				}
+				console.log(`✅ [DOWNLOAD SUCCESS] CSV downloaded to: ${response.result.downloadPath}`)
 
 				// extract data from csv
+				console.log(`📄 [CSV PARSE START] Parsing CSV data`)
 				const parsedFileData = await this.extractDataFromCSV(response.result.downloadPath)
-				if (!parsedFileData.success) throw new Error('FAILED_TO_READ_CSV')
+				if (!parsedFileData.success) {
+					console.log(`❌ [CSV PARSE FAILED] Failed to parse CSV data`)
+					throw new Error('FAILED_TO_READ_CSV')
+				}
 				const invitees = parsedFileData.result.data
+				console.log(`✅ [CSV PARSE SUCCESS] Parsed ${invitees.length} rows from CSV`)
 
 				// create outPut file and create invites
+				console.log(`🏭 [PROCESSING START] Starting session processing for ${invitees.length} sessions`)
 				const createResponse = await this.processSessionDetails(
 					invitees,
 					inviteeFileDir,
@@ -63,23 +104,42 @@ module.exports = class UserInviteHelper {
 					defaultOrgCode,
 					defaultTenantCode
 				)
+				console.log(`🏁 [PROCESSING COMPLETE] Session processing finished. Success: ${createResponse.success}`)
 				if (createResponse.success == false) console.log(':::::::::', createResponse.message)
+				console.log(`📊 [PROCESSING RESULT] Full createResponse:`, JSON.stringify(createResponse, null, 2))
+				console.log(
+					`📊 [ERROR CHECK] createResponse.result.isErrorOccured: ${createResponse.result?.isErrorOccured}`
+				)
 				const outputFilename = path.basename(createResponse.result.outputFilePath)
+				console.log(`📤 [CLOUD UPLOAD START] Uploading file: ${outputFilename} to cloud`)
 				// upload output file to cloud
 				const uploadRes = await uploadToCloud.uploadFileToCloud(outputFilename, inviteeFileDir, userId, orgId)
 				const output_path = uploadRes.result.uploadDest
+				console.log(`✅ [CLOUD UPLOAD SUCCESS] File uploaded to: ${output_path}`)
+
+				const newStatus =
+					createResponse.result.isErrorOccured == true ? common.STATUS.FAILED : common.STATUS.PROCESSED
 				const update = {
 					output_path,
 					updated_by: userId,
-					status:
-						createResponse.result.isErrorOccured == true ? common.STATUS.FAILED : common.STATUS.PROCESSED,
+					status: newStatus,
 				}
+				console.log(`🔄 [FILE UPDATE START] Updating file_uploads record:`)
+				console.log(`   - File ID: ${data.fileDetails.id}`)
+				console.log(`   - Organization ID: ${orgId}`)
+				console.log(`   - Tenant Code: ${tenantCode}`)
+				console.log(`   - New Status: ${newStatus}`)
+				console.log(`   - Output Path: ${output_path}`)
+				console.log(`   - Updated By: ${userId}`)
+				console.log(`   - Full Update Object:`, JSON.stringify(update, null, 2))
+
 				//update output path in file uploads
 				const rowsAffected = await fileUploadQueries.update(
-					{ id: data.fileDetails.id, organization_id: orgId },
+					{ id: parseInt(data.fileDetails.id), organization_id: parseInt(orgId) },
 					tenantCode,
 					update
 				)
+				console.log(`📝 [FILE UPDATE RESULT] Rows affected: ${rowsAffected}`)
 				if (rowsAffected === 0) {
 					throw new Error('FILE_UPLOAD_MODIFY_ERROR')
 				}
@@ -88,15 +148,35 @@ module.exports = class UserInviteHelper {
 				const templateCode = process.env.SESSION_UPLOAD_EMAIL_TEMPLATE_CODE
 				if (templateCode) {
 					const defaults = await getDefaults()
-					const templateData = await notificationTemplateQueries.findOneEmailTemplate(
-						templateCode,
+					if (!defaults.orgCode)
+						return resolve(
+							responses.failureResponse({
+								message: 'DEFAULT_ORG_CODE_NOT_SET',
+								statusCode: httpStatusCode.bad_request,
+								responseCode: 'CLIENT_ERROR',
+							})
+						)
+					if (!defaults.tenantCode)
+						return resolve(
+							responses.failureResponse({
+								message: 'DEFAULT_TENANT_CODE_NOT_SET',
+								statusCode: httpStatusCode.bad_request,
+								responseCode: 'CLIENT_ERROR',
+							})
+						)
+
+					const orgCodes = [data.user.organization_code, defaults.orgCode]
+					const tenantCodes = [tenantCode, defaults.tenantCode]
+					// send mail to mentors on session creation if session created by manager
+					const templateData = await cacheHelper.notificationTemplates.get(
+						tenantCode,
 						data.user.organization_code,
-						defaults.tenantCode
+						templateCode
 					)
 
 					if (templateData) {
 						const sessionUploadURL = await utils.getDownloadableUrl(output_path)
-						await this.sendSessionManagerEmail(templateData, data.user, sessionUploadURL) //Rename this to function to generic name since this function is used for both Invitee & Org-admin.
+						await this.sendSessionManagerEmail(templateData, userWithEmail, sessionUploadURL) //Rename this to function to generic name since this function is used for both Invitee & Org-admin.
 					}
 				}
 
@@ -158,9 +238,9 @@ module.exports = class UserInviteHelper {
 		}
 	}
 
-	static async appendWithComma(existingMessagePromise, newMessage) {
-		const existingMessage = await existingMessagePromise
-		if (existingMessage) {
+	static appendWithComma(existingMessage, newMessage) {
+		// Handle both string and Promise inputs
+		if (existingMessage && typeof existingMessage === 'string') {
 			return `${existingMessage}, ${newMessage}`
 		} else {
 			return newMessage
@@ -256,8 +336,20 @@ module.exports = class UserInviteHelper {
 					parsedRow.custom_entities = customEntities
 				}
 
+				console.log(`🗂️  [CSV ROW PARSED] Row data for session: ${title}`)
+				console.log(`   - action: ${action}`)
+				console.log(`   - title: ${title}`)
+				console.log(`   - description: ${description}`)
+				console.log(`   - mentor_id: ${mentor_id}`)
+				console.log(`   - date: ${date}`)
+				console.log(`   - time_zone: ${time_zone}`)
+				console.log(`   - time24hrs: ${time24hrs}`)
+				console.log(`   - duration: ${duration}`)
+				console.log(`   - meeting_info: ${JSON.stringify(meetingInfo)}`)
+				console.log(`   - type: ${type}`)
+				console.log(`   - Full parsedRow:`, JSON.stringify(parsedRow, null, 2))
+
 				parsedCSVData.push(parsedRow)
-				parsedCSVData
 
 				if (action.toUpperCase() !== common.DELETE_METHOD) {
 					const platformNameRegex = common.PLATFORMS_REGEX
@@ -267,11 +359,10 @@ module.exports = class UserInviteHelper {
 					const setMeetingInfo = (label, value, meta = {}, link) => {
 						lastEntry.meeting_info = { platform: label, value: value, meta: meta, link: meetingLinkOrId }
 					}
-					const processStatusMessage = async (statusMessage, message) => {
+					const processStatusMessage = (statusMessage, message) => {
 						return statusMessage ? `${statusMessage}, ${message}` : message
 					}
-					const processInvalidLink = async (statusMessage, message) =>
-						await processStatusMessage(statusMessage, message)
+					const processInvalidLink = (statusMessage, message) => processStatusMessage(statusMessage, message)
 					//Zoom Validation
 					const validateZoom = async () => {
 						const match = meetingLinkOrId.match(zoomMeetingRegex)
@@ -284,7 +375,7 @@ module.exports = class UserInviteHelper {
 							})
 						} else {
 							lastEntry.status = 'Invalid'
-							lastEntry.statusMessage = await processInvalidLink(lastEntry.statusMessage, 'Invalid Link')
+							lastEntry.statusMessage = processInvalidLink(lastEntry.statusMessage, 'Invalid Link')
 						}
 					}
 					//WhatsApp Validation
@@ -296,7 +387,7 @@ module.exports = class UserInviteHelper {
 							setMeetingInfo(common.MEETING_VALUES.WHATSAPP_LABEL, common.MEETING_VALUES.WHATSAPP_LABEL)
 						} else {
 							lastEntry.status = 'Invalid'
-							lastEntry.statusMessage = await processInvalidLink(lastEntry.statusMessage, 'Invalid Link')
+							lastEntry.statusMessage = processInvalidLink(lastEntry.statusMessage, 'Invalid Link')
 						}
 					}
 					//GoogleMeet Validation
@@ -308,24 +399,29 @@ module.exports = class UserInviteHelper {
 							setMeetingInfo(common.MEETING_VALUES.GOOGLE_LABEL, common.MEETING_VALUES.GOOGLE_VALUE)
 						} else {
 							lastEntry.status = 'Invalid'
-							lastEntry.statusMessage = await processInvalidLink(lastEntry.statusMessage, 'Invalid Link')
+							lastEntry.statusMessage = processInvalidLink(lastEntry.statusMessage, 'Invalid Link')
 						}
 					}
 					//BBB Validation
 					const validateBBB = async () => {
+						console.log(`🟦 [BBB VALIDATION] Starting BBB validation`)
+						console.log(`   - meetingLinkOrId: "${meetingLinkOrId}"`)
+						console.log(`   - !meetingLinkOrId: ${!meetingLinkOrId}`)
 						if (!meetingLinkOrId) {
 							if (process.env.DEFAULT_MEETING_SERVICE === common.BBB_VALUE) {
 								setMeetingInfo(common.MEETING_VALUES.BBB_LABEL, common.BBB_VALUE)
 							} else {
 								setMeetingInfo(process.env.DEFAULT_MEETING_SERVICE, process.env.DEFAULT_MEETING_SERVICE)
-								lastEntry.statusMessage = await processInvalidLink(
+								lastEntry.statusMessage = processInvalidLink(
 									lastEntry.statusMessage,
 									'Set Meeting Later'
 								)
 							}
+							console.log(`✅ [BBB SUCCESS] BBB validation passed - no link provided`)
 						} else {
+							console.log(`❌ [BBB FAIL] BBB validation failed - link provided when none expected`)
 							lastEntry.status = 'Invalid'
-							lastEntry.statusMessage = await processInvalidLink(
+							lastEntry.statusMessage = processInvalidLink(
 								lastEntry.statusMessage,
 								'Link should be empty for Big Blue Button'
 							)
@@ -335,30 +431,31 @@ module.exports = class UserInviteHelper {
 					const validateDefaultBBB = async () => {
 						setMeetingInfo('', '')
 						if (process.env.DEFAULT_MEETING_SERVICE !== common.BBB_VALUE) {
-							lastEntry.statusMessage = await processInvalidLink(
-								lastEntry.statusMessage,
-								'Set Meeting Later'
-							)
+							lastEntry.statusMessage = processInvalidLink(lastEntry.statusMessage, 'Set Meeting Later')
 						}
 					}
 					//Platform Validation
 					const validateNoPlatformWithLink = async () => {
 						lastEntry.status = 'Invalid'
-						lastEntry.statusMessage = await processInvalidLink(
-							lastEntry.statusMessage,
-							'Platform is not filled'
-						)
+						lastEntry.statusMessage = processInvalidLink(lastEntry.statusMessage, 'Platform is not filled')
 					}
 					//Invalid Platform Validation
 					const validateInvalidPlatform = async () => {
 						lastEntry.status = 'Invalid'
-						lastEntry.statusMessage = await processInvalidLink(
+						lastEntry.statusMessage = processInvalidLink(
 							lastEntry.statusMessage,
 							'Invalid Meeting Platform'
 						)
 					}
 					//Validating logic using switch case
+					console.log(`🔗 [MEETING VALIDATION] Starting meeting validation for session: ${title}`)
+					console.log(`   - meetingPlatform: "${meetingPlatform}"`)
+					console.log(`   - meetingName: "${meetingName}"`)
+					console.log(`   - meetingLinkOrId: "${meetingLinkOrId}"`)
+					console.log(`   - meetingPasscode: "${meetingPasscode}"`)
+
 					const validateMeetingLink = async () => {
+						console.log(`🔍 [MEETING SWITCH] Checking validation conditions...`)
 						switch (true) {
 							case meetingName.includes(common.MEETING_VALUES.ZOOM_VALUE):
 								await validateZoom()
@@ -370,6 +467,7 @@ module.exports = class UserInviteHelper {
 								await validateGoogleMeet()
 								break
 							case common.MEETING_VALUES.BBB_PLATFORM_VALUES.some((value) => meetingName.includes(value)):
+								console.log(`✅ [BBB MATCH] Platform matched BBB validation`)
 								await validateBBB()
 								break
 							case !meetingLinkOrId && !meetingName:
@@ -410,6 +508,16 @@ module.exports = class UserInviteHelper {
 	}
 
 	static async processSession(session, userId, orgCode, validRowsCount, invalidRowsCount, tenantCode) {
+		console.log(`🔍 [PROCESS SESSION] Starting validation for session:`)
+		console.log(`   - Session ID/Title: ${session.id || session.title || 'Unknown'}`)
+		console.log(`   - Session object keys: [${Object.keys(session).join(', ')}]`)
+		console.log(`   - Session.action: ${session.action}`)
+		console.log(`   - Session.title: ${session.title}`)
+		console.log(`   - Session.mentor_id: ${session.mentor_id}`)
+		console.log(`   - Session.date: ${session.date}`)
+		console.log(`   - Session.duration: ${session.duration}`)
+		console.log(`   - Full session object:`, JSON.stringify(session, null, 2))
+
 		const requiredFields = [
 			'action',
 			'title',
@@ -429,6 +537,14 @@ module.exports = class UserInviteHelper {
 		const missingFields = requiredFields.filter(
 			(field) => !session[field] || (Array.isArray(session[field]) && session[field].length === 0)
 		)
+		console.log(`📋 [FIELD VALIDATION] Required fields check:`)
+		console.log(`   - Required fields: [${requiredFields.join(', ')}]`)
+		console.log(`   - Missing fields: [${missingFields.join(', ')}]`)
+		console.log(`   - Field values:`)
+		requiredFields.forEach((field) => {
+			console.log(`     * ${field}: ${JSON.stringify(session[field])}`)
+		})
+
 		if (missingFields.length > 0) {
 			session.status = 'Invalid'
 			session.statusMessage = this.appendWithComma(
@@ -574,28 +690,50 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [orgCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [sessionModelName] },
-				},
-				{
-					[Op.in]: [tenantCode, defaults.tenantCode],
-				}
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				sessionModelName,
+				tenantCode,
+				orgCode
 			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,
 				entities: item.entities,
 				org_Id: item.organization_id,
 			}))
+
+			console.log(`🎯 [SESSION VALIDATION] Starting validation for session: ${session.title}`)
+			console.log(`📋 [AVAILABLE ENTITIES] Found ${idAndValues.length} entity types for validation:`)
+			idAndValues.forEach((item, index) => {
+				console.log(`   - [${index}] EntityType: "${item.value}" has ${item.entities?.length || 0} entities`)
+				if (item.entities && item.entities.length > 0) {
+					console.log(`     - Entities: ${item.entities.map((e) => e.value).join(', ')}`)
+				}
+			})
+
 			await this.mapSessionToEntityValues(session, idAndValues)
 
+			console.log(`📊 [SESSION DATA] Session after mapping:`)
+			console.log(`   - title: ${session.title}`)
+			console.log(`   - custom_entities:`, JSON.stringify(session.custom_entities, null, 2))
+			console.log(`   - Has custom_entities: ${!!session.custom_entities}`)
+
 			if (session.custom_entities) {
+				const customEntityKeys = Object.keys(session.custom_entities)
+				console.log(`🔍 [VALIDATION CHECK] Session has ${customEntityKeys.length} custom entity fields:`)
+				customEntityKeys.forEach((key) => {
+					const values = session.custom_entities[key]
+					console.log(`   - "${key}": [${Array.isArray(values) ? values.join(', ') : values}]`)
+				})
+
+				const availableEntityTypes = idAndValues.map((item) => item.value)
+				console.log(`🎯 [ENTITY COMPARISON] Available entity types: [${availableEntityTypes.join(', ')}]`)
+
 				const result = await this.validateCustomEntities(session, idAndValues, userId)
+				console.log(
+					`✅ [VALIDATION RESULT] Custom entities validation: ${result.isValid ? 'PASSED' : 'FAILED'}`
+				)
 				if (!result.isValid) {
+					console.log(`❌ [VALIDATION ERROR] Message: ${result.message}`)
 					session.status = 'Invalid'
 					session.statusMessage = this.appendWithComma(session.statusMessage, result.message)
 				} else {
@@ -626,18 +764,68 @@ module.exports = class UserInviteHelper {
 	}
 
 	static async mapSessionToEntityValues(session, entitiesList) {
+		console.log(`🔄 [ENTITY MAPPING] Starting to map session fields to entity values`)
+		console.log(`   - Session title: ${session.title}`)
+		console.log(`   - Available entity types: [${entitiesList.map((e) => e.value).join(', ')}]`)
+
+		const sessionFieldsBeforeMapping = {}
+		entitiesList.forEach((entityType) => {
+			const sessionKey = entityType.value
+			sessionFieldsBeforeMapping[sessionKey] = session[sessionKey]
+		})
+		console.log(`   - Session fields before mapping:`, JSON.stringify(sessionFieldsBeforeMapping, null, 2))
+
 		entitiesList.forEach((entityType) => {
 			const sessionKey = entityType.value
 			const sessionValues = session[sessionKey]
 
+			console.log(
+				`   📝 [MAPPING ${sessionKey}] Session has "${sessionKey}": ${JSON.stringify(sessionValues)} (type: ${
+					Array.isArray(sessionValues) ? 'array' : typeof sessionValues
+				})`
+			)
+
 			if (Array.isArray(sessionValues)) {
 				const entityValues = entityType.entities
+				console.log(
+					`     - Available entities for "${sessionKey}": [${entityValues
+						.map((e) => `${e.label}:${e.value}`)
+						.join(', ')}]`
+				)
+
 				session[sessionKey] = sessionValues.map((sessionValue) => {
 					const entity = entityValues.find((e) => e.label.toLowerCase() === sessionValue.toLowerCase())
+					console.log(
+						`     - Mapping "${sessionValue}" → ${entity ? entity.value : sessionValue} (${
+							entity ? 'found' : 'not found'
+						})`
+					)
 					return entity ? entity.value : sessionValue
 				})
+
+				console.log(`     ✅ Final mapped "${sessionKey}": [${session[sessionKey].join(', ')}]`)
+			} else {
+				console.log(`     ⚠️ Skipping "${sessionKey}" - not an array`)
 			}
 		})
+
+		// Check if custom_entities should be created
+		const hasCustomEntities = entitiesList.some(
+			(entityType) => session[entityType.value] && Array.isArray(session[entityType.value])
+		)
+		console.log(`🔍 [CUSTOM ENTITIES CHECK] Should create custom_entities: ${hasCustomEntities}`)
+
+		if (hasCustomEntities) {
+			session.custom_entities = {}
+			entitiesList.forEach((entityType) => {
+				if (session[entityType.value] && Array.isArray(session[entityType.value])) {
+					session.custom_entities[entityType.value] = session[entityType.value]
+				}
+			})
+			console.log(`✅ [CUSTOM ENTITIES CREATED]`, JSON.stringify(session.custom_entities, null, 2))
+		} else {
+			console.log(`❌ [NO CUSTOM ENTITIES] No array fields found to create custom_entities`)
+		}
 
 		return session
 	}
@@ -734,14 +922,20 @@ module.exports = class UserInviteHelper {
 		defaultOrgCode,
 		defaultTenantCode
 	) {
+		console.log(`📋 [PROCESS SESSION DETAILS] Starting processing of ${csvData.length} sessions`)
+		console.log(`📋 [PARAMS] UserId: ${userId}, OrgId: ${orgId}, TenantCode: ${tenantCode}, OrgCode: ${orgCode}`)
 		try {
 			const outputFileName = utils.generateFileName(common.sessionOutputFile, common.csvExtension)
 			let rowsWithStatus = []
 			let validRowsCount = 0
 			let invalidRowsCount = 0
+			console.log(`🔄 [SESSION LOOP] Starting to process each session individually`)
 			for (const session of csvData) {
+				console.log(`🎯 [SESSION] Processing: ${session.title || 'Untitled'}, Action: ${session.action}`)
 				if (session.action.replace(/\s+/g, '').toLowerCase() === common.ACTIONS.CREATE) {
+					console.log(`➡️ [CREATE ACTION] Processing CREATE action for session: ${session.title}`)
 					if (!session.id) {
+						console.log(`🔍 [VALIDATION START] Starting validation for session: ${session.title}`)
 						const {
 							validRowsCount: valid,
 							invalidRowsCount: invalid,
@@ -754,6 +948,12 @@ module.exports = class UserInviteHelper {
 							invalidRowsCount,
 							tenantCode
 						)
+						console.log(
+							`📊 [VALIDATION RESULT] Session: ${session.title}, Status: ${processedSession.status}`
+						)
+						if (processedSession.statusMessage) {
+							console.log(`💬 [STATUS MESSAGE] ${processedSession.statusMessage}`)
+						}
 						validRowsCount = valid
 						invalidRowsCount = invalid
 						rowsWithStatus.push(processedSession)
@@ -806,9 +1006,7 @@ module.exports = class UserInviteHelper {
 					session.statusMessage = this.appendWithComma(session.statusMessage, ' Invalid Row Action')
 				}
 
-				if (session.statusMessage && typeof session.statusMessage != 'string') {
-					session.statusMessage = await session.statusMessage.then((result) => result)
-				}
+				// Status message is now always a string - no Promise resolution needed
 			}
 
 			const SessionBodyData = rowsWithStatus.map((item) => {
@@ -852,15 +1050,10 @@ module.exports = class UserInviteHelper {
 				})
 			}
 
-			let entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: {
-						[Op.in]: [orgCode, defaults.orgCode],
-					},
-					model_names: { [Op.contains]: [sessionModelName] },
-				},
-				{ [Op.in]: [tenantCode, defaults.tenantCode] }
+			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				sessionModelName,
+				tenantCode,
+				orgCode
 			)
 			const idAndValues = entityTypes.map((item) => ({
 				value: item.value,
@@ -956,6 +1149,14 @@ module.exports = class UserInviteHelper {
 			const outputFilePath = path.join(sessionFileDir, outputFileName)
 			fs.writeFileSync(outputFilePath, csvContent)
 
+			// Check if any sessions failed processing
+			const hasErrors = sessionCreationOutput.some((session) => session.status === 'Invalid')
+			console.log(`🔍 [ERROR ANALYSIS] Checking for processing errors:`)
+			console.log(`   - Total sessions processed: ${sessionCreationOutput.length}`)
+			console.log(`   - Valid sessions: ${validRowsCount}`)
+			console.log(`   - Invalid sessions: ${invalidRowsCount}`)
+			console.log(`   - Has errors: ${hasErrors}`)
+
 			return {
 				success: true,
 				result: {
@@ -963,6 +1164,7 @@ module.exports = class UserInviteHelper {
 					outputFilePath,
 					validRowsCount,
 					invalidRowsCount,
+					isErrorOccured: hasErrors,
 				},
 			}
 		} catch (error) {
@@ -974,10 +1176,13 @@ module.exports = class UserInviteHelper {
 	}
 
 	static async processCreateData(SessionsArray, userId, orgId, isMentor, notifyUser, tenantCode, orgCode) {
+		console.log(`📋 [BULK PROCESSING] Starting to process ${SessionsArray.length} sessions for user ${userId}`)
 		const output = []
 		for (const data of SessionsArray) {
+			console.log(`🔄 [PROCESSING SESSION] Title: ${data.title}, Action: ${data.action}, Status: ${data.status}`)
 			if (data.status != 'Invalid') {
 				if (data.action.replace(/\s+/g, '').toLowerCase() === common.ACTIONS.CREATE) {
+					console.log(`✅ [VALID SESSION] Processing session: ${data.title}`)
 					data.status = common.PUBLISHED_STATUS
 					data.time_zone =
 						data.time_zone == common.TIMEZONE
@@ -988,6 +1193,8 @@ module.exports = class UserInviteHelper {
 						delete data.meeting_info
 					}
 					const { id, ...dataWithoutId } = data
+					console.log(`📝 [SESSION CREATION] Attempting to create session: ${data.title}`)
+					console.log(`📝 [SESSION CREATION] User: ${userId}, Org: ${orgCode}, Tenant: ${tenantCode}`)
 					const sessionCreation = await sessionService.create(
 						dataWithoutId,
 						userId,
@@ -997,7 +1204,13 @@ module.exports = class UserInviteHelper {
 						notifyUser,
 						tenantCode
 					)
+					console.log(
+						`📝 [SESSION CREATION RESULT] Status: ${sessionCreation.statusCode}, Message: ${sessionCreation.message}`
+					)
 					if (sessionCreation.statusCode === httpStatusCode.created) {
+						console.log(
+							`✅ [SESSION CREATED] Successfully created session ID: ${sessionCreation.result.id}`
+						)
 						data.statusMessage = this.appendWithComma(data.statusMessage, sessionCreation.message)
 						data.id = sessionCreation.result.id
 						data.recommended_for = sessionCreation.result.recommended_for.map((item) => item.label)
@@ -1012,6 +1225,9 @@ module.exports = class UserInviteHelper {
 								: (data.time_zone = common.TIMEZONE_UTC)
 						output.push(data)
 					} else {
+						console.log(
+							`❌ [SESSION CREATION FAILED] Status: ${sessionCreation.statusCode}, Message: ${sessionCreation.message}`
+						)
 						data.status = 'Invalid'
 						data.time_zone =
 							data.time_zone == common.IST_TIMEZONE
@@ -1085,9 +1301,7 @@ module.exports = class UserInviteHelper {
 				output.push(data)
 			}
 
-			if (data.statusMessage && typeof data.statusMessage != 'string') {
-				data.statusMessage = await data.statusMessage.then((result) => result)
-			}
+			// Status message is now always a string - no Promise resolution needed
 		}
 		return output
 	}
@@ -1132,6 +1346,12 @@ module.exports = class UserInviteHelper {
 
 	static async sendSessionManagerEmail(templateData, userData, sessionUploadURL = null, subjectComposeData = {}) {
 		try {
+			console.log(`📧 [EMAIL DEBUG] sendSessionManagerEmail called with userData:`)
+			console.log(`   - userData.email: ${userData.email}`)
+			console.log(`   - userData.name: ${userData.name}`)
+			console.log(`   - userData keys: [${Object.keys(userData).join(', ')}]`)
+			console.log(`   - Full userData:`, JSON.stringify(userData, null, 2))
+
 			const payload = {
 				type: common.notificationEmailType,
 				email: {

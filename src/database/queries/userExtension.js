@@ -559,6 +559,11 @@ module.exports = class MenteeExtensionQueries {
 				search: `%${searchText}%`,
 			}
 
+			// Add tenantCode to replacements if it's being used in the query
+			if (tenantCode) {
+				replacements.tenantCode = tenantCode
+			}
+
 			// Always provide offset and limit replacements since they're in the query
 			if (page !== null && limit !== null) {
 				replacements.offset = limit * (page - 1)
@@ -577,12 +582,7 @@ module.exports = class MenteeExtensionQueries {
 			const countQuery = `
 				SELECT COUNT(*) AS count
 				FROM ${viewName}
-				WHERE
-					${userFilterClause}
-					${filterClause}
-					${saasFilterClause}
-					${additionalFilter}
-					${defaultFilter}
+				${whereClause}
 			`
 
 			const count = await Sequelize.query(countQuery, {

@@ -1,5 +1,6 @@
 const common = require('@constants/common')
 const defaultRuleQueries = require('@database/queries/defaultRule')
+const entityTypeCache = require('@helpers/entityTypeCache')
 const entityTypeQueries = require('@database/queries/entityType')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const menteeExtensionQueries = require('@database/queries/userExtension')
@@ -40,14 +41,14 @@ module.exports = class DefaultRuleHelper {
 
 		const validFieldsPromise = Promise.all([
 			entityTypeQueries.findAllEntityTypes(orgCodes, tenantCodes, ['id', 'data_type'], {
-				status: 'ACTIVE',
+				status: common.ACTIVE_STATUS,
 				value: bodyData.target_field,
 				model_names: { [Op.contains]: [modelName] },
 				required: true,
 				allow_filtering: true,
 			}),
 			entityTypeQueries.findAllEntityTypes(orgCodes, tenantCodes, ['id', 'data_type'], {
-				status: 'ACTIVE',
+				status: common.ACTIVE_STATUS,
 				value: bodyData.requester_field,
 				model_names: { [Op.contains]: [mentorModelName] },
 				required: true,

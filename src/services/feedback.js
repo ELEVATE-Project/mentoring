@@ -10,6 +10,7 @@ const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const { Op } = require('sequelize')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class MenteesHelper {
 	/**
@@ -132,11 +133,9 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Feedback forms.
 	 */
 
-	static async forms(sessionId, roles, tenantCode) {
+	static async forms(sessionId, roles, tenantCode, orgCode) {
 		try {
-			let sessioninfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-				attributes: ['mentee_feedback_question_set', 'mentor_feedback_question_set'],
-			})
+			let sessioninfo = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
 
 			if (!sessioninfo) {
 				return responses.failureResponse({
@@ -179,7 +178,7 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - Feedback submission.
 	 */
 
-	static async submit(sessionId, updateData, userId, isAMentor, tenantCode) {
+	static async submit(sessionId, updateData, userId, isAMentor, tenantCode, orgCode) {
 		let feedback_as
 		if (isAMentor) {
 			feedback_as = updateData.feedback_as
@@ -187,9 +186,7 @@ module.exports = class MenteesHelper {
 		}
 		try {
 			//get session details
-			let sessionInfo = await sessionQueries.findOne({ id: sessionId }, tenantCode, {
-				attributes: ['is_feedback_skipped', 'mentor_id'],
-			})
+			let sessionInfo = await cacheHelper.sessions.get(tenantCode, orgCode, sessionId)
 
 			if (!sessionInfo) {
 				return responses.failureResponse({
@@ -256,11 +253,20 @@ module.exports = class MenteesHelper {
 							responseCode: 'CLIENT_ERROR',
 						})
 					}
+					try {
+						await cacheHelper.sessions.delete(tenantCode, orgCode, sessionId)
+					} catch (cacheError) {
+						console.error(`❌ Failed to delete session cache after deletion:`, cacheError)
+					}
 				}
 
 				//create feedback
 				if (feedbackNotExists && feedbackNotExists.length > 0) {
 					await feedbackQueries.bulkCreate(feedbackNotExists)
+
+					// Invalidate mentor cache after feedback submission (may affect mentor ratings/profile)
+					// Note: We already have mentorDetails from ratingCalculation, but userId here refers to the feedback submitter
+					// The actual mentor cache invalidation will happen in ratingCalculation function where we have mentor data
 				}
 
 				return responses.successResponse({
@@ -320,7 +326,7 @@ module.exports = class MenteesHelper {
 								questionData.category &&
 								questionData.category.evaluating == common.MENTOR_EVALUATING
 							) {
-								await ratingCalculation(feedbackInfo, sessionInfo.mentor_id, tenantCode)
+								await ratingCalculation(feedbackInfo, sessionInfo.mentor_id, tenantCode, orgCode)
 							}
 						}
 					}
@@ -408,9 +414,9 @@ const getFeedbackQuestions = async function (formCode, tenantCode) {
  * @returns {JSON} - mentor data.
  */
 
-const ratingCalculation = async function (ratingData, mentor_id, tenantCode) {
+const ratingCalculation = async function (ratingData, mentor_id, tenantCode, orgCode) {
 	try {
-		let mentorDetails = await mentorExtensionQueries.getMentorExtension(mentor_id, tenantCode)
+		let mentorDetails = await cacheHelper.mentor.get(tenantCode, orgCode, mentor_id)
 		let mentorRating = mentorDetails.rating
 		let updateData
 
@@ -467,6 +473,14 @@ const ratingCalculation = async function (ratingData, mentor_id, tenantCode) {
 			}
 		}
 		await mentorExtensionQueries.updateMentorExtension(mentor_id, updateData, tenantCode)
+
+		// Invalidate mentor profile cache after rating update
+		try {
+			await cacheHelper.mentor.delete(tenantCode, mentorDetails.organization_code, mentor_id)
+		} catch (cacheError) {
+			console.error(`❌ Failed to invalidate mentor cache after rating update:`, cacheError)
+		}
+
 		return
 	} catch (error) {
 		return error

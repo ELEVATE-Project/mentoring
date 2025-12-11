@@ -4,6 +4,7 @@ const permissionsQueries = require('@database/queries/permissions')
 const { UniqueConstraintError, ForeignKeyConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class modulesHelper {
 	/**
@@ -40,6 +41,13 @@ module.exports = class modulesHelper {
 
 			// Database Operation: Create role permission mapping
 			const rolePermissionMapping = await rolePermissionMappingQueries.create(data)
+
+			// Cache Invalidation: Clear cache for this role across all modules and paths
+			try {
+				await cacheHelper.apiPermissions.evictRole(roleTitle)
+			} catch (cacheError) {
+				console.warn('Cache invalidation failed for role permission creation:', cacheError)
+			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -83,6 +91,14 @@ module.exports = class modulesHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
+			// Cache Invalidation: Clear cache for this role across all modules and paths
+			try {
+				await cacheHelper.apiPermissions.evictRole(roleTitle)
+			} catch (cacheError) {
+				console.warn('Cache invalidation failed for role permission deletion:', cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'ROLE_PERMISSION_DELETED_SUCCESSFULLY',

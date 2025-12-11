@@ -30,7 +30,12 @@ module.exports = class Connection {
 	 */
 	async initiate(req) {
 		try {
-			return await connectionsService.initiate(req.body, req.decodedToken.id, req.decodedToken.tenant_code)
+			return await connectionsService.initiate(
+				req.body,
+				req.decodedToken.id,
+				req.decodedToken.tenant_code,
+				req.decodedToken.organization_code
+			)
 		} catch (error) {
 			throw error
 		}

@@ -3,10 +3,10 @@ const common = require('@constants/common')
 const kafkaCommunication = require('@generics/kafka-communication')
 const utils = require('@generics/utils')
 const sessionQueries = require('@database/queries/sessions')
-const notificationQueries = require('@database/queries/notificationTemplate')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const userRequests = require('@requests/user')
 const menteeQueries = require('@database/queries/userExtension')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class Notifications {
 	/**
@@ -37,10 +37,10 @@ module.exports = class Notifications {
 			)
 
 			// Get email template based on incoming request.
-			let emailTemplate = await notificationQueries.findOneEmailTemplate(
-				notificataionTemplate,
+			let emailTemplate = await cacheHelper.notificationTemplates.get(
+				tenantCode,
 				jobCreatorOrgCode,
-				tenantCode
+				notificataionTemplate
 			)
 
 			if (emailTemplate && sessions) {

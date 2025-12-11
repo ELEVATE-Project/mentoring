@@ -1,6 +1,8 @@
 const userRequests = require('@requests/user')
 const common = require('@constants/common')
 const entityTypeQueries = require('@database/queries/entityType')
+const entityTypeCache = require('@helpers/entityTypeCache')
+const cacheHelper = require('@generics/cacheHelper')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const { Op } = require('sequelize')
 
@@ -104,6 +106,7 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 								attributes: ['organization_id', 'organization_code', 'tenant_code'],
 							}
 						)
+
 						if (organizationExtension) {
 							const organizationCodesFromOrgExtension = organizationExtension.map(
 								(orgExt) => orgExt.organization_code
@@ -179,6 +182,7 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 								attributes: ['organization_id', 'organization_code', 'tenant_code'],
 							}
 						)
+
 						if (organizationExtension) {
 							const organizationCodesFromOrgExtension = organizationExtension.map(
 								(orgExt) => orgExt.organization_code
@@ -237,9 +241,36 @@ module.exports = class OrganizationAndEntityTypePolicyHelper {
 			// Handle both array and string cases for tenantCodes
 			const tenantCodeArray = Array.isArray(tenantCodes) ? tenantCodes : [tenantCodes]
 			const finalTenantCodes = defaultTenantCode ? [...tenantCodeArray, defaultTenantCode] : tenantCodeArray
-			let entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: finalTenantCodes,
-			})
+
+			// Use cache for model-based queries since this query has core fields only
+			let entityTypesWithEntities
+			if (modelName && !entity_types) {
+				// This query uses only core fields (model, status, organization_code, allow_filtering, has_entities)
+				// Can use model cache with additional filtering
+				try {
+					entityTypesWithEntities = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+						modelName,
+						filter.organization_code[Op.in],
+						finalTenantCodes,
+						{
+							allow_filtering: filter.allow_filtering,
+							has_entities: filter.has_entities,
+						}
+					)
+				} catch (cacheError) {
+					// Fallback to direct database query
+					entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(
+						filter,
+						finalTenantCodes
+					)
+				}
+			} else {
+				// Query has specific entity values or other non-core filters - use direct query
+				entityTypesWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(
+					filter,
+					finalTenantCodes
+				)
+			}
 			return {
 				success: true,
 				result: entityTypesWithEntities,

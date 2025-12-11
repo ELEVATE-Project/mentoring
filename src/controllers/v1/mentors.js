@@ -83,7 +83,6 @@ module.exports = class Mentors {
 				req.decodedToken.id,
 				req.query.filterType,
 				req.decodedToken.roles,
-				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
 			return reports

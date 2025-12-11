@@ -7,6 +7,7 @@ const request = require('request')
 const common = require('@constants/common')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
+const cacheHelper = require('@generics/cacheHelper')
 
 ;(async () => {
 	try {
@@ -71,6 +72,32 @@ const { getDefaults } = require('@helpers/getDefaultOrgId')
 			console.log('updating csv_path for default org_id failed')
 		} else {
 			console.log('updating csv_path for default org_id completed')
+
+			// Invalidate organization cache since we updated the organization extension
+			// We don't have organizationId here, so we'll invalidate using a pattern
+			try {
+				// Get the updated organization data to find the organization_id for cache deletion
+				const updatedOrg = await organisationExtensionQueries.findOne(
+					{ organization_code: defaults.orgCode },
+					defaults.tenantCode,
+					{
+						attributes: ['organization_id', 'organization_code'],
+					}
+				)
+
+				if (updatedOrg && updatedOrg.organization_id) {
+					await cacheHelper.organizations.delete(
+						defaults.tenantCode,
+						defaults.orgCode,
+						updatedOrg.organization_id
+					)
+					console.log(
+						`🗑️ Organization cache invalidated for ${updatedOrg.organization_id} after CSV path update`
+					)
+				}
+			} catch (cacheError) {
+				console.error(`❌ Failed to invalidate organization cache:`, cacheError)
+			}
 		}
 		console.log('file path: ' + getSignedUrl.result.destFilePath)
 		console.log('completed')

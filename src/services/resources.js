@@ -1,7 +1,5 @@
 // Dependencies
 const httpStatusCode = require('@generics/http-status')
-const sessionQueries = require('@database/queries/sessions')
-const path = require('path')
 const responses = require('@helpers/responses')
 
 const resourceQueries = require('@database/queries/resources')
