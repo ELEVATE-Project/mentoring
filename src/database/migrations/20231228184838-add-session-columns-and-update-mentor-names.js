@@ -33,7 +33,7 @@ module.exports = {
 		// Logic to update mentor names
 		const updateMentorNamesInSessions = async () => {
 			try {
-				const sessionsWithNullMentorName = await sessionQueries.findAll({ mentor_name: 'Mentor' })
+				const sessionsWithNullMentorName = await sessionQueries.findAllMigrations({ mentor_name: 'Mentor' })
 
 				if (sessionsWithNullMentorName.length === 0) {
 					console.log('No sessions found with mentor_name as null.')
