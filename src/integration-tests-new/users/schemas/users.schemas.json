@@ -1,0 +1,100 @@
+{
+	"GET_mentoring_v1_users_pendingFeedbacks": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"id": {
+							"type": "number"
+						},
+						"title": {
+							"type": "string"
+						},
+						"description": {
+							"type": "string"
+						},
+						"mentor_feedback_form": {
+							"type": "string"
+						},
+						"form": {
+							"type": "object",
+							"properties": {}
+						}
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_users_list_type_userType_page_page_limit_limit_search_search": {
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"values": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"id": {
+												"type": "number"
+											},
+											"name": {
+												"type": "string"
+											},
+											"areas_of_expertise": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"properties": {
+														"value": {
+															"type": "string"
+														},
+														"label": {
+															"type": "string"
+														}
+													}
+												}
+											},
+											"image": {
+												"type": "string"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"count": {
+						"type": "number"
+					}
+				}
+			}
+		}
+	}
+}

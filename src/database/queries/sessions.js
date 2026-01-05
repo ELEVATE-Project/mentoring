@@ -5,6 +5,7 @@ const utils = require('@generics/utils')
 const sequelize = require('sequelize')
 const moment = require('moment')
 const Sequelize = require('@database/models/index').sequelize
+const SessionAttendee = require('@database/models/index').SessionAttendee
 
 exports.getColumns = async () => {
 	try {
@@ -66,26 +67,37 @@ exports.findById = async (id, tenantCode) => {
 
 exports.findSessionWithAttendee = async (sessionId, userId, tenantCode) => {
 	try {
-		// Optimized: Single query with JOIN to get session and attendee data together
-		const query = `
-			SELECT 
-				s.*,
-				sa.id as attendee_id,
-				sa.type as enrolled_type,
-				sa.meeting_info as attendee_meeting_info,
-				sa.joined_at,
-				sa.mentee_id
-			FROM sessions s
-			LEFT JOIN session_attendees sa ON s.id = sa.session_id AND sa.mentee_id = :userId AND sa.tenant_code = :tenantCode
-			WHERE s.id = :sessionId AND s.tenant_code = :tenantCode
-		`
-
-		const result = await Sequelize.query(query, {
-			replacements: { sessionId, userId, tenantCode },
-			type: QueryTypes.SELECT,
+		const result = await Session.findOne({
+			where: {
+				id: sessionId,
+				tenant_code: tenantCode,
+			},
+			include: [
+				{
+					model: SessionAttendee,
+					as: 'attendees', // correct alias
+					required: false,
+					where: {
+						mentee_id: userId,
+						tenant_code: tenantCode,
+					},
+					attributes: ['id', 'type', 'meeting_info', 'joined_at', 'mentee_id'],
+				},
+			],
 		})
 
-		return result.length > 0 ? result[0] : null
+		const attendee = result?.attendees?.[0]
+
+		return result
+			? {
+					...result.get(),
+					attendee_id: attendee?.id || null,
+					enrolled_type: attendee?.type || null,
+					attendee_meeting_info: attendee?.meeting_info || null,
+					joined_at: attendee?.joined_at || null,
+					mentee_id: attendee?.mentee_id || null,
+			  }
+			: null
 	} catch (error) {
 		return error
 	}
@@ -146,6 +158,35 @@ exports.updateRecords = async (data, options = {}) => {
 		}
 		const result = await Session.update(data, options)
 		return Array.isArray(result) ? result[0] : result // Sequelize returns [number of affected rows]
+	} catch (error) {
+		return error
+	}
+}
+
+exports.findAllMigrations = async (filter) => {
+	try {
+		const whereClauses = []
+		const replacements = {}
+
+		Object.entries(filter).forEach(([key, value]) => {
+			if (value === undefined) return
+
+			whereClauses.push(`"${key}" = :${key}`)
+			replacements[key] = value
+		})
+
+		const sql = `
+      SELECT *
+      FROM sessions
+      ${whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''}
+    `
+
+		const result = await Sequelize.query(sql, {
+			replacements,
+			type: QueryTypes.SELECT,
+		})
+
+		return result
 	} catch (error) {
 		return error
 	}
@@ -891,7 +932,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			CASE WHEN sa.id IS NOT NULL THEN true ELSE false END AS is_enrolled,
 			COALESCE(sa.type, NULL) AS enrolment_type
 		FROM
-				${utils.getTenantViewName(tenantCode, Session.tableName)}
+				${utils.getTenantViewName(tenantCode, Session.tableName)} as Sessions
 				LEFT JOIN session_attendees AS sa
 				ON Sessions.id = sa.session_id AND sa.mentee_id = :menteeUserId AND sa.tenant_code = :tenantCode
 		WHERE
@@ -937,7 +978,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 		const countQuery = `
 		SELECT count(*) AS "count"
 		FROM
-		${utils.getTenantViewName(tenantCode, Session.tableName)}
+		${utils.getTenantViewName(tenantCode, Session.tableName)} as Sessions
 		LEFT JOIN session_attendees AS sa
 				ON Sessions.id = sa.session_id AND sa.mentee_id = :menteeUserId  AND sa.tenant_code = :tenantCode
 		WHERE

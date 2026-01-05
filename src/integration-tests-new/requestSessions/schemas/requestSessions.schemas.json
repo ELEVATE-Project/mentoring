@@ -1,0 +1,540 @@
+{
+	"POST_mentoring_v1_requestSessions_create": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"id": {
+						"type": "number"
+					},
+					"requestor_id": {
+						"type": "string"
+					},
+					"requestee_id": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"agenda": {
+						"type": "string"
+					},
+					"start_date": {
+						"type": "number"
+					},
+					"end_date": {
+						"type": "number"
+					},
+					"created_by": {
+						"type": "string"
+					},
+					"updated_by": {
+						"type": "string"
+					},
+					"meta": {
+						"type": "null"
+					},
+					"session_id": {
+						"type": "null"
+					},
+					"reject_reason": {
+						"type": "null"
+					},
+					"deleted_at": {
+						"type": "null"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							},
+							"required": ["id", "type", "version"]
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_requestSessions_list": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"requestor_id": {
+									"type": "string"
+								},
+								"requestee_id": {
+									"type": "string"
+								},
+								"status": {
+									"type": "string"
+								},
+								"meta": {
+									"type": ["object", "null"]
+								},
+								"title": {
+									"type": "string"
+								},
+								"agenda": {
+									"type": "string"
+								},
+								"start_date": {
+									"type": "number"
+								},
+								"end_date": {
+									"type": "number"
+								},
+								"session_id": {
+									"type": ["string", "null"]
+								},
+								"reject_reason": {
+									"type": "null"
+								},
+								"updated_by": {
+									"type": "string"
+								},
+								"created_by": {
+									"type": "string"
+								},
+								"created_at": {
+									"type": "string"
+								},
+								"updated_at": {
+									"type": "string"
+								},
+								"deleted_at": {
+									"type": "null"
+								},
+								"user_details": {
+									"type": "object",
+									"properties": {
+										"user_id": {
+											"type": "string"
+										},
+										"image": {
+											"type": "string"
+										},
+										"name": {
+											"type": "string"
+										},
+										"experience": {
+											"type": ["string", "null"]
+										},
+										"designation": {
+											"type": ["string", "null"]
+										},
+										"organization_id": {
+											"type": "string"
+										}
+									}
+								},
+								"request_type": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"count": {
+						"type": "number"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							},
+							"required": ["id", "type", "version"]
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_requestSessions_getDetails": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"requestor_id": {
+						"type": "string"
+					},
+					"requestee_id": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"meta": {
+						"type": "object",
+						"properties": {}
+					},
+					"title": {
+						"type": "string"
+					},
+					"agenda": {
+						"type": "string"
+					},
+					"start_date": {
+						"type": "number"
+					},
+					"end_date": {
+						"type": "number"
+					},
+					"session_id": {
+						"type": "null"
+					},
+					"reject_reason": {
+						"type": "null"
+					},
+					"updated_by": {
+						"type": "string"
+					},
+					"created_by": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"user_details": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"user_id": {
+								"type": "string"
+							},
+							"mentee_visibility": {
+								"type": "string"
+							},
+							"organization_id": {
+								"type": "string"
+							},
+							"designation": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"value": {
+											"type": "string"
+										},
+										"label": {
+											"type": "string"
+										}
+									},
+									"required": ["value", "label"]
+								}
+							},
+							"area_of_expertise": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"value": {
+											"type": "string"
+										},
+										"label": {
+											"type": "string"
+										}
+									},
+									"required": ["value", "label"]
+								}
+							},
+							"education_qualification": {
+								"type": "string"
+							},
+							"meta": {
+								"type": "null"
+							},
+							"is_mentor": {
+								"type": "boolean"
+							},
+							"experience": {
+								"type": "string"
+							},
+							"image": {
+								"type": "null"
+							}
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							},
+							"required": ["id", "type", "version"]
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_requestSessions_userAvailability": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"date": {
+							"type": "string"
+						},
+						"bookedSlots": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"startTime": {
+										"type": "string"
+									},
+									"endTime": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									}
+								},
+								"required": ["startTime", "endTime", "title"]
+							}
+						}
+					},
+					"required": ["date", "bookedSlots"]
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							},
+							"required": ["id", "type", "version"]
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"POST_mentoring_v1_requestSessions_accept": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "string"
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							},
+							"required": ["id", "type", "version"]
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"POST_mentoring_v1_requestSessions_reject": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							},
+							"required": ["id", "type", "version"]
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}
