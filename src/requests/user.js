@@ -21,6 +21,8 @@ const menteeQueries = require('@database/queries/userExtension')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
 // Removed cacheHelper to break circular dependency with getDefaultOrgId
 
+const kafkaCommunication = require('@generics/kafka-communication')
+
 const emailEncryption = require('@utils/emailEncryption')
 const _ = require('lodash')
 
@@ -866,7 +868,21 @@ const getUserDetailedListUsingCache = async function (userIds, tenantCode, delet
 				tenantCode,
 				unscopped
 			)
+
 			userDetails.push(...usersFromDb)
+
+			if (cacheHelper._internal.ENABLE_CACHE) {
+				let unCachedUsers = []
+				for (const userDetail of usersFromDb) {
+					unCachedUsers.push({
+						user_id: userDetail.user_id,
+						is_mentor: userDetail.is_mentor,
+						tenant_code: userDetail.tenant_code,
+						organization_code: userDetail.organization_code,
+					})
+				}
+				await kafkaCommunication.pushUncachedUsersToKafka(unCachedUsers)
+			}
 		}
 
 		// ---- Organization Mapping ----

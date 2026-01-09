@@ -48,7 +48,27 @@ const pushPayloadToKafka = async (payload) => {
 	}
 }
 
+const pushUncachedUsersToKafka = async (users) => {
+	try {
+		if (!users || !Array.isArray(users) || users.length === 0) {
+			throw new Error('Invalid users parameter: must be a non-empty array')
+		}
+		const payload = {
+			topic: process.env.EVENTS_TOPIC,
+			messages: [{ value: JSON.stringify({ eventType: 'readUser', users }) }],
+		}
+		const response = await pushPayloadToKafka(payload)
+		if (response instanceof Error) {
+			throw response
+		}
+		return response
+	} catch (error) {
+		console.log(error)
+		throw error
+	}
+}
 module.exports = {
 	pushEmailToKafka,
 	clearInternalCache,
+	pushUncachedUsersToKafka,
 }
