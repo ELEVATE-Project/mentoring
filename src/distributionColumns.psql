@@ -1,9 +1,11 @@
+SELECT create_reference_table('entity_types');
+SELECT create_reference_table('permissions');
+SELECT create_reference_table('sessions');
 SELECT create_distributed_table('availabilities', 'tenant_code');
 SELECT create_distributed_table('connection_requests', 'tenant_code');
 SELECT create_distributed_table('connections', 'tenant_code');
 SELECT create_distributed_table('default_rules', 'tenant_code');
 SELECT create_distributed_table('entities', 'tenant_code');
-SELECT create_distributed_table('entity_types', 'tenant_code');
 SELECT create_distributed_table('feedbacks', 'tenant_code');
 SELECT create_distributed_table('file_uploads', 'tenant_code');
 SELECT create_distributed_table('forms', 'tenant_code');
@@ -21,8 +23,6 @@ SELECT create_distributed_table('resources', 'tenant_code');
 SELECT create_distributed_table('role_extensions', 'tenant_code');
 SELECT create_distributed_table('session_attendees', 'tenant_code');
 SELECT create_distributed_table('session_request', 'tenant_code');
-SELECT create_distributed_table('sessions', 'tenant_code');
 SELECT create_distributed_table('user_extensions', 'tenant_code');
-SELECT create_distributed_table('permissions', 'id');
 SELECT create_distributed_table('role_permission_mapping', 'role_title');
 

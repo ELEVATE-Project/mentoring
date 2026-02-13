@@ -1,0 +1,458 @@
+{
+	"POST_mentoring_v1_profile_create": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"designation": {
+						"type": "string"
+					},
+					"area_of_expertise": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							},
+							"required": ["value", "label"]
+						}
+					},
+					"education_qualification": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							},
+							"required": ["value", "label"]
+						}
+					},
+					"rating": {
+						"type": "object",
+						"properties": {
+							"average": {
+								"type": "number"
+							},
+							"count": {
+								"type": "number"
+							}
+						}
+					},
+					"meta": {
+						"type": "object",
+						"properties": {
+							"age": {
+								"type": "number"
+							},
+							"experience": {
+								"type": "string"
+							}
+						}
+					},
+					"stats": {
+						"type": "object",
+						"properties": {
+							"sessions_attended": {
+								"type": "number"
+							},
+							"students_mentored": {
+								"type": "number"
+							}
+						}
+					},
+					"tags": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"configs": {
+						"type": "object",
+						"properties": {
+							"notification": {
+								"type": "boolean"
+							},
+							"visibility": {
+								"type": "string"
+							}
+						}
+					},
+					"visibility": {
+						"type": "string"
+					},
+					"organisation_ids": {
+						"type": "array",
+						"items": {
+							"type": "number"
+						}
+					},
+					"external_session_visibility": {
+						"type": "string"
+					},
+					"external_mentor_visibility": {
+						"type": "string"
+					},
+					"user_id": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"user_roles": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"title": {
+									"type": "string"
+								},
+								"user_type": {
+									"type": "number"
+								},
+								"status": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"POST_mentoring_v1_profile_update": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"user_id": {
+						"type": "string"
+					},
+					"designation": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": { "type": "string" },
+								"label": { "type": "string" }
+							}
+						}
+					},
+					"area_of_expertise": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": { "type": "string" },
+								"label": { "type": "string" }
+							}
+						}
+					},
+					"education_qualification": { "type": "null" },
+					"rating": { "type": "null" },
+					"meta": { "type": "null" },
+					"stats": { "type": "null" },
+					"tags": { "type": "null" },
+					"configs": { "type": "null" },
+					"visible_to_organizations": {
+						"type": "array",
+						"items": { "type": "string" }
+					},
+					"external_session_visibility": { "type": "string" },
+					"experience": { "type": "string" },
+					"organization_id": { "type": "string" },
+					"external_mentee_visibility": { "type": "string" },
+					"mentee_visibility": { "type": "string" },
+					"external_mentor_visibility": { "type": "string" },
+					"mentor_visibility": { "type": "string" },
+					"name": { "type": "string" },
+					"email": { "type": "string" },
+					"phone": { "type": "null" },
+					"is_mentor": { "type": "boolean" },
+					"settings": {
+						"type": "object",
+						"properties": {
+							"chat_enabled": { "type": "boolean" }
+						}
+					},
+					"image": { "type": "string" },
+					"gender": { "type": "null" },
+					"status": { "type": "string" },
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": { "type": "number" },
+								"type": { "type": "string" },
+								"version": { "type": "number" }
+							}
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_profile_filterList_entity_types_entity_types": {},
+	"GET_mentoring_v1_profile_details": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"user_id": {
+						"type": "string"
+					},
+					"designation": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": { "type": "string" },
+								"label": { "type": "string" }
+							}
+						}
+					},
+					"area_of_expertise": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "object",
+							"properties": {
+								"value": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							},
+							"required": ["value", "label"]
+						}
+					},
+					"education_qualification": { "type": ["null", "string", "array"] },
+					"rating": { "type": ["null", "object"] },
+					"meta": { "type": ["null", "object"] },
+					"stats": { "type": ["null", "object"] },
+					"tags": { "type": ["null", "array"] },
+					"configs": { "type": ["null", "object"] },
+					"external_session_visibility": {
+						"type": "string"
+					},
+					"experience": {
+						"type": ["null", "string"]
+					},
+					"organization_id": {
+						"type": "string"
+					},
+					"external_mentee_visibility": {
+						"type": "string"
+					},
+					"mentee_visibility": {
+						"type": "string"
+					},
+					"external_mentor_visibility": {
+						"type": "string"
+					},
+					"mentor_visibility": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"is_mentor": {
+						"type": "boolean"
+					},
+					"settings": {
+						"type": "object",
+						"properties": {
+							"chat_enabled": { "type": "boolean" }
+						}
+					},
+					"image": { "type": "string" },
+					"gender": {
+						"type": "null"
+					},
+					"status": {
+						"type": "string"
+					},
+					"organization_code": {
+						"type": "string"
+					},
+					"tenant_code": {
+						"type": "string"
+					},
+					"user_name": {
+						"type": "null"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"profile_mandatory_fields": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"organization": {
+						"type": "object",
+						"properties": {
+							"id": { "type": "string" },
+							"name": { "type": ["null", "string"] }
+						}
+					},
+					"sessions_attended": {
+						"type": "number"
+					},
+					"sessions_hosted": {
+						"type": "number"
+					},
+					"is_connected": {
+						"type": "boolean"
+					},
+					"visible_to_organizations": {
+						"type": "array",
+						"items": { "type": "string" }
+					},
+					"displayProperties": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"key": { "type": "string" },
+								"label": { "type": "string" },
+								"visible": { "type": "boolean" },
+								"visibility": { "type": "string" },
+								"sequence": { "type": "number" }
+							},
+							"required": ["key"]
+						}
+					},
+					"Permissions": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"module": { "type": "string" },
+								"request_type": {
+									"type": "array",
+									"items": { "type": "string" }
+								},
+								"service": { "type": "string" }
+							},
+							"required": ["module", "request_type", "service"]
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"formsVersion": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"type": {
+									"type": "string"
+								},
+								"version": {
+									"type": "number"
+								}
+							},
+							"required": ["id", "type", "version"]
+						}
+					},
+					"correlation": {
+						"type": "string"
+					},
+					"meetingPlatform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}
