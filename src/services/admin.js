@@ -170,7 +170,7 @@ module.exports = class AdminService {
 			let result = {}
 
 			// Step 1: Fetch user details
-			let getUserDetails = []
+			let userInfo = null
 			let userTenantCode = tenantCode
 
 			// Optimization: If admin, query directly without tenant restriction (1 query)
@@ -182,18 +182,17 @@ module.exports = class AdminService {
 				getUserDetails = userDetail ? [userDetail] : []
 			} else {
 				// Regular user deleting themselves - use tenant code from token (optimized path)
-				getUserDetails = await menteeQueries.getUsersByUserIds([userId], {}, tenantCode)
+				const getUserDetails = await menteeQueries.getUsersByUserIds([userId], {}, tenantCode)
+				userInfo = getUserDetails?.[0]
 			}
 
-			if (!getUserDetails || getUserDetails.length === 0) {
+			if (!userInfo) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.bad_request,
 					message: 'USER_NOT_FOUND',
 					result,
 				})
 			}
-
-			const userInfo = getUserDetails[0]
 			const isMentor = userInfo.is_mentor === true
 
 			// Step 2: Check if user is a session manager
@@ -763,7 +762,17 @@ module.exports = class AdminService {
 			const sentRequestsData = sentRequests.rows || []
 
 			// Get requests where user is requestee (received requests)
-			const sessionRequestMapping = await sessionRequestMappingQueries.getSessionsMapping(userId, tenantCode)
+			// FIX: Added missing 'status' parameter to getSessionsMapping call
+			// ROOT CAUSE: Function signature is getSessionsMapping(userId, status, tenantCode) but was called
+			// with only (userId, tenantCode). This caused tenantCode to be passed as 'status' parameter,
+			// and the actual tenantCode parameter received 'undefined'.
+			// Error: "WHERE parameter 'tenant_code' has invalid 'undefined' value"
+			// SOLUTION: Pass all three parameters in correct order: userId, status, tenantCode
+			const sessionRequestMapping = await sessionRequestMappingQueries.getSessionsMapping(
+				userId,
+				common.CONNECTIONS_STATUS.REQUESTED,
+				tenantCode
+			)
 			const sessionRequestIds = Array.isArray(sessionRequestMapping)
 				? sessionRequestMapping.map((s) => s.request_session_id)
 				: []
@@ -1133,7 +1142,7 @@ module.exports = class AdminService {
 			orgCode: orgCodes,
 			templateData: { menteeName },
 			subjectData: { menteeName },
-			tenantCodes,
+			tenantCode: tenantCodes,
 		})
 	}
 
@@ -1190,7 +1199,7 @@ module.exports = class AdminService {
 					sessionTime: sessionDateTime.format('hh:mm A'),
 				},
 				subjectData: { sessionName: sessionDetails.title },
-				tenantCodes,
+				tenantCode: tenantCodes,
 			})
 		} catch (error) {
 			console.error('Error notifying mentor about private session cancellation:', error)
@@ -1408,6 +1417,12 @@ module.exports = class AdminService {
 		}
 	}
 
+	// FIX: Changed 'tenantCodes,' to 'tenantCode: tenantCodes,'
+	// ROOT CAUSE: Using shorthand 'tenantCodes,' creates property {tenantCodes: tenantCodes}
+	// but sendGenericNotification() expects {tenantCode: ...} (singular, not plural).
+	// This caused template lookup to fail with undefined tenant, leading to:
+	// "Cannot read properties of undefined (reading 'replace')" when composing email body.
+	// SOLUTION: Explicitly map the parameter name: tenantCode: tenantCodes
 	static async notifyMenteesAboutMentorDeletion(mentees, mentorName, orgCodes, tenantCodes) {
 		return await NotificationHelper.sendGenericNotification({
 			recipients: mentees,
@@ -1415,21 +1430,24 @@ module.exports = class AdminService {
 			orgCode: orgCodes,
 			templateData: { mentorName },
 			subjectData: { mentorName },
-			tenantCodes,
+			tenantCode: tenantCodes,
 		})
 	}
 
+	// FIX: Removed JOIN with non-existent request_session_mapping table
+	// ROOT CAUSE: Original query tried to JOIN with 'request_session_mapping' table that doesn't exist:
+	// "relation 'request_session_mapping' does not exist"
+	// SOLUTION: Query session_request table directly since requestee_id is already a column in it.
+	// The RequestSession model (line 15-18) already has requestee_id field, no mapping table needed.
 	static async getPendingSessionRequestsForMentor(mentorUserId, tenantCode) {
 		try {
 			const query = `
-				SELECT rs.*, rm.requestee_id
-				FROM ${RequestSession.tableName} rs
-				INNER JOIN request_session_mapping rm ON rs.id = rm.request_session_id
-				WHERE rm.requestee_id = :mentorUserId 
-				AND rs.status = :requestedStatus
-				AND rs.deleted_at IS NULL
-				AND rs.tenant_code = :tenantCode
-				AND rm.tenant_code = :tenantCode
+				SELECT *
+				FROM ${RequestSession.tableName}
+				WHERE requestee_id = :mentorUserId
+				AND status = :requestedStatus
+				AND deleted_at IS NULL
+				AND tenant_code = :tenantCode
 			`
 
 			const pendingRequests = await sequelize.query(query, {
@@ -1476,7 +1494,7 @@ module.exports = class AdminService {
 						orgCode: orgCodes,
 						templateData: { sessionName: request.title },
 						subjectData: { sessionName: request.title },
-						tenantCodes,
+						tenantCode: tenantCodes,
 					})
 				}
 			}
@@ -1532,7 +1550,7 @@ module.exports = class AdminService {
 						orgCode: orgCodes,
 						templateData: { mentorName, sessionList },
 						subjectData: { mentorName },
-						tenantCodes,
+						tenantCode: tenantCodes,
 					})
 				}
 			})
@@ -1589,7 +1607,7 @@ module.exports = class AdminService {
 						orgCode: orgCodes,
 						templateData: { menteeName: menteeName, sessionList: sessionList },
 						subjectData: { menteeName: menteeName },
-						tenantCodes,
+						tenantCode: tenantCodes,
 					})
 				}
 			})
@@ -1643,7 +1661,7 @@ module.exports = class AdminService {
 							orgCode: orgCodes,
 							templateData: { sessionName: session.title },
 							subjectData: { sessionName: session.title },
-							tenantCodes,
+							tenantCode: tenantCodes,
 						})
 					}
 				}

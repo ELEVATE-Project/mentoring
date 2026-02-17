@@ -1099,15 +1099,23 @@ exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 	}
 }
 
-exports.getSessionsAssignedToMentor = async (mentorUserId) => {
+// FIX: Added tenantCode parameter and included it in JOIN and WHERE clauses
+// ROOT CAUSE: Citus distributed database requires JOINs to include the distribution column (tenant_code).
+// Original query failed with: "complex joins are only supported when all distributed tables are
+// co-located and joined on their distribution columns"
+// SOLUTION: Added tenant_code to both the JOIN condition (line 1108) and WHERE clause (line 1112)
+// to ensure Citus can properly route the query across distributed shards.
+exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 	try {
 		const query = `
 				SELECT s.*, sa.mentee_id
 				FROM ${Session.tableName} s
 				LEFT JOIN session_attendees sa ON s.id = sa.session_id
-				WHERE s.mentor_id = :mentorUserId 
+				AND s.tenant_code = sa.tenant_code
+				WHERE s.mentor_id = :mentorUserId
 				AND s.start_date > :currentTime
 				AND s.deleted_at IS NULL
+				AND s.tenant_code = :tenantCode
 			`
 
 		const sessionsToDelete = await Sequelize.query(query, {
@@ -1115,6 +1123,7 @@ exports.getSessionsAssignedToMentor = async (mentorUserId) => {
 			replacements: {
 				mentorUserId,
 				currentTime: Math.floor(Date.now() / 1000),
+				tenantCode,
 			},
 		})
 

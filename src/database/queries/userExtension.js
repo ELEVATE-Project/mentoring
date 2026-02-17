@@ -35,8 +35,12 @@ module.exports = class MenteeExtensionQueries {
 
 	static async updateMenteeExtension(userId, data, options = {}, customFilter = {}, tenantCode) {
 		try {
+			// Remove partition key columns - Citus doesn't allow updating these
 			if (data.user_id) {
 				delete data['user_id']
+			}
+			if (data.tenant_code) {
+				delete data['tenant_code']
 			}
 			let whereClause
 			if (_.isEmpty(customFilter)) {

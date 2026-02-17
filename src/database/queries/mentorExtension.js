@@ -54,8 +54,12 @@ module.exports = class MentorExtensionQueries {
 		try {
 			data = { ...data, is_mentor: true }
 
+			// Remove partition key columns - Citus doesn't allow updating these
 			if (data.user_id) {
 				delete data['user_id']
+			}
+			if (data.tenant_code) {
+				delete data['tenant_code']
 			}
 
 			let whereClause
@@ -159,10 +163,17 @@ module.exports = class MentorExtensionQueries {
 
 			for (const [key, attribute] of Object.entries(modelAttributes)) {
 				// Skip primary key or explicitly excluded fields
+				// FIX: Added organization_code and tenant_code to exclusion list
+				// ROOT CAUSE: These fields have NOT NULL constraints in the database.
+				// When removeMentorDetails() tried to set them to null, Sequelize threw:
+				// "notNull Violation: UserExtension.organization_code cannot be null"
+				// SOLUTION: Exclude these fields from nullification to maintain data integrity
 				if (
 					attribute.primaryKey ||
 					key === 'user_id' ||
 					key === 'organization_id' || // required field
+					key === 'organization_code' || // FIX: required NOT NULL field - cannot be nullified
+					key === 'tenant_code' || // FIX: required NOT NULL field - cannot be nullified
 					key === 'created_at' ||
 					key === 'updated_at' ||
 					key === 'is_mentor' // has default value
