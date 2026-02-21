@@ -28,8 +28,6 @@ module.exports = {
 					updated_by: 0,
 					allow_filtering: false,
 					organization_id: defaultOrgId,
-					organization_code: defaultOrgCode,
-					tenant_code: defaultTenantCode,
 					has_entities: false,
 					meta: JSON.stringify({
 						label: convertToWords(key),
