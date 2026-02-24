@@ -1099,15 +1099,17 @@ exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 	}
 }
 
-exports.getSessionsAssignedToMentor = async (mentorUserId) => {
+exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 	try {
 		const query = `
 				SELECT s.*, sa.mentee_id
 				FROM ${Session.tableName} s
 				LEFT JOIN session_attendees sa ON s.id = sa.session_id
-				WHERE s.mentor_id = :mentorUserId 
+				AND s.tenant_code = sa.tenant_code
+				WHERE s.mentor_id = :mentorUserId
 				AND s.start_date > :currentTime
 				AND s.deleted_at IS NULL
+				AND s.tenant_code = :tenantCode
 			`
 
 		const sessionsToDelete = await Sequelize.query(query, {
@@ -1115,6 +1117,7 @@ exports.getSessionsAssignedToMentor = async (mentorUserId) => {
 			replacements: {
 				mentorUserId,
 				currentTime: Math.floor(Date.now() / 1000),
+				tenantCode,
 			},
 		})
 

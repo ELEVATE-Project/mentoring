@@ -14,12 +14,11 @@ const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
 const common = require('@constants/common')
 const { Op } = require('sequelize')
-const cacheHelper = require('@generics/cacheHelper')
 const usersHelper = require('@helpers/users')
+const cacheHelper = require('@generics/cacheHelper')
 
 const menteeQueries = require('@database/queries/userExtension')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
-// Removed cacheHelper to break circular dependency with getDefaultOrgId
 
 const emailEncryption = require('@utils/emailEncryption')
 const _ = require('lodash')

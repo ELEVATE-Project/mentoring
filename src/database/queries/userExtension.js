@@ -238,38 +238,35 @@ module.exports = class MenteeExtensionQueries {
 
 	static async removeMenteeDetails(userId, tenantCode) {
 		try {
-			const modelAttributes = MenteeExtension.rawAttributes
-
-			const fieldsToNullify = {}
-
-			for (const [key, attribute] of Object.entries(modelAttributes)) {
-				// Skip primary key or explicitly excluded fields
-				if (
-					attribute.primaryKey ||
-					key === 'user_id' ||
-					key === 'organization_id' || // required field
-					key === 'created_at' ||
-					key === 'updated_at' ||
-					key === 'is_mentor' // has default value
-				) {
-					continue
-				}
-
-				// Set types accordingly
-				if (attribute.type.constructor.name === 'ARRAY') {
-					fieldsToNullify[key] = []
-				} else if (attribute.type.key === 'JSON' || attribute.type.key === 'JSONB') {
-					fieldsToNullify[key] = {} // Or `{}` if you prefer default object
-				} else if (key === 'deleted_at') {
-					fieldsToNullify[key] = new Date() // Timestamp field
-				} else if (key === 'name') {
-					fieldsToNullify[key] = common.USER_NOT_FOUND
-				} else {
-					fieldsToNullify[key] = null
-				}
+			const fieldsToClear = {
+				designation: [],
+				area_of_expertise: [],
+				education_qualification: null,
+				rating: {},
+				meta: {},
+				stats: {},
+				tags: [],
+				configs: {},
+				visible_to_organizations: [],
+				external_session_visibility: null,
+				custom_entity_text: {},
+				experience: null,
+				external_mentee_visibility: null,
+				mentee_visibility: null,
+				external_mentor_visibility: null,
+				mentor_visibility: null,
+				name: common.USER_NOT_FOUND,
+				email: null,
+				phone: null,
+				settings: {},
+				image: null,
+				gender: null,
+				status: null,
+				username: null,
+				deleted_at: new Date(),
 			}
 
-			return await MenteeExtension.update(fieldsToNullify, {
+			return await MenteeExtension.update(fieldsToClear, {
 				where: {
 					user_id: userId,
 					tenant_code: tenantCode,
