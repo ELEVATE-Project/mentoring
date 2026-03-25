@@ -36,7 +36,6 @@ module.exports = class EntityHelper {
 			// Invalidate entityType cache using the fetched entityType details
 			if (entityTypeDetails && entityTypeDetails.value && entityTypeDetails.model_names) {
 				try {
-					// Delete entityType cache for each model using the actual entityType value
 					for (const modelName of entityTypeDetails.model_names) {
 						await cacheHelper.entityTypes.delete(
 							tenantCode,
@@ -47,27 +46,6 @@ module.exports = class EntityHelper {
 					}
 				} catch (cacheError) {
 					console.error(`❌ Failed to invalidate entityType cache after entity creation:`, cacheError)
-				}
-			}
-
-			// Invalidate entity list caches after creation
-			if (entity && sanitizedData.entity_type_id) {
-				// Separate try-catch for each cache deletion to ensure all caches are cleared
-				try {
-					await cacheHelper.forms.delete(
-						tenantCode,
-						common.SYSTEM,
-						'entity_list',
-						sanitizedData.entity_type_id
-					)
-				} catch (cacheError) {
-					console.error(`❌ Failed to invalidate entity_list cache after creation:`, cacheError)
-				}
-
-				try {
-					await cacheHelper.forms.delete(tenantCode, common.SYSTEM, 'entity_list_all', 'all_entities')
-				} catch (cacheError) {
-					console.error(`❌ Failed to invalidate entity_list_all cache after creation:`, cacheError)
 				}
 			}
 
@@ -148,7 +126,6 @@ module.exports = class EntityHelper {
 					)
 
 					if (entityTypeDetails && entityTypeDetails.value && entityTypeDetails.model_names) {
-						// Delete entityType cache for each model using the actual entityType value
 						for (const modelName of entityTypeDetails.model_names) {
 							await cacheHelper.entityTypes.delete(
 								tenantCode,
@@ -160,23 +137,6 @@ module.exports = class EntityHelper {
 					}
 				} catch (cacheError) {
 					console.error(`❌ Failed to invalidate entityType cache after entity update:`, cacheError)
-				}
-			}
-
-			// Invalidate entity list caches after update
-			if (updatedEntity && (updatedEntity.entity_type_id || sanitizedData.entity_type_id)) {
-				const entityTypeId = updatedEntity.entity_type_id || sanitizedData.entity_type_id
-				// Separate try-catch for each cache deletion to ensure all caches are cleared
-				try {
-					await cacheHelper.forms.delete(tenantCode, common.SYSTEM, 'entity_list', entityTypeId)
-				} catch (cacheError) {
-					console.error(`❌ Failed to invalidate entity_list cache after update:`, cacheError)
-				}
-
-				try {
-					await cacheHelper.forms.delete(tenantCode, common.SYSTEM, 'entity_list_all', 'all_entities')
-				} catch (cacheError) {
-					console.error(`❌ Failed to invalidate entity_list_all cache after update:`, cacheError)
 				}
 			}
 
@@ -373,7 +333,6 @@ module.exports = class EntityHelper {
 			// Invalidate entityType cache using the fetched entityType details
 			if (entityTypeDetails && entityTypeDetails.value && entityTypeDetails.model_names) {
 				try {
-					// Delete entityType cache for each model using the actual entityType value
 					for (const modelName of entityTypeDetails.model_names) {
 						await cacheHelper.entityTypes.delete(
 							tenantCode,
@@ -385,14 +344,6 @@ module.exports = class EntityHelper {
 				} catch (cacheError) {
 					console.error(`❌ Failed to invalidate entityType cache after entity deletion:`, cacheError)
 				}
-			}
-
-			// Invalidate entity list caches after deletion
-			try {
-				// Clear all entity list caches since we don't know the entity_type_id after deletion
-				await cacheHelper.forms.delete(tenantCode, common.SYSTEM, 'entity_list_all', 'all_entities')
-			} catch (cacheError) {
-				console.error(`❌ Failed to invalidate entity list cache after deletion:`, cacheError)
 			}
 
 			return responses.successResponse({
@@ -441,35 +392,14 @@ module.exports = class EntityHelper {
 				filter['entity_type_id'] = entityType
 			}
 
-			// Try to get entities from cache first (only cache paginated lists without search)
-			const cacheKey = `${entityType || 'all'}_page${pageNo}_limit${pageSize}`
-			let entities = null
-
-			if (!searchText) {
-				entities = await cacheHelper.forms.get(tenantCode, common.SYSTEM, 'entity_list', cacheKey)
-				if (entities) {
-				}
-			}
-
-			if (!entities) {
-				// Optimized: Get entities with entity_type details included - eliminates N+1 queries for clients
-				entities = await entityQueries.getAllEntitiesWithEntityTypeDetails(
-					filter,
-					[tenantCode],
-					pageNo,
-					pageSize,
-					searchText
-				)
-
-				// Cache the result if no search text (searchable results shouldn't be cached)
-				if (!searchText && entities) {
-					try {
-						await cacheHelper.forms.set(tenantCode, common.SYSTEM, 'entity_list', cacheKey, entities)
-					} catch (cacheError) {
-						console.error(`❌ Failed to cache entity list:`, cacheError)
-					}
-				}
-			}
+			// Optimized: Get entities with entity_type details included - eliminates N+1 queries for clients
+			const entities = await entityQueries.getAllEntitiesWithEntityTypeDetails(
+				filter,
+				[tenantCode],
+				pageNo,
+				pageSize,
+				searchText
+			)
 
 			if (entities.rows == 0 || entities.count == 0) {
 				return responses.failureResponse({

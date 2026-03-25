@@ -160,50 +160,18 @@ module.exports = class modulesHelper {
 		try {
 			const offset = common.getPaginationOffset(page, limit)
 
-			// Try to get modules from cache first (only cache without search)
-			const cacheKey = `page${page}_limit${limit}`
-			let modules = null
-
-			if (!search || search.trim() === '') {
-				modules = await cacheHelper.forms.get(
-					tenantCode,
-					organizationId || common.SYSTEM,
-					'modules_list',
-					cacheKey
-				)
-				if (modules) {
-				}
+			const filter = {
+				tenant_code: tenantCode,
 			}
-
-			if (!modules) {
-				const filter = {
-					tenant_code: tenantCode,
-				}
-				if (search && search.trim() !== '') {
-					filter.code = { [Op.iLike]: `%${search.trim()}%` }
-				}
-				const options = {
-					offset,
-					limit,
-				}
-				const attributes = ['id', 'code', 'status']
-				modules = await modulesQueries.findAllModules(filter, attributes, options, tenantCode)
-
-				// Cache the result if no search text
-				if ((!search || search.trim() === '') && modules) {
-					try {
-						await cacheHelper.forms.set(
-							tenantCode,
-							organizationId || common.SYSTEM,
-							'modules_list',
-							cacheKey,
-							modules
-						)
-					} catch (cacheError) {
-						console.error(`❌ Failed to cache modules list:`, cacheError)
-					}
-				}
+			if (search && search.trim() !== '') {
+				filter.code = { [Op.iLike]: `%${search.trim()}%` }
 			}
+			const options = {
+				offset,
+				limit,
+			}
+			const attributes = ['id', 'code', 'status']
+			const modules = await modulesQueries.findAllModules(filter, attributes, options, tenantCode)
 
 			if (modules.rows == 0 || modules.count == 0) {
 				return responses.failureResponse({

@@ -1757,11 +1757,9 @@ module.exports = class SessionsHelper {
 
 			const validationData = removeDefaultOrgEntityTypes(sessionEntityTypes, defaults.orgCode)
 
-			const processDbResponse = utils.processDbResponse(sessionDetails, validationData)
-
 			if (utils.isNumeric(id)) {
 				try {
-					const cacheCopy = { ...processDbResponse }
+					const cacheCopy = { ...sessionDetails }
 					delete cacheCopy.is_enrolled
 					delete cacheCopy.enrolment_type
 					await cacheHelper.sessions.set(tenantCode, cacheCopy.id, cacheCopy)
@@ -1770,6 +1768,8 @@ module.exports = class SessionsHelper {
 					// Continue without caching - don't fail the request
 				}
 			}
+
+			const processDbResponse = utils.processDbResponse(sessionDetails, validationData)
 			processDbResponse['resources'] = await this.getResourceAccessibleUrl(processDbResponse['resources'])
 
 			if (userId != processDbResponse.mentor_id && userId != processDbResponse.created_by) {
