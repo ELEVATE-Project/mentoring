@@ -31,6 +31,15 @@ module.exports = class FormsHelper {
 
 			//			await KafkaProducer.clearInternalCache('formVersion')
 
+			// Invalidate cache so stale fallback (default org) is not served
+			try {
+				if (bodyData.type && bodyData.sub_type) {
+					await cacheHelper.forms.delete(tenantCode, orgCode, bodyData.type, bodyData.sub_type)
+				}
+			} catch (cacheError) {
+				console.error('Failed to invalidate form cache:', cacheError)
+			}
+
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
 				message: 'FORM_CREATED_SUCCESSFULLY',
@@ -185,8 +194,8 @@ module.exports = class FormsHelper {
 				})
 			}
 
-			// Business logic: Prefer current tenant over default tenant
-			const form = forms.find((f) => f.tenant_code === tenantCode) || forms[0]
+			// Business logic: Prefer current org over default org
+			const form = forms.find((f) => f.organization_code === orgCode) || forms[0]
 
 			// Cache the result if it was searched by type and subtype
 			if (!id && bodyData?.type && bodyData?.sub_type) {
@@ -240,7 +249,10 @@ module.exports = class FormsHelper {
 									)
 
 									if (completeFormData && completeFormData.length > 0) {
-										const formData = completeFormData[0]
+										// Prefer custom org form over default org form
+										const formData =
+											completeFormData.find((f) => f.organization_code !== defaults.orgCode) ||
+											completeFormData[0]
 										if (formData.sub_type) {
 											await cacheHelper.forms.set(
 												tenantCode,
