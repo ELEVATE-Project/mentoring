@@ -484,7 +484,7 @@ const sessions = {
 
 					if (sessionDetails) {
 						// Cache the session data directly
-						await this.set(tenantCode, organizationCode, sessionId, sessionDetails)
+						await this.set(tenantCode, sessionId, sessionDetails)
 						dbFetchedSessions.push(sessionDetails)
 						console.log(`✅ [getSessionKafka] Session ${sessionId} fetched and cached`)
 					}
@@ -1316,7 +1316,7 @@ const mentee = {
 					if (usersFromDb && usersFromDb.length > 0) {
 						// Cache each fetched user individually
 						for (const user of usersFromDb) {
-							await this.set(tenantCode, organizationCode, user.user_id, user)
+							await this.set(tenantCode, user.user_id, user)
 						}
 
 						// Add fetched users to result

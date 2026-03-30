@@ -76,6 +76,11 @@ module.exports = class NotificationTemplateHelper {
 			bodyData['organization_code'] = tokenInformation.organization_code
 			bodyData['updated_by'] = tokenInformation.id
 
+			// Fetch original template BEFORE update to capture old code for cache invalidation
+			const existingTemplates = await notificationTemplateQueries.findTemplatesByFilter(filter)
+			const existingTemplate = existingTemplates?.[0]
+			const oldCode = existingTemplate?.code || filter.code
+
 			const result = await notificationTemplateQueries.updateTemplate(filter, bodyData, tenantCode)
 			if (result == 0) {
 				return responses.failureResponse({
@@ -85,23 +90,21 @@ module.exports = class NotificationTemplateHelper {
 				})
 			}
 
-			// Delete old cache
-			const existingTemplates = await notificationTemplateQueries.findTemplatesByFilter(filter)
-			const existingTemplate = existingTemplates?.[0]
-			const templateCode = bodyData.code || existingTemplate?.code || filter.code
+			// Delete cache using old code (captured before update) and new code (if changed)
+			const newCode = bodyData.code || oldCode
 			try {
-				if (templateCode) {
+				if (oldCode) {
 					await cacheHelper.notificationTemplates.delete(
 						tenantCode,
 						tokenInformation.organization_code,
-						templateCode
+						oldCode
 					)
 				}
-				if (existingTemplate?.code && existingTemplate.code !== templateCode) {
+				if (newCode && newCode !== oldCode) {
 					await cacheHelper.notificationTemplates.delete(
 						tenantCode,
 						tokenInformation.organization_code,
-						existingTemplate.code
+						newCode
 					)
 				}
 			} catch (cacheError) {
