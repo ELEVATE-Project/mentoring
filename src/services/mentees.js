@@ -836,7 +836,7 @@ module.exports = class MenteesHelper {
 					/**
 					 * user's external_session_visibility === ALL (ASSOCIATED sessions + sessions whose visibility is ALL)
 					 */
-					filter = `AND (('${userPolicyDetails.organization_id}' = ANY("visible_to_organizations") AND "visibility" != 'CURRENT' ) OR "visibility" = 'ALL' OR "mentor_organization_id" = '${userPolicyDetails.organization_id}')`
+					filter = `AND (('${userPolicyDetails.organization_id}' = ANY("visible_to_organizations") AND "visibility" != 'CURRENT' ) OR ("visibility" = 'ALL' AND "tenant_code" = '${tenantCode}') OR "mentor_organization_id" = '${userPolicyDetails.organization_id}')`
 				}
 			}
 			return filter
@@ -1834,7 +1834,7 @@ module.exports = class MenteesHelper {
 					 */
 					filter =
 						additionalFilter +
-						`AND (('${requesterOrgId}' = ANY("visible_to_organizations") AND "mentee_visibility" != 'CURRENT' ) OR "mentee_visibility" = 'ALL' OR "organization_code" = '${requesterOrgCode}')`
+						`AND (('${requesterOrgId}' = ANY("visible_to_organizations") AND "mentee_visibility" != 'CURRENT' ) OR ("mentee_visibility" = 'ALL' AND "tenant_code" = '${tenantCode}') OR "organization_code" = '${requesterOrgCode}')`
 				}
 			}
 

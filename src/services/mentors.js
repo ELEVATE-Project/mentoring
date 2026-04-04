@@ -1640,7 +1640,7 @@ module.exports = class MentorsHelper {
 					 */
 					filter =
 						additionalFilter +
-						`AND (('${userPolicyDetails.organization_code}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT' ) OR "mentor_visibility" = 'ALL' OR "organization_code" = '${userPolicyDetails.organization_code}')`
+						`AND (('${userPolicyDetails.organization_code}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT' ) OR ("mentor_visibility" = 'ALL' AND "tenant_code" = '${tenantCode}') OR "organization_code" = '${userPolicyDetails.organization_code}')`
 				}
 			}
 
