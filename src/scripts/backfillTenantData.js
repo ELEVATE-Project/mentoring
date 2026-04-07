@@ -32,6 +32,7 @@ const fs = require('fs')
 const path = require('path')
 const csv = require('csv-parser')
 const tenantConsumer = require('@generics/kafka/consumers/tenant')
+const TenantService = require('@services/tenant')
 
 /**
  * Parses a CSV file and returns an array of row objects.
@@ -63,9 +64,11 @@ async function backfillTenants(tenants, options = {}) {
 	let success = 0
 	let failed = 0
 
+	const defaultConfig = await TenantService.fetchDefaultTenantConfig()
+
 	for (const tenant of tenants) {
-		if (!tenant.code || !tenant.name) {
-			console.error(`[SKIP] Missing required field (code or name):`, tenant)
+		if (!tenant.code || !tenant.name || !tenant.org_id || !tenant.org_code) {
+			console.error(`[SKIP] Missing required field (code, name, org_id, or org_code):`, tenant)
 			failed++
 			continue
 		}
@@ -84,9 +87,10 @@ async function backfillTenants(tenants, options = {}) {
 			status: tenant.status || 'ACTIVE',
 			description: tenant.description || null,
 			logo: tenant.logo || null,
-			org_id: tenant.org_id || process.env.DEFAULT_ORG_ID,
-			org_code: tenant.org_code || process.env.DEFAULT_ORGANISATION_CODE,
+			org_id: tenant.org_id,
+			org_code: tenant.org_code,
 			backfill: true,
+			defaultConfig,
 		}
 
 		try {
