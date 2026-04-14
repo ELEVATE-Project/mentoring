@@ -15,6 +15,10 @@
  * Safe to re-run: the consumer uses findOrCreate (idempotent) and
  * replication only runs for genuinely new tenants.
  *
+ * After the backfill, correctTenantData runs automatically to fix/refresh
+ * config for all tenants in the CSV (handles already-existing tenants whose
+ * config may be missing or stale).
+ *
  * Usage:
  *   node src/scripts/backfillTenantData.js <path-to-csv>
  *   node src/scripts/backfillTenantData.js <path-to-csv> --dry-run
@@ -32,7 +36,7 @@ const fs = require('fs')
 const path = require('path')
 const csv = require('csv-parser')
 const tenantConsumer = require('@generics/kafka/consumers/tenant')
-const TenantService = require('@services/tenant')
+const { correctTenants } = require('./correctTenantData')
 
 /**
  * Parses a CSV file and returns an array of row objects.
@@ -53,22 +57,21 @@ function parseCsv(filePath) {
 /**
  * Backfills tenant data from an array of tenant records.
  * Each record is passed to the tenant Kafka consumer as a create event.
+ * After all tenants are processed, correctTenants runs to fix/refresh config.
  *
  * @param {Array<object>} tenants - Array of { code, name, org_id, org_code, status?, description?, logo? }
  * @param {object} options
  * @param {boolean} options.dryRun - If true, only logs what would happen
- * @returns` {Promise<{ success: number, failed: number, total: number }>}
+ * @returns {Promise<{ success: number, failed: number, total: number }>}
  */
 async function backfillTenants(tenants, options = {}) {
 	const { dryRun = false } = options
 	let success = 0
 	let failed = 0
 
-	const defaultConfig = await TenantService.fetchDefaultTenantConfig()
-
 	for (const tenant of tenants) {
-		if (!tenant.code || !tenant.name || !tenant.org_id || !tenant.org_code) {
-			console.error(`[SKIP] Missing required field (code, name, org_id, or org_code):`, tenant)
+		if (!tenant.code || !tenant.name) {
+			console.error(`[SKIP] Missing required field (code or name):`, tenant)
 			failed++
 			continue
 		}
@@ -87,10 +90,8 @@ async function backfillTenants(tenants, options = {}) {
 			status: tenant.status || 'ACTIVE',
 			description: tenant.description || null,
 			logo: tenant.logo || null,
-			org_id: tenant.org_id,
-			org_code: tenant.org_code,
-			backfill: true,
-			defaultConfig,
+			org_id: tenant.org_id || process.env.DEFAULT_ORG_ID,
+			org_code: tenant.org_code || process.env.DEFAULT_ORGANISATION_CODE,
 		}
 
 		try {
@@ -150,6 +151,15 @@ if (require.main === module) {
 			console.log(`Total:   ${result.total}`)
 			console.log(`Success: ${result.success}`)
 			console.log(`Failed:  ${result.failed}`)
+
+			if (!isDryRun) {
+				console.log('\n=== Running Tenant Data Correction ===')
+				const correction = await correctTenants(tenants)
+				console.log('\n=== Correction Summary ===')
+				console.log(`Total:   ${correction.total}`)
+				console.log(`Success: ${correction.success}`)
+				console.log(`Failed:  ${correction.failed}`)
+			}
 
 			process.exit(result.failed > 0 ? 1 : 0)
 		} catch (err) {

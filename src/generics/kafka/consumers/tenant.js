@@ -42,29 +42,22 @@ var messageReceived = function (message) {
 						updated_by: created_by ? created_by.toString() : null,
 					}
 					const { created } = await tenantQueries.upsert(tenantData)
-					if (created || message.backfill) {
-						await tenantService.replicateConfigFromDefaultTenant(
-							code,
-							org_id,
-							org_code,
-							message.defaultConfig || null
-						)
-						// Rebuild materialized views — entity_types may have changed during replication
+					if (created) {
+						await tenantService.replicateConfigFromDefaultTenant(code, org_id, org_code)
+
+						// Build materialized views for the new tenant
 						const entityTypesGroupedByModel = await materializedViewsService.triggerViewBuild(code)
 
-						if (created) {
-							// Register periodic refresh jobs only for new tenants (existing ones already have jobs)
-							const baseInterval = process.env.REFRESH_VIEW_INTERVAL
+						// Register periodic refresh jobs in scheduler service for the new tenant
+						const baseInterval = process.env.REFRESH_VIEW_INTERVAL
 
-							for (const { modelName } of entityTypesGroupedByModel) {
-								const interval =
-									(modelName === 'UserExtension' &&
-										process.env.USER_EXTENSION_REFRESH_VIEW_INTERVAL) ||
-									(modelName === 'Session' && process.env.SESSION_REFRESH_VIEW_INTERVAL) ||
-									baseInterval
+						for (const { modelName } of entityTypesGroupedByModel) {
+							const interval =
+								(modelName === 'UserExtension' && process.env.USER_EXTENSION_REFRESH_VIEW_INTERVAL) ||
+								(modelName === 'Session' && process.env.SESSION_REFRESH_VIEW_INTERVAL) ||
+								baseInterval
 
-								materializedViewsService.scheduleViewRefreshJob(code, modelName, interval)
-							}
+							materializedViewsService.scheduleViewRefreshJob(code, modelName, interval)
 						}
 					}
 					break

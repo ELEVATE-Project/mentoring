@@ -67,62 +67,7 @@ async function replicateWithIdMap({ label, fetchSource, transform, bulkCreate, f
 }
 
 module.exports = class TenantService {
-	static async fetchDefaultTenantConfig() {
-		const defaultTenantCode = process.env.DEFAULT_TENANT_CODE
-		const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE
-
-		if (!defaultTenantCode || !defaultOrgCode) {
-			throw new Error('DEFAULT_TENANT_CODE and DEFAULT_ORGANISATION_CODE env vars are required for replication')
-		}
-
-		const [
-			notificationTemplates,
-			forms,
-			entityTypes,
-			questions,
-			questionSets,
-			reportTypes,
-			reports,
-			reportQueries,
-			reportRoleMappings,
-			roleExtensions,
-		] = await Promise.all([
-			NotificationTemplateQueries.findTemplatesByFilter({
-				organization_code: defaultOrgCode,
-				tenant_code: defaultTenantCode,
-			}),
-			FormQueries.findFormsByFilter({ organization_code: defaultOrgCode }, defaultTenantCode),
-			EntityTypeQueries.findAllEntityTypes([defaultOrgCode], defaultTenantCode, null),
-			QuestionQueries.find({ organization_code: defaultOrgCode, tenant_code: defaultTenantCode }),
-			QuestionSetQueries.findQuestionSets({ organization_code: defaultOrgCode, tenant_code: defaultTenantCode }),
-			ReportTypeQueries.findAllByFilter({ organization_code: defaultOrgCode }, defaultTenantCode),
-			ReportQueries.findAllReports({ organization_code: defaultOrgCode }, defaultTenantCode),
-			ReportQueryQueries.findReportQueries({ organization_code: defaultOrgCode }, defaultTenantCode),
-			ReportRoleMappingQueries.findAllByFilter({ organization_code: defaultOrgCode }, defaultTenantCode),
-			RoleExtensionQueries.findAllByFilter({ organization_code: defaultOrgCode }, defaultTenantCode),
-		])
-
-		const entityTypeIds = entityTypes.map((et) => et.id)
-		const entities = entityTypeIds.length
-			? await EntityQueries.findAllEntities({ entity_type_id: { [Op.in]: entityTypeIds } }, defaultTenantCode)
-			: []
-
-		return {
-			notificationTemplates,
-			forms,
-			entityTypes,
-			entities,
-			questions,
-			questionSets,
-			reportTypes,
-			reports,
-			reportQueries,
-			reportRoleMappings,
-			roleExtensions,
-		}
-	}
-
-	static async replicateConfigFromDefaultTenant(newTenantCode, newOrgId, newOrgCode, defaultConfig = null) {
+	static async replicateConfigFromDefaultTenant(newTenantCode, newOrgId, newOrgCode) {
 		const defaultTenantCode = process.env.DEFAULT_TENANT_CODE
 		const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE
 
@@ -140,7 +85,6 @@ module.exports = class TenantService {
 		}
 		const newOrgIdStr = newOrgId.toString()
 		const resolvedOrgCode = newOrgCode || defaultOrgCode
-		const config = defaultConfig || (await TenantService.fetchDefaultTenantConfig())
 
 		const baseTransform =
 			(extra = {}) =>
@@ -153,31 +97,14 @@ module.exports = class TenantService {
 
 		const transaction = await db.sequelize.transaction()
 		try {
-			// ── 0. Clear existing config for this tenant (ensures fresh data on re-run) ──
-			const configTables = [
-				'entities',
-				'entity_types', // entities first (references entity_types)
-				'question_sets',
-				'questions',
-				'notification_templates',
-				'forms',
-				'report_role_mapping',
-				'report_queries',
-				'reports',
-				'report_types',
-				'role_extensions',
-			]
-			for (const table of configTables) {
-				await db.sequelize.query(`DELETE FROM "${table}" WHERE tenant_code = :tenantCode`, {
-					replacements: { tenantCode: newTenantCode },
-					transaction,
-				})
-			}
-
 			// ── 1. Notification Templates ────────────────────────────────────────
 			await replicateResource({
 				label: 'Notification templates',
-				fetchSource: () => Promise.resolve(config.notificationTemplates),
+				fetchSource: () =>
+					NotificationTemplateQueries.findTemplatesByFilter({
+						organization_code: defaultOrgCode,
+						tenant_code: defaultTenantCode,
+					}),
 				transform: baseTransform({ organization_id: newOrgIdStr }),
 				bulkCreate: (items, opts) => NotificationTemplateQueries.bulkCreate(items, newTenantCode, opts),
 				transaction,
@@ -186,7 +113,8 @@ module.exports = class TenantService {
 			// ── 2. Forms ─────────────────────────────────────────────────────────
 			await replicateResource({
 				label: 'Forms',
-				fetchSource: () => Promise.resolve(config.forms),
+				fetchSource: () =>
+					FormQueries.findFormsByFilter({ organization_code: defaultOrgCode }, defaultTenantCode),
 				transform: baseTransform({ organization_id: newOrgIdStr, version: 0 }),
 				bulkCreate: (items, opts) => FormQueries.bulkCreate(items, newTenantCode, opts),
 				transaction,
@@ -195,7 +123,7 @@ module.exports = class TenantService {
 			// ── 3. Entity Types ───────────────────────────────────────────────────
 			const entityTypeIdMap = await replicateWithIdMap({
 				label: 'Entity types',
-				fetchSource: () => Promise.resolve(config.entityTypes),
+				fetchSource: () => EntityTypeQueries.findAllEntityTypes([defaultOrgCode], defaultTenantCode, null),
 				transform: baseTransform({ organization_id: newOrgIdStr, parent_id: null }),
 				bulkCreate: (items, opts) => EntityTypeQueries.bulkCreate(items, newTenantCode, opts),
 				fetchExisting: () => EntityTypeQueries.findAllEntityTypes([defaultOrgCode], newTenantCode, null),
@@ -210,8 +138,11 @@ module.exports = class TenantService {
 				await replicateResource({
 					label: 'Entities',
 					fetchSource: () =>
-						Promise.resolve(config.entities.filter((e) => oldEntityTypeIds.includes(e.entity_type_id))),
-					filter: (e) => entityTypeIdMap[e.entity_type_id] != null,
+						EntityQueries.findAllEntities(
+							{ entity_type_id: { [Op.in]: oldEntityTypeIds } },
+							defaultTenantCode
+						),
+					filter: (e) => entityTypeIdMap[e.entity_type_id] !== undefined,
 					transform: (e) => ({
 						...baseTransform()(e),
 						entity_type_id: entityTypeIdMap[e.entity_type_id],
@@ -224,7 +155,8 @@ module.exports = class TenantService {
 			// ── 5. Questions ──────────────────────────────────────────────────────
 			const questionIdMap = await replicateWithIdMap({
 				label: 'Questions',
-				fetchSource: () => Promise.resolve(config.questions),
+				fetchSource: () =>
+					QuestionQueries.find({ organization_code: defaultOrgCode, tenant_code: defaultTenantCode }),
 				transform: baseTransform(),
 				bulkCreate: (items, opts) =>
 					QuestionQueries.bulkCreate(items, newTenantCode, { ...opts, returning: true }),
@@ -236,7 +168,11 @@ module.exports = class TenantService {
 			// ── 6. Question Sets ──────────────────────────────────────────────────
 			await replicateResource({
 				label: 'Question sets',
-				fetchSource: () => Promise.resolve(config.questionSets),
+				fetchSource: () =>
+					QuestionSetQueries.findQuestionSets({
+						organization_code: defaultOrgCode,
+						tenant_code: defaultTenantCode,
+					}),
 				transform: (qs) => ({
 					...baseTransform()(qs),
 					questions: (qs.questions || []).map((qId) => {
@@ -251,7 +187,8 @@ module.exports = class TenantService {
 			// ── 7. Report Types ───────────────────────────────────────────────────
 			await replicateResource({
 				label: 'Report types',
-				fetchSource: () => Promise.resolve(config.reportTypes),
+				fetchSource: () =>
+					ReportTypeQueries.findAllByFilter({ organization_code: defaultOrgCode }, defaultTenantCode),
 				transform: baseTransform(),
 				bulkCreate: (items, opts) => ReportTypeQueries.bulkCreate(items, newTenantCode, opts),
 				transaction,
@@ -260,7 +197,8 @@ module.exports = class TenantService {
 			// ── 8. Reports ────────────────────────────────────────────────────────
 			await replicateResource({
 				label: 'Reports',
-				fetchSource: () => Promise.resolve(config.reports),
+				fetchSource: () =>
+					ReportQueries.findAllReports({ organization_code: defaultOrgCode }, defaultTenantCode),
 				transform: baseTransform({ organization_id: newOrgIdStr }),
 				bulkCreate: (items, opts) => ReportQueries.bulkCreate(items, newTenantCode, opts),
 				transaction,
@@ -269,7 +207,8 @@ module.exports = class TenantService {
 			// ── 9. Report Queries ─────────────────────────────────────────────────
 			await replicateResource({
 				label: 'Report queries',
-				fetchSource: () => Promise.resolve(config.reportQueries),
+				fetchSource: () =>
+					ReportQueryQueries.findReportQueries({ organization_code: defaultOrgCode }, defaultTenantCode),
 				transform: baseTransform({ organization_id: newOrgIdStr }),
 				bulkCreate: (items, opts) => ReportQueryQueries.bulkCreate(items, newTenantCode, opts),
 				transaction,
@@ -278,7 +217,8 @@ module.exports = class TenantService {
 			// ── 10. Report Role Mappings ──────────────────────────────────────────
 			await replicateResource({
 				label: 'Report role mappings',
-				fetchSource: () => Promise.resolve(config.reportRoleMappings),
+				fetchSource: () =>
+					ReportRoleMappingQueries.findAllByFilter({ organization_code: defaultOrgCode }, defaultTenantCode),
 				transform: baseTransform(),
 				bulkCreate: (items, opts) => ReportRoleMappingQueries.bulkCreate(items, newTenantCode, opts),
 				transaction,
@@ -287,7 +227,8 @@ module.exports = class TenantService {
 			// ── 11. Role Extensions ───────────────────────────────────────────────
 			await replicateResource({
 				label: 'Role extensions',
-				fetchSource: () => Promise.resolve(config.roleExtensions),
+				fetchSource: () =>
+					RoleExtensionQueries.findAllByFilter({ organization_code: defaultOrgCode }, defaultTenantCode),
 				transform: baseTransform({ organization_id: newOrgIdStr }),
 				bulkCreate: (items, opts) => RoleExtensionQueries.bulkCreate(items, newTenantCode, opts),
 				transaction,
