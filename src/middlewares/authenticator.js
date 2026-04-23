@@ -140,6 +140,35 @@ module.exports = async function (req, res, next) {
 			}
 		}
 
+		// Handle organization/tenant override for admin and org admin (mirrors user service logic)
+		const isAdminUser =
+			req.decodedToken.roles && req.decodedToken.roles.some((role) => role.title === common.ADMIN_ROLE)
+		const isOrgAdmin =
+			req.decodedToken.roles && req.decodedToken.roles.some((role) => role.title === common.ORG_ADMIN_ROLE)
+
+		if (isAdminUser || isOrgAdmin) {
+			const orgCode = (req.headers[common.ORG_CODE_HEADER] || '').trim()
+			const tenantCode = (req.headers[common.TENANT_CODE_HEADER] || '').trim()
+
+			if (isOrgAdmin && !isAdminUser) {
+				// Org admin: can only override organization_code, NOT tenant_code (security)
+				if (orgCode) req.decodedToken.organization_code = orgCode
+			} else if (isAdminUser) {
+				// Super admin: can override both, but must supply both together
+				if (orgCode || tenantCode) {
+					if (!orgCode || !tenantCode) {
+						throw responses.failureResponse({
+							message: 'BOTH_X_ORG_CODE_AND_X_TENANT_CODE_HEADERS_REQUIRED',
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+					req.decodedToken.tenant_code = tenantCode
+					req.decodedToken.organization_code = orgCode
+				}
+			}
+		}
+
 		req.decodedToken.id =
 			typeof req.decodedToken?.id === 'number' ? req.decodedToken?.id?.toString() : req.decodedToken?.id
 		req.decodedToken.organization_id =

@@ -317,4 +317,6 @@ module.exports = {
 		ASCENDING: 'ASC',
 		DESCENDING: 'DESC',
 	},
+	ORG_CODE_HEADER: process.env.ORG_CODE_HEADER_NAME.toLowerCase(),
+	TENANT_CODE_HEADER: process.env.TENANT_CODE_HEADER_NAME.toLowerCase(),
 }
