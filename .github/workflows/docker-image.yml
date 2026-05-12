@@ -1,63 +1,230 @@
-name: Build and Push Docker Image
+name: Build, Tag, and Push Docker Image
 
 on:
   workflow_dispatch:
     inputs:
       tag_version:
-        description: 'Docker image tag version (e.g., 3.3.11)'
-        required: true
+        description: 'Docker image tag version (e.g., 3.4.0) — leave blank to auto-increment'
+        required: false
+        default: ''
+      version_bump:
+        description: 'Part to increment when tag_version is blank'
+        required: false
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+      is_rc:
+        description: 'Tag this as a Release Candidate (e.g. 3.4.1-rc.1)'
+        required: false
+        type: boolean
+        default: false
+      branch:
+        description: 'Branch to build from (default: staging)'
+        required: false
+        default: 'staging'
+      push_image:
+        description: 'Build and push Docker image (leave unchecked to only create the Git tag)'
+        required: false
+        type: boolean
+        default: false
 
 env:
-  DOCKER_IMAGE_NAME: elevate-mentoring # Configure your image name here
+  DOCKER_IMAGE_NAME: elevate-mentoring
   DOCKER_REGISTRY: docker.io
   DOCKER_NAMESPACE: shikshalokamqa
 
+permissions:
+  contents: write
+
+concurrency:
+  group: docker-release
+  cancel-in-progress: false
+
 jobs:
   docker-image-build-and-push:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout code from target branch
       uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.branch || 'staging' }}
+        fetch-depth: 0
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+    - name: Resolve tag version
+      id: get-version
+      shell: bash
+      run: |
+        INPUT="${{ github.event.inputs.tag_version }}"
+        BUMP="${{ github.event.inputs.version_bump }}"
+        IS_RC="${{ github.event.inputs.is_rc }}"
+
+        if [ -n "$INPUT" ]; then
+          # Manual version — strip leading "v" and validate
+          VERSION="${INPUT#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "Error: tag_version must be x.y.z or x.y.z-rc.N (e.g. 3.4.0 or 3.4.0-rc.1)"
+            exit 1
+          fi
+          # If is_rc is checked and no RC suffix was typed, find the next RC number for this base version
+          if [ "$IS_RC" == "true" ] && [[ ! "$VERSION" =~ -rc\.[0-9]+$ ]]; then
+            LATEST_RC_FOR_BASE=$(git tag --sort=-v:refname | grep -E "^${VERSION}-rc\.[0-9]+$" | head -1 || true)
+            if [ -n "$LATEST_RC_FOR_BASE" ]; then
+              RC_NUM=$(echo "$LATEST_RC_FOR_BASE" | grep -oE '[0-9]+$')
+              VERSION="${VERSION}-rc.$((RC_NUM + 1))"
+            else
+              VERSION="${VERSION}-rc.1"
+            fi
+          fi
+        elif [ "$IS_RC" == "true" ]; then
+          # Auto-increment RC
+          LATEST_RC=$(git tag --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$' | head -1 || true)
+
+          if [ -n "$LATEST_RC" ]; then
+            echo "Latest RC tag: $LATEST_RC"
+            EXISTING_BASE=$(echo "$LATEST_RC" | sed 's/-rc\.[0-9]*$//')
+
+            # Compute the desired base version from latest stable tag + BUMP
+            LATEST_STABLE=$(git tag --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+            if [ -z "$LATEST_STABLE" ]; then
+              case "$BUMP" in
+                major) DESIRED_BASE="1.0.0" ;;
+                minor) DESIRED_BASE="0.1.0" ;;
+                *)     DESIRED_BASE="0.0.1" ;;
+              esac
+            else
+              MAJOR=$(echo "$LATEST_STABLE" | cut -d. -f1)
+              MINOR=$(echo "$LATEST_STABLE" | cut -d. -f2)
+              PATCH=$(echo "$LATEST_STABLE" | cut -d. -f3)
+              case "$BUMP" in
+                major) DESIRED_BASE="$((MAJOR + 1)).0.0" ;;
+                minor) DESIRED_BASE="${MAJOR}.$((MINOR + 1)).0" ;;
+                *)     DESIRED_BASE="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+              esac
+            fi
+
+            if [ "$EXISTING_BASE" == "$DESIRED_BASE" ]; then
+              # Same base — increment RC number
+              RC_NUM=$(echo "$LATEST_RC" | grep -oE '[0-9]+$')
+              VERSION="${EXISTING_BASE}-rc.$((RC_NUM + 1))"
+            else
+              # Different bump level requested — start a new RC series
+              VERSION="${DESIRED_BASE}-rc.1"
+            fi
+          else
+            # No existing RC — compute next release version from latest release tag and add -rc.1
+            LATEST=$(git tag --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+            if [ -z "$LATEST" ]; then
+              case "$BUMP" in
+                major) BASE="1.0.0" ;;
+                minor) BASE="0.1.0" ;;
+                *)     BASE="0.0.1" ;;
+              esac
+            else
+              echo "Latest release tag: $LATEST"
+              MAJOR=$(echo "$LATEST" | cut -d. -f1)
+              MINOR=$(echo "$LATEST" | cut -d. -f2)
+              PATCH=$(echo "$LATEST" | cut -d. -f3)
+              case "$BUMP" in
+                major) BASE="$((MAJOR + 1)).0.0" ;;
+                minor) BASE="${MAJOR}.$((MINOR + 1)).0" ;;
+                *)     BASE="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+              esac
+            fi
+            VERSION="${BASE}-rc.1"
+          fi
+          echo "Auto-incremented RC version: $VERSION"
+        else
+          # Auto-increment regular release
+          LATEST=$(git tag --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+          if [ -z "$LATEST" ]; then
+            case "$BUMP" in
+              major) VERSION="1.0.0" ;;
+              minor) VERSION="0.1.0" ;;
+              *)     VERSION="0.0.1" ;;
+            esac
+          else
+            echo "Latest release tag: $LATEST"
+            MAJOR=$(echo "$LATEST" | cut -d. -f1)
+            MINOR=$(echo "$LATEST" | cut -d. -f2)
+            PATCH=$(echo "$LATEST" | cut -d. -f3)
+            case "$BUMP" in
+              major) VERSION="$((MAJOR + 1)).0.0" ;;
+              minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+              *)     VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+            esac
+          fi
+          echo "Auto-incremented version ($BUMP): $VERSION"
+        fi
+
+        printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+
+    - name: Check if Git tag already exists
+      run: |
+        VERSION="${{ steps.get-version.outputs.version }}"
+        if git rev-parse "$VERSION" >/dev/null 2>&1; then
+          echo "Error: Git tag $VERSION already exists"
+          exit 1
+        fi
 
     - name: Login to Docker Hub
+      if: ${{ github.event.inputs.push_image == 'true' }}
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Get Docker tag version (fail if not provided)
-      id: get-version
+    - name: Check if version exists on Docker Hub
+      if: ${{ github.event.inputs.push_image == 'true' }}
       run: |
-        # Use workflow_dispatch input if provided
-        if [ ! -z "${{ github.event.inputs.tag_version }}" ]; then
-          VERSION="${{ github.event.inputs.tag_version }}"
-        # Or use TAG_VERSION env if set (for push/PR)
-        elif [ ! -z "${TAG_VERSION}" ]; then
-          VERSION="${TAG_VERSION}"
-        else
-          echo "Error: Docker image version must be provided as workflow_dispatch input or TAG_VERSION env."
+        VERSION="${{ steps.get-version.outputs.version }}"
+
+        LOGIN_RESPONSE=$(curl -s --connect-timeout 10 --max-time 30 -w "\n%{http_code}" \
+          -X POST \
+          -H "Content-Type: application/json" \
+          -d '{"username": "${{ secrets.DOCKERHUB_USERNAME }}", "password": "${{ secrets.DOCKERHUB_TOKEN }}"}' \
+          "https://hub.docker.com/v2/users/login")
+        LOGIN_HTTP=$(echo "$LOGIN_RESPONSE" | tail -n1)
+        LOGIN_BODY=$(echo "$LOGIN_RESPONSE" | head -n-1)
+
+        if [ "$LOGIN_HTTP" -ne 200 ]; then
+          echo "Error: Docker Hub login failed with HTTP $LOGIN_HTTP"
           exit 1
         fi
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-    - name: Check if version exists on Docker Hub
-      id: check-version
-      run: |
-        VERSION=${{ steps.get-version.outputs.version }}
-        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "https://hub.docker.com/v2/namespaces/${{ env.DOCKER_NAMESPACE }}/repositories/${{ env.DOCKER_IMAGE_NAME }}/tags/$VERSION")
+        TOKEN=$(echo "$LOGIN_BODY" | jq -r .token)
+        if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+          echo "Error: Docker Hub login succeeded but returned no token"
+          exit 1
+        fi
+
+        RESPONSE=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w "%{http_code}" \
+          -H "Authorization: Bearer $TOKEN" \
+          "https://hub.docker.com/v2/namespaces/${{ env.DOCKER_NAMESPACE }}/repositories/${{ env.DOCKER_IMAGE_NAME }}/tags/$VERSION")
+
         if [ "$RESPONSE" -eq 200 ]; then
           echo "Error: Tag $VERSION already exists on Docker Hub"
           exit 1
+        elif [ "$RESPONSE" -eq 404 ]; then
+          echo "Tag $VERSION not found on Docker Hub — safe to push"
         else
-          echo "Tag $VERSION does not exist, proceeding with build"
+          echo "Error: Unexpected HTTP $RESPONSE from Docker Hub tag check; aborting to fail safe"
+          exit 1
         fi
 
+    - name: Set up QEMU
+      if: ${{ github.event.inputs.push_image == 'true' }}
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      if: ${{ github.event.inputs.push_image == 'true' }}
+      uses: docker/setup-buildx-action@v3
+
     - name: Extract metadata
+      if: ${{ github.event.inputs.push_image == 'true' }}
       id: meta
       uses: docker/metadata-action@v5
       with:
@@ -66,6 +233,7 @@ jobs:
           type=raw,value=${{ steps.get-version.outputs.version }}
 
     - name: Build and push Docker image
+      if: ${{ github.event.inputs.push_image == 'true' }}
       id: build
       uses: docker/build-push-action@v5
       with:
@@ -78,10 +246,22 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Image digest
-      run: echo "Image pushed with digest  ${{ steps.build.outputs.digest }}"
-
-    - name: Print pushed tags
+    - name: Create and push Git tag
       run: |
-        echo "Pushed tags:"
-        echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n'
+        VERSION="${{ steps.get-version.outputs.version }}"
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git tag -a "$VERSION" -m "Release $VERSION"
+        git push origin "$VERSION"
+
+    - name: Job summary
+      run: |
+        echo "### Git Tag Created 🏷️" >> $GITHUB_STEP_SUMMARY
+        echo "**Tag:** ${{ steps.get-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Branch:** ${{ github.event.inputs.branch || 'staging' }}" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ github.event.inputs.push_image }}" == "true" ]; then
+          echo "**Docker Image:** ${{ env.DOCKER_NAMESPACE }}/${{ env.DOCKER_IMAGE_NAME }}:${{ steps.get-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** ${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "_Docker image was not pushed. To push, trigger a new run with **push_image** checked and a new version._" >> $GITHUB_STEP_SUMMARY
+        fi
