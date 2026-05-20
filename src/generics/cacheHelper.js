@@ -610,6 +610,17 @@ const entityTypes = {
 		})
 	},
 
+	async getCacheOnly(tenantCode, orgCode, modelName, entityValue) {
+		try {
+			const compositeId = `model:${modelName}:${entityValue}`
+			const useInternal = nsUseInternal('entityTypes')
+			const cacheKey = await buildKey({ tenantCode, orgCode, ns: 'entityTypes', id: compositeId })
+			return await get(cacheKey, { useInternal })
+		} catch (error) {
+			return null
+		}
+	},
+
 	async delete(tenantCode, orgCode, modelName, entityValue) {
 		const compositeId = `model:${modelName}:${entityValue}`
 		const useInternal = nsUseInternal('entityTypes')
