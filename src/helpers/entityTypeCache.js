@@ -1,6 +1,7 @@
 // Dependencies
 const httpStatusCode = require('@generics/http-status')
 const entityTypeQueries = require('../database/queries/entityType')
+const organisationExtensionQueries = require('@database/queries/organisationExtension')
 const { Op } = require('sequelize')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const responses = require('@helpers/responses')
@@ -326,9 +327,44 @@ async function getEntityTypeByValue(modelName, entityValue, tenantCode, orgCode)
 	return found
 }
 
+/**
+ * Resolve entity types for a model, using the mentor's org code when available.
+ * Delegates to getEntityTypesAndEntitiesForModel after resolving the effective org.
+ * @param {string} tenantCode
+ * @param {string} currentOrgCode - caller's org code (fallback if mentor org not found)
+ * @param {string} mentorOrganizationId - numeric org ID of the mentor (may be null)
+ * @param {string} modelName
+ */
+async function getEntityTypesWithMentorOrg(tenantCode, currentOrgCode, mentorOrganizationId, modelName) {
+	try {
+		let mentorOrgCode = null
+		if (mentorOrganizationId) {
+			try {
+				const mentorOrg = await cacheHelper.organizations.get(tenantCode, currentOrgCode, mentorOrganizationId)
+				mentorOrgCode = mentorOrg?.organization_code
+			} catch (orgCacheError) {
+				console.warn('Organization cache lookup failed, falling back to database query')
+				const orgData = await organisationExtensionQueries.findOne(
+					{ organization_id: mentorOrganizationId },
+					tenantCode,
+					{ attributes: ['organization_code'], raw: true }
+				)
+				mentorOrgCode = orgData?.organization_code
+			}
+		}
+
+		const effectiveOrgCode = mentorOrgCode || currentOrgCode
+		return getEntityTypesAndEntitiesForModel(modelName, tenantCode, effectiveOrgCode)
+	} catch (error) {
+		console.error('Failed to get entity types with mentor org resolution:', error)
+		return []
+	}
+}
+
 module.exports = {
 	getEntityTypesAndEntitiesWithCache,
 	getEntityTypesAndEntitiesForModel,
 	getEntityTypeByValue,
+	getEntityTypesWithMentorOrg,
 	clearModelCache,
 }
