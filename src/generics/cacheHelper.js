@@ -653,48 +653,55 @@ const entityTypes = {
 	 */
 	async getAllEntityTypesForModel(tenantCode, orgCode, modelName) {
 		try {
-			// Get defaults internally for database query
-			let entityTypes = []
-			try {
-				const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE
-				const orgCandidates = [...new Set([orgCode, defaultOrgCode].filter(Boolean))]
+			const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE
+			const orgCandidates = [...new Set([orgCode, defaultOrgCode].filter(Boolean))]
 
-				const userEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-					{
-						status: 'ACTIVE',
-						organization_code: { [Op.in]: orgCandidates },
-						model_names: { [Op.contains]: [modelName] },
-					},
-					tenantCode
+			const userEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
+				{
+					status: 'ACTIVE',
+					organization_code: { [Op.in]: orgCandidates },
+					model_names: { [Op.contains]: [modelName] },
+				},
+				tenantCode
+			)
+
+			if (!userEntityTypes || userEntityTypes.length === 0) return []
+
+			const results = []
+			const cacheMisses = []
+
+			for (const entityTypeWithEntities of userEntityTypes) {
+				const cached = await this.getCacheOnly(
+					tenantCode,
+					entityTypeWithEntities.organization_code,
+					modelName,
+					entityTypeWithEntities.value
 				)
-				if (userEntityTypes && userEntityTypes.length > 0) {
-					entityTypes.push(...userEntityTypes)
-					console.log(
-						`💾 Entity types for model ${modelName} found in user tenant/org: ${userEntityTypes.length} results`
+				if (cached && !Array.isArray(cached)) {
+					results.push(cached)
+				} else {
+					cacheMisses.push(entityTypeWithEntities)
+				}
+			}
+
+			for (const entityTypeWithEntities of cacheMisses) {
+				try {
+					await this.set(
+						tenantCode,
+						entityTypeWithEntities.organization_code,
+						modelName,
+						entityTypeWithEntities.value,
+						entityTypeWithEntities
 					)
+				} catch (cacheError) {
+					// silent — cache write failure must not block the response
 				}
-			} catch (dbError) {
-				console.error(`Failed to fetch entity types for model ${modelName} from database:`, dbError.message)
-				return []
+				results.push(entityTypeWithEntities)
 			}
 
-			// Cache each entity type individually using standard cache pattern
-			if (entityTypes && entityTypes.length > 0) {
-				for (const entityType of entityTypes) {
-					try {
-						await this.set(tenantCode, orgCode, modelName, entityType.value, [entityType])
-					} catch (cacheError) {
-						// Continue if caching fails for individual entity type
-					}
-				}
-				console.log(
-					`💾 Cached ${entityTypes.length} entity types for model ${modelName} under user context: tenant:${tenantCode}:org:${orgCode}`
-				)
-			}
-
-			return entityTypes || []
+			return results
 		} catch (error) {
-			console.error(`❌ Failed to get all entity types for model ${modelName}:`, error)
+			console.error(`Failed to get all entity types for model ${modelName}:`, error)
 			return []
 		}
 	},
