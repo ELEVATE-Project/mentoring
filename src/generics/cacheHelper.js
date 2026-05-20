@@ -656,47 +656,56 @@ const entityTypes = {
 			const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE
 			const orgCandidates = [...new Set([orgCode, defaultOrgCode].filter(Boolean))]
 
-			const userEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{
-					status: 'ACTIVE',
-					organization_code: { [Op.in]: orgCandidates },
-					model_names: { [Op.contains]: [modelName] },
-				},
-				tenantCode
+			// Step 1 — cheap: entity type definitions only, no entities join
+			const entityTypeDefs = await entityTypeQueries.findAllEntityTypes(
+				{ [Op.in]: orgCandidates },
+				tenantCode,
+				undefined,
+				{ status: 'ACTIVE', model_names: { [Op.contains]: [modelName] } }
 			)
 
-			if (!userEntityTypes || userEntityTypes.length === 0) return []
+			if (!entityTypeDefs || entityTypeDefs.length === 0) return []
 
+			// Step 2 — cache check per entity type using the entity's own org code
 			const results = []
 			const cacheMisses = []
 
-			for (const entityTypeWithEntities of userEntityTypes) {
+			for (const entityTypeDef of entityTypeDefs) {
 				const cached = await this.getCacheOnly(
 					tenantCode,
-					entityTypeWithEntities.organization_code,
+					entityTypeDef.organization_code,
 					modelName,
-					entityTypeWithEntities.value
+					entityTypeDef.value
 				)
 				if (cached && !Array.isArray(cached)) {
 					results.push(cached)
 				} else {
-					cacheMisses.push(entityTypeWithEntities)
+					cacheMisses.push(entityTypeDef)
 				}
 			}
 
-			for (const entityTypeWithEntities of cacheMisses) {
-				try {
-					await this.set(
-						tenantCode,
-						entityTypeWithEntities.organization_code,
-						modelName,
-						entityTypeWithEntities.value,
-						entityTypeWithEntities
-					)
-				} catch (cacheError) {
-					// silent — cache write failure must not block the response
+			// Step 3 — entities join only for cache misses
+			if (cacheMisses.length > 0) {
+				const missedIds = cacheMisses.map((e) => e.id)
+				const missedWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(
+					{ id: { [Op.in]: missedIds } },
+					tenantCode
+				)
+
+				for (const entityTypeWithEntities of missedWithEntities) {
+					try {
+						await this.set(
+							tenantCode,
+							entityTypeWithEntities.organization_code,
+							modelName,
+							entityTypeWithEntities.value,
+							entityTypeWithEntities
+						)
+					} catch (cacheError) {
+						// silent — cache write failure must not block the response
+					}
+					results.push(entityTypeWithEntities)
 				}
-				results.push(entityTypeWithEntities)
 			}
 
 			return results
