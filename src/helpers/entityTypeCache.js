@@ -151,16 +151,10 @@ async function resolveEntityTypesWithCache(entityTypeDefs, tenantCode, modelName
 
 	if (cacheMisses.length > 0) {
 		const missedIds = cacheMisses.map((e) => e.id)
-		let missedWithEntities = []
-		try {
-			missedWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(
-				{ id: { [Op.in]: missedIds } },
-				tenantCode
-			)
-		} catch (dbError) {
-			console.error('Failed to fetch entity types from database:', dbError.message)
-			return results
-		}
+		const missedWithEntities = await entityTypeQueries.findUserEntityTypesAndEntities(
+			{ id: { [Op.in]: missedIds } },
+			tenantCode
+		)
 		for (const entityTypeWithEntities of missedWithEntities) {
 			try {
 				await cacheHelper.entityTypes.set(
