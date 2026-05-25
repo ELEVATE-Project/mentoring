@@ -1729,14 +1729,14 @@ module.exports = class SessionsHelper {
 			let accessorEntityTypes = []
 			try {
 				// Get Session model entity types
-				sessionEntityTypes = await cacheHelper.entityTypes.getEntityTypesWithMentorOrg(
+				sessionEntityTypes = await entityTypeCache.getEntityTypesWithMentorOrg(
 					tenantCode,
 					orgCode,
 					sessionDetails.mentor_organization_id,
 					sessionModelName
 				)
 
-				accessorEntityTypes = await cacheHelper.entityTypes.getEntityTypesWithMentorOrg(
+				accessorEntityTypes = await entityTypeCache.getEntityTypesWithMentorOrg(
 					tenantCode,
 					sessionAccessorDetails.organization_code,
 					sessionAccessorDetails.organization_id,

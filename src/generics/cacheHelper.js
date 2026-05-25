@@ -610,6 +610,17 @@ const entityTypes = {
 		})
 	},
 
+	async getCacheOnly(tenantCode, orgCode, modelName, entityValue) {
+		try {
+			const compositeId = `model:${modelName}:${entityValue}`
+			const useInternal = nsUseInternal('entityTypes')
+			const cacheKey = await buildKey({ tenantCode, orgCode, ns: 'entityTypes', id: compositeId })
+			return await get(cacheKey, { useInternal })
+		} catch (error) {
+			return null
+		}
+	},
+
 	async delete(tenantCode, orgCode, modelName, entityValue) {
 		const compositeId = `model:${modelName}:${entityValue}`
 		const useInternal = nsUseInternal('entityTypes')
@@ -631,101 +642,6 @@ const entityTypes = {
 	// Clear all entityTypes cache for a tenant/org (useful after cache key format changes)
 	async clearAll(tenantCode, orgCode) {
 		return await evictNamespace({ tenantCode, orgCode: orgCode, ns: 'entityTypes' })
-	},
-
-	/**
-	 * Get all entity types for a specific model using direct database query
-	 * @param {string} tenantCode - Tenant code
-	 * @param {string} orgCode - Organization code
-	 * @param {string} modelName - Model name (e.g., 'Session', 'UserExtension')
-	 * @returns {Promise<Array>} Array of all entity types for the model
-	 */
-	async getAllEntityTypesForModel(tenantCode, orgCode, modelName) {
-		try {
-			// Get defaults internally for database query
-			let entityTypes = []
-			try {
-				const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE
-				const orgCandidates = [...new Set([orgCode, defaultOrgCode].filter(Boolean))]
-
-				const userEntityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(
-					{
-						status: 'ACTIVE',
-						organization_code: { [Op.in]: orgCandidates },
-						model_names: { [Op.contains]: [modelName] },
-					},
-					tenantCode
-				)
-				if (userEntityTypes && userEntityTypes.length > 0) {
-					entityTypes.push(...userEntityTypes)
-					console.log(
-						`💾 Entity types for model ${modelName} found in user tenant/org: ${userEntityTypes.length} results`
-					)
-				}
-			} catch (dbError) {
-				console.error(`Failed to fetch entity types for model ${modelName} from database:`, dbError.message)
-				return []
-			}
-
-			// Cache each entity type individually using standard cache pattern
-			if (entityTypes && entityTypes.length > 0) {
-				for (const entityType of entityTypes) {
-					try {
-						await this.set(tenantCode, orgCode, modelName, entityType.value, [entityType])
-					} catch (cacheError) {
-						// Continue if caching fails for individual entity type
-					}
-				}
-				console.log(
-					`💾 Cached ${entityTypes.length} entity types for model ${modelName} under user context: tenant:${tenantCode}:org:${orgCode}`
-				)
-			}
-
-			return entityTypes || []
-		} catch (error) {
-			console.error(`❌ Failed to get all entity types for model ${modelName}:`, error)
-			return []
-		}
-	},
-
-	/**
-	 * Get entity types for specific model with mentor org code resolution using standard cache
-	 * @param {string} tenantCode - Tenant code
-	 * @param {string} currentOrgCode - Current organization code
-	 * @param {string} mentorOrganizationId - Mentor's organization ID (numeric)
-	 * @param {string} modelName - Model name ('Session' or 'UserExtension')
-	 * @returns {Promise<Array>} Array of entity types
-	 */
-	async getEntityTypesWithMentorOrg(tenantCode, currentOrgCode, mentorOrganizationId, modelName) {
-		try {
-			// Step 1: Get mentor organization code using organization cache
-			let mentorOrgCode = null
-			if (mentorOrganizationId) {
-				try {
-					const mentorOrg = await organizations.get(tenantCode, currentOrgCode, mentorOrganizationId)
-					mentorOrgCode = mentorOrg?.organization_code
-				} catch (orgCacheError) {
-					console.warn('Organization cache lookup failed, falling back to database query')
-					// Fallback: Direct database query for organization code
-					const organisationExtensionQueries = require('@database/queries/organisationExtension')
-					const orgData = await organisationExtensionQueries.findOne(
-						{ organization_id: mentorOrganizationId },
-						tenantCode,
-						{ attributes: ['organization_code'], raw: true }
-					)
-					mentorOrgCode = orgData?.organization_code
-				}
-			}
-
-			// Step 2: Use mentor org code if available, otherwise current org code
-			const effectiveOrgCode = mentorOrgCode || currentOrgCode
-
-			// Step 3: Get entity types for the specific model and org
-			return await this.getAllEntityTypesForModel(tenantCode, effectiveOrgCode, modelName)
-		} catch (error) {
-			console.error('Failed to get entity types with mentor org resolution:', error)
-			return []
-		}
 	},
 }
 
