@@ -83,4 +83,19 @@ module.exports = class QuestionsData {
 			throw error
 		}
 	}
+
+	static async bulkCreate(records, tenantCode, options = {}) {
+		try {
+			const dataWithTenant = records.map((item) => ({
+				...item,
+				tenant_code: tenantCode,
+			}))
+			return await Question.bulkCreate(dataWithTenant, {
+				ignoreDuplicates: true,
+				...options,
+			})
+		} catch (error) {
+			throw error
+		}
+	}
 }

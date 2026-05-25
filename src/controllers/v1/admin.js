@@ -10,8 +10,8 @@ const adminService = require('@services/admin')
 const common = require('@constants/common')
 const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
-const userExtensionQueries = require('@database/queries/userExtension')
 const cacheHelper = require('@generics/cacheHelper')
+const userExtensionQueries = require('@database/queries/userExtension')
 
 module.exports = class admin {
 	/**
@@ -25,12 +25,16 @@ module.exports = class admin {
 
 	async userDelete(req) {
 		try {
+			// Check if the caller is an admin (allows cross-tenant deletions)
+			const isAdmin = req.decodedToken.roles?.some((role) => role.title === common.ADMIN_ROLE) || false
+
 			const userDelete = await adminService.userDelete(
 				req.query.userId,
 				req.decodedToken.id,
 				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code,
-				req.decodedToken.token
+				'',
+				isAdmin
 			)
 			return userDelete
 		} catch (error) {
@@ -88,23 +92,77 @@ module.exports = class admin {
 	async triggerPeriodicViewRefreshInternal(req) {
 		try {
 			// Internal method - can refresh for specific tenant or all tenants
-			if (!req.query.tenant_code) {
-				const tenants = await userExtensionQueries.getDistinctTenantCodes()
+			let tenantCode = null
+			let modelName = null
 
-				if (tenants.length > 0) {
-					return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name, tenants[0].code)
+			// Check if tenant_code and model_name are encoded in path parameter (id)
+			// Format: {tenantCode|modelName} - Express auto-decodes URL params
+			if (req.params.id) {
+				const parts = req.params.id.split('|')
+				if (parts.length === 2) {
+					tenantCode = parts[0]
+					modelName = parts[1]
 				}
-
-				return responses.successResponse({
-					statusCode: httpStatusCode.ok,
-					message: 'NO_TENANTS_FOUND',
-				})
 			}
 
-			// Specific tenantCode provided - refresh for that tenant only
-			return await adminService.triggerPeriodicViewRefreshInternal(req.query.model_name, req.query.tenant_code)
+			// If tenantCode is provided, refresh for that specific tenant
+			if (tenantCode) {
+				return await adminService.triggerPeriodicViewRefreshInternal(modelName, tenantCode)
+			} else {
+				// If no tenantCode provided, fetch all tenants dynamically and refresh for each
+				const tenants = await userExtensionQueries.getDistinctTenantCodes()
+				if (!tenants || tenants.length === 0) {
+					return responses.successResponse({
+						statusCode: httpStatusCode.ok,
+						message: 'NO_TENANTS_FOUND',
+						result: { tenantsProcessed: 0 },
+					})
+				}
+
+				// Process each tenant
+				const results = []
+				for (const tenant of tenants) {
+					const tenantCodeToProcess = tenant.code
+					// Skip invalid tenant codes
+					if (!tenantCodeToProcess || tenantCodeToProcess === 'undefined') {
+						continue
+					}
+					try {
+						const result = await adminService.triggerPeriodicViewRefreshInternal(
+							modelName,
+							tenantCodeToProcess
+						)
+						results.push({
+							tenantCode: tenantCodeToProcess,
+							modelName: modelName || 'all models',
+							success: result.statusCode === httpStatusCode.ok,
+							result: result.result,
+						})
+					} catch (error) {
+						results.push({
+							tenantCode: tenantCodeToProcess,
+							modelName: modelName || 'all models',
+							success: false,
+							error: error.message || 'Unknown error',
+						})
+					}
+				}
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'MATERIALIZED_VIEW_REFRESH_INITIATED_SUCCESSFULLY',
+					result: {
+						tenantsProcessed: results.length,
+						results: results,
+					},
+				})
+			}
 		} catch (err) {
-			console.log(err)
+			console.error('❌ Error in triggerPeriodicViewRefreshInternal:', err)
+			return responses.failureResponse({
+				statusCode: httpStatusCode.internal_server_error,
+				message: 'MATERIALIZED_VIEW_REFRESH_FAILED',
+				responseCode: 'SERVER_ERROR',
+			})
 		}
 	}
 

@@ -76,6 +76,25 @@ module.exports = {
 			.isInt()
 			.withMessage('parent_id is invalid,must be integer')
 
+		req.checkBody('meta')
+			.optional()
+			.custom((meta) => {
+				if (meta === null || typeof meta !== 'object' || Array.isArray(meta)) {
+					throw new Error('meta must be an object')
+				}
+				if (meta.filterType !== undefined) {
+					if (typeof meta.filterType !== 'string') {
+						throw new Error('filterType inside meta must be a string')
+					}
+					const filterType = meta.filterType.toUpperCase()
+					if (!['OR', 'AND'].includes(filterType)) {
+						throw new Error('filterType inside meta must be either OR or AND')
+					}
+					meta.filterType = filterType
+				}
+				return true
+			})
+
 		if (req.body.has_entities == false) {
 			req.checkBody('allow_filtering').custom((value) => {
 				if (value) {
@@ -156,6 +175,25 @@ module.exports = {
 			.withMessage('parent_id field is empty')
 			.isInt()
 			.withMessage('parent_id is invalid,must be integer')
+
+		req.checkBody('meta')
+			.optional()
+			.custom((meta) => {
+				if (meta === null || typeof meta !== 'object' || Array.isArray(meta)) {
+					throw new Error('meta must be an object')
+				}
+				if (meta.filterType !== undefined) {
+					if (typeof meta.filterType !== 'string') {
+						throw new Error('filterType inside meta must be a string')
+					}
+					const filterType = meta.filterType.toUpperCase()
+					if (!['OR', 'AND'].includes(filterType)) {
+						throw new Error('filterType inside meta must be either OR or AND')
+					}
+					meta.filterType = filterType
+				}
+				return true
+			})
 
 		if (req.body.has_entities == false) {
 			req.checkBody('allow_filtering').custom((value) => {

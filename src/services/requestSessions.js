@@ -41,7 +41,7 @@ module.exports = class requestSessionsHelper {
 
 	static async create(bodyData, userId, organizationCode, organizationId, SkipValidation, tenantCode) {
 		try {
-			const mentorUserExists = await cacheHelper.mentor.get(tenantCode, organizationCode, bodyData.requestee_id)
+			const mentorUserExists = await cacheHelper.mentor.get(tenantCode, bodyData.requestee_id)
 			if (!mentorUserExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -186,7 +186,6 @@ module.exports = class requestSessionsHelper {
 				result: SessionRequestResult,
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -271,7 +270,7 @@ module.exports = class requestSessionsHelper {
 				modelName,
 				'organization_code',
 				[],
-				[tenantCode]
+				tenantCode
 			)
 
 			const userDetailsMap = Object.fromEntries(oppositeUserDetails.map((u) => [u.user_id, u]))
@@ -316,7 +315,6 @@ module.exports = class requestSessionsHelper {
 				},
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -410,7 +408,7 @@ module.exports = class requestSessionsHelper {
 			}
 
 			// Check if mentee user exists - try cache first
-			let userExists = await cacheHelper.mentee.get(tenantCode, orgCode, getRequestSessionDetails.requestor_id)
+			let userExists = await cacheHelper.mentee.get(tenantCode, getRequestSessionDetails.requestor_id)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -517,12 +515,12 @@ module.exports = class requestSessionsHelper {
 			if (templateCode) {
 				emailForAcceptAndReject(
 					templateCode,
-					{ [Op.in]: [orgCode, defaults.orgCode] },
+					orgCode,
 					getRequestSessionDetails.requestor_id,
 					mentorUserId,
 					'',
-					{ [Op.in]: [tenantCode, defaults.tenantCode] },
-					true
+					tenantCode,
+					false
 				)
 			}
 
@@ -536,7 +534,6 @@ module.exports = class requestSessionsHelper {
 					: undefined,
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -598,7 +595,7 @@ module.exports = class requestSessionsHelper {
 			const templateCode = process.env.MENTOR_REJECT_SESSION_REQUEST_EMAIL_TEMPLATE
 			emailForAcceptAndReject(
 				templateCode,
-				{ [Op.in]: [tenantCode, defaults.tenantCode] },
+				orgCode,
 				rejectedData[0].dataValues.requestor_id,
 				userId,
 				bodyData.reason,
@@ -611,7 +608,6 @@ module.exports = class requestSessionsHelper {
 				message: 'SESSION_REQUEST_REJECTED',
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -706,7 +702,6 @@ module.exports = class requestSessionsHelper {
 				result: requestSessions,
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -786,7 +781,6 @@ module.exports = class requestSessionsHelper {
 				message: 'SESSION_REQUEST_EXPIRED',
 			})
 		} catch (error) {
-			console.error(error)
 			throw error
 		}
 	}
@@ -865,7 +859,6 @@ async function emailForAcceptAndReject(
 		})
 
 	const orgCodes = [orgCode, defaults.orgCode]
-	const tenantCodes = [tenantCode, defaults.tenantCode]
 	// send mail to mentors on session creation if session created by manager
 	const templateData = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, emailTemplateCode)
 

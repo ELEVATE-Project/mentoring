@@ -1,4 +1,5 @@
 const Resources = require('../models/index').Resources
+const Session = require('../models/index').Session
 
 module.exports = class ResourcessData {
 	static async bulkCreate(data, tenantCode) {
@@ -69,27 +70,25 @@ module.exports = class ResourcessData {
 		}
 	}
 
-	static async deleteResourceByIdWithSessionValidation(resourceId, tenantCode) {
+	static async deleteResourceByIdWithSessionValidation(resourceId, sessionId, tenantCode) {
 		try {
-			// Sequelize approach: Find resource with session validation through association
-			const resource = await Resources.findOne({
-				where: { id: resourceId, tenant_code: tenantCode },
-				include: [
-					{
-						model: Resources.sequelize.models.Sessions,
-						as: 'session',
-						where: { tenant_code: tenantCode },
-						attributes: ['id'], // Only verify session exists
-					},
-				],
+			// Validate session belongs to tenant
+			const sessionExists = await Session.count({
+				where: { id: sessionId, tenant_code: tenantCode },
 			})
 
-			if (!resource) {
-				return 0 // No resource found or session invalid
-			}
+			if (!sessionExists) return 0
 
-			await resource.destroy()
-			return 1 // Successfully deleted
+			// Delete resource in same tenant+session scope
+			const deletedCount = await Resources.destroy({
+				where: {
+					id: resourceId,
+					session_id: sessionId,
+					tenant_code: tenantCode,
+				},
+			})
+
+			return deletedCount > 0 ? 1 : 0
 		} catch (error) {
 			return error
 		}

@@ -131,7 +131,7 @@ module.exports = class questionsSetHelper {
 
 			const filter = {
 				id: questionsSetId,
-				tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] },
+				tenant_code: tenantCode,
 			}
 			if (questionSetCode) {
 				filter.code = questionSetCode

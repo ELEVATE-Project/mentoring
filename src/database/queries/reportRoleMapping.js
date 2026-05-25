@@ -56,14 +56,41 @@ module.exports = class ReportRoleMappingQueries {
 		}
 	}
 
-	static async findReportRoleMappingByReportCode(reportCode, tenantCodes, organizationCodes) {
+	static async findReportRoleMappingByReportCode(reportCode, tenantCode, organizationCodes) {
 		try {
 			return await ReportRoleMapping.findOne({
 				where: {
 					report_code: reportCode,
-					tenant_code: { [Op.in]: tenantCodes },
+					tenant_code: tenantCode,
 					organization_code: { [Op.in]: organizationCodes },
 				},
+			})
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async findAllByFilter(filter, tenantCode) {
+		try {
+			filter.tenant_code = tenantCode
+			return await ReportRoleMapping.findAll({
+				where: filter,
+				raw: true,
+			})
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async bulkCreate(records, tenantCode, options = {}) {
+		try {
+			const dataWithTenant = records.map((item) => ({
+				...item,
+				tenant_code: tenantCode,
+			}))
+			return await ReportRoleMapping.bulkCreate(dataWithTenant, {
+				ignoreDuplicates: true,
+				...options,
 			})
 		} catch (error) {
 			throw error

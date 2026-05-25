@@ -17,6 +17,7 @@ const notificationQueries = require('@database/queries/notificationTemplate')
 const kafkaCommunication = require('@generics/kafka-communication')
 const mentorExtensionQueries = require('@database/queries/mentorExtension')
 const cacheHelper = require('@generics/cacheHelper')
+const getOrgIdAndEntityTypes = require('@helpers/getOrgIdAndEntityTypewithEntitiesBasedOnPolicy')
 
 module.exports = class ConnectionHelper {
 	/**
@@ -43,7 +44,7 @@ module.exports = class ConnectionHelper {
 	static async initiate(bodyData, userId, tenantCode, orgCode) {
 		try {
 			// Check if the target user exists using cache with automatic DB fallback
-			const userExists = await cacheHelper.mentee.get(tenantCode, orgCode, bodyData.user_id, false)
+			const userExists = await cacheHelper.mentee.get(tenantCode, bodyData.user_id)
 			if (!userExists) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -125,7 +126,7 @@ module.exports = class ConnectionHelper {
 			const userExtensionsModelName = await userExtensionQueries.getModelName()
 
 			// Use getCacheOnly first, then fallback to database query if cache miss
-			let userDetails = await cacheHelper.mentee.getCacheOnly(tenantCode, defaults.orgCode, friendId)
+			let userDetails = await cacheHelper.mentee.getCacheOnly(tenantCode, friendId)
 
 			if (!userDetails) {
 				userDetails = await userExtensionQueries.getMenteeExtension(
@@ -155,6 +156,12 @@ module.exports = class ConnectionHelper {
 					message: 'USER_NOT_FOUND',
 				})
 			}
+
+			// Remove email from response - not needed for connection details
+			if (userDetails.email) {
+				delete userDetails.email
+			}
+
 			userDetails.image &&= (await userRequests.getDownloadableUrl(userDetails.image))?.result
 
 			// Fetch entity types associated with the user
@@ -249,7 +256,7 @@ module.exports = class ConnectionHelper {
 				userExtensionsModelName,
 				'organization_code',
 				[],
-				[tenantCode]
+				tenantCode
 			)
 
 			const friendDetailsMap = friendDetails.reduce((acc, friend) => {
@@ -436,6 +443,18 @@ module.exports = class ConnectionHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
+			const [mentorPolicyOrgs, menteePolicyOrgs] = await Promise.all([
+				getOrgIdAndEntityTypes.getOrganizationIdBasedOnPolicy(userId, orgCode, common.MENTOR_ROLE, tenantCode),
+				getOrgIdAndEntityTypes.getOrganizationIdBasedOnPolicy(userId, orgCode, common.MENTEE_ROLE, tenantCode),
+			])
+			const connectionOrgCodes = [
+				...new Set([
+					...(mentorPolicyOrgs?.result?.organizationCodes || []),
+					...(menteePolicyOrgs?.result?.organizationCodes || []),
+				]),
+			]
+			if (connectionOrgCodes.length === 0) connectionOrgCodes.push(orgCode)
+
 			// Fetch validation data for filtering connections (excluding roles) - using cache with fallback
 			const validationData = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
 				{
@@ -444,7 +463,7 @@ module.exports = class ConnectionHelper {
 					model_names: { [Op.contains]: [userExtensionsModelName] },
 				},
 				tenantCode,
-				orgCode,
+				connectionOrgCodes,
 				userExtensionsModelName
 			)
 
@@ -488,7 +507,7 @@ module.exports = class ConnectionHelper {
 					userExtensionsModelName,
 					'organization_code',
 					[],
-					[tenantCode]
+					tenantCode
 				)
 			}
 			const userIds = extensionDetails.data.map((item) => item.user_id)
@@ -535,12 +554,12 @@ module.exports = class ConnectionHelper {
 				{
 					attributes: ['name', 'email', 'user_id'],
 				},
-				false,
-				tenantCode
+				tenantCode,
+				false
 			)
 
 			// Get mentor details using getCacheOnly first, then fallback to database query
-			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, mentorId)
+			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, mentorId)
 
 			if (!mentorDetails) {
 				mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], true, tenantCode)
@@ -567,7 +586,6 @@ module.exports = class ConnectionHelper {
 				})
 			}
 
-			const tenantCodes = [tenantCode, defaults.tenantCode]
 			const orgCodes = [orgCode, defaults.orgCode]
 
 			// Get email template
@@ -618,12 +636,12 @@ module.exports = class ConnectionHelper {
 				{
 					attributes: ['name', 'email', 'user_id'],
 				},
-				false,
-				tenantCode
+				tenantCode,
+				false
 			)
 
 			// Get mentor details using getCacheOnly first, then fallback to database query
-			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, mentorId)
+			let mentorDetails = await cacheHelper.mentor.getCacheOnly(tenantCode, mentorId)
 
 			if (!mentorDetails) {
 				mentorDetails = await mentorExtensionQueries.getMentorExtension(mentorId, ['name'], false, tenantCode)
@@ -649,7 +667,6 @@ module.exports = class ConnectionHelper {
 				})
 			}
 
-			const tenantCodes = [tenantCode, defaults.tenantCode]
 			const orgCodes = [orgCode, defaults.orgCode]
 
 			// Get email template
@@ -701,11 +718,12 @@ module.exports = class ConnectionHelper {
 			}
 
 			const userInfo = await communicationHelper.resolve(friend_id, tenantCode)
+
 			if (!userInfo) {
 				return responses.failureResponse({
 					responseCode: 'CLIENT_ERROR',
 					statusCode: httpStatusCode.not_found,
-					message: USER_NOT_FOUND,
+					message: 'USER_NOT_FOUND',
 				})
 			}
 

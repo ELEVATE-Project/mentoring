@@ -290,7 +290,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/form/createForm400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/form/update/{formId}:
     put:
       operationId: formUpdate
@@ -468,7 +479,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/form/updateForm400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/form/read/{formId}:
     post:
       operationId: formRead
@@ -666,7 +688,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/form/readForm400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/entity/create:
     post:
       summary: Create entity
@@ -780,7 +813,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
     parameters:
       - in: path
         name: ''
@@ -916,7 +960,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/updateUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/entity/read/{id}:
     post:
       summary: Get entity details
@@ -1179,7 +1234,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/deleteUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/list?page={page}&limit={limit}&status={status}&search={search}:
     get:
       summary: Get list of sessions
@@ -1319,7 +1385,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/getSessionList400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/details/{sessionId}:
     get:
       summary: Get session details
@@ -1483,7 +1560,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/getSessionDetails400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/share/{sessionId}:
     get:
       summary: Share session details
@@ -1550,7 +1638,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/shareSession400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/enroll/{sessionId}:
     post:
       summary: Enroll for a session
@@ -1589,13 +1688,35 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/enrollSession200Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
         '400':
           description: Bad Request. The user is already enrolled for the session.
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/enrollSession400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/unenroll/{sessionId}:
     post:
       summary: Cancel enrollment from a session
@@ -1634,13 +1755,35 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/unenrollSession200Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
         '400':
           description: Bad Request. The user is not enrolled for the session.
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/unenrollSession400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/start/{sessionId}:
     get:
       summary: Start Session
@@ -1679,19 +1822,52 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/startSession200Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
         '400':
           description: Bad Request. The session could not be found.
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/startSession400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
         '500':
           description: Bad Request. Unable to create a meeting.
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/startSession500Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/update:
     post:
       summary: Create Session
@@ -1880,7 +2056,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/createSession400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/update/{sessionId}:
     delete:
       summary: Delete session
@@ -1947,7 +2134,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/deleteSession400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
     post:
       summary: Update session
       tags:
@@ -2131,7 +2329,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/updateSession400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/getRecording/{sessionId}:
     get:
       summary: Get session recording
@@ -2170,13 +2379,35 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/sessionRecording200Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
         '400':
           description: Bad Request.
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/sessionRecording400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/completed/{sessionId}:
     patch:
       summary: Update session status
@@ -2214,7 +2445,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/sessionCompleted200Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/sessions/updateRecordingUrl/{internalSessionId}:
     patch:
       summary: Update session recording url
@@ -2253,13 +2495,35 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/updateRecordingUrl200Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
         '400':
           description: Bad Request.
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/updateRecordingUrl400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/mentees/sessions?enrolled={enrolled}&page={page}&limit={limit}:
     get:
       summary: Get list of enrolled session
@@ -2434,7 +2698,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/mentees/menteeSession400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: SESSION_NOT_FOUND
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/mentees/joinSession/{sessionId}:
     get:
       summary: Join session as mentee
@@ -2505,7 +2780,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/mentees/menteeJoinSession400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: JOIN_SESSION_ERROR
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/mentees/reports?filterType={filterType}:
     get:
       summary: Mentee reports
@@ -3002,7 +3288,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/mentors/mentorProfile400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: MENTOR_NOT_FOUND
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/mentors/reports?filterType={filterType}:
     get:
       summary: Mentors reports
@@ -3202,7 +3499,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/mentors/upcomingSession400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: MENTOR_NOT_FOUND
+                  result:
+                    type: object
+                  meta:
+                    type: object
     parameters: []
   /mentoring/v1/questions/create:
     post:
@@ -3636,7 +3944,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/questions/updateQuestionResponse400'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/questions/read/{QuestionId}:
     get:
       summary: Get questions
@@ -3773,7 +4092,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/questions/readQuestionResponse400'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/question-set/create:
     post:
       summary: Create question set
@@ -3881,7 +4211,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/questionset/createQuestionSetResponse400'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/question-set/update/{QuestionSetId}: &ref_10
     patch:
       summary: Update question set
@@ -3995,7 +4336,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/questionset/updateQuestionSetResponse400'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/question-set/read/{QuestionSetId}:
     post:
       summary: Get question set
@@ -4086,7 +4438,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/questionset/readQuestionSetResponse400'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/feedback/forms/{SessionId}:
     get:
       summary: Get feedback form
@@ -4209,7 +4572,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/feedback/getFeedbackFormResponse400'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/feedback/submit/{SessionId}:
     post:
       summary: Submit feedback
@@ -4267,19 +4641,52 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/feedback/submitFeedbackResponse200'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
         '400':
           description: Bad Request
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/feedback/submitFeedbackResponse400'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
         '422':
           description: Unprocessable Entity
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/feedback/submitFeedbackResponse422'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/users/pendingFeedbacks:
     get:
       summary: Users pending feedback
@@ -4431,7 +4838,6 @@ paths:
             application.json:
               schema:
                 $ref: >-
-                  #/components/schemas/cloudServices/cloudServicesDownloadResponse200
   /mentoring/v1/users/list?type={userType}&page={page}&limit={limit}&search={search}:
     get:
       summary: List user
@@ -4606,7 +5012,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/mentors/shareMentorProfile400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: MENTOR_NOT_FOUND
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/issues/create:
     post:
       summary: Report an issue
@@ -5400,13 +5817,35 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/users/filterList200Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
         '400':
           description: Bad Request. User Entity already exists.
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/entity-type/create:
     post:
       summary: Create entity type
@@ -5457,6 +5896,15 @@ paths:
                   type: string
                 type:
                   type: string
+                meta:
+                  type: object
+                  properties:
+                    filterType:
+                      type: string
+                      enum:
+                        - OR
+                        - AND
+
             examples:
               example1:
                 value:
@@ -5469,6 +5917,8 @@ paths:
                   required: true
                   status: ACTIVE
                   type: SYSTEM
+                  meta:
+                    filterType: OR
               example2:
                 value:
                   value: pgender
@@ -5523,6 +5973,11 @@ paths:
                         type: 'null'
                       has_entities:
                         type: boolean
+                      meta:
+                        type: object
+                        properties:
+                          filterType:
+                            type: string
                   field_0:
                     type: string
                   meta:
@@ -5549,6 +6004,8 @@ paths:
                       updated_at: '2023-09-22T12:40:19.817Z'
                       created_at: '2023-09-22T12:40:19.817Z'
                       has_entities: true
+                      meta:
+                        filterType: OR
                     meta:
                       correlation: 3babe76b-d277-4073-8a59-8dfb94face9b
                       meeting_platform: BBB
@@ -5557,7 +6014,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
     parameters: &ref_3
       - in: path
         name: ''
@@ -5715,7 +6183,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/entity-type/update/{id}:
     post:
       summary: Update entity type
@@ -5767,6 +6246,14 @@ paths:
                   type: boolean
                 required:
                   type: boolean
+                meta:
+                  type: object
+                  properties:
+                    filterType:
+                      type: string
+                      enum:
+                        - OR
+                        - AND
             examples:
               example1:
                 value:
@@ -5779,6 +6266,8 @@ paths:
                     - UserExtension
                   allow_filtering: true
                   required: true
+                  meta:
+                    filterType: OR
               example2:
                 value:
                   value: pgender
@@ -5835,6 +6324,11 @@ paths:
                         type: string
                       has_entities:
                         type: boolean
+                      meta:
+                        type: object
+                        properties:
+                          filterType:
+                            type: string
                   meta:
                     type: object
                     properties:
@@ -5861,6 +6355,8 @@ paths:
                       deleted_at: null
                       organization_id: '1'
                       has_entities: true
+                      meta:
+                        filterType: OR
                     meta:
                       correlation: 5f384234-cd5a-467e-a5ac-b43365d2a7a3
                       meeting_platform: BBB
@@ -5869,7 +6365,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/entity-type/delete/{id}:
     delete:
       summary: Delete entity type
@@ -5936,7 +6443,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/org-admin/roleChange:
     post:
       summary: To change a users role
@@ -7009,7 +7527,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/mentors/shareMentorProfile400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: MENTOR_NOT_FOUND
+                  result:
+                    type: object
+                  meta:
+                    type: object
     parameters:
       - in: path
         name: area_of_expertise
@@ -7158,7 +7687,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/mentors/shareMentorProfile400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: MENTOR_NOT_FOUND
+                  result:
+                    type: object
+                  meta:
+                    type: object
     parameters: []
   /mentoring/v1/permissions/create:
     post:
@@ -7397,7 +7937,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/permissions/delete/{id}:
     delete:
       summary: Delete permissions by id
@@ -7456,7 +8007,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/permissions/list?page={page}&limit={limit}&search={search}:
     get:
       summary: Get list of permissions
@@ -7565,7 +8127,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/getSessionList400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/modules/create:
     post:
       summary: Creating new modules
@@ -7765,7 +8338,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/modules/delete/{id}:
     delete:
       summary: Delete modules by id
@@ -7830,7 +8414,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/modules/list?page={page}&limit={limit}&search={search}:
     get:
       summary: Get list of modules
@@ -7942,7 +8537,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/sessions/getSessionList400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/rolePermissionMapping/create/{role_id}:
     post:
       summary: Creating new role permission mapping
@@ -8126,7 +8732,18 @@ paths:
           content:
             application.json:
               schema:
-                $ref: '#/components/schemas/entity/createUserEntity400Response'
+                type: object
+                properties:
+                  responseCode:
+                    type: string
+                    example: CLIENT_ERROR
+                  message:
+                    type: string
+                    example: BAD_REQUEST
+                  result:
+                    type: object
+                  meta:
+                    type: object
   /mentoring/v1/org-admin/uploadSampleCSV:
     post:
       summary: Upload Sample CSV
@@ -14629,7 +15246,6 @@ paths:
         `required`
 
         * This is a mandatory parameter and cannot be empty or null.
-
   /mentoring/v1/connections/initiate:
     post:
       summary: Initiate connection with a user
@@ -17195,2579 +17811,6 @@ components:
                       errMsg: "Missing 'url' for enabled service: postgres"
                     status: 400
                     result: {}
-components:
-  schemas:
-    form:
-      createFormRequest:
-        type: object
-        required:
-          - type
-          - subType
-          - action
-          - data
-        properties:
-          type:
-            type: string
-            example: profile
-          subType:
-            type: string
-            example: profileForm
-          action:
-            type: string
-            example: profileFields
-          data:
-            type: object
-            properties:
-              templateName:
-                type: string
-                example: defaultTemplate
-              fields:
-                type: object
-                properties:
-                  controls:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                          example: name
-                        label:
-                          type: string
-                          example: name
-                        value:
-                          type: string
-                          example: ''
-                        class:
-                          type: string
-                          example: ion-margin
-                        type:
-                          type: string
-                          example: text
-                        position:
-                          type: string
-                          example: floating
-                        validators:
-                          type: object
-                          properties:
-                            required:
-                              type: boolean
-                              example: true
-                            minLength:
-                              type: number
-                              example: 10
-      createForm200Response:
-        description: Created
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Form created successfully
-          result:
-            type: array
-            example: []
-      createForm400Response:
-        description: Bad Request. Form Already Exist
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Form already exists
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      updateFormRequest:
-        type: object
-        required:
-          - type
-          - subType
-          - action
-          - data
-        properties:
-          type:
-            type: string
-            example: profile
-          subType:
-            type: string
-            example: profileForm
-          action:
-            type: string
-            example: profileFields
-          data:
-            type: object
-            properties:
-              templateName:
-                type: string
-                example: defaultTemplate
-              fields:
-                type: object
-                properties:
-                  controls:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                          example: name
-                        label:
-                          type: string
-                          example: name
-                        value:
-                          type: string
-                          example: ''
-                        class:
-                          type: string
-                          example: ion-margin
-                        type:
-                          type: string
-                          example: text
-                        position:
-                          type: string
-                          example: floating
-                        validators:
-                          type: object
-                          properties:
-                            required:
-                              type: boolean
-                              example: true
-                            minLength:
-                              type: number
-                              example: 10
-      updateForm200Response:
-        description: Updated
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Form updated successfully
-          result:
-            type: array
-            example: []
-      updateForm400Response:
-        description: Bad Request. Form Already Exist
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Form already exists
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      readFormRequest:
-        type: object
-        properties:
-          type:
-            type: string
-            example: profile
-          subType:
-            type: string
-            example: profileForm
-          action:
-            type: string
-            example: profileFields
-          templateName:
-            type: string
-            example: defaultTemplate
-      readForm200Response:
-        description: Read
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Form fetched successfully
-          result:
-            type: object
-            properties:
-              type:
-                type: string
-                example: profile
-              subType:
-                type: string
-                example: profileForm
-              action:
-                type: string
-                example: profileFields
-              updated_at:
-                type: string
-                example: '2022-05-24T23:14:10.080Z'
-              created_at:
-                type: string
-                example: '2022-05-24T23:14:10.080Z'
-              __v:
-                type: number
-                example: 0
-              _id:
-                type: string
-                example: 628d66c28069a73506cb4b2d
-              data:
-                type: object
-                properties:
-                  templateName:
-                    type: string
-                    example: defaultTemplate
-                  fields:
-                    type: object
-                    properties:
-                      controls:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            name:
-                              type: string
-                              example: name
-                            label:
-                              type: string
-                              example: name
-                            value:
-                              type: string
-                              example: ''
-                            class:
-                              type: string
-                              example: ion-margin
-                            type:
-                              type: string
-                              example: text
-                            position:
-                              type: string
-                              example: floating
-                            validators:
-                              type: object
-                              properties:
-                                required:
-                                  type: boolean
-                                  example: true
-                                minLength:
-                                  type: number
-                                  example: 10
-      readForm400Response:
-        description: Bad Request. Form not found
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Form not found
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-    entity:
-      createUserEntityRequest:
-        type: object
-        required:
-          - value
-          - label
-          - type
-        properties:
-          value:
-            type: string
-            example: HM
-          label:
-            type: string
-            example: Head Master
-          type:
-            type: string
-            example: roles
-      createUserEntity201Response:
-        type: object
-        description: User entity created
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: User entity created successfully
-          result:
-            type: array
-            example: []
-      createUserEntity400Response:
-        type: object
-        description: User entity already exist
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: User entity already exists
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      updateUserEntityRequest:
-        type: object
-        description: User entity update request
-        required:
-          - value
-          - label
-          - type
-          - status
-        properties:
-          value:
-            type: string
-            example: HM
-          label:
-            type: string
-            example: Head Master
-          status:
-            type: string
-            example: DISABLED
-          type:
-            type: string
-            example: roles
-      updateUserEntity202Response:
-        type: object
-        description: User Entity Updated
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: User entity updated successfully
-          result:
-            type: array
-            example: []
-      updateUserEntity400Response:
-        type: object
-        description: User Entity Not Found
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: User entity not found
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      readUserEntity200Response:
-        description: User Entity fetched
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: User entity fetched successfully
-          result:
-            type: array
-            items:
-              type: object
-              properties:
-                value:
-                  type: string
-                  example: HM
-                label:
-                  type: string
-                  example: Head Master
-      deleteUserEntity202Response:
-        type: object
-        description: User Entity Deleted
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: User entity deleted successfully
-          result:
-            type: array
-            example: []
-      deleteUserEntity400Response:
-        type: object
-        description: User Entity Deleted
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: User entity already deleted
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-    sessions:
-      getSessionList200Response:
-        description: list of all sessions
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Session fetched successfully.
-          result:
-            type: object
-            properties:
-              count:
-                type: integer
-              rows:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                      example: 1
-                    title:
-                      type: string
-                      example: Leadership session by Adam
-                    mentor_id:
-                      type: string
-                      example: 21
-                    description:
-                      type: string
-                      example: Leadership session desc
-                    status:
-                      type: string
-                      example: PUBLISHED
-                    start_date:
-                      type: string
-                      example: 1695210731
-                    end_date:
-                      type: string
-                      example: 1695214329
-                    image:
-                      type: array
-                      items:
-                        example: >-
-                          https://aws-bucket-storage-name.s3.ap-south-1.amazonaws.com/users/1232s2133sdd1-12e2dasd3123.png
-                    created_at:
-                      type: string
-                      example: 2023-09-20T11:56:42.257Z,
-                    meeting_info.value:
-                      type: string
-                      example: BBB
-                    meeting_info.platform:
-                      type: string
-                      example: BigBlueButton (Default)
-                    mentor_name:
-                      type: string
-                      example: Newell
-      getSessionList400Response:
-        type: object
-        description: Session not found.
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Session not found.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      getSessionDetails200Response:
-        description: Details of session
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Session fetched successfully.
-          result:
-            type: object
-            properties:
-              id:
-                type: integer
-                example: 1
-              title:
-                type: string
-                example: Leadership session by Adam
-              mentor_id:
-                type: string
-                example: 21
-              description:
-                type: string
-                example: Leadership session desc
-              status:
-                type: string
-                example: PUBLISHED
-              start_date:
-                type: string
-                example: 1695210731
-              end_date:
-                type: string
-                example: 1695214329
-              image:
-                type: array
-                items:
-                  example: >-
-                    https://aws-bucket-storage-name.s3.ap-south-1.amazonaws.com/users/1232s2133sdd1-12e2dasd3123.png
-              created_at:
-                type: string
-                example: 2023-09-20T11:56:42.257Z,
-              session_reschedule:
-                type: integer
-                example: 0
-              time_zone:
-                type: string
-                example: Asia/Calcutta
-              started_at:
-                type: string
-                format: nullable
-              completed_at:
-                type: string
-                format: nullable
-              is_feedback_skipped:
-                type: boolean
-                example: false
-              mentee_feedback_question_set:
-                type: string
-                example: MENTEE_QS1
-              mentor_feedback_question_set:
-                type: string
-                example: MENTOR_QS2
-              meeting_info:
-                type: object
-                properties:
-                  value:
-                    type: string
-                    example: BBB
-                  platform:
-                    type: string
-                    example: BigBlueButton (Default)
-              meta:
-                type: string
-                format: nullable
-              visibility:
-                type: string
-                format: nullable
-              organization_ids:
-                type: string
-                format: nullable
-              mentor_organization_id:
-                type: string
-                example: 1
-              seats_remaining:
-                type: integer
-                example: 25
-              seats_limit:
-                type: integer
-                example: 25
-              updated_at:
-                type: string
-                example: '2023-09-20T11:56:42.412Z'
-              deleted_at:
-                type: string
-                example: null
-              is_enrolled:
-                type: boolean
-                example: false
-              mentor_name:
-                type: string
-                example: Newell
-          meta:
-            type: object
-            example: {}
-      getSessionDetails400Response:
-        type: object
-        description: Session not found.
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Session not found.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      shareSession200Response:
-        description: share session details
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Session link generated successfully.
-          result:
-            type: object
-            properties:
-              shareLink:
-                type: string
-                example: 45fd48791a7a9d589aaa2d1b7f3f8dd7
-          meta: {}
-      shareSession400Response:
-        description: Session not found.
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Session not found.
-          error:
-            type: array
-            example: []
-      enrollSession200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: You have successfully enrolled for this session.
-          result:
-            type: array
-            example: []
-          meta: {}
-      enrollSession400Response:
-        description: Session not found.
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: User is already enrolled for this session.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      unenrollSession200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: You are no longer enrolled in this session.
-          result:
-            type: array
-            example: []
-          meta: {}
-      unenrollSession400Response:
-        description: Session not found.
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: User is not enrolled for this session.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      startSession200Response:
-        description: Share session details
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Successfully fetched the link for starting the session.
-          result:
-            type: object
-            properties:
-              link:
-                type: string
-                example: >-
-                  https://dev.mentoring.shikshalokam.org/bigbluebutton/api/join?meetingID=628dae0fce0ce9359aeb8b23&password=$2a$10$PI3yKdwMSbPkl5hn1043n.L3ooeRqnlx024h2EmGfSxxrGy76cwW2&fullName=Ankit&checksum=02261702f22f1c405d39e8bb3dd1f1b88646a4ed
-          meta: {}
-      startSession400Response:
-        description: Session not found.
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example:
-              - Session not found.
-              - Mentor not found.
-              - The user is not a mentor.
-              - You cannot start another mentor's session.
-              - You can start the session 10 minutes before the scheduled time.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      startSession500Response:
-        description: Could not create meeting.
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: SERVER_ERROR
-          message:
-            type: string
-            example: Unable to create the meeting.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      createSessionRequest:
-        type: object
-        required:
-          - title
-          - description
-          - start_date
-          - end_date
-          - recommended_for
-          - categories
-          - medium
-        properties:
-          title:
-            type: string
-            example: testing
-          description:
-            type: string
-            example: Training in leadership
-          start_date:
-            type: string
-            example: '1695210731'
-          end_date:
-            type: string
-            example: '1695214329'
-          recommended_for:
-            type: array
-            items:
-              type: string
-            example:
-              - hm
-          categories:
-            type: array
-            items:
-              type: string
-            example:
-              - Educational leadership
-          medium:
-            type: array
-            items:
-              type: string
-            example:
-              - 1
-          image:
-            type: array
-            items:
-              type: string
-              example: users/1232s2133sdd1-12e2dasd3123.png
-      createSession201Response:
-        type: object
-        description: User entity created
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Session created successfully.
-          result:
-            type: object
-            properties:
-              title:
-                type: string
-                example: Leadership session by Adam
-              description:
-                type: string
-                example: Training in leadership
-              start_date:
-                type: string
-                example: 1695210731
-              end_date:
-                type: string
-                example: 1695214329
-              recommended_for:
-                type: array
-                items:
-                  type: string
-                example:
-                  - hm
-              categories:
-                type: array
-                items:
-                  type: string
-                example:
-                  - Educational leadership
-              medium:
-                type: array
-                items:
-                  type: string
-                example:
-                  - 1
-              image:
-                type: array
-                items:
-                  type: string
-                  example: users/1232s2133sdd1-12e2dasd3123.png
-              mentor_id:
-                type: string
-                example: 21
-              mentor_name:
-                type: string
-                example: John
-              status:
-                type: string
-                example: PUBLISHED
-              deleted_at:
-                type: string
-                example: null
-              is_feedback_skipped:
-                type: boolean
-                example: false
-              mentee_feedback_question_set:
-                type: string
-                example: MENTEE_QS1
-              mentor_feedback_question_set:
-                type: string
-                example: MENTOR_QS2
-              id:
-                type: string
-                example: 1
-              created_at:
-                type: string
-                example: 2023-09-20T11:56:42.257Z,
-              updated_at:
-                type: string
-                example: '2023-09-20T11:56:42.412Z'
-      createSession400Response:
-        description: Create Session Error.
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example:
-              - User does not have the requisite permissions.
-              - End time should be atleast 30 minutes after the start time.
-              - >-
-                Session cannot be created! Session duration should be less than
-                24 hours.
-          error:
-            type: array
-            example: []
-      deleteSession202Response:
-        description: Delete session
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Session successfully deleted. This session is no longer available.
-          result:
-            type: array
-            example: []
-          meta: {}
-      deleteSession400Response:
-        description: Delete session
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Session not found.
-          result:
-            type: array
-            example: []
-      updateSessionRequest:
-        type: object
-        properties:
-          title:
-            type: string
-            example: Leadership session by Adam
-          description:
-            type: string
-            example: Leadership session desc
-          start_date:
-            type: string
-            example: 1695210731
-          end_date:
-            type: string
-            example: 1695214329
-          mentee_feedback_question_set:
-            type: string
-            example: MENTEE_QS1
-          mentor_feedback_question_set:
-            type: string
-            example: MENTOR_QS2
-          recommended_for:
-            type: array
-            items:
-              type: string
-            example:
-              - hm
-          categories:
-            type: array
-            items:
-              type: string
-            example:
-              - Educational leadership
-          medium:
-            type: array
-            items:
-              type: string
-            example:
-              - 1
-          image:
-            type: array
-            items:
-              type: string
-              example: users/1232s2133sdd1-12e2dasd3123.png
-      updateSession202Response:
-        description: Updated the session
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Your session details have been updated.
-          result:
-            type: array
-            example: []
-          meta: {}
-      updateSession400Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Session not found.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      sessionRecording200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          result:
-            type: object
-            properties:
-              recording:
-                type: object
-                properties:
-                  recordID:
-                    type: string
-                    example: 26254f85cea8aa71d38c11f10acdbf5951ddbf5f-1650616238241
-                  meetingID:
-                    type: string
-                    example: 626267aa2832e6cea85aa435
-                  internalMeetingID:
-                    type: string
-                    example: 26254f85cea8aa71d38c11f10acdbf5951ddbf5f-1650616238241
-                  name:
-                    type: string
-                    example: Okkkk
-                  isBreakout:
-                    type: boolean
-                    example: false
-                  published:
-                    type: boolean
-                    example: true
-                  state:
-                    type: string
-                    example: published
-                  startTime:
-                    type: string
-                    example: 1650616238241
-                  endTime:
-                    type: string
-                    example: 1650616245013
-                  participants:
-                    type: string
-                    example: 1
-                  rawSize:
-                    type: string
-                    example: 35425
-                  metadata:
-                    type: object
-                    properties:
-                      meetingName:
-                        type: string
-                        example: Okkkk
-                      isBreakout:
-                        type: boolean
-                        example: false
-                      endcallbackurl:
-                        type: string
-                        example: >-
-                          https://elevate-apis.shikshalokam.org/mentoring/v1/sessions/completed/626267aa2832e6cea85aa435
-                      meetingId:
-                        type: string
-                        example: 626267aa2832e6cea85aa435
-                  size:
-                    type: string
-                    example: 27256
-                  playback:
-                    type: object
-                    properties:
-                      format:
-                        type: object
-                        properties:
-                          type:
-                            type: string
-                            example: video
-                          url:
-                            type: string
-                            example: >-
-                              https://mentoring.shikshalokam.org/presentation/26254f85cea8aa71d38c11f10acdbf5951ddbf5f-1650616238241/meeting.mp4
-                          processingTime:
-                            type: string
-                            example: 576
-                          length:
-                            type: string
-                            example: 0
-                          size:
-                            type: string
-                            example: 27256
-                  data:
-                    type: object
-                    example: {}
-          meta:
-            type: object
-            example: {}
-      sessionRecording400Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Session not found.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      sessionCompleted200Response:
-        type: object
-        properties:
-          result:
-            type: string
-            example: SESSION_UPDATED
-      updateRecordingUrl200Response:
-        type: object
-        properties:
-          message:
-            type: string
-            example: Your session details have been updated.
-          result:
-            type: object
-            example: {}
-      updateRecordingUrl400Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Session not found.
-          error:
-            type: array
-            example: []
-    mentees:
-      menteeSessionList200Response:
-        description: List of all sessions
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Session fetched successfully.
-          result:
-            type: object
-            properties:
-              data:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    _id:
-                      type: string
-                      example: 628dae0fce0ce9359aeb8b23
-                    title:
-                      type: string
-                      example: Leadership5
-                    description:
-                      type: string
-                      example: Training in leadership
-                    image:
-                      type: array
-                      items:
-                        type: string
-                        example: '["users/1232s2133sdd1-12e2dasd3123.png"]'
-                    mentorName:
-                      type: string
-                      example: Ankit
-                    status:
-                      type: string
-                      example: published
-                    startDate:
-                      type: string
-                      example: '2022-01-04 18:00:00'
-                    endDate:
-                      type: string
-                      example: '2022-01-04 18:30:00'
-                    endDateUtc:
-                      type: string
-                      example: Invalid date
-              count:
-                type: number
-                example: 1
-          meta:
-            type: object
-            example: {}
-      menteeSession400Response:
-        type: object
-        description: Session not found.
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Session not found.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      menteeJoinSession200Response:
-        description: Share session details
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Successfully fetched session start link.
-          result:
-            type: object
-            properties:
-              link:
-                type: string
-                example: >-
-                  https://dev.mentoring.shikshalokam.org/bigbluebutton/api/join?meetingID=628dae0fce0ce9359aeb8b23&password=$2a$10$PI3yKdwMSbPkl5hn1043n.L3ooeRqnlx024h2EmGfSxxrGy76cwW2&fullName=Ankit&checksum=02261702f22f1c405d39e8bb3dd1f1b88646a4ed
-          meta: {}
-      menteeJoinSession400Response:
-        description: Session not found.
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example:
-              - User not found.
-              - Session not found.
-              - As the host has ended the session, you cannot join.
-              - Please wait for the Mentor to start the session.
-              - User has not enrolled for the session.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      menteeSessionReport200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Mentees report fetched successfully.
-          result:
-            type: object
-            properties:
-              totalSessionEnrolled:
-                type: number
-                example: 1
-              totalsessionsAttended:
-                type: number
-                example: 1
-          meta: {}
-      homefeed200Response:
-        description: home feed
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Session fetched successfully.
-          result:
-            type: object
-            properties:
-              allSessions:
-                type: array
-                example: []
-              mySessions:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    _id:
-                      type: string
-                      example: 628dae0fce0ce9359aeb8b23
-                    title:
-                      type: string
-                      example: Leadership5
-                    description:
-                      type: string
-                      example: Training in leadership
-                    image:
-                      type: array
-                      items:
-                        type: string
-                        example: '["users/1232s2133sdd1-12e2dasd3123.png"]'
-                    mentorName:
-                      type: string
-                      example: jhon
-                    status:
-                      type: string
-                      example: published
-                    startDate:
-                      type: string
-                      example: '2022-01-04 18:00:00'
-                    endDate:
-                      type: string
-                      example: '2022-01-04 18:30:00'
-                    endDateUtc:
-                      type: string
-                      example: Invalid date
-          meta:
-            type: object
-            example: {}
-      menteeProfile200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Profile fetched successfully.
-          result:
-            type: object
-            properties:
-              email:
-                type: object
-                properties:
-                  verified:
-                    type: boolean
-                    example: false
-                  address:
-                    type: string
-                    example: example@mail.com
-              sessionAttended:
-                type: string
-                example: 1
-              isAMentor:
-                type: boolean
-                example: false
-              hasAcceptedTAndC:
-                type: boolean
-                example: false
-              deleted:
-                type: boolean
-                example: false
-              _id:
-                type: string
-                example: 62832531a05cbd57b273aebb
-              name:
-                type: string
-                example: Ankit
-              designation:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    value:
-                      type: number
-                      example: 1
-                    lable:
-                      type: string
-                      example: Teacher
-              location:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    value:
-                      type: number
-                      example: 1
-                    lable:
-                      type: string
-                      example: Bangalore
-              areasOfExpertise:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    value:
-                      type: number
-                      example: 1
-                    lable:
-                      type: string
-                      example: Educational Leadership
-              languages:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    value:
-                      type: number
-                      example: 1
-                    lable:
-                      type: string
-                      example: English
-              educationQualification:
-                type: string
-                example: B.A.
-              updated_at:
-                type: string
-                example: '2022-05-18T05:24:52.431Z'
-              created_at:
-                type: string
-                example: '2022-05-18T05:24:52.431Z'
-              __v:
-                type: number
-                example: 0
-              lastLoggedInAt:
-                type: string
-                example: '2022-05-18T05:24:52.431Z'
-              about:
-                type: string
-                example: This is test about of mentee
-              experience:
-                type: string
-                example: '4.2'
-              gender:
-                type: string
-                example: MALE
-              image:
-                type: string
-                example: https://cloudstorage.com/container/abc.png
-    mentors:
-      upcomingSession400Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Could not found mentor.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      upcomingSession200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Upcoming session fetched successfully.
-          result:
-            type: object
-            properties:
-              data:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    _id:
-                      type: string
-                      example: 628dae0fce0ce9359aeb8b23
-                    title:
-                      type: string
-                      example: Leadership5
-                    description:
-                      type: string
-                      example: Training in leadership
-                    image:
-                      type: array
-                      items:
-                        type: string
-                        example: '["users/1232s2133sdd1-12e2dasd3123.png"]'
-                    mentorName:
-                      type: string
-                      example: Ankit
-                    status:
-                      type: string
-                      example: published
-                    startDate:
-                      type: string
-                      example: '2022-01-04 18:00:00'
-                    endDate:
-                      type: string
-                      example: '2022-01-04 18:30:00'
-                    endDateUtc:
-                      type: string
-                      example: Invalid date
-              count:
-                type: number
-                example: 1
-          meta:
-            type: object
-            example: {}
-      mentorSessionReport200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Mentors report fetched successfully.
-          result:
-            type: object
-            properties:
-              totalSessionEnrolled:
-                type: number
-                example: 1
-              totalsessionsAttended:
-                type: number
-                example: 1
-          meta: {}
-      mentorProfile200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Profile fetched successfully.
-          result:
-            type: object
-            properties:
-              email:
-                type: object
-                properties:
-                  verified:
-                    type: boolean
-                    example: false
-                  address:
-                    type: string
-                    example: example@mail.com
-              sessionAttended:
-                type: string
-                example: 1
-              isAMentor:
-                type: boolean
-                example: true
-              hasAcceptedTAndC:
-                type: boolean
-                example: false
-              deleted:
-                type: boolean
-                example: false
-              _id:
-                type: string
-                example: 62832531a05cbd57b273aebb
-              name:
-                type: string
-                example: Ankit
-              designation:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    value:
-                      type: number
-                      example: 1
-                    lable:
-                      type: string
-                      example: Teacher
-              location:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    value:
-                      type: number
-                      example: 1
-                    lable:
-                      type: string
-                      example: Bangalore
-              areasOfExpertise:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    value:
-                      type: number
-                      example: 1
-                    lable:
-                      type: string
-                      example: Educational Leadership
-              languages:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    value:
-                      type: number
-                      example: 1
-                    lable:
-                      type: string
-                      example: English
-              educationQualification:
-                type: string
-                example: B.A.
-              updated_at:
-                type: string
-                example: '2022-05-18T05:24:52.431Z'
-              created_at:
-                type: string
-                example: '2022-05-18T05:24:52.431Z'
-              __v:
-                type: number
-                example: 0
-              lastLoggedInAt:
-                type: string
-                example: '2022-05-18T05:24:52.431Z'
-              about:
-                type: string
-                example: This is test about of mentee
-              experience:
-                type: string
-                example: '4.2'
-              gender:
-                type: string
-                example: MALE
-              image:
-                type: string
-                example: https://cloudstorage.com/container/abc.png
-      mentorProfile400Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Could not found mentor.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      shareMentorProfile200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Profile share link generated successfully.
-          result:
-            type: object
-            properties:
-              shareLink:
-                type: string
-                example: 52f076629b3749ebf7dcab23f22b30df
-          meta: {}
-      shareMentorProfile400Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: User doesn't exist.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-    questions:
-      createQuestionRequest:
-        type: object
-        required:
-          - question
-          - options
-          - deleted
-          - hint
-          - value
-        properties:
-          question:
-            type: string
-            example: How would you rate the audio and video quality of the session
-          options:
-            type: array
-            items:
-              type: string
-              example:
-                - '1'
-                - '2'
-          deleted:
-            type: boolean
-            example: false
-          value:
-            type: string
-            example: '1'
-          hint:
-            type: string
-            example: ''
-      createQuestionResponse201:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Question created successfully
-          result:
-            type: object
-            properties:
-              question:
-                type: string
-                example: How would you rate the audio and video quality of the session
-              options:
-                - '1'
-                - '2'
-              deleted:
-                type: boolean
-                example: false
-              validators:
-                type: object
-                properties:
-                  required:
-                    type: boolean
-                    example: false
-              value:
-                type: string
-                example: '1'
-              hint:
-                type: string
-                example: ''
-              disable:
-                type: boolean
-                example: false
-              visible:
-                type: boolean
-                example: true
-              status:
-                type: string
-                example: published
-              _id:
-                type: string
-                example: 6296e6892fdc1f037cbf4529
-              updated_at:
-                type: string
-                example: '2022-06-01T04:09:45.713Z'
-              created_at:
-                type: string
-                example: '2022-06-01T04:09:45.713Z'
-              __v:
-                type: number
-                example: 0
-          meta:
-            type: object
-            example: {}
-      updateQuestionRequest:
-        type: object
-        properties:
-          question:
-            type: string
-            example: How would you rate the audio and video quality of the session
-          options:
-            type: array
-            items:
-              type: string
-              example:
-                - '1'
-                - '2'
-                - '3'
-          deleted:
-            type: boolean
-            example: false
-          value:
-            type: string
-            example: '1'
-          hint:
-            type: string
-            example: ''
-      updateQuestionResponse202:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Question updated successfully
-          result:
-            type: array
-            example: []
-          meta:
-            type: object
-            example: {}
-      updateQuestionResponse400:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Question not found
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      readQuestionResponse200:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Question created successfully
-          result:
-            type: object
-            properties:
-              question:
-                type: string
-                example: How would you rate the audio and video quality of the session
-              options:
-                type: array
-                items:
-                  - type: string
-                    example: '1'
-                  - type: string
-                    example: '2'
-                  - type: string
-                    example: '3'
-              deleted:
-                type: boolean
-                example: false
-              validators:
-                type: object
-                properties:
-                  required:
-                    type: boolean
-                    example: false
-              value:
-                type: string
-                example: '1'
-              hint:
-                type: string
-                example: ''
-              disable:
-                type: boolean
-                example: false
-              visible:
-                type: boolean
-                example: true
-              status:
-                type: string
-                example: published
-              _id:
-                type: string
-                example: 6296e6892fdc1f037cbf4529
-              updated_at:
-                type: string
-                example: '2022-06-01T04:09:45.713Z'
-              created_at:
-                type: string
-                example: '2022-06-01T04:09:45.713Z'
-              __v:
-                type: number
-                example: 0
-          meta:
-            type: object
-            example: {}
-      readQuestionResponse400:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Question not found
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-    questionset:
-      createQuestionSetRequest:
-        type: object
-        required:
-          - questions
-          - code
-        properties:
-          questions:
-            type: array
-            items:
-              - type: string
-                example: 6296e6892fdc1f037cbf4529
-              - type: string
-                example: 6296e6892fdc1f037cbf4767
-          code: feedback
-      createQuestionSetResponse201:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Questions set created successfully
-          result:
-            type: object
-            properties:
-              questions:
-                type: array
-                items:
-                  - type: string
-                    example: 6296e6892fdc1f037cbf4529
-                  - type: string
-                    example: 6296e6892fdc1f037cbf4767
-              code:
-                type: string
-                example: feedback
-              deleted:
-                type: boolean
-                example: false
-              status:
-                type: string
-                example: published
-              _id:
-                type: string
-                example: 629978caf0cf0901d7d74d12
-              updated_at:
-                type: string
-                example: '2022-06-03T02:58:18.462Z'
-              created_at:
-                type: string
-                example: '2022-06-03T02:58:18.462Z'
-              __v:
-                type: number
-                example: 0
-          meta:
-            type: object
-            example: {}
-      createQuestionSetResponse400:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Questions are already in use in the question set
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      updateQuestionSetRequest:
-        type: object
-        properties:
-          questions:
-            type: array
-            items:
-              - type: string
-                example: 6296e6892fdc1f037cbf4529
-              - type: string
-                example: 6296e6892fdc1f037cbf4767
-              - type: string
-                example: 6296e6522fdc1f037cbf4525
-          code: feedback
-      updateQuestionSetResponse202:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Questions set updated successfully
-          result:
-            type: array
-            items:
-              type: string
-            example: []
-          meta:
-            type: object
-            example: {}
-      updateQuestionSetResponse400:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Questions are already in use in the question set
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      readQuestionSetResponse200:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Questions set fetched successfully
-          result:
-            type: object
-            properties:
-              questions:
-                type: array
-                items:
-                  - type: string
-                    example: 6296e6892fdc1f037cbf4529
-                  - type: string
-                    example: 6296e6892fdc1f037cbf4767
-              code:
-                type: string
-                example: feedback
-              deleted:
-                type: boolean
-                example: false
-              status:
-                type: string
-                example: published
-              _id:
-                type: string
-                example: 629978caf0cf0901d7d74d12
-              updated_at:
-                type: string
-                example: '2022-06-03T02:58:18.462Z'
-              created_at:
-                type: string
-                example: '2022-06-03T02:58:18.462Z'
-              __v:
-                type: number
-                example: 0
-          meta:
-            type: object
-            example: {}
-      readQuestionSetResponse400:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Question not found
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-    feedback:
-      getFeedbackFromResponse200:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: >-
-              Thank you for hosting the session. Please rate us on the following
-              to help us improve.
-          result:
-            type: object
-            properties:
-              form:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                      example: 1
-                    name:
-                      type: string
-                      example: mentor_engagement_in_session
-                    options:
-                      type: string
-                      example: null
-                    type:
-                      type: string
-                      example: rating
-                    no_of_stars:
-                      type: integer
-                      example: 5
-                    status:
-                      type: string
-                      example: PUBLISHED
-                    category:
-                      type: string
-                      example: null
-                    rendering_data:
-                      type: object
-                      properties:
-                        validators:
-                          type: object
-                          properties:
-                            required:
-                              type: boolean
-                        disable:
-                          type: boolean
-                        visible:
-                          type: boolean
-                        class:
-                          type: string
-                          example: ion-margin
-                    meta:
-                      type: string
-                      format: nullable
-                    created_at:
-                      type: string
-                      example: '2023-09-20T11:48:34.679Z'
-                    updated_at:
-                      type: string
-                      example: '2023-09-20T11:48:34.679Z'
-                    deleted_at:
-                      type: string
-                      example: null
-                    label:
-                      type: string
-                      example: How would you rate the engagement in the session?
-          meta:
-            type: object
-            example: {}
-      getFeedbackFormResponse400:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Session not found.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      submitFeedbackRequest:
-        type: object
-        required:
-          - feedbacks
-          - feedbackAs
-        properties:
-          feedbacks:
-            type: array
-            items:
-              type: object
-              required:
-                - question_id
-                - value
-                - question
-              properties:
-                question_id:
-                  type: string
-                  example: 1
-                value:
-                  type: string
-                  example: '1'
-                question:
-                  type: string
-                  example: >-
-                    How would you rate the audio and video quality of the
-                    session
-          feedback_as:
-            type: string
-            example: mentee
-      submitFeedbackResponse200:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Feedback submitted successfully.
-          result:
-            type: array
-            items:
-              type: string
-            example: []
-          meta:
-            type: object
-            example: {}
-      submitFeedbackResponse400:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Feedback form has already been submitted.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-      submitFeedbackResponse422:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Feedback key failed for the mentor
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-    cloudServices:
-      cloudServicesResponse200:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Signed URL Generated Successfully.
-          result:
-            type: object
-            properties:
-              signedUrl:
-                type: string
-                example: >-
-                  https://aws-bucket-storage-name.s3.ap-south-1.amazonaws.com/users/62832531a05cbd57b273aebb-1654149589875-laptop1.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=aws-access-key-id%2F20220602%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20220602T055949Z&X-Amz-Expires=1800&X-Amz-Signature=0588b16fba45cb85efdc45749173c42ba26b47a9faa9bce5715c666b2657a4d4&X-Amz-SignedHeaders=host
-              filePath:
-                type: string
-                example: users/62832531a05cbd57b273aebb-1654149589875-laptop1.jpg
-              destFilePath:
-                type: string
-                example: users/62832531a05cbd57b273aebb-1654149589875-laptop1.jpg
-      cloudServicesDownloadResponse200:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Download URL Generated Successfully.
-          result:
-            type: string
-            example: >-
-              https://aws-bucket-storage-name.s3.ap-south-1.amazonaws.com/users/62832531a05cbd57b273aebb-1654149589875-image.jpg
-    users:
-      feedbackResponse200:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK,
-          message:
-            type: string
-            example: Pending feedbacks fetched successfully.
-          result:
-            type: array
-            items:
-              type: object
-              properties:
-                _id:
-                  type: string
-                  example: 628ee0c8efb3923017c27f03
-                title:
-                  type: string
-                  example: Leadership5
-                description:
-                  type: string
-                  example: Training in leadership
-                mentorFeedbackForm:
-                  type: string
-                  example: mentorQS2
-                form:
-                  type: object
-                  example: {}
-      userList200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Mentor list fetched successfully.
-          result:
-            type: object
-            properties:
-              data:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    key:
-                      type: string
-                      example: A
-                    values:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          _id:
-                            type: string
-                            example: 62832531a05cbd57b273aebb
-                          name:
-                            type: string
-                            example: jhon
-                          areasOfExpertise:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                value:
-                                  type: string
-                                  example: 1
-                                label:
-                                  type: string
-                                  example: Educational Leadership
-                                _id:
-                                  type: string
-                                  example: 628d422029034b105806b906
-                          image:
-                            type: string
-                            example: >-
-                              https://aws-bucket-storage-name.s3.ap-south-1.amazonaws.com/https://cloudstorage.com/container/abc.png
-              count:
-                type: number
-                example: 1
-      filterList200Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Filter list fetched successfully.
-          result:
-            type: object
-            properties:
-              organizations:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                      example: 24
-                    name:
-                      type: string
-                      example: Tunerlabs
-                    code:
-                      type: string
-                      example: tl
-                    description:
-                      type: string
-                      example: Tunerlabs
-              entity_types:
-                type: object
-                properties:
-                  designation:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/users/FilterDesignation'
-      FilterDesignation:
-        type: object
-        properties:
-          id:
-            type: integer
-            example: 5
-          label:
-            type: string
-            example: Designation
-          value:
-            type: string
-            example: designation
-          parent_id:
-            type: integer
-            nullable: true
-          organization_id:
-            type: string
-            example: 1
-          entities:
-            type: array
-            items:
-              type: object
-              properties:
-                id:
-                  type: integer
-                  example: 19
-                entity_type_id:
-                  type: integer
-                  example: 5
-                value:
-                  type: string
-                  example: beo
-                label:
-                  type: string
-                  example: Block education officer
-                status:
-                  type: string
-                  example: ACTIVE
-                type:
-                  type: string
-                  example: SYSTEM
-                created_by:
-                  type: string
-                  example: 0
-                updated_by:
-                  type: string
-                  nullable: true
-                created_at:
-                  type: string
-                  format: date-time
-                  example: '2023-12-12T14:05:07.769Z'
-                updated_at:
-                  type: string
-                  format: date-time
-                  example: '2023-12-12T14:05:07.769Z'
-                deleted_at:
-                  type: string
-                  format: date-time
-                  nullable: true
-    email:
-      emailSendRequest:
-        description: Email Sent request
-        type: object
-        required:
-          - type
-          - email
-        properties:
-          type:
-            type: string
-            description: Type of channel such as Email
-            example: email
-          email:
-            type: object
-            required:
-              - to
-              - subject
-              - body
-            properties:
-              to:
-                type: string
-                description: >-
-                  Email ID of the recipient. To specify multiple email IDs,
-                  separate the IDs using `,`
-                example: example@mail.com
-              cc:
-                type: string
-                description: >-
-                  Email ID of the recipient. To specify multiple email IDs,
-                  separate the IDs using `,`
-                example: ccexample@mail.com
-              subject:
-                type: string
-                description: Subject of the Email Message
-                example: Email Notification
-              body:
-                type: string
-                description: >-
-                  Body of the Email Message. To enhance the formatting of the
-                  message, use HTML tags.
-                example: |-
-                  Dear John, 
-                   Welcome to Notification
-                required: true
-      emailSendResponse200:
-        description: Email Sent response
-        type: object
-        properties:
-          message:
-            type: string
-            example: Email sent successfully.
-          result:
-            type: object
-            properties:
-              status:
-                type: string
-                example: success
-              message:
-                type: string
-                example: Email was sent successfully
-      emailSendResponse400:
-        description: Failed to send email
-        type: object
-        properties:
-          message:
-            type: string
-            example: Unable to send the Email
-          status:
-            type: string
-            example: failure
-          statusCode:
-            type: number
-            example: 400
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-    issues:
-      createRequest:
-        type: object
-        description: API for reporting an issue
-        required:
-          - description
-        properties:
-          description:
-            type: string
-            description: Description of the issue faced.
-            example: Sample description of the issue faced
-      createResponse:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: OK
-          message:
-            type: string
-            example: Your issue was successfully reported.
-      create422Response:
-        type: object
-        properties:
-          responseCode:
-            type: string
-            example: CLIENT_ERROR
-          message:
-            type: string
-            example: Validation failed, Entered data is incorrect!.
-          error:
-            type: array
-            items:
-              type: string
-            example: []
-    config:
-      $schema: http://json-schema.org/draft-04/schema#
-      type: object
-      properties:
-        responseCode:
-          type: string
-        message:
-          type: string
-        result:
-          type: object
-          properties:
-            meeting_platform:
-              type: string
-            reportIssue:
-              type: object
-              properties:
-                to:
-                  type: string
-                subject:
-                  type: string
-        meta:
-          type: object
-          properties:
-            formsVersion:
-              type: array
-              items:
-                type: object
-                properties:
-                  _id:
-                    type: string
-                  type:
-                    type: string
-            correlation:
-              type: string
-  securitySchemes:
-    bearer:
-      type: apiKey
-      name: x-auth-token
-      in: header
 tags:
   - name: Config
     description: You can use this API to get config related to the service

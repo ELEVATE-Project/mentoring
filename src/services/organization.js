@@ -37,7 +37,7 @@ module.exports = class OrganizationService {
 				mentor_feedback_question_set: bodyData.mentor_feedback_question_set,
 				updated_by: decodedToken.id,
 			}
-			const orgExtension = await organisationExtensionQueries.upsert(extensionData)
+			const orgExtension = await organisationExtensionQueries.upsert(extensionData, tenantCode)
 
 			// Update cache with fresh data after update
 			try {

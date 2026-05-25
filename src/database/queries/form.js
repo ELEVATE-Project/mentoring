@@ -33,11 +33,11 @@ module.exports = class FormsData {
 		}
 	}
 
-	static async findFormsByFilter(filter, tenantCodes, options = {}) {
+	static async findFormsByFilter(filter, tenantCode, options = {}) {
 		try {
 			const whereClause = {
 				...filter,
-				tenant_code: { [Op.in]: tenantCodes },
+				tenant_code: tenantCode,
 			}
 
 			// Safe merge: tenant filtering cannot be overridden by options.where
@@ -96,6 +96,21 @@ module.exports = class FormsData {
 				attributes: ['id', 'type', 'version'],
 			})
 			return formData
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async bulkCreate(records, tenantCode, options = {}) {
+		try {
+			const dataWithTenant = records.map((item) => ({
+				...item,
+				tenant_code: tenantCode,
+			}))
+			return await Form.bulkCreate(dataWithTenant, {
+				ignoreDuplicates: true,
+				...options,
+			})
 		} catch (error) {
 			throw error
 		}

@@ -92,7 +92,7 @@ module.exports = class questionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			const filter = { id: questionId, tenant_code: { [Op.in]: [tenantCode, defaults.tenantCode] } }
+			const filter = { id: questionId, tenant_code: tenantCode }
 			const question = await questionQueries.findOneQuestion(filter)
 			if (!question) {
 				return responses.failureResponse({

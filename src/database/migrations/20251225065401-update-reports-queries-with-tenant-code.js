@@ -3,13 +3,11 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
 	async up(queryInterface, Sequelize) {
-		// Update existing queries in the report_queries table with Citus-compatible versions
-
-		// Update total_number_of_sessions_attended
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT 
+		await queryInterface.sequelize.transaction(async (transaction) => {
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT 
                 COUNT(*) AS total_count,
                 CASE 
                     WHEN 'All' = 'All' THEN 
@@ -43,38 +41,37 @@ module.exports = {
                     )
                     AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'total_number_of_sessions_attended',
-			}
-		)
-
-		// Update total_hours_of_learning
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT
-                TO_CHAR(
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'total_number_of_sessions_attended',
+				},
+				{ transaction }
+			)
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT
+                COALESCE(TO_CHAR(
                     INTERVAL '1 hour' * FLOOR(SUM(duration) / 3600) +
                     INTERVAL '1 minute' * FLOOR((SUM(duration) / 60)::BIGINT % 60) +
                     INTERVAL '1 second' * FLOOR(SUM(duration)::BIGINT % 60),
                     'HH24:MI:SS'
-                ) AS total_hours,  -- Total duration of all sessions
-            
-                TO_CHAR(
+                ), '00:00:00') AS total_hours,
+
+                COALESCE(TO_CHAR(
                     INTERVAL '1 hour' * FLOOR(SUM(CASE WHEN type = 'PUBLIC' THEN duration ELSE 0 END) / 3600) +
                     INTERVAL '1 minute' * FLOOR((SUM(CASE WHEN type = 'PUBLIC' THEN duration ELSE 0 END) / 60)::BIGINT % 60) +
                     INTERVAL '1 second' * FLOOR(SUM(CASE WHEN type = 'PUBLIC' THEN duration ELSE 0 END)::BIGINT % 60),
                     'HH24:MI:SS'
-                ) AS public_hours,  -- Total duration of public sessions
-            
-                TO_CHAR(
+                ), '00:00:00') AS public_hours,
+
+                COALESCE(TO_CHAR(
                     INTERVAL '1 hour' * FLOOR(SUM(CASE WHEN type = 'PRIVATE' THEN duration ELSE 0 END) / 3600) +
                     INTERVAL '1 minute' * FLOOR((SUM(CASE WHEN type = 'PRIVATE' THEN duration ELSE 0 END) / 60)::BIGINT % 60) +
                     INTERVAL '1 second' * FLOOR(SUM(CASE WHEN type = 'PRIVATE' THEN duration ELSE 0 END)::BIGINT % 60),
                     'HH24:MI:SS'
-                ) AS private_hours  -- Total duration of private sessions
+                ), '00:00:00') AS private_hours
             
                 FROM (
                     SELECT
@@ -104,18 +101,16 @@ module.exports = {
                         AND Session.deleted_at IS NULL
                         DYNAMIC_AND_CLAUSE
                 ) AS session_durations`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'total_hours_of_learning',
-			}
-		)
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{ report_code: 'total_hours_of_learning' },
+				{ transaction }
+			)
 
-		// Update split_of_sessions_enrolled_and_attended_by_user
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT 
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT 
                 :start_date AS startDate,
                 :end_date AS endDate,
                 -- Enrolled session counts
@@ -167,18 +162,19 @@ module.exports = {
                     AND (CASE WHEN :end_date IS NOT NULL THEN Session.end_date < :end_date ELSE TRUE END)
                     AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'split_of_sessions_enrolled_and_attended_by_user',
-			}
-		)
 
-		// Update mentee_session_details
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'split_of_sessions_enrolled_and_attended_by_user',
+				},
+				{ transaction }
+			)
+
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT
                 s.title AS "sessions_title",
                 ue.name AS "sessions_created_by",
                 s.mentor_name AS "mentor_name",
@@ -203,23 +199,23 @@ module.exports = {
                     AND (:end_date IS NULL OR s.end_date < :end_date)
                     AND (
                         (:session_type = 'All' AND s.type IN ('PUBLIC', 'PRIVATE'))
-                        OR (:session_type = 'PUBLIC' AND s.type = 'PUBLIC')
-                        OR (:session_type = 'PRIVATE' AND s.type = 'PRIVATE')
+                        OR (:session_type = 'Public' AND s.type = 'PUBLIC')
+                        OR (:session_type = 'Private' AND s.type = 'PRIVATE')
                     )
                     AND s.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'mentee_session_details',
-			}
-		)
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'mentee_session_details',
+				},
+				{ transaction }
+			)
 
-		// Update total_number_of_sessions_conducted
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT
                 COUNT(*) AS total_count,
                 COUNT(CASE WHEN Session.type = 'PUBLIC' THEN 1 END) AS public_count,
                 COUNT(CASE WHEN Session.type = 'PRIVATE' THEN 1 END) AS private_count
@@ -228,30 +224,30 @@ module.exports = {
                     Session.tenant_code = :tenantCode
                     AND Session.mentor_id = :userId
                     AND Session.status = 'COMPLETED'
-                    AND Session.start_date > :start_date
-                    AND Session.end_date < :end_date
+                    AND (:start_date IS NULL OR Session.start_date > :start_date)
+                    AND (:end_date IS NULL OR Session.end_date < :end_date)
                     AND (
                         CASE
                             WHEN :session_type = 'All' THEN Session.type IN ('PUBLIC', 'PRIVATE')
-                            WHEN :session_type = 'PUBLIC' THEN Session.type = 'PUBLIC'
-                            WHEN :session_type = 'PRIVATE' THEN Session.type = 'PRIVATE'
+                            WHEN :session_type = 'Public' THEN Session.type = 'PUBLIC'
+                            WHEN :session_type = 'Private' THEN Session.type = 'PRIVATE'
                             ELSE TRUE
                         END
                     )
                     AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'total_number_of_sessions_conducted',
-			}
-		)
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'total_number_of_sessions_conducted',
+				},
+				{ transaction }
+			)
 
-		// Update total_hours_of_mentoring_conducted
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT 
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT 
                 -- Total duration (sum of both public and private sessions)
                 COALESCE(
                     TO_CHAR(
@@ -341,32 +337,32 @@ module.exports = {
             
                 FROM public.sessions Session
                 WHERE Session.tenant_code = :tenantCode
-                    AND Session.mentor_id = :userId 
+                    AND Session.mentor_id = :userId
                     AND Session.status = 'COMPLETED'
-                    AND Session.start_date > :start_date
-                    AND Session.end_date < :end_date
+                    AND (:start_date IS NULL OR Session.start_date > :start_date)
+                    AND (:end_date IS NULL OR Session.end_date < :end_date)
                     AND (
                         CASE 
                             WHEN :session_type = 'All' THEN Session.type IN ('PUBLIC', 'PRIVATE')
-                            WHEN :session_type = 'PUBLIC' THEN Session.type = 'PUBLIC'
-                            WHEN :session_type = 'PRIVATE' THEN Session.type = 'PRIVATE'
+                            WHEN :session_type = 'Public' THEN Session.type = 'PUBLIC'
+                            WHEN :session_type = 'Private' THEN Session.type = 'PRIVATE'
                             ELSE TRUE
                         END
                     )
                     AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'total_hours_of_mentoring_conducted',
-			}
-		)
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'total_hours_of_mentoring_conducted',
+				},
+				{ transaction }
+			)
 
-		// Update split_of_sessions_conducted
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT
                 :start_date AS startDate,
                 :end_date AS endDate,
             
@@ -444,21 +440,20 @@ module.exports = {
                     session.tenant_code = :tenantCode
                     AND (session.start_date > :start_date OR :start_date IS NULL)
                     AND (session.end_date < :end_date OR :end_date IS NULL)
-                    AND (:userId IS NOT NULL)
                     AND session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'split_of_sessions_conducted',
-			}
-		)
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'split_of_sessions_conducted',
+				},
+				{ transaction }
+			)
 
-		// Update mentoring_session_details
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT
                 session.title AS "sessions_title",
                 ue.name AS "sessions_created_by",
                 session.seats_limit-session.seats_remaining AS "number_of_mentees",
@@ -472,118 +467,118 @@ module.exports = {
                 WHERE
                     session.tenant_code = :tenantCode
                     AND session.mentor_id = :userId
-                    AND session.start_date > :start_date 
-                    AND session.end_date < :end_date
+                    AND (:start_date IS NULL OR session.start_date > :start_date)
+                    AND (:end_date IS NULL OR session.end_date < :end_date)
                     AND (
                         CASE
                             WHEN :session_type = 'All' THEN session.type IN ('PUBLIC', 'PRIVATE')
-                            WHEN :session_type = 'PUBLIC' THEN session.type = 'PUBLIC'
-                            WHEN :session_type = 'PRIVATE' THEN session.type = 'PRIVATE'
+                            WHEN :session_type = 'Public' THEN session.type = 'PUBLIC'
+                            WHEN :session_type = 'Private' THEN session.type = 'PRIVATE'
                             ELSE TRUE
                         END
                     )
                     AND session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'mentoring_session_details',
-			}
-		)
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'mentoring_session_details',
+				},
+				{ transaction }
+			)
 
-		// Update total_hours_of_sessions_created_by_session_manager
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT
-                TO_CHAR(
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT
+                COALESCE(TO_CHAR(
                     INTERVAL '1 second' * FLOOR(SUM(EXTRACT(EPOCH FROM (completed_at - started_at)))),
                     'HH24:MI:SS'
-                ) AS total_hours,
-            
-                TO_CHAR(
+                ), '00:00:00') AS total_hours,
+
+                COALESCE(TO_CHAR(
                     INTERVAL '1 second' * FLOOR(SUM(CASE WHEN Session.type = 'PUBLIC' THEN EXTRACT(EPOCH FROM (completed_at - started_at)) ELSE 0 END)),
                     'HH24:MI:SS'
-                ) AS total_public_hours,
-            
-                TO_CHAR(
+                ), '00:00:00') AS total_public_hours,
+
+                COALESCE(TO_CHAR(
                     INTERVAL '1 second' * FLOOR(SUM(CASE WHEN Session.type = 'PRIVATE' THEN EXTRACT(EPOCH FROM (completed_at - started_at)) ELSE 0 END)),
                     'HH24:MI:SS'
-                ) AS total_private_hours
-            
+                ), '00:00:00') AS total_private_hours
+
                 FROM public.sessions AS Session
                 WHERE
-                    Session.tenant_code = :tenantCode 
-                    AND Session.created_by = :userId 
-                    AND Session.status = 'COMPLETED' 
-                    AND Session.start_date > :start_date 
-                    AND Session.end_date < :end_date
+                    Session.tenant_code = :tenantCode
+                    AND Session.created_by = :userId
+                    AND Session.status = 'COMPLETED'
+                    AND (:start_date IS NULL OR Session.start_date > :start_date)
+                    AND (:end_date IS NULL OR Session.end_date < :end_date)
                     AND (
                         CASE 
                             WHEN :session_type = 'All' THEN TRUE
-                            WHEN :session_type = 'PUBLIC' THEN Session.type = 'PUBLIC'
-                            WHEN :session_type = 'PRIVATE' THEN Session.type = 'PRIVATE'
+                            WHEN :session_type = 'Public' THEN Session.type = 'PUBLIC'
+                            WHEN :session_type = 'Private' THEN Session.type = 'PRIVATE'
                             ELSE TRUE
                         END
                     )
                     AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'total_hours_of_sessions_created_by_session_manager',
-			}
-		)
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'total_hours_of_sessions_created_by_session_manager',
+				},
+				{ transaction }
+			)
 
-		// Update total_number_of_hours_of_mentoring_conducted
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT
-                TO_CHAR(
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT
+                COALESCE(TO_CHAR(
                     INTERVAL '1 second' * FLOOR(SUM(EXTRACT(EPOCH FROM (completed_at - started_at)))),
                     'HH24:MI:SS'
-                ) AS total_hours,
-            
-                TO_CHAR(
+                ), '00:00:00') AS total_hours,
+
+                COALESCE(TO_CHAR(
                     INTERVAL '1 second' * FLOOR(SUM(CASE WHEN Session.type = 'PUBLIC' THEN EXTRACT(EPOCH FROM (completed_at - started_at)) ELSE 0 END)),
                     'HH24:MI:SS'
-                ) AS public_hours,
-            
-                TO_CHAR(
+                ), '00:00:00') AS public_hours,
+
+                COALESCE(TO_CHAR(
                     INTERVAL '1 second' * FLOOR(SUM(CASE WHEN Session.type = 'PRIVATE' THEN EXTRACT(EPOCH FROM (completed_at - started_at)) ELSE 0 END)),
                     'HH24:MI:SS'
-                ) AS private_hours
-            
+                ), '00:00:00') AS private_hours
+
                 FROM public.sessions AS Session
                 WHERE
-                    Session.tenant_code = :tenantCode 
-                    AND Session.mentor_id = :userId 
-                    AND Session.status = 'COMPLETED' 
-                    AND Session.start_date > :start_date 
-                    AND Session.end_date < :end_date
+                    Session.tenant_code = :tenantCode
+                    AND Session.mentor_id = :userId
+                    AND Session.status = 'COMPLETED'
+                    AND (:start_date IS NULL OR Session.start_date > :start_date)
+                    AND (:end_date IS NULL OR Session.end_date < :end_date)
                     AND (
                         CASE 
                             WHEN :session_type = 'All' THEN TRUE
-                            WHEN :session_type = 'PUBLIC' THEN Session.type = 'PUBLIC'
-                            WHEN :session_type = 'PRIVATE' THEN Session.type = 'PRIVATE'
+                            WHEN :session_type = 'Public' THEN Session.type = 'PUBLIC'
+                            WHEN :session_type = 'Private' THEN Session.type = 'PRIVATE'
                             ELSE TRUE
                         END
                     )
                     AND Session.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'total_number_of_hours_of_mentoring_conducted',
-			}
-		)
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'total_number_of_hours_of_mentoring_conducted',
+				},
+				{ transaction }
+			)
 
-		// Update split_of_sessions_created_and_conducted
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `SELECT
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `SELECT
                 :start_date AS startDate,
                 :end_date AS endDate,
                 
@@ -650,18 +645,18 @@ module.exports = {
                     )
                     AND s.deleted_at IS NULL
                     DYNAMIC_AND_CLAUSE;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'split_of_sessions_created_and_conducted',
-			}
-		)
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'split_of_sessions_created_and_conducted',
+				},
+				{ transaction }
+			)
 
-		// Update session_manger_session_details
-		await queryInterface.bulkUpdate(
-			'report_queries',
-			{
-				query: `WITH 
+			await queryInterface.bulkUpdate(
+				'report_queries',
+				{
+					query: `WITH 
                 session_count AS (
                     SELECT 
                         session.tenant_code,
@@ -674,11 +669,11 @@ module.exports = {
                         ) AS "hours_of_mentoring_sessions"
                     FROM public.sessions AS session 
                     WHERE session.tenant_code = :tenantCode
-                        AND session.created_by = :userId 
-                        AND session.started_at IS NOT NULL 
-                        AND session.completed_at IS NOT NULL 
-                        AND session.start_date > :start_date 
-                        AND session.end_date < :end_date 
+                        AND session.created_by = :userId
+                        AND session.started_at IS NOT NULL
+                        AND session.completed_at IS NOT NULL
+                        AND (:start_date IS NULL OR session.start_date > :start_date)
+                        AND (:end_date IS NULL OR session.end_date < :end_date)
                         AND (
                             CASE
                                 WHEN :session_type = 'All' THEN session.type IN ('PUBLIC', 'PRIVATE')
@@ -697,22 +692,18 @@ module.exports = {
                     sc.hours_of_mentoring_sessions as hours_of_mentoring_sessions,
                     COALESCE(CAST(ue.rating ->>'average' AS NUMERIC),0) AS avg_mentor_rating
                 FROM session_count AS sc
-                JOIN public.user_extensions AS ue ON sc.mentor_id = ue.user_id AND sc.tenant_code = ue.tenant_code 
+                LEFT JOIN public.user_extensions AS ue ON sc.mentor_id = ue.user_id AND sc.tenant_code = ue.tenant_code
                 DYNAMIC_WHERE_CLAUSE
                 ORDER BY sc.mentor_name;`,
-				updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
-			},
-			{
-				report_code: 'session_manger_session_details',
-			}
-		)
+					updated_at: Sequelize.literal('CURRENT_TIMESTAMP'),
+				},
+				{
+					report_code: 'session_manger_session_details',
+				},
+				{ transaction }
+			)
+		})
 	},
 
-	async down(queryInterface, Sequelize) {
-		// This migration updates existing queries, so rollback would restore original queries
-		// Since we don't have the original queries stored, we'll just log a message
-		console.log(
-			'Rollback: This migration updated existing report queries. Manual restoration of original queries would be required for complete rollback.'
-		)
-	},
+	async down(queryInterface, Sequelize) {},
 }

@@ -71,8 +71,10 @@ module.exports = class modulesHelper {
 				bodyData,
 				tenantCode
 			)
+			// Note: permissions table is global/system-level without tenant isolation
+			// Do not filter by tenant_code when updating permissions
 			const updatePermissions = await permissionsQueries.updatePermissions(
-				{ module: modules.code, tenant_code: tenantCode },
+				{ module: modules.code },
 				{ module: updatedModules.code }
 			)
 

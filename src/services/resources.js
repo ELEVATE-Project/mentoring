@@ -3,6 +3,7 @@ const httpStatusCode = require('@generics/http-status')
 const responses = require('@helpers/responses')
 
 const resourceQueries = require('@database/queries/resources')
+const cacheHelper = require('@generics/cacheHelper')
 
 module.exports = class SessionsHelper {
 	/**
@@ -16,8 +17,12 @@ module.exports = class SessionsHelper {
 
 	static async deleteResource(resourceId, sessionId, userId, organizationId, tenantCode) {
 		try {
-			// Optimized: Single query with JOIN validation - eliminates separate session existence check
-			const deletedRows = await resourceQueries.deleteResourceByIdWithSessionValidation(resourceId, tenantCode)
+			// Validate resource belongs to the specified session and delete it
+			const deletedRows = await resourceQueries.deleteResourceByIdWithSessionValidation(
+				resourceId,
+				sessionId,
+				tenantCode
+			)
 
 			if (deletedRows === 0) {
 				return responses.failureResponse({
@@ -25,6 +30,14 @@ module.exports = class SessionsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			}
+
+			// Invalidate session cache after deleting resource
+			try {
+				await cacheHelper.sessions.delete(tenantCode, sessionId)
+			} catch (cacheError) {
+				console.log('Error in invalidating session cache:', cacheError)
+				// Cache invalidation failure - continue operation
 			}
 
 			return responses.successResponse({

@@ -100,7 +100,12 @@ module.exports = class Users {
 	 */
 	async add(req) {
 		try {
-			return await userService.add(req.body, req.body.id, req.body.organization_code, req.body.tenant_code)
+			return await userService.add(
+				req.body,
+				req.body.id.toString(),
+				req.body.organization_code,
+				req.body.tenant_code
+			)
 		} catch (error) {
 			return error
 		}
@@ -118,7 +123,7 @@ module.exports = class Users {
 		try {
 			// For internal calls, construct minimal decodedToken object with required properties
 			const decodedToken = req.decodedToken || {
-				id: req.body.id,
+				id: req.body.id.toString(),
 				tenant_code: req.body.tenant_code,
 				organization_id: req.body.organization_id || req.body.organization_code,
 				organization_code: req.body.organization_code,
@@ -127,7 +132,7 @@ module.exports = class Users {
 			return await userService.update(
 				req.body,
 				decodedToken,
-				req.body.id,
+				req.body.id.toString(),
 				req.body.organization_code,
 				req.body.tenant_code
 			)
@@ -158,12 +163,14 @@ module.exports = class Users {
 
 			// For internal calls, only req.body.id and req.body.tenant_code are available
 			// Other parameters (currentUserId, organizationCode, token) will use defaults
+			// Internal endpoint is admin-only, so pass isAdmin=true
 			return await adminService.userDelete(
 				req.body.id.toString(),
 				null, // currentUserId - not available for internal calls
 				null, // organizationCode - not available for internal calls
-				req.body.tenant_code
-				// token defaults to '' in service method
+				req.body.tenant_code,
+				'', // token defaults to '' in service method
+				false // isAdmin - internal endpoint is admin-only
 			)
 		} catch (error) {
 			return error

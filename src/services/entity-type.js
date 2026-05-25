@@ -4,6 +4,7 @@ const entityTypeQueries = require('../database/queries/entityType')
 const menteeExtensionQueries = require('../database/queries/userExtension')
 const mentorExtensionQueries = require('../database/queries/mentorExtension')
 const sessionQueries = require('../database/queries/sessions')
+const organisationExtensionQueries = require('../database/queries/organisationExtension')
 const { UniqueConstraintError } = require('sequelize')
 const { Op } = require('sequelize')
 const { removeDefaultOrgEntityTypes } = require('@generics/utils')
@@ -105,25 +106,18 @@ module.exports = class EntityHelper {
 			}
 
 			// Cache invalidation after successful update: just delete using original entity data
-			try {
-				if (originalEntity && originalEntity.model_names && originalEntity.value) {
-					// Delete cache entries using original entity's model_names and value
-					for (const modelName of originalEntity.model_names) {
-						await cacheHelper.entityTypes.delete(tenantCode, orgCode, modelName, originalEntity.value)
-					}
+			const isDefaultOrg = orgCode === process.env.DEFAULT_ORGANISATION_CODE
+			if (originalEntity && originalEntity.model_names) {
+				for (const modelName of originalEntity.model_names) {
+					await this._clearUserCachesForEntityTypeChange(
+						orgCode,
+						tenantCode,
+						modelName,
+						originalEntity.value,
+						isDefaultOrg
+					)
 				}
-			} catch (cacheError) {
-				// Failed to invalidate entity type cache - continue operation
 			}
-
-			// Clear user caches since entity types affect user profiles
-			const updatedEntity = updatedEntityType[0]
-			await this._clearUserCachesForEntityTypeChange(
-				orgCode,
-				tenantCode,
-				updatedEntity.model_names ? updatedEntity.model_names[0] : null,
-				updatedEntity.value
-			)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
@@ -160,7 +154,7 @@ module.exports = class EntityHelper {
 				})
 			const entities = await entityTypeQueries.findAllEntityTypes(
 				{ [Op.or]: [orgCode, defaults.orgCode] },
-				{ [Op.in]: [tenantCode, defaults.tenantCode] },
+				tenantCode,
 				attributes
 			)
 
@@ -228,11 +222,9 @@ module.exports = class EntityHelper {
 				organization_code: {
 					[Op.in]: [orgCode, defaults.orgCode],
 				},
-				tenant_code: { [Op.in]: [defaults.tenantCode, tenantCode] },
+				tenant_code: tenantCode,
 			}
-			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, {
-				[Op.in]: [defaults.tenantCode, tenantCode],
-			})
+			const entityTypes = await entityTypeQueries.findUserEntityTypesAndEntities(filter, tenantCode)
 
 			const prunedEntities = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
 
@@ -290,14 +282,8 @@ module.exports = class EntityHelper {
 				})
 			}
 
-			// Clear cache for affected models before deletion
-			await this._clearUserCachesForEntityTypeChange(organizationCode, tenantCode, {
-				id: entityToDelete.id,
-				value: entityToDelete.value,
-				modelNames: entityToDelete.model_names,
-			})
-
 			// SECOND: Delete from database
+			const isDefaultOrg = organizationCode === process.env.DEFAULT_ORGANISATION_CODE
 			const deleteCount = await entityTypeQueries.deleteOneEntityType(id, organizationCode, tenantCode)
 			if (deleteCount === 0) {
 				return responses.failureResponse({
@@ -307,47 +293,16 @@ module.exports = class EntityHelper {
 				})
 			}
 
-			// THIRD: Remove individual entity type from cache
-			try {
-				// For each model this entity belonged to
-				if (entityToDelete.model_names && Array.isArray(entityToDelete.model_names)) {
-					for (const modelName of entityToDelete.model_names) {
-						// Remove the specific entity type cache
-						await cacheHelper.entityTypes.delete(
-							tenantCode,
-							organizationCode,
-							modelName,
-							entityToDelete.value
-						)
-					}
-				}
-			} catch (cacheError) {
-				// Failed to perform selective cache removal - continue operation
-
-				// Fallback: retry removing only this specific entity's cache
-				if (entityToDelete.model_names && Array.isArray(entityToDelete.model_names)) {
-					for (const modelName of entityToDelete.model_names) {
-						try {
-							await cacheHelper.entityTypes.delete(
-								tenantCode,
-								organizationCode,
-								modelName,
-								entityToDelete.value
-							)
-						} catch (retryError) {
-							// Failed to retry clear cache - continue operation
-						}
-					}
-				}
+			// Clear user caches after successful deletion
+			for (const modelName of entityToDelete.model_names) {
+				await this._clearUserCachesForEntityTypeChange(
+					organizationCode,
+					tenantCode,
+					modelName,
+					entityToDelete.value,
+					isDefaultOrg
+				)
 			}
-
-			// Clear user caches since entity types affect user profiles
-			await this._clearUserCachesForEntityTypeChange(
-				organizationCode,
-				tenantCode,
-				entityToDelete.model_names ? entityToDelete.model_names[0] : null,
-				entityToDelete.value
-			)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.accepted,
@@ -363,10 +318,12 @@ module.exports = class EntityHelper {
 	 * @method
 	 * @name processEntityTypesToAddValueLabels
 	 * @param {Array} responseData 				- data to modify
-	 * @param {Array} orgCods					- org ids
+	 * @param {Array} orgCodes					- org ids or org codes depending on orgIdPassed
 	 * @param {String} modelName 				- model name which the entity search is associated to.
-	 * @param {String} orgCodeKey 				- In responseData which key represents org id
+	 * @param {String} orgCodeKey 				- In responseData which key represents org identifier
 	 * @param {ARRAY} entityType 				- Array of entity types value
+	 * @param {String} tenantCode				- tenant code
+	 * @param {Boolean} orgIdPassed				- true when orgCodes contains integer org IDs instead of org code strings
 	 * @returns {JSON} 							- modified response data
 	 */
 	static async processEntityTypesToAddValueLabels(
@@ -375,7 +332,8 @@ module.exports = class EntityHelper {
 		modelName,
 		orgCodeKey,
 		entityType,
-		tenantCodes = []
+		tenantCode,
+		orgIdPassed = false
 	) {
 		try {
 			const defaults = await getDefaults()
@@ -392,12 +350,24 @@ module.exports = class EntityHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 
-			if (!orgCodes.includes(defaults.orgCode)) {
-				orgCodes.push(defaults.orgCode)
+			// When callers pass integer org IDs instead of org code strings, resolve them first
+			let idToCodeMap = null
+			let resolvedOrgCodes = orgCodes
+			if (orgIdPassed) {
+				const validIds = orgCodes.filter(Boolean)
+				const orgExtensions = await organisationExtensionQueries.findAll(
+					{ organization_id: { [Op.in]: validIds }, tenant_code: tenantCode },
+					{ attributes: ['organization_id', 'organization_code'] }
+				)
+				idToCodeMap = {}
+				orgExtensions.forEach((ext) => {
+					idToCodeMap[ext.organization_id] = ext.organization_code
+				})
+				resolvedOrgCodes = [...new Set(Object.values(idToCodeMap))]
 			}
 
-			if (!tenantCodes.includes(defaults.tenantCode)) {
-				tenantCodes.push(defaults.tenantCode)
+			if (!resolvedOrgCodes.includes(defaults.orgCode)) {
+				resolvedOrgCodes = [...resolvedOrgCodes, defaults.orgCode]
 			}
 
 			const additionalFilters = {
@@ -406,14 +376,10 @@ module.exports = class EntityHelper {
 			if (entityType && entityType.length > 0) {
 				additionalFilters.value = entityType
 			}
-			// get entityTypes with entities data using cache
-			// Use first tenant/org as user context - cache helper handles defaults internally
-			const primaryTenantCode = tenantCodes[0] || defaults.tenantCode
-			const primaryOrgCode = orgCodes[0] || defaults.orgCode
 			let entityTypesWithEntities = await entityTypeCache.getEntityTypesAndEntitiesForModel(
 				Array.isArray(modelName) ? modelName[0] : modelName,
-				primaryTenantCode,
-				primaryOrgCode,
+				tenantCode,
+				resolvedOrgCodes,
 				additionalFilters
 			)
 			entityTypesWithEntities = JSON.parse(JSON.stringify(entityTypesWithEntities))
@@ -423,8 +389,13 @@ module.exports = class EntityHelper {
 
 			// Use Array.map with async to process each element asynchronously
 			const result = responseData.map(async (element) => {
-				// Prepare the array of orgCodes to search
-				const orgIdToSearch = [element[orgCodeKey], defaults.orgCode]
+				// Resolve per-element org code (handles both integer ID and string code cases)
+				const elementOrgIdentifier = element[orgCodeKey]
+				const elementOrgCode = idToCodeMap ? idToCodeMap[elementOrgIdentifier] : elementOrgIdentifier
+
+				const orgIdToSearch = []
+				if (elementOrgCode) orgIdToSearch.push(elementOrgCode)
+				orgIdToSearch.push(defaults.orgCode)
 
 				// Filter entity types based on orgCodes and remove parent entity types
 				let entitTypeData = entityTypesWithEntities.filter((obj) =>
@@ -440,7 +411,7 @@ module.exports = class EntityHelper {
 			})
 			return Promise.all(result)
 		} catch (err) {
-			return err
+			throw err
 		}
 	}
 
@@ -457,7 +428,7 @@ module.exports = class EntityHelper {
 			// Get entity types before deletion to clear cache
 			const entitiesToDelete = await entityTypeQueries.findAllEntityTypes(
 				{}, // No org code filter for this operation
-				{ [Op.in]: [tenantCode] },
+				tenantCode,
 				['value', 'model_names', 'organization_code'],
 				{
 					status: common.ACTIVE_STATUS,
@@ -465,11 +436,14 @@ module.exports = class EntityHelper {
 				}
 			)
 
-			const deleteCount = await entityTypeQueries.deleteEntityTypesAndEntities({
-				status: common.ACTIVE_STATUS,
-				value: { [Op.in]: value },
-				tenant_code: tenantCode,
-			})
+			const deleteCount = await entityTypeQueries.deleteEntityTypesAndEntities(
+				{
+					status: common.ACTIVE_STATUS,
+					value: { [Op.in]: value },
+					tenant_code: tenantCode,
+				},
+				tenantCode
+			)
 
 			if (deleteCount === 0) {
 				return responses.failureResponse({
@@ -481,14 +455,16 @@ module.exports = class EntityHelper {
 
 			// Clear cache for deleted entities
 			try {
+				const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE
 				for (const entityToDelete of entitiesToDelete) {
-					const modelNames = entityToDelete.model_names || []
-					for (const modelName of modelNames) {
-						await cacheHelper.entityTypes.delete(
-							tenantCode,
+					const isDefaultOrg = entityToDelete.organization_code === defaultOrgCode
+					for (const modelName of entityToDelete.model_names || []) {
+						await this._clearUserCachesForEntityTypeChange(
 							entityToDelete.organization_code,
+							tenantCode,
 							modelName,
-							entityToDelete.value
+							entityToDelete.value,
+							isDefaultOrg
 						)
 					}
 				}
@@ -525,7 +501,8 @@ module.exports = class EntityHelper {
 		organizationCode,
 		tenantCode,
 		modelName = null,
-		entityValue = null
+		entityValue = null,
+		allOrgs = false
 	) {
 		try {
 			const logContext = modelName ? `${modelName}:${entityValue}` : 'global'
@@ -539,21 +516,27 @@ module.exports = class EntityHelper {
 			const clearPromises = []
 
 			// 1. Clear display properties cache (affects all users in org)
-			clearPromises.push(
-				cacheHelper.displayProperties.delete(tenantCode, organizationCode).catch((error) => {
-					/* Failed to clear display properties cache - continue operation */
-				})
-			)
+			if (allOrgs) {
+				clearPromises.push(cacheHelper.displayProperties.deleteAll(tenantCode).catch(() => {}))
+			} else {
+				clearPromises.push(cacheHelper.displayProperties.delete(tenantCode, organizationCode).catch(() => {}))
+			}
 
-			// 2. Clear entity type caches for unified model strategy
+			// 2. Clear entity type cache for the specific model + value
 			if (modelName) {
-				clearPromises.push(
-					cacheHelper.entityTypes
-						.delete(tenantCode, organizationCode, `model:${modelName}:__ALL__`)
-						.catch((error) => {
-							/* Failed to clear unified entity type cache - continue operation */
-						})
-				)
+				if (allOrgs) {
+					clearPromises.push(
+						cacheHelper.entityTypes
+							.deleteEntityTypesAcrossAllOrgs(tenantCode, modelName, entityValue)
+							.catch(() => {})
+					)
+				} else {
+					clearPromises.push(
+						cacheHelper.entityTypes
+							.delete(tenantCode, organizationCode, modelName, entityValue)
+							.catch(() => {})
+					)
+				}
 			}
 
 			// 3. Clear model-specific user caches based on the entity type model
@@ -569,47 +552,48 @@ module.exports = class EntityHelper {
 				// Clear user caches immediately when entity types affect specific models
 
 				if (modelName === menteeModelName) {
-					// Clear all mentee caches for this organization
-					try {
-						const users = await menteeExtensionQueries.getAllUsersByOrgId([organizationCode], tenantCode)
-						const menteeUserIds = users.map((user) => user.user_id)
-
-						// Clear mentee caches for all users in organization
-						const menteeClearPromises = menteeUserIds.map((userId) =>
-							cacheHelper.mentee.delete(tenantCode, organizationCode, userId).catch((error) => {
-								/* Failed to clear mentee cache - continue operation */
-							})
-						)
-						clearPromises.push(...menteeClearPromises)
-					} catch (error) {
-						// Failed to enumerate mentee users - continue operation
+					if (allOrgs) {
+						// Default org: sweep all mentee caches in the tenant via wildcard (no DB query needed)
+						clearPromises.push(cacheHelper.mentee.deleteAll(tenantCode).catch(() => {}))
+					} else {
+						try {
+							const users = await menteeExtensionQueries.getAllUsersByOrgId(
+								[organizationCode],
+								tenantCode
+							)
+							const menteeClearPromises = users.map(({ user_id }) =>
+								cacheHelper.mentee.delete(tenantCode, user_id).catch(() => {})
+							)
+							clearPromises.push(...menteeClearPromises)
+						} catch (error) {
+							// Failed to enumerate mentee users - continue operation
+						}
 					}
 				}
 
 				if (modelName === mentorModelName) {
-					// Clear all mentor caches for this organization
-					try {
-						// Get all users who might be mentors in this organization
-						const users = await menteeExtensionQueries.getAllUsersByOrgId([organizationCode], tenantCode)
-						const mentorUserIds = users.map((user) => user.user_id)
-
-						// Clear mentor caches for all users in organization (users can be both mentee and mentor)
-						const mentorClearPromises = mentorUserIds.map((userId) =>
-							cacheHelper.mentor.delete(tenantCode, organizationCode, userId).catch((error) => {
-								/* Failed to clear mentor cache - continue operation */
-							})
-						)
-						clearPromises.push(...mentorClearPromises)
-					} catch (error) {
-						// Failed to enumerate mentor users - continue operation
+					if (allOrgs) {
+						// Default org: sweep all mentor caches in the tenant via wildcard (no DB query needed)
+						clearPromises.push(cacheHelper.mentor.deleteAll(tenantCode).catch(() => {}))
+					} else {
+						try {
+							const users = await menteeExtensionQueries.getAllUsersByOrgId(
+								[organizationCode],
+								tenantCode
+							)
+							const mentorClearPromises = users.map(({ user_id }) =>
+								cacheHelper.mentor.delete(tenantCode, user_id).catch(() => {})
+							)
+							clearPromises.push(...mentorClearPromises)
+						} catch (error) {
+							// Failed to enumerate mentor users - continue operation
+						}
 					}
 				}
 
 				if (modelName === sessionModelName) {
-					// For session model, we don't have session enumeration by org
-					// Session caches are typically cleared by individual session operations
-					// Entity types affecting sessions would be rare (custom session fields)
-					// Skip organization-wide session cache clearing to avoid performance impact
+					// Session keys have no org scope, so always sweep all sessions for the tenant
+					clearPromises.push(cacheHelper.sessions.deleteAll(tenantCode).catch(() => {}))
 				}
 			}
 
@@ -632,7 +616,7 @@ module.exports = class EntityHelper {
 			const defaults = await getDefaults()
 			const allEntityTypes = await entityTypeQueries.findAllEntityTypes(
 				{ [Op.or]: [orgCode, defaults.orgCode] },
-				{ [Op.in]: [tenantCode, defaults.tenantCode] },
+				tenantCode,
 				['model_names']
 			)
 

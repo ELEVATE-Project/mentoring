@@ -33,11 +33,9 @@ module.exports = class ReportsHelper {
 
 	static async getMapping(code, organizationCode, tenantCode) {
 		try {
-			const readMapping = await mappingQueries.findReportRoleMappingByReportCode(
-				code,
-				[tenantCode],
-				[organizationCode]
-			)
+			const readMapping = await mappingQueries.findReportRoleMappingByReportCode(code, tenantCode, [
+				organizationCode,
+			])
 			if (!readMapping) {
 				return responses.failureResponse({
 					message: 'REPORT_MAPPING_NOT_FOUND',

@@ -46,6 +46,16 @@ let enviromentVariables = {
 		optional: true,
 		default: 'organization-id',
 	},
+	ORG_CODE_HEADER_NAME: {
+		message: 'Required organization code header name for admin org override',
+		optional: true,
+		default: 'x-org-code',
+	},
+	TENANT_CODE_HEADER_NAME: {
+		message: 'Required tenant code header name for admin tenant override',
+		optional: true,
+		default: 'x-tenant-code',
+	},
 	IS_AUTH_TOKEN_BEARER: {
 		message: 'Required specification: If auth token is bearer or not',
 		optional: true,
@@ -252,6 +262,11 @@ let enviromentVariables = {
 		message: 'Required email template name for mentee session enrollment by manager',
 		optional: true,
 		default: 'mentee_session_enrollment_by_manager',
+	},
+	MENTEE_PUBLIC_SESSION_ENROLLMENT_BY_MANAGER_EMAIL_TEMPLATE: {
+		message: 'Required email template name for mentee public session enrollment by manager',
+		optional: true,
+		default: 'mentee_public_session_enrollment_by_manager',
 	},
 	MENTOR_PRIVATE_SESSION_INVITE_BY_MANAGER_EMAIL_TEMPLATE: {
 		message: 'Required email template name for mentor private session invite by manager',
@@ -596,6 +611,16 @@ let enviromentVariables = {
 		message: 'Required event topic for handling events',
 		optional: true,
 		default: 'mentoring.events',
+	},
+	EVENT_TENANT_KAFKA_TOPIC: {
+		message: 'Required kafka topic for tenant events',
+		optional: true,
+		default: 'tenantEvent',
+	},
+	EVENT_ORGANIZATION_KAFKA_TOPIC: {
+		message: 'Required kafka topic for organization events',
+		optional: true,
+		default: 'organizationEvent',
 	},
 	SERVICE_NAME: {
 		message: 'Required SERVICE_NAME to handling health check',

@@ -5,6 +5,8 @@ const utils = require('@generics/utils')
 const sequelize = require('sequelize')
 const moment = require('moment')
 const Sequelize = require('@database/models/index').sequelize
+const SessionAttendee = require('@database/models/index').SessionAttendee
+const { attendeeData } = require('@dtos/attendee')
 
 exports.getColumns = async () => {
 	try {
@@ -58,7 +60,7 @@ exports.findOne = async (filter, tenantCode, options = {}) => {
 
 exports.findById = async (id, tenantCode) => {
 	try {
-		return await Session.findOne({ where: { id, tenant_code: tenantCode } })
+		return await Session.findOne({ where: { id, tenant_code: tenantCode }, raw: true })
 	} catch (error) {
 		return error
 	}
@@ -66,26 +68,33 @@ exports.findById = async (id, tenantCode) => {
 
 exports.findSessionWithAttendee = async (sessionId, userId, tenantCode) => {
 	try {
-		// Optimized: Single query with JOIN to get session and attendee data together
-		const query = `
-			SELECT 
-				s.*,
-				sa.id as attendee_id,
-				sa.type as enrolled_type,
-				sa.meeting_info as attendee_meeting_info,
-				sa.joined_at,
-				sa.mentee_id
-			FROM sessions s
-			LEFT JOIN session_attendees sa ON s.id = sa.session_id AND sa.mentee_id = :userId AND sa.tenant_code = :tenantCode
-			WHERE s.id = :sessionId AND s.tenant_code = :tenantCode
-		`
-
-		const result = await Sequelize.query(query, {
-			replacements: { sessionId, userId, tenantCode },
-			type: QueryTypes.SELECT,
+		const result = await Session.findOne({
+			where: {
+				id: sessionId,
+				tenant_code: tenantCode,
+			},
+			include: [
+				{
+					model: SessionAttendee,
+					as: 'attendees', // correct alias
+					required: false,
+					where: {
+						mentee_id: userId,
+						tenant_code: tenantCode,
+					},
+					attributes: ['id', 'type', 'meeting_info', 'joined_at', 'mentee_id'],
+				},
+			],
 		})
 
-		return result.length > 0 ? result[0] : null
+		const attendee = result?.attendees?.[0]
+
+		return result
+			? {
+					...result.get(),
+					...attendeeData(attendee),
+			  }
+			: null
 	} catch (error) {
 		return error
 	}
@@ -275,7 +284,7 @@ exports.getSessionTenantCode = async (sessionId) => {
 	try {
 		return await Session.findOne({
 			where: { id: sessionId },
-			attributes: ['id', 'tenant_code'],
+			attributes: ['id', 'tenant_code', 'mentor_organization_id'],
 			raw: true,
 		})
 	} catch (error) {
@@ -309,16 +318,16 @@ exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 
 		const foundSessions = await Session.findAll({
 			where: {
-				[Op.or]: [{ mentor_id: userId }, { created_by: userId }],
-				[Op.or]: [{ start_date: { [Op.gt]: currentEpochTime } }, { status: common.PUBLISHED_STATUS }],
+				// Op.and ensures both [Op.or] blocks are applied; duplicate object keys silently overwrite
+				[Op.and]: [
+					{ [Op.or]: [{ mentor_id: userId }, { created_by: userId }] },
+					{ [Op.or]: [{ start_date: { [Op.gt]: currentEpochTime } }, { status: common.PUBLISHED_STATUS }] },
+				],
 				tenant_code: tenantCode,
 			},
 			raw: true,
 		})
 
-		const sessionIdAndTitle = foundSessions.map((session) => {
-			return { id: session.id, title: session.title, start_date: session.start_date }
-		})
 		const upcomingSessionIds = foundSessions.map((session) => session.id)
 
 		const updatedSessions = await Session.update(
@@ -336,7 +345,15 @@ exports.removeAndReturnMentorSessions = async (userId, tenantCode) => {
 				},
 			}
 		)
-		const removedSessions = updatedSessions[0] > 0 ? sessionIdAndTitle : []
+
+		// Only return sessions that were actually soft-deleted (mentor is both creator and assigned mentor).
+		// Session-manager-created sessions (created_by != userId) are NOT deleted and must NOT be included
+		// here, or their attendees would be incorrectly unenrolled.
+		const deletedSessionIdAndTitle = foundSessions
+			.filter((s) => String(s.mentor_id) === String(userId) && String(s.created_by) === String(userId))
+			.map((session) => ({ id: session.id, title: session.title, start_date: session.start_date }))
+
+		const removedSessions = updatedSessions[0] > 0 ? deletedSessionIdAndTitle : []
 		return removedSessions
 	} catch (error) {
 		return error
@@ -891,7 +908,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			CASE WHEN sa.id IS NOT NULL THEN true ELSE false END AS is_enrolled,
 			COALESCE(sa.type, NULL) AS enrolment_type
 		FROM
-				${utils.getTenantViewName(tenantCode, Session.tableName)}
+				${utils.getTenantViewName(tenantCode, Session.tableName)} as Sessions
 				LEFT JOIN session_attendees AS sa
 				ON Sessions.id = sa.session_id AND sa.mentee_id = :menteeUserId AND sa.tenant_code = :tenantCode
 		WHERE
@@ -937,7 +954,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 		const countQuery = `
 		SELECT count(*) AS "count"
 		FROM
-		${utils.getTenantViewName(tenantCode, Session.tableName)}
+		${utils.getTenantViewName(tenantCode, Session.tableName)} as Sessions
 		LEFT JOIN session_attendees AS sa
 				ON Sessions.id = sa.session_id AND sa.mentee_id = :menteeUserId  AND sa.tenant_code = :tenantCode
 		WHERE
@@ -1064,15 +1081,16 @@ exports.getUpcomingSessionsForMentor = async (mentorUserId, tenantCode) => {
 
 exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 	try {
+		// Citus requires tenant_code in JOIN ON clause for co-located distributed tables
 		const query = `
 				SELECT s.*, sa.mentee_id
 				FROM ${Session.tableName} s
 				LEFT JOIN session_attendees sa ON s.id = sa.session_id
-				WHERE s.mentor_id = :mentorUserId 
+				AND s.tenant_code = sa.tenant_code
+				WHERE s.mentor_id = :mentorUserId
+				AND s.start_date > :currentTime
+				AND s.deleted_at IS NULL
 				AND s.tenant_code = :tenantCode
-				AND s.start_date > :currentTime
-				AND s.deleted_at IS NULL
-				AND s.created_by = :mentorUserId
 			`
 
 		const sessionsToDelete = await Sequelize.query(query, {
@@ -1080,32 +1098,7 @@ exports.getSessionsAssignedToMentor = async (mentorUserId, tenantCode) => {
 			replacements: {
 				mentorUserId,
 				currentTime: Math.floor(Date.now() / 1000),
-				tenantCode: tenantCode,
-			},
-		})
-
-		return sessionsToDelete
-	} catch (error) {
-		throw error
-	}
-}
-
-exports.getSessionsAssignedToMentor = async (mentorUserId) => {
-	try {
-		const query = `
-				SELECT s.*, sa.mentee_id
-				FROM ${Session.tableName} s
-				LEFT JOIN session_attendees sa ON s.id = sa.session_id
-				WHERE s.mentor_id = :mentorUserId 
-				AND s.start_date > :currentTime
-				AND s.deleted_at IS NULL
-			`
-
-		const sessionsToDelete = await Sequelize.query(query, {
-			type: QueryTypes.SELECT,
-			replacements: {
-				mentorUserId,
-				currentTime: Math.floor(Date.now() / 1000),
+				tenantCode,
 			},
 		})
 
@@ -1157,6 +1150,8 @@ exports.findAllSessions = async (page, limit, search, filters, tenantCode) => {
 				'created_at',
 				'meeting_info',
 				'created_by',
+				'mentor_organization_id',
+				'meta',
 			],
 			offset: parseInt((page - 1) * limit, 10),
 			limit: parseInt(limit, 10),

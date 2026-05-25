@@ -13,11 +13,11 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async findOneEntityType(filter, tenantCodes, options = {}) {
+	static async findOneEntityType(filter, tenantCode, options = {}) {
 		try {
 			const whereClause = {
 				...filter,
-				tenant_code: tenantCodes,
+				tenant_code: tenantCode,
 			}
 
 			// Safe merge: tenant filtering cannot be overridden by options.where
@@ -36,14 +36,23 @@ module.exports = class UserEntityData {
 		}
 	}
 
-	static async findAllEntityTypes(orgCodes, tenantCodes, attributes, filter = {}) {
+	static async findAllEntityTypes(orgCodes, tenantCode, attributes, filter = {}) {
 		try {
+			const whereClause = {
+				...filter,
+				tenant_code: tenantCode,
+			}
+
+			// Only apply org filter when a real value is provided (skip empty object {})
+			const hasOrgFilter =
+				orgCodes &&
+				(Array.isArray(orgCodes) || typeof orgCodes !== 'object' || Reflect.ownKeys(orgCodes).length > 0)
+			if (hasOrgFilter) {
+				whereClause.organization_code = orgCodes
+			}
+
 			const entityData = await EntityType.findAll({
-				where: {
-					organization_code: orgCodes,
-					tenant_code: tenantCodes,
-					...filter,
-				},
+				where: whereClause,
 				attributes,
 				raw: true,
 			})
@@ -52,11 +61,11 @@ module.exports = class UserEntityData {
 			throw error
 		}
 	}
-	static async findUserEntityTypesAndEntities(filter, tenantCodes) {
+	static async findUserEntityTypesAndEntities(filter, tenantCode) {
 		try {
 			const whereClause = {
 				...filter,
-				tenant_code: Array.isArray(tenantCodes) ? { [Op.in]: tenantCodes } : tenantCodes,
+				tenant_code: tenantCode,
 			}
 
 			const entityTypes = await EntityType.findAll({
@@ -71,7 +80,7 @@ module.exports = class UserEntityData {
 				const entityFilter = {
 					entity_type_id: entityTypeIds,
 					status: 'ACTIVE',
-					tenant_code: tenantCodes,
+					tenant_code: tenantCode,
 				}
 
 				entities = await Entity.findAll({
@@ -245,6 +254,22 @@ module.exports = class UserEntityData {
 			} else {
 				return []
 			}
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async bulkCreate(records, tenantCode, options = {}) {
+		try {
+			const dataWithTenant = records.map((item) => ({
+				...item,
+				tenant_code: tenantCode,
+			}))
+			return await EntityType.bulkCreate(dataWithTenant, {
+				returning: true,
+				ignoreDuplicates: true,
+				...options,
+			})
 		} catch (error) {
 			throw error
 		}

@@ -28,15 +28,15 @@ exports.getEnrolledMentees = async (sessionId, queryParams, tenantCode) => {
 		}
 
 		let menteeTypeMap = {}
-		const menteesMapData = []
+		const menteeIds = []
 		mentees.forEach((mentee) => {
-			menteesMapData.push({ user_id: mentee.mentee_id })
+			menteeIds.push(mentee.mentee_id)
 			const isDeleted = Boolean(mentee.deleted_at ?? mentee.deletedAt)
 			menteeTypeMap[mentee.mentee_id] = isDeleted ? '' : mentee.type
 		})
 
 		// Fetch missing user details from DB if any
-		let userDetailsResult = await userRequests.getUserDetailedListUsingCache(menteesMapData, tenantCode, true, true)
+		let userDetailsResult = await userRequests.getUserDetailedListUsingCache(menteeIds, tenantCode, true, true)
 		let enrolledUsers = userDetailsResult?.result || []
 
 		enrolledUsers.forEach((user) => {
@@ -67,16 +67,16 @@ exports.getEnrolledMentees = async (sessionId, queryParams, tenantCode) => {
 		}
 
 		// Process entity types to add value labels
-		const uniqueOrgIds = [...new Set(enrolledUsers.map((user) => user.organization_id))]
+		const uniqueOrgCodes = [...new Set(enrolledUsers.map((user) => user.organization_code).filter(Boolean))]
 		const modelName = await menteeExtensionQueries.getModelName()
 
 		const processedUsers = await entityTypeService.processEntityTypesToAddValueLabels(
 			enrolledUsers,
-			uniqueOrgIds,
+			uniqueOrgCodes,
 			[modelName],
-			'organization_id',
+			'organization_code',
 			[],
-			[tenantCode]
+			tenantCode
 		)
 
 		// Check if processing actually returned processed data or error

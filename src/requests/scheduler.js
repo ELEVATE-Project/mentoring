@@ -21,7 +21,7 @@ const mentoringBaseurl = `http://${process.env.APPLICATION_HOST}:${process.env.A
  * @param {Object} requestBody 				- Job api call request body.
  * @param {function} callback 				- The callback function to handle the result of the job creation.
  */
-const createSchedulerJob = function (jobId, delay, jobName, requestBody = {}, urlEndpoint, method) {
+const createSchedulerJob = function (jobId, delay, jobName, requestBody = {}, urlEndpoint, method, jobOptions = null) {
 	const bodyData = {
 		jobName: jobName,
 		email: email,
@@ -32,7 +32,7 @@ const createSchedulerJob = function (jobId, delay, jobName, requestBody = {}, ur
 			reqBody: requestBody,
 		},
 
-		jobOptions: {
+		jobOptions: jobOptions || {
 			jobId: jobId,
 			delay: delay,
 			removeOnComplete: true,

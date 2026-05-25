@@ -30,7 +30,7 @@ var messageReceived = function (message) {
 					// Use existing createOrgExtension method from organization service
 					const createEventBody = {
 						entityId: entityId.toString(),
-						organization_code: code,
+						code: code,
 						name: name,
 						description: description,
 						status: status,
@@ -81,7 +81,7 @@ var messageReceived = function (message) {
 					if (newValues && (newValues.name || newValues.description)) {
 						const updateEventBody = {
 							entityId: entityId.toString(),
-							organization_code: code,
+							code: code,
 							name: newValues.name || name,
 							description: newValues.description || description,
 							updated_by: updated_by || created_by || 'system',
@@ -95,7 +95,7 @@ var messageReceived = function (message) {
 					console.log(`Organization deactivation event received for org ${entityId}`)
 					const deactivateEventBody = {
 						entityId: entityId.toString(),
-						organization_code: code,
+						code: code,
 						name: name,
 						status: status, // This will be 'INACTIVE' from the event
 						is_active: false,

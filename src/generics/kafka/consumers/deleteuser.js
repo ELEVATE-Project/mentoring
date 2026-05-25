@@ -3,11 +3,15 @@ const adminService = require('@services/admin')
 var messageReceived = function (message) {
 	return new Promise(async function (resolve, reject) {
 		try {
+			// Kafka consumer handles system-initiated deletions (from user service)
+			// Treat as admin to allow cross-tenant deletions
 			const response = await adminService.userDelete(
 				message.entityId.toString(),
 				message.userId,
 				message.organizations?.code || message.organizations?.[0]?.code,
-				message.tenant_code
+				message.tenant_code,
+				'', // token
+				false // isAdmin - system-initiated deletion
 			)
 			return resolve(response)
 		} catch (error) {

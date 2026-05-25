@@ -236,7 +236,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"value\": \"roless\",\n    \"label\": \"RolesV\",\n    \"status\": \"ACTIVE\",\n    \"type\": \"SYSTEM\",\n    \"data_type\": \"ARRAY[STRING]\",\n    \"model_names\": [\"UserExtension\",\"Session\"],\n    \"required\": true,\n    \"allow_filtering\": true\n}",
+							"raw": "{\n    \"value\": \"roless\",\n    \"label\": \"RolesV\",\n    \"status\": \"ACTIVE\",\n    \"type\": \"SYSTEM\",\n    \"data_type\": \"ARRAY[STRING]\",\n    \"model_names\": [\"UserExtension\",\"Session\"],\n    \"required\": true,\n    \"allow_filtering\": true,\n    \"meta\":{\n        \"filterType\":\"OR\"\n    }\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -331,7 +331,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"value\": \"roless\",\n    \"label\": \"RolesV\",\n    \"status\": \"ACTIVE\",\n    \"type\": \"SYSTEM\",\n    \"data_type\": \"ARRAY[STRING]\",\n    \"model_names\": [\"UserExtension\",\"Session\"],\n    \"required\": true\n}",
+							"raw": "{\n    \"value\": \"roless\",\n    \"label\": \"RolesV\",\n    \"status\": \"ACTIVE\",\n    \"type\": \"SYSTEM\",\n    \"data_type\": \"ARRAY[STRING]\",\n    \"model_names\": [\"UserExtension\",\"Session\"],\n    \"required\": true,\n    \"meta\":{\n        \"filterType\":\"AND\"\n    }\n}",
 							"options": {
 								"raw": {
 									"language": "json"

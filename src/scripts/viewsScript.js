@@ -12,6 +12,24 @@ const apiEndpoints = require('../constants/endpoints')
 const defaultOrgCode = process.env.DEFAULT_ORGANISATION_CODE
 const defaultTenantCode = process.env.DEFAULT_TENANT_CODE
 
+// Validate required environment variables
+if (!schedulerServiceUrl) {
+	console.error('❌ SCHEDULER_SERVICE_HOST environment variable is not set')
+	process.exit(1)
+}
+if (!process.env.APPLICATION_HOST || !process.env.APPLICATION_PORT) {
+	console.error('❌ APPLICATION_HOST or APPLICATION_PORT environment variable is not set')
+	process.exit(1)
+}
+if (!process.env.INTERNAL_ACCESS_TOKEN) {
+	console.error('❌ INTERNAL_ACCESS_TOKEN environment variable is not set')
+	process.exit(1)
+}
+if (!process.env.SCHEDULER_SERVICE_BASE_URL) {
+	console.error('❌ SCHEDULER_SERVICE_BASE_URL environment variable is not set')
+	process.exit(1)
+}
+
 /**
  * Create a scheduler job.
  *
@@ -21,13 +39,18 @@ const defaultTenantCode = process.env.DEFAULT_TENANT_CODE
  * @param {string} modelName - The template for the notification.
  */
 const createSchedulerJob = function (jobId, interval, jobName, repeat, url, offset) {
+	// URL already has tenant_code and model_name encoded in the path
+	// Format: /mentoring/v1/admin/triggerPeriodicViewRefreshInternal/{tenantCode|modelName}
+	// The scheduler will call this URL, and the path parameter will be preserved
 	const bodyData = {
 		jobName: jobName,
 		email: [process.env.SCHEDULER_SERVICE_ERROR_REPORTING_EMAIL_ID],
 		request: {
-			url,
-			method: 'get',
-			header: { internal_access_token: process.env.INTERNAL_ACCESS_TOKEN },
+			url: url, // Use the full URL with path parameters
+			method: 'get', // Scheduler converts to GET anyway, so use GET
+			header: {
+				internal_access_token: process.env.INTERNAL_ACCESS_TOKEN,
+			},
 		},
 		jobOptions: {
 			jobId: jobId,
@@ -48,21 +71,28 @@ const createSchedulerJob = function (jobId, interval, jobName, repeat, url, offs
 
 	const apiUrl = schedulerServiceUrl + process.env.SCHEDULER_SERVICE_BASE_URL + apiEndpoints.CREATE_SCHEDULER_JOB
 
+	if (!apiUrl || !apiUrl.includes('http')) {
+		console.error(`❌ Invalid scheduler service URL: ${apiUrl}`)
+		return
+	}
 	try {
 		request.post(apiUrl, options, (err, data) => {
 			if (err) {
-				console.error('Error in createSchedulerJob POST request:', err)
+				console.error(`❌ Error in createSchedulerJob POST request for ${jobName}:`, err.message || err)
+				return
+			}
+			if (!data || !data.body) {
+				console.error(`❌ Invalid response from scheduler service for ${jobName}`)
+				return
+			}
+			if (data.body.success) {
+				console.log(`✅ Scheduler job created successfully: ${jobName} (${jobId})`)
 			} else {
-				if (data.body.success) {
-					//console.log('Scheduler', data.body)
-					//console.log('Request made to scheduler successfully (createSchedulerJob)')
-				} else {
-					console.error('Error in createSchedulerJob POST request response:', data.body)
-				}
+				console.error(`❌ Error in createSchedulerJob response for ${jobName}:`, JSON.stringify(data.body))
 			}
 		})
 	} catch (error) {
-		console.error('Error in createSchedulerJob ', error)
+		console.error(`❌ Error in createSchedulerJob for ${jobName}:`, error.message || error)
 	}
 }
 
@@ -111,8 +141,16 @@ const triggerPeriodicViewRefresh = async () => {
 		const modelNames = await modelNameCollector(allowFilteringEntityTypes)
 		console.log('Model names collected:', modelNames)
 
+		if (!modelNames || modelNames.length === 0) {
+			console.log('⚠️  No model names found. Skipping periodic view refresh setup.')
+			return
+		}
 		const tenants = await userExtensionQueries.getDistinctTenantCodes()
 		console.log(`Starting periodic refresh for ${tenants.length} tenants`)
+		if (!tenants || tenants.length === 0) {
+			console.log('⚠️  No tenants found. Skipping periodic view refresh setup.')
+			return
+		}
 
 		// Create unique timestamp for this batch of jobs
 		const timestamp = Date.now()
@@ -120,6 +158,11 @@ const triggerPeriodicViewRefresh = async () => {
 		let globalOffset = 0
 		const baseInterval = process.env.REFRESH_VIEW_INTERVAL
 
+		if (!baseInterval) {
+			console.error('❌ REFRESH_VIEW_INTERVAL environment variable is not set')
+			return
+		}
+		let jobsCreated = 0
 		// Create scheduler jobs for each tenant and model combination
 		for (const tenant of tenants) {
 			const tenantCode = tenant.code
@@ -131,34 +174,33 @@ const triggerPeriodicViewRefresh = async () => {
 			}
 
 			let offset = baseInterval / (modelNames.length * tenants.length)
-			modelNames.map((model, index) => {
+			modelNames.forEach((model, index) => {
 				let refreshInterval = baseInterval
 				if (model == 'UserExtension') {
-					refreshInterval = process.env.USER_EXTENSION_REFRESH_VIEW_INTERVAL
+					refreshInterval = process.env.USER_EXTENSION_REFRESH_VIEW_INTERVAL || baseInterval
 				} else if (model == 'Session') {
-					refreshInterval = process.env.SESSION_REFRESH_VIEW_INTERVAL
+					refreshInterval = process.env.SESSION_REFRESH_VIEW_INTERVAL || baseInterval
 				}
 
 				const uniqueJobId = `repeatable_view_job_${tenantCode}_${model}_${timestamp}`
 				const jobName = `repeatable_view_job_${tenantCode}_${model}`
 
-				createSchedulerJob(
-					uniqueJobId,
-					refreshInterval,
-					jobName,
-					true,
-					mentoringBaseurl +
-						`/mentoring/v1/admin/triggerPeriodicViewRefreshInternal?model_name=${model}&tenant_code=${tenantCode}`,
-					globalOffset
-				)
+				// Encode tenant_code and model_name in the URL path using :id parameter
+				// Format: /mentoring/v1/admin/triggerPeriodicViewRefreshInternal/{tenantCode|modelName}
+				// Encode the entire segment to make | URL-safe (%7C)
+				const encodedParams = encodeURIComponent(`${tenantCode}|${model}`)
+				const url = `${mentoringBaseurl}/mentoring/v1/admin/triggerPeriodicViewRefreshInternal/${encodedParams}`
 
+				createSchedulerJob(uniqueJobId, refreshInterval, jobName, true, url, globalOffset)
+
+				jobsCreated++
 				globalOffset += offset
 			})
 		}
 
-		console.log('=== triggerPeriodicViewRefresh completed ===')
+		console.log(`✅ triggerPeriodicViewRefresh completed - Created ${jobsCreated} scheduler jobs`)
 	} catch (err) {
-		console.log('Error in triggerPeriodicViewRefresh:', err)
+		console.error('❌ Error in triggerPeriodicViewRefresh:', err)
 	}
 }
 const buildMaterializedViews = async () => {
@@ -168,6 +210,10 @@ const buildMaterializedViews = async () => {
 		const tenants = await userExtensionQueries.getDistinctTenantCodes()
 		console.log(`Starting materialized view build for ${tenants.length} tenants`)
 
+		if (!tenants || tenants.length === 0) {
+			console.log('⚠️  No tenants found. Skipping materialized view build.')
+			return
+		}
 		// Create unique timestamp for this job
 		const timestamp = Date.now()
 
@@ -175,17 +221,18 @@ const buildMaterializedViews = async () => {
 		const uniqueJobId = `BuildMaterializedViews_All_Tenants_${timestamp}`
 		const jobName = `BuildMaterializedViews_Complete`
 
+		const url = `${mentoringBaseurl}/mentoring/v1/admin/triggerViewRebuildInternal`
 		createSchedulerJob(
 			uniqueJobId,
 			10000, // 10 seconds delay
 			jobName,
 			false,
-			mentoringBaseurl + `/mentoring/v1/admin/triggerViewRebuildInternal` // No parameters - builds all
+			url
 		)
 
-		console.log('=== buildMaterializedViews completed ===')
+		console.log('✅ buildMaterializedViews completed - Scheduler job created')
 	} catch (err) {
-		console.log('Error in buildMaterializedViews:', err)
+		console.error('❌ Error in buildMaterializedViews:', err)
 	}
 }
 // Triggering the starting function

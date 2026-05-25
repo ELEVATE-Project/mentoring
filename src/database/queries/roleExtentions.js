@@ -76,6 +76,9 @@ module.exports = class RoleExtensionService {
 
 	static async updateRoleExtension(title, updateData, tenantCode) {
 		try {
+			if (updateData.tenant_code) {
+				delete updateData['tenant_code']
+			}
 			const filter = { title: title, tenant_code: tenantCode }
 
 			const [rowsUpdated, updatedExtension] = await RoleExtension.update(updateData, {
@@ -101,6 +104,33 @@ module.exports = class RoleExtensionService {
 				where: { title, tenant_code: tenantCode },
 			})
 			return deletedRows // Soft delete (paranoid enabled)
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async findAllByFilter(filter, tenantCode) {
+		try {
+			filter.tenant_code = tenantCode
+			return await RoleExtension.findAll({
+				where: filter,
+				raw: true,
+			})
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async bulkCreate(records, tenantCode, options = {}) {
+		try {
+			const dataWithTenant = records.map((item) => ({
+				...item,
+				tenant_code: tenantCode,
+			}))
+			return await RoleExtension.bulkCreate(dataWithTenant, {
+				ignoreDuplicates: true,
+				...options,
+			})
 		} catch (error) {
 			throw error
 		}

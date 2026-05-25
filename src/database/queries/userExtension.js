@@ -38,6 +38,9 @@ module.exports = class MenteeExtensionQueries {
 			if (data.user_id) {
 				delete data['user_id']
 			}
+			if (data.tenant_code) {
+				delete data['tenant_code']
+			}
 			let whereClause
 			if (_.isEmpty(customFilter)) {
 				whereClause = { user_id: userId, tenant_code: tenantCode }
@@ -238,38 +241,35 @@ module.exports = class MenteeExtensionQueries {
 
 	static async removeMenteeDetails(userId, tenantCode) {
 		try {
-			const modelAttributes = MenteeExtension.rawAttributes
-
-			const fieldsToNullify = {}
-
-			for (const [key, attribute] of Object.entries(modelAttributes)) {
-				// Skip primary key or explicitly excluded fields
-				if (
-					attribute.primaryKey ||
-					key === 'user_id' ||
-					key === 'organization_id' || // required field
-					key === 'created_at' ||
-					key === 'updated_at' ||
-					key === 'is_mentor' // has default value
-				) {
-					continue
-				}
-
-				// Set types accordingly
-				if (attribute.type.constructor.name === 'ARRAY') {
-					fieldsToNullify[key] = []
-				} else if (attribute.type.key === 'JSON' || attribute.type.key === 'JSONB') {
-					fieldsToNullify[key] = {} // Or `{}` if you prefer default object
-				} else if (key === 'deleted_at') {
-					fieldsToNullify[key] = new Date() // Timestamp field
-				} else if (key === 'name') {
-					fieldsToNullify[key] = common.USER_NOT_FOUND
-				} else {
-					fieldsToNullify[key] = null
-				}
+			const fieldsToClear = {
+				designation: [],
+				area_of_expertise: [],
+				education_qualification: null,
+				rating: {},
+				meta: {},
+				stats: {},
+				tags: [],
+				configs: {},
+				visible_to_organizations: [],
+				external_session_visibility: null,
+				custom_entity_text: {},
+				experience: null,
+				external_mentee_visibility: null,
+				mentee_visibility: null,
+				external_mentor_visibility: null,
+				mentor_visibility: null,
+				name: common.USER_NOT_FOUND,
+				email: null,
+				phone: null,
+				settings: {},
+				image: null,
+				gender: null,
+				status: null,
+				username: null,
+				deleted_at: new Date(),
 			}
 
-			return await MenteeExtension.update(fieldsToNullify, {
+			return await MenteeExtension.update(fieldsToClear, {
 				where: {
 					user_id: userId,
 					tenant_code: tenantCode,
@@ -504,6 +504,7 @@ module.exports = class MenteeExtensionQueries {
 				email,
 				image,
 				organization_id,
+				organization_code,
 				designation,
 				area_of_expertise,
 				education_qualification,
@@ -714,9 +715,12 @@ module.exports = class MenteeExtensionQueries {
 			if (!Array.isArray(orgCodes) || orgCodes.length === 0) {
 				return []
 			}
+
+			const viewName = utils.getTenantViewName(tenantCode, MenteeExtension.tableName)
+
 			const query = `
 			SELECT user_id
-			FROM ${common.materializedViewsPrefix + MenteeExtension.tableName}
+			FROM ${viewName}
 			WHERE organization_code IN (:orgCodes) AND tenant_code = :tenantCode
 		`
 			const results = await Sequelize.query(query, {
@@ -724,6 +728,37 @@ module.exports = class MenteeExtensionQueries {
 				replacements: { orgCodes, tenantCode },
 			})
 			return results
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async getMenteeExtensionById(userId, attributes = [], unScoped = false) {
+		try {
+			const queryOptions = {
+				where: {
+					user_id: userId,
+				},
+				raw: true,
+			}
+
+			// If attributes are passed update query
+			if (attributes.length > 0) {
+				queryOptions.attributes = attributes
+			}
+
+			let mentee
+			if (unScoped) {
+				mentee = await MenteeExtension.unscoped().findOne(queryOptions)
+			} else {
+				mentee = await MenteeExtension.findOne(queryOptions)
+			}
+
+			if (mentee && mentee.email) {
+				mentee.email = await emailEncryption.decrypt(mentee.email.toLowerCase())
+			}
+
+			return mentee
 		} catch (error) {
 			throw error
 		}

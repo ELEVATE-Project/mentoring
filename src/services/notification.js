@@ -17,11 +17,13 @@ module.exports = class NotificationTemplateHelper {
 
 	static async create(bodyData, tokenInformation, tenantCode) {
 		try {
-			const template = await notificationTemplateQueries.findOne({
-				code: bodyData.code,
-				tenant_code: tenantCode,
-				organization_code: tokenInformation.organization_code,
-			})
+			const template = await notificationTemplateQueries.findOne(
+				{
+					code: bodyData.code,
+					organization_code: tokenInformation.organization_code,
+				},
+				tenantCode
+			)
 			if (template) {
 				return responses.failureResponse({
 					message: 'NOTIFICATION_TEMPLATE_ALREADY_EXISTS',
@@ -36,6 +38,17 @@ module.exports = class NotificationTemplateHelper {
 			bodyData['created_by'] = tokenInformation.id
 
 			const createdNotification = await notificationTemplateQueries.create(bodyData, tenantCode)
+
+			// Invalidate cache so stale fallback (default org) is not served
+			try {
+				await cacheHelper.notificationTemplates.delete(
+					tenantCode,
+					tokenInformation.organization_code,
+					bodyData.code
+				)
+			} catch (cacheError) {
+				console.error('❌ Failed to invalidate notification template cache:', cacheError)
+			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -73,6 +86,10 @@ module.exports = class NotificationTemplateHelper {
 			bodyData['organization_code'] = tokenInformation.organization_code
 			bodyData['updated_by'] = tokenInformation.id
 
+			// Fetch existing template BEFORE update to capture the old code for cache invalidation
+			const existingTemplates = await notificationTemplateQueries.findTemplatesByFilter(filter)
+			const existingTemplate = existingTemplates?.[0]
+
 			const result = await notificationTemplateQueries.updateTemplate(filter, bodyData, tenantCode)
 			if (result == 0) {
 				return responses.failureResponse({
@@ -82,24 +99,32 @@ module.exports = class NotificationTemplateHelper {
 				})
 			}
 
-			// Delete old cache
-			const existingTemplates = await notificationTemplateQueries.findTemplatesByFilter(filter)
-			const existingTemplate = existingTemplates?.[0]
-			const templateCode = bodyData.code || existingTemplate?.code || filter.code
+			// Delete cache for both old code and new code (in case code was changed)
+			const oldCode = existingTemplate?.code
+			const newCode = bodyData.code
+			const isDefaultOrg = tokenInformation.organization_code === process.env.DEFAULT_ORGANISATION_CODE
 			try {
-				if (templateCode) {
-					await cacheHelper.notificationTemplates.delete(
-						tenantCode,
-						tokenInformation.organization_code,
-						templateCode
-					)
+				if (oldCode) {
+					if (isDefaultOrg) {
+						await cacheHelper.notificationTemplates.deleteNotificationsAcrossAllOrgs(tenantCode, oldCode)
+					} else {
+						await cacheHelper.notificationTemplates.delete(
+							tenantCode,
+							tokenInformation.organization_code,
+							oldCode
+						)
+					}
 				}
-				if (existingTemplate?.code && existingTemplate.code !== templateCode) {
-					await cacheHelper.notificationTemplates.delete(
-						tenantCode,
-						tokenInformation.organization_code,
-						existingTemplate.code
-					)
+				if (newCode && newCode !== oldCode) {
+					if (isDefaultOrg) {
+						await cacheHelper.notificationTemplates.deleteNotificationsAcrossAllOrgs(tenantCode, newCode)
+					} else {
+						await cacheHelper.notificationTemplates.delete(
+							tenantCode,
+							tokenInformation.organization_code,
+							newCode
+						)
+					}
 				}
 			} catch (cacheError) {
 				console.error(`❌ Failed to update notification template cache:`, cacheError)
@@ -152,10 +177,9 @@ module.exports = class NotificationTemplateHelper {
 				})
 			}
 
-			// Business logic: Build filter for both current and default org/tenant
 			let filter = {
 				organization_code: organizationCode ? [organizationCode, defaults.orgCode] : [defaults.orgCode],
-				tenant_code: [tenantCode, defaults.tenantCode],
+				tenant_code: tenantCode,
 			}
 
 			if (id) {
@@ -219,37 +243,12 @@ module.exports = class NotificationTemplateHelper {
 				})
 			}
 
-			// Business logic: Build filter for both current and default org/tenant
 			const filter = {
 				organization_code: organizationCode ? [organizationCode, defaults.orgCode] : [defaults.orgCode],
-				tenant_code: [tenantCode, defaults.tenantCode],
+				tenant_code: tenantCode,
 			}
 
 			const notificationTemplates = await notificationTemplateQueries.findTemplatesByFilter(filter)
-
-			// Cache each individual template for future single reads
-			if (notificationTemplates && notificationTemplates.length > 0) {
-				try {
-					console.log(`Caching ${notificationTemplates.length} notification templates individually...`)
-					const cachePromises = []
-
-					for (const template of notificationTemplates) {
-						if (template.code) {
-							const cachePromise = cacheHelper.notificationTemplates.set(
-								tenantCode,
-								organizationCode,
-								template.code,
-								template
-							)
-							cachePromises.push(cachePromise)
-						}
-					}
-
-					await Promise.all(cachePromises)
-				} catch (cacheError) {
-					console.warn('Failed to cache individual notification templates:', cacheError)
-				}
-			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -294,13 +293,12 @@ module.exports = class NotificationTemplateHelper {
 				})
 			}
 
-			// Business logic: Build filter for both current and default org/tenant
 			const filter = {
 				code: code,
 				type: 'email',
 				status: 'active',
 				organization_code: orgCode ? [orgCode, defaults.orgCode] : [defaults.orgCode],
-				tenant_code: [tenantCode, defaults.tenantCode],
+				tenant_code: tenantCode,
 			}
 
 			const templateData = await notificationTemplateQueries.findTemplatesByFilter(filter)
@@ -309,12 +307,8 @@ module.exports = class NotificationTemplateHelper {
 				return null
 			}
 
-			// Business logic: Prefer current tenant and org over default
-			let selectedTemplate =
-				templateData.find((t) => t.organization_code === orgCode && t.tenant_code === tenantCode) ||
-				templateData.find((t) => t.organization_code === orgCode) ||
-				templateData.find((t) => t.tenant_code === tenantCode) ||
-				templateData[0]
+			// Business logic: Prefer user's org template over default org template
+			let selectedTemplate = templateData.find((t) => t.organization_code === orgCode) || templateData[0]
 
 			// Business logic: Compose template with header and footer
 			if (selectedTemplate && selectedTemplate.email_header) {
@@ -369,13 +363,12 @@ module.exports = class NotificationTemplateHelper {
 				})
 			}
 
-			// Business logic: Build filter for header template
 			const filter = {
 				code: header,
 				type: 'emailHeader',
 				status: 'active',
 				organization_code: orgCode ? [orgCode, defaults.orgCode] : [defaults.orgCode],
-				tenant_code: [tenantCode, defaults.tenantCode],
+				tenant_code: tenantCode,
 			}
 
 			const headerData = await notificationTemplateQueries.findTemplatesByFilter(filter)
@@ -423,13 +416,12 @@ module.exports = class NotificationTemplateHelper {
 				})
 			}
 
-			// Business logic: Build filter for footer template
 			const filter = {
 				code: footer,
 				type: 'emailFooter',
 				status: 'active',
 				organization_code: orgCode ? [orgCode, defaults.orgCode] : [defaults.orgCode],
-				tenant_code: [tenantCode, defaults.tenantCode],
+				tenant_code: tenantCode,
 			}
 
 			const footerData = await notificationTemplateQueries.findTemplatesByFilter(filter)

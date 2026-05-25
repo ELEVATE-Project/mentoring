@@ -240,7 +240,7 @@ async function getEntityTypeFilter(modelName, config, search, searchOn, tenantCo
 		entity_type_id: entityTypeIds,
 	}
 
-	const entities = await entityQueries.findAllEntities(filter, { [Op.in]: [tenantCode, defaults.tenantCode] })
+	const entities = await entityQueries.findAllEntities(filter, tenantCode)
 
 	if (entities.length == 0) {
 		return false

@@ -65,4 +65,31 @@ module.exports = class ReportQueries {
 			throw error
 		}
 	}
+
+	static async findAllReports(filter, tenantCode) {
+		try {
+			filter.tenant_code = tenantCode
+			return await Report.findAll({
+				where: filter,
+				raw: true,
+			})
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async bulkCreate(records, tenantCode, options = {}) {
+		try {
+			const dataWithTenant = records.map((item) => ({
+				...item,
+				tenant_code: tenantCode,
+			}))
+			return await Report.bulkCreate(dataWithTenant, {
+				ignoreDuplicates: true,
+				...options,
+			})
+		} catch (error) {
+			throw error
+		}
+	}
 }

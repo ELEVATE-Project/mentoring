@@ -45,7 +45,6 @@ module.exports = class Mentees {
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
-				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
 			return sessions
@@ -127,7 +126,6 @@ module.exports = class Mentees {
 			const session = await menteesService.joinSession(
 				req.params.id,
 				req.decodedToken.id,
-				req.decodedToken.organization_code,
 				req.decodedToken.tenant_code
 			)
 			return session

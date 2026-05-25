@@ -241,15 +241,25 @@ module.exports = class Sessions {
 		try {
 			let tenantCode = req.decodedToken?.tenant_code
 			let orgCode = req.decodedToken?.organization_code
+
+			// For scheduler service callbacks: tenant_code and org_code come in the request body
+			if (!tenantCode && req.body?.tenant_code) {
+				tenantCode = req.body.tenant_code
+			}
+			if (!orgCode && req.body?.org_code) {
+				orgCode = req.body.org_code
+			}
+
 			// Enhanced: Check query parameters first (from BBB callback with enhanced isolation)
 			if (!tenantCode && req.query.tenantCode) {
 				tenantCode = req.query.tenantCode
 			}
 
-			// For scheduled jobs or BBB callbacks without tokens, get tenant_code from session
-			if (!tenantCode) {
-				const sessionData = await sessionService.getSessionTenantCode(req.params.id, tenantCode)
-				tenantCode = sessionData?.tenant_code
+			// For BBB callbacks or any other case without tokens/body — fetch from session
+			if (!tenantCode || !orgCode) {
+				const sessionData = await sessionService.getSessionTenantCode(req.params.id, orgCode)
+				if (!tenantCode) tenantCode = sessionData?.tenant_code
+				if (!orgCode) orgCode = sessionData?.org_code
 			}
 
 			const isBBB = req.query.source == common.BBB_VALUE ? true : false

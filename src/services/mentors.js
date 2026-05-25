@@ -29,6 +29,7 @@ const connectionQueries = require('@database/queries/connection')
 const communicationHelper = require('@helpers/communications')
 const searchConfig = require('@root/config.json')
 const cacheHelper = require('@generics/cacheHelper')
+const getOrgIdAndEntityTypes = require('@helpers/getOrgIdAndEntityTypewithEntitiesBasedOnPolicy')
 module.exports = class MentorsHelper {
 	/**
 	 * upcomingSessions.
@@ -56,7 +57,7 @@ module.exports = class MentorsHelper {
 			let requestedMentorExtension = false
 			if (id !== '' && isAMentor !== '' && roles !== '') {
 				// Try cache first, fallback to direct query
-				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
+				requestedMentorExtension = await cacheHelper.mentor.get(tenantCode, id)
 
 				if (!requestedMentorExtension) {
 					return responses.failureResponse({
@@ -83,6 +84,15 @@ module.exports = class MentorsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			const policyOrgs = await getOrgIdAndEntityTypes.getOrganizationIdBasedOnPolicy(
+				menteeUserId,
+				orgCode,
+				common.SESSION,
+				tenantCode
+			)
+			const sessionOrgCodes =
+				policyOrgs?.result?.organizationCodes?.length > 0 ? policyOrgs.result.organizationCodes : [orgCode]
+
 			let validationData = await entityTypeCache.getEntityTypesAndEntitiesWithCache(
 				{
 					status: common.ACTIVE_STATUS,
@@ -90,7 +100,7 @@ module.exports = class MentorsHelper {
 					model_names: { [Op.contains]: [sessionModelName] },
 				},
 				tenantCode,
-				orgCode,
+				sessionOrgCodes,
 				sessionModelName
 			)
 
@@ -107,7 +117,7 @@ module.exports = class MentorsHelper {
 				requesterId: menteeUserId,
 				roles: roles,
 				requesterOrganizationCode: orgCode,
-				tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+				tenantCode: tenantCode,
 			})
 
 			if (defaultRuleFilter.error && defaultRuleFilter.error.missingField) {
@@ -162,7 +172,8 @@ module.exports = class MentorsHelper {
 				common.sessionModelName,
 				'mentor_organization_id',
 				[],
-				[tenantCode]
+				tenantCode,
+				true
 			)
 
 			upcomingSessions.data = await this.sessionMentorDetails(upcomingSessions.data, tenantCode)
@@ -295,7 +306,7 @@ module.exports = class MentorsHelper {
 	static async share(id, userId, organizationCode, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let mentorsDetails = await cacheHelper.mentor.get(tenantCode, organizationCode, id)
+			let mentorsDetails = await cacheHelper.mentor.get(tenantCode, id)
 			if (!mentorsDetails) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.bad_request,
@@ -315,7 +326,7 @@ module.exports = class MentorsHelper {
 			if (session.length > 0) {
 				const userIds = _.uniqBy(session, 'mentor_id').map((item) => item.mentor_id)
 
-				let mentorDetails = await userRequests.getUserDetailedList(userIds, tenantCode)
+				let mentorDetails = await userRequests.getUserDetailedListUsingCache(userIds, tenantCode)
 
 				mentorDetails = mentorDetails.result
 
@@ -518,7 +529,7 @@ module.exports = class MentorsHelper {
 	static async updateMentorExtension(data, userId, orgCode, tenantCode) {
 		try {
 			// Try cache first for current mentor data
-			let currentUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+			let currentUser = await cacheHelper.mentor.get(tenantCode, userId)
 			if (!currentUser) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
@@ -638,7 +649,7 @@ module.exports = class MentorsHelper {
 
 			if (updateCount === 0) {
 				// Try cache first for fallback data
-				let fallbackUpdatedUser = await cacheHelper.mentor.get(tenantCode, orgCode, userId)
+				let fallbackUpdatedUser = await cacheHelper.mentor.get(tenantCode, userId)
 				if (!fallbackUpdatedUser) {
 					return responses.failureResponse({
 						statusCode: httpStatusCode.not_found,
@@ -662,7 +673,7 @@ module.exports = class MentorsHelper {
 			if (userId && orgCode) {
 				try {
 					// Delete old cache first
-					await cacheHelper.mentor.delete(tenantCode, orgCode, userId)
+					await cacheHelper.mentor.delete(tenantCode, userId)
 				} catch (cacheError) {
 					console.error(`❌ Failed to update mentor cache after update:`, cacheError)
 				}
@@ -686,18 +697,16 @@ module.exports = class MentorsHelper {
 	 * @param {String} organizationCode - Organization code from token context.
 	 * @returns {Promise<Object>} - Mentor extension details.
 	 */
-	static async getMentorExtension(userId, organizationCode, tenantCode) {
+	static async getMentorExtension(userId, tenantCode) {
 		try {
 			// Try cache first using logged-in user's organization context
-			let mentor = await cacheHelper.mentor.get(tenantCode, organizationCode, userId)
+			let mentor = await cacheHelper.mentor.get(tenantCode, userId)
 			if (!mentor) {
 				return responses.failureResponse({
 					statusCode: httpStatusCode.not_found,
 					message: 'MENTOR_EXTENSION_NOT_FOUND',
 				})
 			}
-
-			const orgCode = mentor.organization_code
 
 			// We already have mentor data from the initial cache call, no need to fetch again
 			if (mentor.is_mentor) {
@@ -719,7 +728,7 @@ module.exports = class MentorsHelper {
 			}
 
 			// Try mentee cache as fallback (user might have both roles)
-			const cachedUser = await cacheHelper.mentee.get(tenantCode, orgCode, userId, false)
+			const cachedUser = await cacheHelper.mentee.get(tenantCode, userId)
 			if (cachedUser) {
 				// Always generate fresh downloadable URL for image (cached URLs expire)
 				if (cachedUser.image) {
@@ -792,7 +801,7 @@ module.exports = class MentorsHelper {
 			// Cache invalidation: Clear mentor cache after deletion
 			if (mentorExtension && mentorExtension.organization_code) {
 				try {
-					await cacheHelper.mentor.delete(tenantCode, mentorExtension.organization_code, userId)
+					await cacheHelper.mentor.delete(tenantCode, userId)
 				} catch (cacheError) {
 					console.error(`Cache deletion failed for mentor ${userId}:`, cacheError)
 				}
@@ -819,23 +828,7 @@ module.exports = class MentorsHelper {
 	 */
 	static async read(id, orgCode, userId = '', isAMentor = '', roles = '', tenantCode) {
 		try {
-			// Get mentor profile first to ensure we have organization_code
-			let mentorProfile = await userRequests.getUserDetails(id, tenantCode)
-			if (!mentorProfile.data.result) {
-				return responses.failureResponse({
-					statusCode: httpStatusCode.not_found,
-					message: 'MENTORS_NOT_FOUND',
-				})
-			}
-
-			// Set orgCode if not provided
-			if (!orgCode) {
-				orgCode = mentorProfile.data.result.organization_code
-			}
-
-			// Try to get complete profile from cache first using getCacheOnly
-			let cachedProfile = null
-			cachedProfile = await cacheHelper.mentor.getCacheOnly(tenantCode, orgCode, id)
+			let cachedProfile = await cacheHelper.mentor.getCacheOnly(tenantCode, id)
 
 			// If we have cached data, use it efficiently
 			if (cachedProfile) {
@@ -850,7 +843,7 @@ module.exports = class MentorsHelper {
 						roles: roles,
 						requesterOrganizationCode: orgCode,
 						data: requestedMentorExtension,
-						tenant_code: tenantCode,
+						tenantCode: tenantCode,
 					})
 					if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
 						return responses.failureResponse({
@@ -906,8 +899,18 @@ module.exports = class MentorsHelper {
 						cachedProfile.image = await utils.getDownloadableUrl(cachedProfile.image)
 					} catch (error) {
 						console.error(`Failed to get downloadable URL for cached profile image:`, error)
-						cachedProfile.image = null
 					}
+				}
+
+				if (cachedProfile?.meta?.communications_user_id) {
+					try {
+						const chat = await communicationHelper.login(id, tenantCode)
+
+						cachedProfile.meta = {
+							...cachedProfile.meta,
+							chat,
+						}
+					} catch (error) {}
 				}
 
 				return responses.successResponse({
@@ -918,7 +921,13 @@ module.exports = class MentorsHelper {
 			}
 
 			// Get mentor extension data efficiently (avoid redundant queries)
-			let mentorExtension = await cacheHelper.mentor.get(tenantCode, orgCode, id)
+			let mentorExtension = await cacheHelper.mentor.get(tenantCode, id)
+			if (!mentorExtension) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					message: 'MENTORS_NOT_FOUND',
+				})
+			}
 
 			// If user authentication is required, perform validation
 			if (userId !== '' && isAMentor !== '' && roles !== '') {
@@ -928,7 +937,7 @@ module.exports = class MentorsHelper {
 					roles: roles,
 					requesterOrganizationCode: orgCode,
 					data: mentorExtension,
-					tenant_code: tenantCode,
+					tenantCode: tenantCode,
 				})
 				if (validateDefaultRules.error && validateDefaultRules.error.missingField) {
 					return responses.failureResponse({
@@ -970,42 +979,11 @@ module.exports = class MentorsHelper {
 				}
 			}
 
-			const mentorOrgCode = mentorProfile.data.result.organization_code
-
-			// If no mentor extension found, but user has admin/mentor roles, check if user extension exists and update it
-			if (!mentorExtension && roles && roles.some((role) => role.title === 'admin' || role.title === 'mentor')) {
-				// Try to get user extension without is_mentor filter (unscoped call - cannot cache)
-				const userExtension = await mentorQueries.getMentorExtension(id, [], true, tenantCode)
-				if (userExtension) {
-					// Update using unscoped updateMentorExtension with custom filter to bypass is_mentor constraint
-					await mentorQueries.updateMentorExtension(
-						id,
-						{ is_mentor: true },
-						{},
-						{ user_id: id },
-						true,
-						tenantCode
-					)
-
-					// Cache invalidation: Delete old cache after mentor extension update
-					try {
-						await cacheHelper.mentor.delete(tenantCode, orgCode, id)
-					} catch (cacheError) {
-						console.error(`Cache deletion failed for mentor ${id} after update:`, cacheError)
-					}
-				}
-			}
-
-			if (!mentorProfile.data.result || !mentorExtension) {
-				return responses.failureResponse({
-					statusCode: httpStatusCode.not_found,
-					message: 'MENTORS_NOT_FOUND',
-				})
-			}
-			mentorProfile = utils.deleteProperties(mentorProfile.data.result, ['created_at', 'updated_at'])
+			mentorExtension = utils.deleteProperties(mentorExtension, ['created_at', 'updated_at'])
 
 			mentorExtension = utils.deleteProperties(mentorExtension, ['phone'])
 
+			const mentorOrgCode = mentorExtension.organization_code
 			const mentorExtensionsModelName = await mentorQueries.getModelName()
 
 			let entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
@@ -1065,21 +1043,18 @@ module.exports = class MentorsHelper {
 				processDbResponse.is_connected = false
 			}
 
-			if (!Array.isArray(mentorProfile.permissions)) {
-				mentorProfile.permissions = []
+			if (!Array.isArray(mentorExtension.permissions)) {
+				mentorExtension.permissions = []
 			}
 
 			// Handle both array response (success) and response object (error)
 			if (Array.isArray(mentorPermissions)) {
-				mentorProfile.permissions.push(...mentorPermissions)
+				mentorExtension.permissions.push(...mentorPermissions)
 			} else {
 				// It's the error response object, extract the permissions array
 				const permissionsArray = mentorPermissions.result?.permissions || []
-				mentorProfile.permissions.push(...permissionsArray)
+				mentorExtension.permissions.push(...permissionsArray)
 			}
-
-			const profileMandatoryFields = await utils.validateProfileData(processDbResponse, validationData)
-			mentorProfile.profile_mandatory_fields = profileMandatoryFields
 
 			let communications = null
 
@@ -1094,17 +1069,17 @@ module.exports = class MentorsHelper {
 				communications,
 			}
 
-			if (!mentorProfile.organization) {
+			if (!mentorExtension.organization) {
 				// Get organization details with cache-first approach
 				let orgDetails = null
 
 				// Try cache first if we have organization_id
 				try {
-					if (mentorProfile.organization_id) {
+					if (mentorExtension.organization_id) {
 						orgDetails = await cacheHelper.organizations.get(
 							tenantCode,
 							mentorOrgCode,
-							mentorProfile.organization_id
+							mentorExtension.organization_id
 						)
 					}
 				} catch (cacheError) {
@@ -1122,7 +1097,7 @@ module.exports = class MentorsHelper {
 					)
 				}
 
-				mentorProfile['organization'] = {
+				mentorExtension['organization'] = {
 					id: mentorOrgCode,
 					name: orgDetails?.name,
 				}
@@ -1132,40 +1107,35 @@ module.exports = class MentorsHelper {
 			const profileMandatoryFieldsRead = await utils.validateProfileData(processDbResponse, validationData)
 			processDbResponse.profile_mandatory_fields = profileMandatoryFieldsRead
 
-			// Conditionally fetch profile details if token exists
-			let userProfile = {}
-			if (tenantCode && id) {
-				const profileResponse = await userRequests.getProfileDetails({ tenantCode, userId: id })
-				// If profileResponse.data.result exists, include it; otherwise, keep userProfile empty
-				if (profileResponse.data.result) {
-					userProfile = profileResponse.data.result
-				}
-				// No failure response; proceed with available data
-			}
 			// Construct the final profile response (INCLUDE sessions_attended for read endpoint)
 			const totalSessionsAttended = await sessionAttendeesQueries.countEnrolledSessions(id, tenantCode)
+
+			const mentorImage = mentorExtension.image ? await utils.getDownloadableUrl(mentorExtension.image) : null
 			const finalProfile = {
 				user_id: id, // Add user_id to match mentee read response
-				...mentorProfile,
+				...mentorExtension,
 				...processDbResponse,
-				...userProfile, // Include userProfile only if token was provided
 				meta: {
-					...(userProfile.meta || {}),
 					...(processDbResponse.meta || {}),
 				},
 				sessions_hosted: totalSessionHosted,
 				visible_to_organizations: mentorExtension.visible_to_organizations, // Add to match mentee read
 				settings: mentorExtension.settings, // Add settings to match mentee read
-				image: mentorExtension.image, // Keep original image (may already be downloadable URL)
+				image: mentorImage, // Keep original image (may already be downloadable URL)
 				sessions_attended: totalSessionsAttended, // Add sessions_attended
 				profile_mandatory_fields: processDbResponse.profile_mandatory_fields, // Ensure not overwritten
-				organization: mentorProfile.organization, // Ensure not overwritten
+				organization: mentorExtension.organization, // Ensure not overwritten
 				displayProperties,
 			}
 
 			try {
+				const cacheCopy = { ...finalProfile }
+				delete cacheCopy.image
+				delete cacheCopy.is_connected
+				delete cacheCopy.connection_details
+				delete cacheCopy.meta?.communications
 				console.log(`💾 Caching complete mentor profile response for ${id}`)
-				await cacheHelper.mentor.set(tenantCode, orgCode, id, finalProfile)
+				await cacheHelper.mentor.set(tenantCode, id, cacheCopy)
 			} catch (cacheError) {
 				console.error(`❌ Failed to cache mentor profile ${id}:`, cacheError)
 			}
@@ -1195,7 +1165,7 @@ module.exports = class MentorsHelper {
 		const queryFunction = isAMentor ? mentorQueries.getMentorExtension : menteeQueries.getMenteeExtension
 
 		// Try cache first
-		let userPolicyDetails = await cacheHelper[cacheKey].getCacheOnly(tenantCode, orgCode, userId)
+		let userPolicyDetails = await cacheHelper[cacheKey].getCacheOnly(tenantCode, userId)
 
 		// Fallback to database query if cache miss
 		if (!userPolicyDetails) {
@@ -1321,7 +1291,7 @@ module.exports = class MentorsHelper {
 				if (queryParams.hasOwnProperty(key) & ((key === 'email') | (key === 'name'))) {
 					userServiceQueries[key] = queryParams[key]
 				}
-				if (queryParams.hasOwnProperty(key) & (key === 'organization_codes')) {
+				if (queryParams.hasOwnProperty(key) & (key === 'organization_ids')) {
 					organization_codes = queryParams[key].split(',')
 				}
 
@@ -1418,7 +1388,7 @@ module.exports = class MentorsHelper {
 				requesterId: queryParams.menteeId ? queryParams.menteeId : userId,
 				roles: roles,
 				requesterOrganizationCode: orgCode,
-				tenantCode: { [Op.in]: [tenantCode, defaults.tenantCode] },
+				tenantCode: tenantCode,
 			})
 
 			if (defaultRuleFilter.error && defaultRuleFilter.error.missingField) {
@@ -1498,58 +1468,45 @@ module.exports = class MentorsHelper {
 				})
 			}
 
-			const mentorIds = extensionDetails.data.map((item) => item.user_id)
-			const userDetails = await userRequests.getUserDetailedList(mentorIds, tenantCode)
+			const mentorIds = []
+			const organizationCodes = []
+			const uniqueOrganizations = new Map() // key: organization_code
 
-			//Extract unique organization_codes
-			const organizationCodes = [...new Set(extensionDetails.data.map((user) => user.organization_code))]
+			for (const item of extensionDetails.data) {
+				// mentor ids
+				mentorIds.push(item.user_id)
 
-			//Query organization table (only if there are codes to query)
-			let organizationDetails = []
-			if (organizationCodes.length > 0) {
-				const orgFilter = {
-					organization_code: {
-						[Op.in]: organizationCodes,
-					},
-				}
-				organizationDetails = await organisationExtensionQueries.findAll(orgFilter, tenantCode, {
-					attributes: ['name', 'organization_code', 'organization_id'],
-					raw: true, // Ensure plain objects
-				})
+				// organization codes (unique)
+				if (item.organization_code && !uniqueOrganizations.has(item.organization_code)) {
+					organizationCodes.push(item.organization_code)
 
-				// Cache the organization details
-				if (organizationDetails && organizationDetails.length > 0) {
-					const cachePromises = organizationDetails
-						.map((org) => {
-							if (org.organization_code && org.organization_id) {
-								return cacheHelper.organizations
-									.set(tenantCode, org.organization_code, org.organization_id, org)
-									.catch((cacheError) => {
-										console.error(
-											`❌ Failed to cache organization ${org.organization_id} in mentor list:`,
-											cacheError
-										)
-									})
-							}
-						})
-						.filter(Boolean)
-
-					Promise.all(cachePromises)
-						.then(() => {})
-						.catch((cacheError) => {
-							console.error(`❌ Some organizations failed to cache in mentor list:`, cacheError)
-						})
+					uniqueOrganizations.set(item.organization_code, {
+						organization_id: item.organization_id,
+						organization_code: item.organization_code,
+					})
 				}
 			}
+			const organizations = Array.from(uniqueOrganizations.values())
 
-			//Create a map of organization_code to organization details
 			const orgMap = {}
-			organizationDetails.forEach((org) => {
-				orgMap[org.organization_code] = {
-					id: org.organization_code,
-					name: org.name,
-				}
-			})
+			if (organizations.length > 0) {
+				await Promise.all(
+					organizations.map(async function (orgData) {
+						let orgInfo = await cacheHelper.organizations.get(
+							tenantCode,
+							orgData.organization_code,
+							orgData.organization_id
+						)
+
+						if (orgInfo && orgInfo.organization_code) {
+							orgMap[orgInfo.organization_code] = {
+								id: orgInfo.organization_code,
+								name: orgInfo.name,
+							}
+						}
+					})
+				)
+			}
 
 			//Attach organization details and decrypt email for each user
 			extensionDetails.data = await Promise.all(
@@ -1572,33 +1529,34 @@ module.exports = class MentorsHelper {
 					userExtensionsModelName, // Use UserExtension model name for entity processing
 					'organization_code',
 					[], // Empty array means process ALL entity types for this model
-					[tenantCode]
+					tenantCode
 				)
 			}
 
-			// Create a map from userDetails.result for quick lookups
-			const userDetailsMap = new Map(userDetails.result.map((userDetail) => [userDetail.user_id, userDetail]))
-
 			// Map over extensionDetails.data to merge with the corresponding userDetail
-			extensionDetails.data = extensionDetails.data
-				.map((extensionDetail) => {
-					const user_id = `${extensionDetail.user_id}`
-					const isConnected = connectedMentorIds.has(extensionDetail.user_id)
+			extensionDetails.data = (
+				await Promise.all(
+					extensionDetails.data.map(async (extensionDetail) => {
+						const isConnected = connectedMentorIds.has(extensionDetail.user_id)
 
-					if (userDetailsMap.has(user_id)) {
-						let userDetail = userDetailsMap.get(user_id)
 						// Merge userDetail with extensionDetail, prioritize extensionDetail properties
-						userDetail = { ...userDetail, ...extensionDetail, is_connected: isConnected }
+						let userDetail = { ...extensionDetail, is_connected: isConnected }
+						if (userDetail.image && userDetail.image !== '') {
+							try {
+								userDetail.image = await utils.getDownloadableUrl(userDetail.image)
+							} catch (error) {
+								console.error('Failed to get downloadable URL for mentor image:', error)
+								userDetail.image = null
+							}
+						}
 						delete userDetail.user_id
 						delete userDetail.mentor_visibility
 						delete userDetail.mentee_visibility
-						delete userDetail.organization_code
 						delete userDetail.meta
 						return userDetail
-					}
-					return null
-				})
-				.filter((extensionDetail) => extensionDetail !== null)
+					})
+				)
+			).filter((extensionDetail) => extensionDetail !== null)
 			if (directory) {
 				let foundKeys = {}
 				let result = []
@@ -1654,7 +1612,7 @@ module.exports = class MentorsHelper {
 		try {
 			// Always query mentee extension for mentor list filtering policy
 			// Even if user is also a mentor/admin, we need their mentee visibility policy
-			const userPolicyDetails = await cacheHelper.mentee.get(tenantCode, orgCode, userId)
+			const userPolicyDetails = await cacheHelper.mentee.get(tenantCode, userId)
 
 			// Throw error if mentor/mentee extension not found
 			if (!userPolicyDetails || Object.keys(userPolicyDetails).length === 0) {
@@ -1691,7 +1649,7 @@ module.exports = class MentorsHelper {
 
 					filter =
 						additionalFilter +
-						`AND ( ('${userPolicyDetails.organization_code}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT')`
+						`AND ( ('${userPolicyDetails.organization_id}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT')`
 
 					if (additionalFilter.length === 0)
 						filter += ` OR organization_code = '${userPolicyDetails.organization_code}' )`
@@ -1703,7 +1661,7 @@ module.exports = class MentorsHelper {
 					 */
 					filter =
 						additionalFilter +
-						`AND (('${userPolicyDetails.organization_code}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT' ) OR "mentor_visibility" = 'ALL' OR "organization_code" = '${userPolicyDetails.organization_code}')`
+						`AND (('${userPolicyDetails.organization_id}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT' ) OR "mentor_visibility" = 'ALL' OR "organization_code" = '${userPolicyDetails.organization_code}')`
 				}
 			}
 
@@ -1804,20 +1762,20 @@ module.exports = class MentorsHelper {
 					}
 				}
 				item.is_assigned = item.mentor_id !== item.created_by
+				// Normalize org code from enriched organization object for entity type resolution
+				item.organization_code = item.organization?.organization_code || null
 			})
 
 			// Extract organization codes for entity processing
-			const uniqueOrgIds = [
-				...new Set(sessionDetails.rows.map((obj) => obj.organization?.organization_code).filter(Boolean)),
-			]
+			const uniqueOrgCodes = [...new Set(sessionDetails.rows.map((obj) => obj.organization_code).filter(Boolean))]
 
 			sessionDetails.rows = await entityTypeService.processEntityTypesToAddValueLabels(
 				sessionDetails.rows,
-				uniqueOrgIds,
+				uniqueOrgCodes,
 				common.sessionModelName,
-				'mentor_organization_id',
+				'organization_code',
 				[],
-				[tenantCode]
+				tenantCode
 			)
 
 			return responses.successResponse({
@@ -1846,7 +1804,7 @@ module.exports = class MentorsHelper {
 			const userIds = _.uniqBy(sessions, 'mentor_id').map((item) => item.mentor_id)
 
 			// Fetch mentor details from User Service
-			let mentorDetails = await userRequests.getUserDetailedList(userIds, tenantCode)
+			let mentorDetails = await userRequests.getUserDetailedListUsingCache(userIds, tenantCode)
 			mentorDetails = mentorDetails.result
 
 			// Enrich sessions with mentor details

@@ -11,6 +11,7 @@ const MenteeExtensionQueries = require('@database/queries/userExtension')
 const utils = require('@generics/utils')
 const path = require('path')
 const cacheHelper = require('@generics/cacheHelper')
+const OrganizationExtensionQueries = require('@database/queries/organisationExtension')
 
 module.exports = async function (req, res, next) {
 	try {
@@ -80,39 +81,56 @@ module.exports = async function (req, res, next) {
 				...decodedToken.data,
 			}
 		} else {
+			// Resolve organization_id path once — used by both 'roles' and 'organization_code' blocks
+			const orgIdPath =
+				typeof configData[organizationKey] === 'object'
+					? configData[organizationKey].path
+					: configData[organizationKey]
+			const orgIdDefault =
+				typeof configData[organizationKey] === 'object' ? configData[organizationKey].default : undefined
+
 			// Iterate through each key in the config object
 			for (let key in configData) {
 				if (configData.hasOwnProperty(key)) {
-					let keyValue = getNestedValue(decodedToken, configData[key])
+					const configEntry = configData[key]
+					const pathStr = typeof configEntry === 'object' ? configEntry.path : configEntry
+					const defaultVal = typeof configEntry === 'object' ? configEntry.default : undefined
+
+					let keyValue = getNestedValue(decodedToken, pathStr) ?? defaultVal
 					if (key === 'id') {
 						keyValue = keyValue?.toString()
 					}
 					if (key === organizationKey) {
-						req.decodedToken[key] = getOrgId(req.headers, decodedToken, configData[key])
+						const orgId = getOrgId(req.headers, decodedToken, pathStr, orgIdDefault)
+						req.decodedToken[key] = orgId
 						continue
 					}
 					if (key === 'roles') {
-						let orgId = getOrgId(req.headers, decodedToken, configData[organizationKey])
+						let orgId = getOrgId(req.headers, decodedToken, orgIdPath, orgIdDefault)
 
 						// Now extract roles using fully dynamic path
-						const rolePathTemplate = configData['roles']
+						const rolePathTemplate = pathStr
 
 						decodedToken[organizationKey] = orgId
 						const resolvedRolePath = resolvePathTemplate(rolePathTemplate, decodedToken)
-						const roles = getNestedValue(decodedToken, resolvedRolePath) || []
+						//deduplicates roles if roles provided in the default config configuration
+						const extractedRoles = getNestedValue(decodedToken, resolvedRolePath) ?? []
+						const extractedTitles = new Set(extractedRoles.map((r) => r.title))
+						const uniqueDefaults = (defaultVal ?? []).filter((r) => !extractedTitles.has(r.title))
+						const roles = [...extractedRoles, ...uniqueDefaults]
 						req.decodedToken[key] = roles
 						continue
 					}
 
 					if (key === 'organization_code') {
-						let orgId = getOrgId(req.headers, decodedToken, configData[organizationKey])
+						let orgId = getOrgId(req.headers, decodedToken, orgIdPath, orgIdDefault)
 
-						// Now extract roles using fully dynamic path
-						const rolePathTemplate = configData['organization_code']
+						// Now extract organization_code using fully dynamic path
+						const rolePathTemplate = pathStr
 
 						decodedToken[organizationKey] = orgId
 						const resolvedOrgPath = resolvePathTemplate(rolePathTemplate, decodedToken)
-						const org = getNestedValue(decodedToken, resolvedOrgPath) || []
+						const org = getNestedValue(decodedToken, resolvedOrgPath) ?? defaultVal ?? []
 						req.decodedToken[key] = org
 						continue
 					}
@@ -134,6 +152,93 @@ module.exports = async function (req, res, next) {
 			throw createUnauthorizedResponse()
 		}
 		req.decodedToken.token = authHeader
+
+		// Check for admin and tenant admin roles — allow overriding tenant/org via headers
+		const roles = req.decodedToken.roles || []
+		const isAdmin = roles.some((role) => role.title === common.ADMIN_ROLE)
+		const isTenantAdmin = roles.some((role) => role.title === common.TENANT_ADMIN_ROLE)
+
+		if (isAdmin || isTenantAdmin) {
+			const orgCodeHeaderName = common.ORG_CODE_HEADER
+			const tenantCodeHeaderName = common.TENANT_CODE_HEADER
+
+			const orgCode = (req.headers[orgCodeHeaderName] || '').trim()
+			const tenantCode = (req.headers[tenantCodeHeaderName] || '').trim()
+
+			const hasAnyOverrideHeader = orgCode || tenantCode
+
+			if (hasAnyOverrideHeader) {
+				if (isTenantAdmin && !isAdmin) {
+					const effectiveTenantCode = req.decodedToken.tenant_code
+					if (!orgCode) {
+						throw responses.failureResponse({
+							message: {
+								key: 'ORG_CODE_REQUIRED_FOR_TENANT_ADMIN',
+								interpolation: { orgCodeHeader: orgCodeHeaderName },
+							},
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+
+					const overrideOrg = await OrganizationExtensionQueries.findOne(
+						{ organization_code: orgCode },
+						effectiveTenantCode
+					)
+
+					if (!overrideOrg) {
+						throw responses.failureResponse({
+							message: {
+								key: 'INVALID_ORG_CODE_FOR_TENANT',
+								interpolation: { orgCodeHeader: orgCodeHeaderName },
+							},
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+
+					req.decodedToken.organization_id = overrideOrg.organization_id
+					req.decodedToken.organization_code = orgCode
+				} else if (isAdmin) {
+					if (!orgCode || !tenantCode) {
+						throw responses.failureResponse({
+							message: {
+								key: 'ADD_ORG_OR_TENANT_HEADER',
+								interpolation: {
+									orgCodeHeader: orgCodeHeaderName,
+									tenantCodeHeader: tenantCodeHeaderName,
+								},
+							},
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+
+					const overrideOrg = await OrganizationExtensionQueries.findOne(
+						{ organization_code: orgCode },
+						tenantCode
+					)
+
+					if (!overrideOrg) {
+						throw responses.failureResponse({
+							message: {
+								key: 'INVALID_ORG_OR_TENANT_CODE',
+								interpolation: {
+									orgCodeHeader: orgCodeHeaderName,
+									tenantCodeHeader: tenantCodeHeaderName,
+								},
+							},
+							statusCode: httpStatusCode.bad_request,
+							responseCode: 'CLIENT_ERROR',
+						})
+					}
+
+					req.decodedToken.tenant_code = tenantCode
+					req.decodedToken.organization_id = overrideOrg.organization_id
+					req.decodedToken.organization_code = orgCode
+				}
+			}
+		}
 
 		if (adminHeader) {
 			if (adminHeader != process.env.ADMIN_ACCESS_TOKEN) throw createUnauthorizedResponse()
@@ -192,12 +297,12 @@ module.exports = async function (req, res, next) {
 	}
 }
 
-function getOrgId(headers, decodedToken, orgConfigData) {
+function getOrgId(headers, decodedToken, orgConfigData, defaultVal) {
 	if (headers['organization_id']) {
 		return (orgId = headers['organization_id'].toString())
 	} else {
 		const orgIdPath = orgConfigData
-		return (orgId = getNestedValue(decodedToken, orgIdPath)?.toString())
+		return (orgId = (getNestedValue(decodedToken, orgIdPath) ?? defaultVal)?.toString())
 	}
 }
 function getNestedValue(obj, path) {
@@ -416,6 +521,7 @@ const validRoles = new Set([
 	common.ORG_ADMIN_ROLE,
 	common.ADMIN_ROLE,
 	common.SESSION_MANAGER_ROLE,
+	common.TENANT_ADMIN_ROLE,
 ])
 
 async function keycloakPublicKeyAuthentication(token) {

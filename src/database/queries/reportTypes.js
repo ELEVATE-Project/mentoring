@@ -31,13 +31,13 @@ module.exports = class ReportTypeQueries {
 		}
 	}
 
-	static async findReportTypesByTitle(title, tenantCodes, options = {}) {
+	static async findReportTypesByTitle(title, tenantCode, options = {}) {
 		try {
 			const { where: optionsWhere = {}, ...rest } = options || {}
 			const where = {
 				...optionsWhere,
 				title: title,
-				tenant_code: { [Op.in]: tenantCodes },
+				tenant_code: tenantCode,
 			}
 
 			return await ReportType.findAll({
@@ -69,6 +69,33 @@ module.exports = class ReportTypeQueries {
 				where: { id, tenant_code: tenantCode },
 			})
 			return deletedRows // Soft delete (paranoid enabled)
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async findAllByFilter(filter, tenantCode) {
+		try {
+			filter.tenant_code = tenantCode
+			return await ReportType.findAll({
+				where: filter,
+				raw: true,
+			})
+		} catch (error) {
+			throw error
+		}
+	}
+
+	static async bulkCreate(records, tenantCode, options = {}) {
+		try {
+			const dataWithTenant = records.map((item) => ({
+				...item,
+				tenant_code: tenantCode,
+			}))
+			return await ReportType.bulkCreate(dataWithTenant, {
+				ignoreDuplicates: true,
+				...options,
+			})
 		} catch (error) {
 			throw error
 		}
