@@ -49,7 +49,7 @@ module.exports = {
 		const toCodeArray = (arr, tenantCode) => arr.map((id) => toCode(id, tenantCode) ?? id)
 
 		// Format a JS string array as a Postgres array literal: {val1,val2}
-		const pgArr = (arr) => `{${arr.join(',')}}`
+		const pgArr = (arr) => `{${arr.map((v) => `"${v.replace(/"/g, '\\"')}"`).join(',')}}`
 
 		// ── Step 1: sessions.mentor_organization_code ─────────────────────────
 		console.log('\nStep 1: Backfilling sessions.mentor_organization_code ...')
@@ -65,7 +65,7 @@ module.exports = {
 
 		if (sessionCodeUpdates.length) {
 			// Batch all updates in one VALUES-based UPDATE — no per-row round trips
-			const values = sessionCodeUpdates.map((u) => `(${u.id}, '${u.code}')`).join(', ')
+			const values = sessionCodeUpdates.map((u) => `(${u.id}, '${u.code.replace(/'/g, "''")}')`).join(', ')
 			await queryInterface.sequelize.query(`
 				UPDATE sessions
 				SET    mentor_organization_code = v.code

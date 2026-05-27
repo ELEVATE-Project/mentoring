@@ -358,7 +358,7 @@ module.exports = class MentorExtensionQueries {
 			{
 				visible_to_organizations: sequelize.literal(
 					`array_cat(COALESCE("visible_to_organizations", ARRAY[]::varchar[]), ARRAY[${newRelatedOrgs
-						.map((v) => `'${v}'`)
+						.map((v) => `'${v.replace(/'/g, "''")}'`)
 						.join(',')}]::varchar[])`
 				),
 			},
@@ -387,7 +387,10 @@ module.exports = class MentorExtensionQueries {
 		return await MentorExtension.update(
 			{
 				visible_to_organizations: sequelize.literal(
-					`COALESCE("visible_to_organizations", ARRAY[]::varchar[]) || ARRAY['${organizationId}']::varchar[]`
+					`COALESCE("visible_to_organizations", ARRAY[]::varchar[]) || ARRAY['${organizationId.replace(
+						/'/g,
+						"''"
+					)}']::varchar[]`
 				),
 			},
 			{

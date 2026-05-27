@@ -112,7 +112,7 @@ module.exports = class MenteeExtensionQueries {
 
 		const newRelatedOrgsArray = Array.from(newRelatedOrgs.values())
 
-		const newRelatedOrgsSql = newRelatedOrgsArray.map((e) => `'${e}'`).join(',')
+		const newRelatedOrgsSql = newRelatedOrgsArray.map((e) => `'${e.replace(/'/g, "''")}'`).join(',')
 
 		await MenteeExtension.update(
 			{
@@ -147,7 +147,10 @@ module.exports = class MenteeExtensionQueries {
 		const result = await MenteeExtension.update(
 			{
 				visible_to_organizations: sequelize.literal(
-					`COALESCE("visible_to_organizations", ARRAY[]::varchar[]) || ARRAY['${organizationId}']::varchar[]`
+					`COALESCE("visible_to_organizations", ARRAY[]::varchar[]) || ARRAY['${organizationId.replace(
+						/'/g,
+						"''"
+					)}']::varchar[]`
 				),
 			},
 			{
