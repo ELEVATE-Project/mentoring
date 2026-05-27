@@ -77,6 +77,7 @@ async function main() {
 	console.log('---')
 
 	let hasError = false
+	let droppedAny = false
 
 	for (const { table, column } of TARGETS) {
 		const exists = await columnExists(table, column)
@@ -105,6 +106,7 @@ async function main() {
 			try {
 				await db.sequelize.query(`ALTER TABLE "${table}" DROP COLUMN IF EXISTS "${column}" CASCADE`)
 				console.log(`  Dropped "${column}" from "${table}" (CASCADE).`)
+				droppedAny = true
 			} catch (err) {
 				console.error(`  ERROR dropping "${column}" from "${table}": ${err.message}`)
 				hasError = true
@@ -116,18 +118,25 @@ async function main() {
 
 	if (isDryRun) {
 		console.log('Dry run complete. No changes were made.')
-	} else if (hasError) {
-		console.error('Completed with errors. Check output above.')
-		process.exit(1)
 	} else {
-		console.log('Rebuilding materialized views (dropped by CASCADE)...')
-		try {
-			await materializedViewsService.checkAndCreateMaterializedViews()
-			console.log('Materialized views rebuilt successfully.')
-		} catch (err) {
-			console.error('ERROR rebuilding materialized views:', err.message)
+		// Always rebuild views if any column was dropped via CASCADE, even on partial failure,
+		// so dependent views aren't left missing after a successful drop.
+		if (droppedAny) {
+			console.log('Rebuilding materialized views (dropped by CASCADE)...')
+			try {
+				await materializedViewsService.checkAndCreateMaterializedViews()
+				console.log('Materialized views rebuilt successfully.')
+			} catch (err) {
+				console.error('ERROR rebuilding materialized views:', err.message)
+				process.exit(1)
+			}
+		}
+
+		if (hasError) {
+			console.error('Completed with errors. Check output above.')
 			process.exit(1)
 		}
+
 		console.log('Done. Both backup columns have been dropped.')
 		console.log(
 			'Note: migration 20260525000002-rename-visible-to-org-codes.js down() is no longer fully reversible.'
