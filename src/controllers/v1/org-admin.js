@@ -1,6 +1,8 @@
 const orgAdminService = require('@services/org-admin')
 const common = require('@constants/common')
 const { convertOrgIdsToOrgCodes } = require('@helpers/orgUtils')
+const responses = require('@helpers/responses')
+const httpStatusCode = require('@generics/http-status')
 
 module.exports = class OrgAdmin {
 	/**
@@ -139,6 +141,13 @@ module.exports = class OrgAdmin {
 			const tenantCode = req.body.tenant_code
 			const deltaOrgCodes = await convertOrgIdsToOrgCodes(req.body.delta_organization_ids || [], tenantCode)
 			const [orgCode] = await convertOrgIdsToOrgCodes([req.body.organization_id], tenantCode)
+			if (!orgCode) {
+				return responses.failureResponse({
+					message: 'ORGANIZATION_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			return await orgAdminService.updateRelatedOrgs(deltaOrgCodes, orgCode, req.body.action, tenantCode)
 		} catch (error) {
 			return error
