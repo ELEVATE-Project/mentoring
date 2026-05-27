@@ -37,6 +37,7 @@ const path = require('path')
 const ProjectRootDir = path.join(__dirname, '../')
 const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const fileUploadQueries = require('@database/queries/fileUpload')
+const { convertOrgIdsToOrgCodes } = require('@helpers/orgUtils')
 const { Queue } = require('bullmq')
 const fs = require('fs')
 const csv = require('csvtojson')
@@ -310,6 +311,7 @@ module.exports = class SessionsHelper {
 			}
 
 			bodyData['mentor_organization_id'] = orgId
+			bodyData['mentor_organization_code'] = orgCode
 			// SAAS changes; Include visibility and visible organisation
 			// Call user service to fetch organisation details --SAAS related changes
 			let userOrgDetails = await userRequests.fetchOrgDetails({ organizationCode: orgCode, tenantCode })
@@ -350,9 +352,12 @@ module.exports = class SessionsHelper {
 				tenantCode
 			)
 			bodyData.visibility = organisationPolicy.session_visibility_policy
-			bodyData.visible_to_organizations = userOrgDetails.data.result.related_orgs
-				? userOrgDetails.data.result.related_orgs.concat([orgId])
-				: [orgId]
+			const relatedOrgCodes = await convertOrgIdsToOrgCodes(
+				userOrgDetails.data.result.related_orgs || [],
+				tenantCode
+			)
+			if (!relatedOrgCodes.includes(orgCode)) relatedOrgCodes.push(orgCode)
+			bodyData.visible_to_organizations = relatedOrgCodes
 			if (organisationPolicy.mentee_feedback_question_set)
 				bodyData.mentee_feedback_question_set = organisationPolicy.mentee_feedback_question_set
 			if (organisationPolicy.mentor_feedback_question_set)
@@ -1732,14 +1737,14 @@ module.exports = class SessionsHelper {
 				sessionEntityTypes = await cacheHelper.entityTypes.getEntityTypesWithMentorOrg(
 					tenantCode,
 					orgCode,
-					sessionDetails.mentor_organization_id,
+					sessionDetails.mentor_organization_code,
 					sessionModelName
 				)
 
 				accessorEntityTypes = await cacheHelper.entityTypes.getEntityTypesWithMentorOrg(
 					tenantCode,
 					sessionAccessorDetails.organization_code,
-					sessionAccessorDetails.organization_id,
+					sessionAccessorDetails.organization_code,
 					mentorExtensionsModelName
 				)
 
@@ -1878,31 +1883,31 @@ module.exports = class SessionsHelper {
 
 			// check the accessibility conditions
 			let isAccessible = false
-			if (userPolicyDetails.external_session_visibility && userPolicyDetails.organization_id) {
-				const { external_session_visibility, organization_id } = userPolicyDetails
+			if (userPolicyDetails.external_session_visibility && userPolicyDetails.organization_code) {
+				const { external_session_visibility, organization_code } = userPolicyDetails
 				const isEnrolled = session.is_enrolled || false
 
 				switch (external_session_visibility) {
 					/**
 					 * If {userPolicyDetails.external_session_visibility === CURRENT} user will be able to sessions-
 					 *  -created by his/her organization mentors.
-					 * So will check if mentor_organization_id equals user's  organization_id
+					 * So will check if mentor_organization_code equals user's organization_code
 					 */
 					case common.CURRENT:
-						isAccessible = isEnrolled || session.mentor_organization_id === organization_id
+						isAccessible = isEnrolled || session.mentor_organization_code === organization_code
 						break
 					/**
 					 * user external_session_visibility is ASSOCIATED
-					 * user can see sessions where session's visible_to_organizations contain user's organization_id and -
+					 * user can see sessions where session's visible_to_organizations contain user's organization_code and -
 					 *  - session's visibility not CURRENT (In case of same organization session has to be
-					 * fetched for that we added OR condition {"mentor_organization_id" = ${userPolicyDetails.organization_id}})
+					 * fetched for that we added OR condition {"mentor_organization_code" = ${userPolicyDetails.organization_code}})
 					 */
 					case common.ASSOCIATED:
 						isAccessible =
 							isEnrolled ||
-							(session.visible_to_organizations.includes(organization_id) &&
+							(session.visible_to_organizations.includes(organization_code) &&
 								session.visibility != common.CURRENT) ||
-							session.mentor_organization_id === organization_id
+							session.mentor_organization_code === organization_code
 						break
 					/**
 					 * user's external_session_visibility === ALL (ASSOCIATED sessions + sessions whose visibility is ALL)
@@ -1910,10 +1915,10 @@ module.exports = class SessionsHelper {
 					case common.ALL:
 						isAccessible =
 							isEnrolled ||
-							(session.visible_to_organizations.includes(organization_id) &&
+							(session.visible_to_organizations.includes(organization_code) &&
 								session.visibility != common.CURRENT) ||
 							session.visibility === common.ALL ||
-							session.mentor_organization_id === organization_id
+							session.mentor_organization_code === organization_code
 						break
 					default:
 						break
@@ -2761,13 +2766,8 @@ module.exports = class SessionsHelper {
 			const session = await sessionQueries.getSessionTenantCode(sessionId)
 			if (!session) return null
 
-			if (!orgCode && session.mentor_organization_id && session.tenant_code) {
-				const orgExtension = await organisationExtensionQueries.findOne(
-					{ organization_id: session.mentor_organization_id },
-					session.tenant_code,
-					{ attributes: ['organization_code'], raw: true }
-				)
-				orgCode = orgExtension?.organization_code || null
+			if (!orgCode) {
+				orgCode = session.mentor_organization_code || null
 			}
 
 			return {
@@ -3256,15 +3256,14 @@ module.exports = class SessionsHelper {
 		tenantCode
 	) {
 		try {
-			const uniqueOrgIds = [...new Set(sessions.map((obj) => obj.mentor_organization_id))]
+			const uniqueOrgCodes = [...new Set(sessions.map((obj) => obj.mentor_organization_code).filter(Boolean))]
 			sessions = await entityTypeService.processEntityTypesToAddValueLabels(
 				sessions,
-				uniqueOrgIds,
+				uniqueOrgCodes,
 				common.sessionModelName,
-				'mentor_organization_id',
+				'mentor_organization_code',
 				[],
-				tenantCode,
-				true
+				tenantCode
 			)
 
 			await Promise.all(
@@ -3371,7 +3370,7 @@ module.exports = class SessionsHelper {
 				duration_in_minutes: session.duration_in_minutes,
 				status: session.status,
 				mentee_count: session.mentee_count,
-				mentor_organization_id: session.mentor_organization_id,
+				mentor_organization_code: session.mentor_organization_code,
 				mentor_id: session.mentor_id,
 			}))
 

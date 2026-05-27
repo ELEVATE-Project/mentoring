@@ -114,6 +114,10 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.STRING,
 				allowNull: false,
 			},
+			mentor_organization_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
 			seats_remaining: {
 				type: DataTypes.INTEGER,
 				defaultValue: process.env.SESSION_MENTEE_LIMIT,

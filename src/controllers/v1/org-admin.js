@@ -1,5 +1,6 @@
 const orgAdminService = require('@services/org-admin')
 const common = require('@constants/common')
+const { convertOrgIdsToOrgCodes } = require('@helpers/orgUtils')
 
 module.exports = class OrgAdmin {
 	/**
@@ -135,12 +136,10 @@ module.exports = class OrgAdmin {
 	 */
 	async updateRelatedOrgs(req) {
 		try {
-			return await orgAdminService.updateRelatedOrgs(
-				req.body.delta_organization_ids,
-				req.body.organization_id,
-				req.body.action,
-				req.body.tenant_code
-			)
+			const tenantCode = req.body.tenant_code
+			const deltaOrgCodes = await convertOrgIdsToOrgCodes(req.body.delta_organization_ids || [], tenantCode)
+			const [orgCode] = await convertOrgIdsToOrgCodes([req.body.organization_id], tenantCode)
+			return await orgAdminService.updateRelatedOrgs(deltaOrgCodes, orgCode, req.body.action, tenantCode)
 		} catch (error) {
 			return error
 		}

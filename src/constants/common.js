@@ -310,6 +310,12 @@ module.exports = {
 				defaultTtl: 86400, // 1 day
 				useInternal: false,
 			},
+			orgIdCode: {
+				name: 'orgIdCode',
+				enabled: true,
+				defaultTtl: 86400, // 1 day
+				useInternal: false,
+			},
 		},
 	},
 

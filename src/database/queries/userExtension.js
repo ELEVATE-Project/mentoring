@@ -123,7 +123,7 @@ module.exports = class MenteeExtensionQueries {
 			{
 				where: {
 					tenant_code: tenantCode,
-					organization_id: organizationId,
+					organization_code: organizationId,
 					[Op.or]: [
 						{
 							[Op.not]: {
@@ -144,16 +144,16 @@ module.exports = class MenteeExtensionQueries {
 			}
 		)
 
-		return await MenteeExtension.update(
+		const result = await MenteeExtension.update(
 			{
 				visible_to_organizations: sequelize.literal(
-					`COALESCE("visible_to_organizations", ARRAY[]::varchar[]) || ARRAY[${organizationId}]::varchar[]`
+					`COALESCE("visible_to_organizations", ARRAY[]::varchar[]) || ARRAY['${organizationId}']::varchar[]`
 				),
 			},
 			{
 				where: {
 					tenant_code: tenantCode,
-					organization_id: {
+					organization_code: {
 						[Op.in]: newRelatedOrgsArray,
 					},
 					[Op.or]: [
@@ -175,6 +175,7 @@ module.exports = class MenteeExtensionQueries {
 				...otherOptions,
 			}
 		)
+		return result
 	}
 
 	static async removeVisibleToOrg(orgId, elementsToRemove, tenantCode) {
@@ -185,7 +186,7 @@ module.exports = class MenteeExtensionQueries {
 			FROM unnest("visible_to_organizations") AS elem
 			WHERE elem NOT IN (:elementsToRemove)
 		  ), '{}')
-		  WHERE organization_id = :orgId AND tenant_code = :tenantCode
+		  WHERE organization_code = :orgId AND tenant_code = :tenantCode
 		`
 
 		await Sequelize.query(organizationUpdateQuery, {
@@ -199,7 +200,7 @@ module.exports = class MenteeExtensionQueries {
 			FROM unnest("visible_to_organizations") AS elem
 			WHERE elem NOT IN (:orgId)
 		  ), '{}')
-		  WHERE organization_id IN (:elementsToRemove) AND tenant_code = :tenantCode
+		  WHERE organization_code IN (:elementsToRemove) AND tenant_code = :tenantCode
 		`
 
 		await Sequelize.query(relatedOrganizationUpdateQuery, {
