@@ -1,4 +1,7 @@
 'use strict'
+require('module-alias/register')
+require('dotenv').config()
+const materializedViewsService = require('@generics/materializedViews')
 
 /**
  * PR 2 — Rename migration for Issue 3 (organization_id → organization_code deprecation).
@@ -37,6 +40,12 @@ module.exports = {
 		console.log(
 			'user_extensions: visible_to_organizations (numeric) → visible_to_organizations_numeric (backup); visible_to_organization_codes → visible_to_organizations'
 		)
+
+		// Rebuild materialized views: visible_to_organizations is now varchar[] not integer[],
+		// and mentor_organization_code is a new concrete column — existing views must be replaced.
+		console.log('Rebuilding materialized views for all tenants...')
+		await materializedViewsService.triggerViewBuildForAllTenants()
+		console.log('Materialized view rebuild complete')
 	},
 
 	async down(queryInterface) {
@@ -57,5 +66,10 @@ module.exports = {
 		)
 
 		console.log('Reverted rename. Numeric ID data fully restored in visible_to_organizations.')
+
+		// Rebuild views to reflect the reverted column names and types
+		console.log('Rebuilding materialized views for all tenants...')
+		await materializedViewsService.triggerViewBuildForAllTenants()
+		console.log('Materialized view rebuild complete')
 	},
 }

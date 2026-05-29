@@ -1222,7 +1222,7 @@ module.exports = class MentorsHelper {
 					 */
 					case common.ASSOCIATED:
 						isAccessible =
-							(mentor.visible_to_organizations.includes(organization_code) &&
+							((mentor.visible_to_organizations || []).includes(organization_code) &&
 								mentor.mentor_visibility != common.CURRENT) ||
 							mentor.organization_code === organization_code
 						break
@@ -1232,7 +1232,7 @@ module.exports = class MentorsHelper {
 					 */
 					case common.ALL:
 						isAccessible =
-							(mentor.visible_to_organizations.includes(organization_code) &&
+							((mentor.visible_to_organizations || []).includes(organization_code) &&
 								mentor.mentor_visibility != common.CURRENT) ||
 							mentor.mentor_visibility === common.ALL ||
 							mentor.organization_code === organization_code
