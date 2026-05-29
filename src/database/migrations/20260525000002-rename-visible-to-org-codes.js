@@ -19,57 +19,92 @@ const materializedViewsService = require('@generics/materializedViews')
  */
 module.exports = {
 	async up(queryInterface) {
-		// sessions: park old column as backup, promote new column to primary name
-		await queryInterface.renameColumn('sessions', 'visible_to_organizations', 'visible_to_organizations_numeric')
-		await queryInterface.renameColumn('sessions', 'visible_to_organization_codes', 'visible_to_organizations')
-		console.log(
-			'sessions: visible_to_organizations (numeric) → visible_to_organizations_numeric (backup); visible_to_organization_codes → visible_to_organizations'
-		)
+		// All four renames run in a single transaction — if any rename fails the
+		// entire swap rolls back, keeping the schema consistent and the migration re-runnable.
+		await queryInterface.sequelize.transaction(async (t) => {
+			await queryInterface.renameColumn(
+				'sessions',
+				'visible_to_organizations',
+				'visible_to_organizations_numeric',
+				{
+					transaction: t,
+				}
+			)
+			await queryInterface.renameColumn('sessions', 'visible_to_organization_codes', 'visible_to_organizations', {
+				transaction: t,
+			})
+			console.log(
+				'sessions: visible_to_organizations (numeric) → visible_to_organizations_numeric (backup); visible_to_organization_codes → visible_to_organizations'
+			)
 
-		// user_extensions: same swap
-		await queryInterface.renameColumn(
-			'user_extensions',
-			'visible_to_organizations',
-			'visible_to_organizations_numeric'
-		)
-		await queryInterface.renameColumn(
-			'user_extensions',
-			'visible_to_organization_codes',
-			'visible_to_organizations'
-		)
-		console.log(
-			'user_extensions: visible_to_organizations (numeric) → visible_to_organizations_numeric (backup); visible_to_organization_codes → visible_to_organizations'
-		)
+			await queryInterface.renameColumn(
+				'user_extensions',
+				'visible_to_organizations',
+				'visible_to_organizations_numeric',
+				{ transaction: t }
+			)
+			await queryInterface.renameColumn(
+				'user_extensions',
+				'visible_to_organization_codes',
+				'visible_to_organizations',
+				{ transaction: t }
+			)
+			console.log(
+				'user_extensions: visible_to_organizations (numeric) → visible_to_organizations_numeric (backup); visible_to_organization_codes → visible_to_organizations'
+			)
+		})
 
-		// Rebuild materialized views: visible_to_organizations is now varchar[] not integer[],
-		// and mentor_organization_code is a new concrete column — existing views must be replaced.
+		// Rebuild materialized views outside the transaction — long-running, best-effort.
+		// visible_to_organizations is now varchar[] not integer[]; existing views must be replaced.
 		console.log('Rebuilding materialized views for all tenants...')
-		await materializedViewsService.triggerViewBuildForAllTenants()
+		const result = await materializedViewsService.triggerViewBuildForAllTenants()
+		if (!result || !result.success) {
+			throw new Error(
+				`Materialized view rebuild failed after column rename: ${result?.message || 'unknown error'}`
+			)
+		}
 		console.log('Materialized view rebuild complete')
 	},
 
 	async down(queryInterface) {
-		// Fully reversible: rename both columns back to their pre-up names.
+		// Fully reversible: rename both columns back to their pre-up names in a single transaction.
 		// Numeric ID data is preserved in visible_to_organizations_numeric throughout.
-		await queryInterface.renameColumn('sessions', 'visible_to_organizations', 'visible_to_organization_codes')
-		await queryInterface.renameColumn('sessions', 'visible_to_organizations_numeric', 'visible_to_organizations')
+		await queryInterface.sequelize.transaction(async (t) => {
+			await queryInterface.renameColumn('sessions', 'visible_to_organizations', 'visible_to_organization_codes', {
+				transaction: t,
+			})
+			await queryInterface.renameColumn(
+				'sessions',
+				'visible_to_organizations_numeric',
+				'visible_to_organizations',
+				{
+					transaction: t,
+				}
+			)
 
-		await queryInterface.renameColumn(
-			'user_extensions',
-			'visible_to_organizations',
-			'visible_to_organization_codes'
-		)
-		await queryInterface.renameColumn(
-			'user_extensions',
-			'visible_to_organizations_numeric',
-			'visible_to_organizations'
-		)
-
-		console.log('Reverted rename. Numeric ID data fully restored in visible_to_organizations.')
+			await queryInterface.renameColumn(
+				'user_extensions',
+				'visible_to_organizations',
+				'visible_to_organization_codes',
+				{ transaction: t }
+			)
+			await queryInterface.renameColumn(
+				'user_extensions',
+				'visible_to_organizations_numeric',
+				'visible_to_organizations',
+				{ transaction: t }
+			)
+			console.log('Reverted rename. Numeric ID data fully restored in visible_to_organizations.')
+		})
 
 		// Rebuild views to reflect the reverted column names and types
 		console.log('Rebuilding materialized views for all tenants...')
-		await materializedViewsService.triggerViewBuildForAllTenants()
+		const result = await materializedViewsService.triggerViewBuildForAllTenants()
+		if (!result || !result.success) {
+			throw new Error(
+				`Materialized view rebuild failed after column rename revert: ${result?.message || 'unknown error'}`
+			)
+		}
 		console.log('Materialized view rebuild complete')
 	},
 }
