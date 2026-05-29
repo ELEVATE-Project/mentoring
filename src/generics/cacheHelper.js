@@ -696,31 +696,9 @@ const entityTypes = {
 	 * @param {string} modelName - Model name ('Session' or 'UserExtension')
 	 * @returns {Promise<Array>} Array of entity types
 	 */
-	async getEntityTypesWithMentorOrg(tenantCode, currentOrgCode, mentorOrganizationId, modelName) {
+	async getEntityTypesWithMentorOrg(tenantCode, currentOrgCode, mentorOrganizationCode, modelName) {
 		try {
-			// Step 1: Get mentor organization code using organization cache
-			let mentorOrgCode = null
-			if (mentorOrganizationId) {
-				try {
-					const mentorOrg = await organizations.get(tenantCode, currentOrgCode, mentorOrganizationId)
-					mentorOrgCode = mentorOrg?.organization_code
-				} catch (orgCacheError) {
-					console.warn('Organization cache lookup failed, falling back to database query')
-					// Fallback: Direct database query for organization code
-					const organisationExtensionQueries = require('@database/queries/organisationExtension')
-					const orgData = await organisationExtensionQueries.findOne(
-						{ organization_id: mentorOrganizationId },
-						tenantCode,
-						{ attributes: ['organization_code'], raw: true }
-					)
-					mentorOrgCode = orgData?.organization_code
-				}
-			}
-
-			// Step 2: Use mentor org code if available, otherwise current org code
-			const effectiveOrgCode = mentorOrgCode || currentOrgCode
-
-			// Step 3: Get entity types for the specific model and org
+			const effectiveOrgCode = mentorOrganizationCode || currentOrgCode
 			return await this.getAllEntityTypesForModel(tenantCode, effectiveOrgCode, modelName)
 		} catch (error) {
 			console.error('Failed to get entity types with mentor org resolution:', error)
@@ -901,6 +879,29 @@ const organizations = {
 		const useInternal = nsUseInternal('organizations')
 		const cacheKey = await buildKey({ tenantCode, orgCode: orgCode, ns: 'organizations', id: organizationId })
 		return del(cacheKey, { useInternal })
+	},
+}
+
+/**
+ * Org ID → Org Code Cache Helpers
+ * Pattern: tenant:${tenantCode}:orgIdCode:${orgId}
+ * TTL: 1 day — Kafka consumer invalidates individual entries on org create/update/deactivate
+ */
+const orgIdCode = {
+	async get(tenantCode, orgId) {
+		const cacheKey = await buildKey({ tenantCode, ns: 'orgIdCode', id: String(orgId) })
+		const cached = await get(cacheKey, { useInternal: nsUseInternal('orgIdCode') })
+		return cached?.code ?? null
+	},
+
+	async set(tenantCode, orgId, code) {
+		const cacheKey = await buildKey({ tenantCode, ns: 'orgIdCode', id: String(orgId) })
+		return set(cacheKey, { code }, nsTtl('orgIdCode'), { useInternal: nsUseInternal('orgIdCode') })
+	},
+
+	async delete(tenantCode, orgId) {
+		const cacheKey = await buildKey({ tenantCode, ns: 'orgIdCode', id: String(orgId) })
+		return del(cacheKey, { useInternal: nsUseInternal('orgIdCode') })
 	},
 }
 
@@ -1800,6 +1801,7 @@ module.exports = {
 	entityTypes,
 	forms,
 	organizations,
+	orgIdCode,
 	mentor,
 	mentee,
 	platformConfig,

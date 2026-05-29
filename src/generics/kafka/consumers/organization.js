@@ -1,5 +1,7 @@
 const orgService = require('@services/organization')
 const orgAdminService = require('@services/org-admin')
+const { convertOrgIdsToOrgCodes } = require('@helpers/orgUtils')
+const cacheHelper = require('@generics/cacheHelper')
 
 var messageReceived = function (message) {
 	return new Promise(async function (resolve, reject) {
@@ -37,6 +39,7 @@ var messageReceived = function (message) {
 						created_by: created_by || 'system',
 					}
 					await orgService.createOrgExtension(createEventBody, tenant_code)
+					await cacheHelper.orgIdCode.delete(tenant_code, entityId)
 					break
 
 				case 'update':
@@ -56,24 +59,18 @@ var messageReceived = function (message) {
 
 						// Handle added related orgs
 						if (addedOrgs.length > 0) {
-							const addedOrgIds = addedOrgs.map((id) => id.toString())
-							await orgAdminService.updateRelatedOrgs(
-								addedOrgIds,
-								entityId.toString(),
-								'push', // Add action
-								tenant_code
-							)
+							const addedOrgCodes = await convertOrgIdsToOrgCodes(addedOrgs, tenant_code)
+							if (addedOrgCodes.length > 0) {
+								await orgAdminService.updateRelatedOrgs(addedOrgCodes, code, 'push', tenant_code)
+							}
 						}
 
 						// Handle removed related orgs
 						if (removedOrgs.length > 0) {
-							const removedOrgIds = removedOrgs.map((id) => id.toString())
-							await orgAdminService.updateRelatedOrgs(
-								removedOrgIds,
-								entityId.toString(),
-								'pop', // Remove action
-								tenant_code
-							)
+							const removedOrgCodes = await convertOrgIdsToOrgCodes(removedOrgs, tenant_code)
+							if (removedOrgCodes.length > 0) {
+								await orgAdminService.updateRelatedOrgs(removedOrgCodes, code, 'pop', tenant_code)
+							}
 						}
 					}
 
@@ -88,6 +85,7 @@ var messageReceived = function (message) {
 						}
 						await orgService.createOrgExtension(updateEventBody, tenant_code)
 					}
+					await cacheHelper.orgIdCode.delete(tenant_code, entityId)
 					break
 
 				case 'deactivate':
@@ -102,6 +100,7 @@ var messageReceived = function (message) {
 						updated_by: updated_by || 'system',
 					}
 					await orgService.createOrgExtension(deactivateEventBody, tenant_code)
+					await cacheHelper.orgIdCode.delete(tenant_code, entityId)
 					break
 
 				default:

@@ -21,6 +21,7 @@ const menteesService = require('@services/mentees')
 const entityTypeService = require('@services/entity-type')
 const responses = require('@helpers/responses')
 const permissions = require('@helpers/getPermissions')
+const { convertOrgIdsToOrgCodes } = require('@helpers/orgUtils')
 const { buildSearchFilter } = require('@helpers/search')
 const defaultSearchConfig = require('@configs/search.json')
 const emailEncryption = require('@utils/emailEncryption')
@@ -162,18 +163,17 @@ module.exports = class MentorsHelper {
 			}
 
 			// Process entity types to add value labels.
-			const uniqueOrgIds =
+			const uniqueOrgCodes =
 				upcomingSessions && upcomingSessions.data && Array.isArray(upcomingSessions.data)
-					? [...new Set(upcomingSessions.data.map((obj) => obj.mentor_organization_id))]
+					? [...new Set(upcomingSessions.data.map((obj) => obj.mentor_organization_code).filter(Boolean))]
 					: []
 			upcomingSessions.data = await entityTypeService.processEntityTypesToAddValueLabels(
 				upcomingSessions.data,
-				uniqueOrgIds,
+				uniqueOrgCodes,
 				common.sessionModelName,
-				'mentor_organization_id',
+				'mentor_organization_code',
 				[],
-				tenantCode,
-				true
+				tenantCode
 			)
 
 			upcomingSessions.data = await this.sessionMentorDetails(upcomingSessions.data, tenantCode)
@@ -488,14 +488,11 @@ module.exports = class MentorsHelper {
 			// construct saas policy data
 			let saasPolicyData = await orgAdminService.constructOrgPolicyObject(organisationPolicy, true)
 
-			// Set related_orgs to include current organization
-			const related_orgs = [saasPolicyData.organization_id]
-
 			// update mentee extension data
 			data = {
 				...data,
 				...saasPolicyData,
-				visible_to_organizations: related_orgs,
+				visible_to_organizations: [orgCode],
 			}
 			const response = await mentorQueries.createMentorExtension(data, tenantCode)
 
@@ -616,9 +613,12 @@ module.exports = class MentorsHelper {
 				data.organization_id = data.organization.id
 				const newPolicy = await orgAdminService.constructOrgPolicyObject(orgPolicies, true)
 				data = _.merge({}, data, newPolicy)
-				data.visible_to_organizations = Array.from(
-					new Set([...userOrgDetails.data.result.related_orgs, data.organization.id])
+				const relatedOrgCodes = await convertOrgIdsToOrgCodes(
+					userOrgDetails.data.result.related_orgs || [],
+					tenantCode
 				)
+				if (!relatedOrgCodes.includes(orgCode)) relatedOrgCodes.push(orgCode)
+				data.visible_to_organizations = relatedOrgCodes
 			}
 
 			const [updateCount, updatedMentor] = await mentorQueries.updateMentorExtension(
@@ -1171,7 +1171,7 @@ module.exports = class MentorsHelper {
 		if (!userPolicyDetails) {
 			userPolicyDetails = await queryFunction(
 				userId,
-				['external_mentor_visibility', 'organization_id'],
+				['external_mentor_visibility', 'organization_id', 'organization_code'],
 				false,
 				tenantCode
 			)
@@ -1205,37 +1205,37 @@ module.exports = class MentorsHelper {
 
 			// check the accessibility conditions
 			let isAccessible = false
-			if (userPolicyDetails.external_mentor_visibility && userPolicyDetails.organization_id) {
-				const { external_mentor_visibility, organization_id } = userPolicyDetails
+			if (userPolicyDetails.external_mentor_visibility && userPolicyDetails.organization_code) {
+				const { external_mentor_visibility, organization_code } = userPolicyDetails
 				const mentor = userData[0]
 				switch (external_mentor_visibility) {
 					/**
 					 * if user external_mentor_visibility is current. He can only see his/her organizations mentors
-					 * so we will check mentor's organization_id and user organization_id are matching
+					 * so we will check mentor's organization_code and user organization_code are matching
 					 */
 					case common.CURRENT:
-						isAccessible = mentor.organization_id === organization_id
+						isAccessible = mentor.organization_code === organization_code
 						break
 					/**
 					 * If user external_mentor_visibility is associated
-					 * <<point**>> first we need to check if mentor's visible_to_organizations contain the user organization_id and verify mentor's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
+					 * <<point**>> first we need to check if mentor's visible_to_organizations contain the user organization_code and verify mentor's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
 					 */
 					case common.ASSOCIATED:
 						isAccessible =
-							(mentor.visible_to_organizations.includes(organization_id) &&
+							((mentor.visible_to_organizations || []).includes(organization_code) &&
 								mentor.mentor_visibility != common.CURRENT) ||
-							mentor.organization_id === organization_id
+							mentor.organization_code === organization_code
 						break
 					/**
-					 * We need to check if mentor's visible_to_organizations contain the user organization_id and verify mentor's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
+					 * We need to check if mentor's visible_to_organizations contain the user organization_code and verify mentor's visibility is not current (if it is ALL and ASSOCIATED it is accessible)
 					 * OR if mentor visibility is ALL that mentor is also accessible
 					 */
 					case common.ALL:
 						isAccessible =
-							(mentor.visible_to_organizations.includes(organization_id) &&
+							((mentor.visible_to_organizations || []).includes(organization_code) &&
 								mentor.mentor_visibility != common.CURRENT) ||
 							mentor.mentor_visibility === common.ALL ||
-							mentor.organization_id === organization_id
+							mentor.organization_code === organization_code
 						break
 					default:
 						break
@@ -1649,7 +1649,7 @@ module.exports = class MentorsHelper {
 
 					filter =
 						additionalFilter +
-						`AND ( ('${userPolicyDetails.organization_id}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT')`
+						`AND ( ('${userPolicyDetails.organization_code}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT')`
 
 					if (additionalFilter.length === 0)
 						filter += ` OR organization_code = '${userPolicyDetails.organization_code}' )`
@@ -1661,7 +1661,7 @@ module.exports = class MentorsHelper {
 					 */
 					filter =
 						additionalFilter +
-						`AND (('${userPolicyDetails.organization_id}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT' ) OR "mentor_visibility" = 'ALL' OR "organization_code" = '${userPolicyDetails.organization_code}')`
+						`AND (('${userPolicyDetails.organization_code}' = ANY("visible_to_organizations") AND "mentor_visibility" != 'CURRENT' ) OR "mentor_visibility" = 'ALL' OR "organization_code" = '${userPolicyDetails.organization_code}')`
 				}
 			}
 

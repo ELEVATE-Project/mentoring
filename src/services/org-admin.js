@@ -16,6 +16,7 @@ const { Op } = require('sequelize')
 const responses = require('@helpers/responses')
 const { getDefaults } = require('@helpers/getDefaultOrgId')
 const cacheHelper = require('@generics/cacheHelper')
+const { convertOrgIdsToOrgCodes } = require('@helpers/orgUtils')
 
 module.exports = class OrgAdminService {
 	/**
@@ -97,9 +98,13 @@ module.exports = class OrgAdminService {
 				mentorDetails.organization_id = bodyData.organization_id
 				const newPolicy = await this.constructOrgPolicyObject(orgPolicies)
 				mentorDetails = _.merge({}, mentorDetails, newPolicy, updateData)
-				mentorDetails.visible_to_organizations = Array.from(
-					new Set([...(organizationDetails.data.result.related_orgs || []), bodyData.organization_id])
+				const relatedOrgCodes1 = await convertOrgIdsToOrgCodes(
+					organizationDetails.data.result.related_orgs || [],
+					tenantCode
 				)
+				if (!relatedOrgCodes1.includes(bodyData.organization_code))
+					relatedOrgCodes1.push(bodyData.organization_code)
+				mentorDetails.visible_to_organizations = relatedOrgCodes1
 			}
 			mentorDetails.is_mentor = false
 			if (mentorDetails.email) delete mentorDetails.email
@@ -227,9 +232,13 @@ module.exports = class OrgAdminService {
 				menteeDetails.organization_code = bodyData.organization_code
 				const newPolicy = await this.constructOrgPolicyObject(orgPolicies)
 				menteeDetails = _.merge({}, menteeDetails, newPolicy, updateData)
-				menteeDetails.visible_to_organizations = Array.from(
-					new Set([...(organizationDetails.data.result.related_orgs || []), bodyData.organization_id])
+				const relatedOrgCodes2 = await convertOrgIdsToOrgCodes(
+					organizationDetails.data.result.related_orgs || [],
+					tenantCode
 				)
+				if (!relatedOrgCodes2.includes(bodyData.organization_code))
+					relatedOrgCodes2.push(bodyData.organization_code)
+				menteeDetails.visible_to_organizations = relatedOrgCodes2
 			}
 
 			if (menteeDetails.email) delete menteeDetails.email
@@ -302,11 +311,13 @@ module.exports = class OrgAdminService {
 						organizationId: decodedToken.organization_id,
 						tenantCode,
 					})
-					policyData.visible_to_organizations = organizationDetails.data.result.related_orgs || []
-
-					if (!policyData.visible_to_organizations.includes(decodedToken.organization_id)) {
-						policyData.visible_to_organizations.push(decodedToken.organization_id)
-					}
+					const relatedOrgCodes3 = await convertOrgIdsToOrgCodes(
+						organizationDetails.data.result.related_orgs || [],
+						tenantCode
+					)
+					if (!relatedOrgCodes3.includes(decodedToken.organization_code))
+						relatedOrgCodes3.push(decodedToken.organization_code)
+					policyData.visible_to_organizations = relatedOrgCodes3
 				}
 
 				//Update all users belonging to the org with new policies
@@ -517,6 +528,12 @@ module.exports = class OrgAdminService {
 			}
 
 			//Update the policy
+			const relatedOrgCodes4 = await convertOrgIdsToOrgCodes(
+				organizationDetails.data.result.related_orgs || [],
+				tenantCode
+			)
+			if (!relatedOrgCodes4.includes(bodyData.organization_code))
+				relatedOrgCodes4.push(bodyData.organization_code)
 			const updateData = {
 				organization_id: orgId,
 				external_session_visibility: orgPolicies.external_session_visibility_policy,
@@ -524,10 +541,7 @@ module.exports = class OrgAdminService {
 				mentor_visibility: orgPolicies.mentor_visibility_policy,
 				mentee_visibility: orgPolicies.mentee_visibility_policy,
 				external_mentee_visibility: orgPolicies.external_mentee_visibility_policy,
-				visible_to_organizations: organizationDetails.data.result.related_orgs || [],
-			}
-			if (!updateData.visible_to_organizations.includes(orgId)) {
-				updateData.visible_to_organizations.push(orgId)
+				visible_to_organizations: relatedOrgCodes4,
 			}
 
 			if (utils.validateRoleAccess(bodyData.roles, common.MENTOR_ROLE)) {
@@ -673,9 +687,9 @@ module.exports = class OrgAdminService {
 		try {
 			orgId = orgId.toString()
 			deltaOrganizationIds = deltaOrganizationIds.map(String)
-			if (action === common.PUSH) {
+			if (action?.toLowerCase() === common.PUSH.toLowerCase()) {
 				await menteeQueries.addVisibleToOrg(orgId, deltaOrganizationIds, tenantCode)
-			} else if (action === common.POP) {
+			} else if (action?.toLowerCase() === common.POP.toLowerCase()) {
 				await menteeQueries.removeVisibleToOrg(orgId, deltaOrganizationIds, tenantCode)
 			}
 

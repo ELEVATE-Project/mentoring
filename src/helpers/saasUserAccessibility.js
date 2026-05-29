@@ -22,7 +22,7 @@ async function checkIfUserIsAccessible(userId, userData, tenantCode, orgCode) {
 			(await cacheHelper.mentee.getCacheOnly(tenantCode, userId)) ||
 			(await menteeQueries.getMenteeExtension(
 				userId,
-				['external_mentor_visibility', 'external_mentee_visibility', 'organization_id'],
+				['external_mentor_visibility', 'external_mentee_visibility', 'organization_id', 'organization_code'],
 				false,
 				tenantCode
 			))
@@ -30,11 +30,11 @@ async function checkIfUserIsAccessible(userId, userData, tenantCode, orgCode) {
 			return false // If no user policy details found, return false for accessibility
 		}
 
-		const { organization_id, external_mentor_visibility, external_mentee_visibility } = userPolicyDetails
+		const { organization_code, external_mentor_visibility, external_mentee_visibility } = userPolicyDetails
 
 		// Ensure data for accessibility evaluation
-		if (!organization_id) {
-			return false // If no organization_id is found, return false for accessibility
+		if (!organization_code) {
+			return false // If no organization_code is found, return false for accessibility
 		}
 
 		// For single user, return boolean indicating accessibility
@@ -48,22 +48,22 @@ async function checkIfUserIsAccessible(userId, userData, tenantCode, orgCode) {
 
 			switch (visibilityKey) {
 				case common.CURRENT:
-					isAccessible = user.organization_id === organization_id
+					isAccessible = user.organization_code === organization_code
 					break
 
 				case common.ASSOCIATED:
 					isAccessible =
-						(user.visible_to_organizations.includes(organization_id) &&
+						(user.visible_to_organizations.includes(organization_code) &&
 							user[roleVisibilityKey] !== common.CURRENT) ||
-						user.organization_id === organization_id
+						user.organization_code === organization_code
 					break
 
 				case common.ALL:
 					isAccessible =
-						(user.visible_to_organizations.includes(organization_id) &&
+						(user.visible_to_organizations.includes(organization_code) &&
 							user[roleVisibilityKey] !== common.CURRENT) ||
 						user[roleVisibilityKey] === common.ALL ||
-						user.organization_id === organization_id
+						user.organization_code === organization_code
 					break
 
 				default:
@@ -83,22 +83,22 @@ async function checkIfUserIsAccessible(userId, userData, tenantCode, orgCode) {
 
 			switch (visibilityKey) {
 				case common.CURRENT:
-					isAccessible = user.organization_id === organization_id
+					isAccessible = user.organization_code === organization_code
 					break
 
 				case common.ASSOCIATED:
 					isAccessible =
-						(user.visible_to_organizations.includes(organization_id) &&
+						(user.visible_to_organizations.includes(organization_code) &&
 							user[roleVisibilityKey] !== common.CURRENT) ||
-						user.organization_id === organization_id
+						user.organization_code === organization_code
 					break
 
 				case common.ALL:
 					isAccessible =
-						(user.visible_to_organizations.includes(organization_id) &&
+						(user.visible_to_organizations.includes(organization_code) &&
 							user[roleVisibilityKey] !== common.CURRENT) ||
 						user[roleVisibilityKey] === common.ALL ||
-						user.organization_id === organization_id
+						user.organization_code === organization_code
 					break
 
 				default:

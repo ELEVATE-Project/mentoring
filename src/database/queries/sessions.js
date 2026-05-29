@@ -284,7 +284,7 @@ exports.getSessionTenantCode = async (sessionId) => {
 	try {
 		return await Session.findOne({
 			where: { id: sessionId },
-			attributes: ['id', 'tenant_code', 'mentor_organization_id'],
+			attributes: ['id', 'tenant_code', 'mentor_organization_id', 'mentor_organization_code'],
 			raw: true,
 		})
 	} catch (error) {
@@ -762,6 +762,7 @@ exports.getUpcomingSessionsFromView = async (
 			'mentor_id',
 			'visibility',
 			'mentor_organization_id',
+			'mentor_organization_code',
 			'created_at',
 			'mentor_name',
 			"(meeting_info - 'link') AS meeting_info",
@@ -904,6 +905,7 @@ exports.getMentorsUpcomingSessionsFromView = async (
 			Sessions.meeting_info,
 			Sessions.visibility,
 			Sessions.mentor_organization_id,
+			Sessions.mentor_organization_code,
 			Sessions.type,
 			CASE WHEN sa.id IS NOT NULL THEN true ELSE false END AS is_enrolled,
 			COALESCE(sa.type, NULL) AS enrolment_type

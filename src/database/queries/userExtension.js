@@ -85,96 +85,46 @@ module.exports = class MenteeExtensionQueries {
 		}
 	}
 
-	static async addVisibleToOrg(organizationId, newRelatedOrgs, tenantCode, options = {}) {
-		// Safe merge: tenant filtering cannot be overridden by options.where
-		const { where: optionsWhere, ...otherOptions } = options
-
-		const whereClause1 = {
-			organization_id: organizationId,
-			[Op.or]: [
-				{
-					[Op.not]: {
-						visible_to_organizations: {
-							[Op.contains]: newRelatedOrgs,
-						},
-					},
-				},
-				{
-					visible_to_organizations: {
-						[Op.is]: null,
-					},
-				},
-			],
-			tenant_code: tenantCode,
-		}
-
-		// Update user extension and concat related org to the org id
-
+	static async addVisibleToOrg(organizationId, newRelatedOrgs, tenantCode) {
 		const newRelatedOrgsArray = Array.from(newRelatedOrgs.values())
 
-		const newRelatedOrgsSql = newRelatedOrgsArray.map((e) => `'${e}'`).join(',')
-
-		await MenteeExtension.update(
+		// Append newRelatedOrgs to all rows belonging to organizationId's org.
+		// $1 = newRelatedOrgsArray (varchar[]), $2 = organizationId, $3 = tenantCode
+		await Sequelize.query(
+			`UPDATE "user_extensions"
+			 SET "visible_to_organizations" = array_cat(
+			     COALESCE("visible_to_organizations", ARRAY[]::varchar[]),
+			     $1::varchar[]
+			 )
+			 WHERE "organization_code" = $2
+			   AND "tenant_code" = $3
+			   AND (
+			       NOT ("visible_to_organizations" @> $1::varchar[])
+			       OR "visible_to_organizations" IS NULL
+			   )`,
 			{
-				visible_to_organizations: sequelize.literal(
-					`array_cat(COALESCE("visible_to_organizations", ARRAY[]::varchar[]), ARRAY[${newRelatedOrgsSql}]::varchar[])`
-				),
-			},
-			{
-				where: {
-					tenant_code: tenantCode,
-					organization_id: organizationId,
-					[Op.or]: [
-						{
-							[Op.not]: {
-								visible_to_organizations: {
-									[Op.contains]: newRelatedOrgsArray,
-								},
-							},
-						},
-						{
-							visible_to_organizations: {
-								[Op.is]: null,
-							},
-						},
-					],
-				},
-				...otherOptions,
-				individualHooks: true,
+				bind: [newRelatedOrgsArray, organizationId, tenantCode],
+				type: QueryTypes.UPDATE,
 			}
 		)
 
-		return await MenteeExtension.update(
+		// Append organizationId to all rows whose org is in newRelatedOrgs.
+		// $1 = organizationId, $2 = newRelatedOrgsArray (varchar[]), $3 = tenantCode
+		const result = await Sequelize.query(
+			`UPDATE "user_extensions"
+			 SET "visible_to_organizations" = COALESCE("visible_to_organizations", ARRAY[]::varchar[]) || ARRAY[$1]::varchar[]
+			 WHERE "organization_code" = ANY($2::varchar[])
+			   AND "tenant_code" = $3
+			   AND (
+			       NOT ("visible_to_organizations" @> ARRAY[$1]::varchar[])
+			       OR "visible_to_organizations" IS NULL
+			   )`,
 			{
-				visible_to_organizations: sequelize.literal(
-					`COALESCE("visible_to_organizations", ARRAY[]::varchar[]) || ARRAY[${organizationId}]::varchar[]`
-				),
-			},
-			{
-				where: {
-					tenant_code: tenantCode,
-					organization_id: {
-						[Op.in]: newRelatedOrgsArray,
-					},
-					[Op.or]: [
-						{
-							[Op.not]: {
-								visible_to_organizations: {
-									[Op.contains]: [organizationId],
-								},
-							},
-						},
-						{
-							visible_to_organizations: {
-								[Op.is]: null,
-							},
-						},
-					],
-				},
-				individualHooks: true,
-				...otherOptions,
+				bind: [organizationId, newRelatedOrgsArray, tenantCode],
+				type: QueryTypes.UPDATE,
 			}
 		)
+		return result
 	}
 
 	static async removeVisibleToOrg(orgId, elementsToRemove, tenantCode) {
@@ -185,7 +135,7 @@ module.exports = class MenteeExtensionQueries {
 			FROM unnest("visible_to_organizations") AS elem
 			WHERE elem NOT IN (:elementsToRemove)
 		  ), '{}')
-		  WHERE organization_id = :orgId AND tenant_code = :tenantCode
+		  WHERE organization_code = :orgId AND tenant_code = :tenantCode
 		`
 
 		await Sequelize.query(organizationUpdateQuery, {
@@ -199,7 +149,7 @@ module.exports = class MenteeExtensionQueries {
 			FROM unnest("visible_to_organizations") AS elem
 			WHERE elem NOT IN (:orgId)
 		  ), '{}')
-		  WHERE organization_id IN (:elementsToRemove) AND tenant_code = :tenantCode
+		  WHERE organization_code IN (:elementsToRemove) AND tenant_code = :tenantCode
 		`
 
 		await Sequelize.query(relatedOrganizationUpdateQuery, {
