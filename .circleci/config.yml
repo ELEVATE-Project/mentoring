@@ -1,64 +1,231 @@
-version: 2.1 # CircleCI version
-orbs:
-  sonarcloud: sonarsource/sonarcloud@1.1.1
+version: 2.1
+
 jobs:
   build:
-    machine: #Linux machine instead of docker environment
+    machine:
       image: ubuntu-2004:2024.05.1
       docker_layer_caching: true
-    working_directory: ~/mentoring # Default working directory
+
+    working_directory: ~/mentoring
+
     steps:
+      # -------------------------------
+      # Git setup
+      # -------------------------------
+      - run:
+          name: Configure git to use HTTPS
+          command: git config --global url."https://github.com/".insteadOf "git@github.com:"
+
       - checkout:
           path: ~/mentoring/
+
+      # -------------------------------
+      # Restore mentoring dependencies
+      # -------------------------------
       - restore_cache:
           key: mentoring-dependency-cache-{{ checksum "src/package.json" }}
+
       - run:
-          name: Install dependencies
-          command: cd src/ && npm install #cd ../src/ && pwd &&
+          name: Install mentoring dependencies
+          command: |
+            cd src
+            npm install
+
       - save_cache:
-          key: mentoring-dependency-cache-{{checksum "src/package.json"}}
+          key: mentoring-dependency-cache-{{ checksum "src/package.json" }}
           paths:
             - ./src/node_modules
+
+      # -------------------------------
+      # Disable SSH rewrite
+      # -------------------------------
       - run:
-          name: Executing unit test cases
-          command: cd src/ && npm run test -- --coverage --collectCoverageFrom="./services/**"
-      - store_artifacts:
-          path: src/coverage/
-          destination: /coverage/
-      - sonarcloud/scan
+          name: Disable SSH rewrite
+          command: git config --global --unset url."ssh://git@github.com".insteadOf || true
+
+      # -------------------------------
+      # Clone USER service
+      # -------------------------------
       - run:
-          name: Checking prerequisites
-          command: |-
-            docker-compose --version
-      - run:
-          name: Cloning user service
-          command: cd ../ && git clone https://github.com/ELEVATE-Project/user.git --branch dev --single-branch
+          name: Clone User service
+          command: |
+            cd ..
+            git clone https://github.com/ELEVATE-Project/user.git \
+              --branch develop \
+              --single-branch
+
       - restore_cache:
           key: user-dependency-cache-{{ checksum "../user/src/package.json" }}
+
       - run:
           name: Install User service dependencies
-          command: cd ../user/src/ && npm install #cd ../src/ && pwd &&
+          command: |
+            cd ../user/src
+            npm install
+
       - save_cache:
-          key: user-dependency-cache-{{checksum "../user/src/package.json"}}
+          key: user-dependency-cache-{{ checksum "../user/src/package.json" }}
           paths:
             - ../user/src/node_modules
+
+      # -------------------------------
+      # Clone optional services
+      # -------------------------------
       - run:
-          name: Starting the docker containers
-          command: |-
-            cd dev-ops/ && docker-compose up -d
+          name: Clone Scheduler service
+          command: |
+            cd ..
+            git clone https://github.com/ELEVATE-Project/scheduler.git \
+              --branch dev \
+              --single-branch || true
+
       - run:
-          name: Running test cases
-          command: |-
-            cd src/ &&  npm run test:integration
+          name: Clone Communications service
+          command: |
+            cd ..
+            git clone https://github.com/ELEVATE-Project/chat-communications.git \
+              --branch dev \
+              --single-branch || true
+
+      # -------------------------------
+      # Config
+      # -------------------------------
+      - run:
+          name: Copy config.json
+          command: cp dev-ops/integration_test.config.json src/config.json
+
+      # -------------------------------
+      # Start docker-compose
+      # -------------------------------
+      - run:
+          name: Start docker containers
+          command: |
+            cd dev-ops
+            docker-compose pull || true
+            docker-compose build
+            docker-compose up -d
+            sleep 20
+
+      # -------------------------------
+      # Wait for healthchecks
+      # -------------------------------
+      - run:
+          name: Wait for services to be healthy
+          command: |
+            cd dev-ops
+            echo "Waiting for containers to be healthy..."
+
+            for i in {1..30}; do
+              unhealthy=$(docker ps --filter "health=unhealthy" --format "{{.Names}}")
+              starting=$(docker ps --filter "health=starting" --format "{{.Names}}")
+
+              if [ -z "$unhealthy" ] && [ -z "$starting" ]; then
+                echo "All containers are healthy"
+                break
+              fi
+
+              echo "Waiting... attempt $i"
+              docker ps --format "table {{.Names}}\t{{.Status}}"
+              sleep 5
+            done
+      # -------------------------------
+      # Run migrations (EXPLICIT)
+      # -------------------------------
+      - run:
+          name: Run mentoring migrations
+          command: |
+            export MENTORING=$(docker ps --format "{{.Names}}" | grep mentoring)
+            echo "Running migrations in $MENTORING"
+            docker exec "$MENTORING" npm run db:init
+
+      - run:
+            name: Enable Citus and run distributionColumns.psql
+            command: |
+              cd dev-ops
+              set -e
+
+              echo "Enabling Citus extension..."
+              docker-compose exec -T citus psql \
+              -U postgres \
+              -d elevate-mentoring \
+              -c "CREATE EXTENSION IF NOT EXISTS citus;"
+
+              echo "Running distributionColumns.psql..."
+              docker-compose exec -T citus psql \
+              -U postgres \
+              -d elevate-mentoring \
+              -f /var/src/distributionColumns.psql
+
+              echo "Citus setup completed."
+
+      # -------------------------------
+      # Run seeders (EXPLICIT)
+      # -------------------------------
+      - run:
+          name: Run mentoring seeders
+          command: |
+            export MENTORING=$(docker ps --format "{{.Names}}" | grep mentoring)
+            echo "Running seeders in $MENTORING"
+            docker exec "$MENTORING" npm run db:seed:all
+
+      - run:
+          name: Start mentoring app
+          command: |
+            export MENTORING=$(docker ps --format "{{.Names}}" | grep mentoring)
+            echo "Starting mentoring app..."
+            docker exec -d "$MENTORING" npm run dev
+
+      - run:
+         name: Run user migrations
+         command: |
+          export USER=$(docker ps --format "{{.Names}}" | grep user)
+          echo "Running user migrations in $USER"
+          docker exec "$USER" npm run db:init
+
+      - run:
+            name: Run user seeders
+            command: |
+               export USER=$(docker ps --format "{{.Names}}" | grep user)
+               docker exec "$USER" npm run db:seed:all
+
+
+      - run:
+            name: Start user service
+            command: |
+              export USER=$(docker ps --format "{{.Names}}" | grep user)
+              echo "Starting user service..."
+              docker exec -d "$USER" npm run dev
+
+
+      # -------------------------------
+      # Run integration tests
+      # -------------------------------
+      - run:
+          name: Run integration tests
+          command: |
+            cd src
+            npm run test:integration
+
+      # -------------------------------
+      # Diagnostics
+      # -------------------------------
+      - run:
+          name: Print logs on failure
+          when: always
+          command: |
+            cd dev-ops
+            docker-compose logs --tail=200 kafka || true
+            docker-compose logs --tail=200 citus || true
+            docker-compose logs --tail=200 mentoring || true
+            docker-compose logs --tail=200 user || true
+
       - store_test_results:
           path: ./dev-ops/report
+
 workflows:
-  build-and-test: # This is the name of the workflow,
-    # Inside the workflow, you define the jobs you want to run.
+  build-and-test:
     jobs:
       - build:
-          context:
-            - SonarCloud
           filters:
             tags:
               only: \b(dev|develop|main)\b

@@ -33,7 +33,10 @@ module.exports = {
 		// Logic to update mentor names
 		const updateMentorNamesInSessions = async () => {
 			try {
-				const sessionsWithNullMentorName = await sessionQueries.findAll({ mentor_name: 'Mentor' })
+				const sessionsWithNullMentorName = await queryInterface.sequelize.query(
+					"SELECT * FROM sessions WHERE mentor_name = 'Mentor'",
+					{ type: Sequelize.QueryTypes.SELECT }
+				)
 
 				if (sessionsWithNullMentorName.length === 0) {
 					console.log('No sessions found with mentor_name as null.')
