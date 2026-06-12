@@ -1,0 +1,275 @@
+{
+	"POST_mentoring_v1_entity-type_create": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"value": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"allow_filtering": {
+						"type": "boolean"
+					},
+					"data_type": {
+						"type": "string"
+					},
+					"created_by": {
+						"type": "string"
+					},
+					"updated_by": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"has_entities": {
+						"type": "boolean"
+					}
+				}
+			},
+			"field_0": {
+				"type": "string"
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"GET_mentoring_v1_entity-type_read": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"entity_types": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": { "type": "number" },
+								"value": { "type": "string" },
+								"label": { "type": "string" },
+								"status": { "type": "string" },
+								"created_by": { "type": "string" },
+								"updated_by": { "type": "string" },
+								"allow_filtering": { "type": "boolean" },
+								"data_type": { "type": "string" },
+								"organization_id": { "type": "string" },
+								"parent_id": { "type": ["null", "number"] },
+								"allow_custom_entities": { "type": "boolean" },
+								"has_entities": { "type": "boolean" },
+								"model_names": {
+									"type": "array",
+									"items": { "type": "string" }
+								},
+								"required": { "type": "boolean" },
+								"regex": { "type": "null" },
+								"report_filter": { "type": "boolean" },
+								"meta": { "type": "null" },
+								"created_at": { "type": "string" },
+								"updated_at": { "type": "string" },
+								"deleted_at": { "type": "null" },
+								"entities": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"id": { "type": "number" },
+											"entity_type_id": { "type": "number" },
+											"value": { "type": "string" },
+											"label": { "type": "string" },
+											"status": { "type": "string" },
+											"type": { "type": "string" },
+											"created_by": { "type": "string" },
+											"updated_by": { "type": ["null", "string"] },
+											"created_at": { "type": "string" },
+											"updated_at": { "type": "string" },
+											"deleted_at": { "type": "null" }
+										},
+										"required": [
+											"id",
+											"entity_type_id",
+											"value",
+											"label",
+											"status",
+											"type",
+											"created_by",
+											"updated_by",
+											"created_at",
+											"updated_at",
+											"deleted_at"
+										]
+									}
+								}
+							},
+							"required": [
+								"id",
+								"value",
+								"label",
+								"status",
+								"created_by",
+								"updated_by",
+								"allow_filtering",
+								"data_type",
+								"organization_id",
+								"parent_id",
+								"allow_custom_entities",
+								"has_entities",
+								"model_names",
+								"required",
+								"regex",
+								"report_filter",
+								"meta",
+								"created_at",
+								"updated_at",
+								"deleted_at",
+								"entities"
+							]
+						}
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"POST_mentoring_v1_entity-type_update_id": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "number"
+					},
+					"value": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"created_by": {
+						"type": "string"
+					},
+					"updated_by": {
+						"type": "string"
+					},
+					"allow_filtering": {
+						"type": "boolean"
+					},
+					"data_type": {
+						"type": "string"
+					},
+					"created_at": {
+						"type": "string"
+					},
+					"updated_at": {
+						"type": "string"
+					},
+					"deleted_at": {
+						"type": "null"
+					},
+					"organization_id": {
+						"type": "string"
+					},
+					"has_entities": {
+						"type": "boolean"
+					}
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"DELETE_mentoring_v1_entity-type_delete_id": {
+		"type": "object",
+		"properties": {
+			"responseCode": {
+				"type": "string"
+			},
+			"message": {
+				"type": "string"
+			},
+			"result": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"meta": {
+				"type": "object",
+				"properties": {
+					"correlation": {
+						"type": "string"
+					},
+					"meeting_platform": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}
