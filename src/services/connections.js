@@ -128,7 +128,9 @@ module.exports = class ConnectionHelper {
 			// Use getCacheOnly first, then fallback to database query if cache miss
 			let userDetails = await cacheHelper.mentee.getCacheOnly(tenantCode, friendId)
 
-			if (!userDetails) {
+			if (userDetails) {
+				delete userDetails.user_roles
+			} else {
 				userDetails = await userExtensionQueries.getMenteeExtension(
 					friendId,
 					[
