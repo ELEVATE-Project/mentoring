@@ -570,9 +570,9 @@ module.exports = class MenteeExtensionQueries {
 				replacements.offset = limit * (page - 1)
 				replacements.limit = limit
 			} else {
-				// Provide defaults if page/limit not specified
+				// No pagination: return all provided IDs (e.g. select_all=true flow)
 				replacements.offset = 0
-				replacements.limit = 5 // Default limit
+				replacements.limit = ids.length > 0 ? ids.length : 5000
 			}
 
 			let results = await Sequelize.query(query, {

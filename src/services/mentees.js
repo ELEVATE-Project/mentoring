@@ -1528,17 +1528,30 @@ module.exports = class MenteesHelper {
 			const query = utils.processQueryParametersWithExclusions(queryParams)
 			const userExtensionModelName = await menteeQueries.getModelName()
 
+			const defaults = await getDefaults()
+			if (!defaults.tenantCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
+			const validationData = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				userExtensionModelName,
+				tenantCode,
+				organizationCode
+			)
+
+			let filteredQuery = utils.validateAndBuildFilters(query, validationData)
+
 			let connectedMenteeIds = []
 			let connectedMenteesCount
 			if (queryParams.connected_mentees === 'true') {
-				const connectedQueryParams = { ...queryParams }
-				delete connectedQueryParams.connected_mentees
-				const connectedQuery = utils.processQueryParametersWithExclusions(connectedQueryParams)
-
+				const selectAll = queryParams.select_all === 'true'
 				const connectionDetails = await connectionQueries.getConnectionsDetails(
-					pageNo,
-					pageSize,
-					connectedQuery,
+					selectAll ? null : pageNo,
+					selectAll ? null : pageSize,
+					filteredQuery,
 					searchText,
 					queryParams.mentorId ? queryParams.mentorId : userId,
 					organization_codes,
@@ -1550,9 +1563,6 @@ module.exports = class MenteesHelper {
 					pageNo = null
 					pageSize = null
 					connectedMenteeIds = connectionDetails.data.map((item) => item.user_id)
-					// if (!connectedMenteeIds.includes(userId)) {
-					// 	connectedMenteeIds.push(userId)
-					// }
 				}
 				if (typeof connectionDetails?.count === 'number') {
 					connectedMenteesCount = connectionDetails.count
@@ -1570,22 +1580,6 @@ module.exports = class MenteesHelper {
 					})
 				}
 			}
-
-			const defaults = await getDefaults()
-			if (!defaults.tenantCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-
-			const validationData = await entityTypeCache.getEntityTypesAndEntitiesForModel(
-				userExtensionModelName,
-				tenantCode,
-				organizationCode
-			)
-
-			let filteredQuery = utils.validateAndBuildFilters(query, validationData)
 
 			const emailIds = []
 			const searchTextArray = searchText ? searchText.split(',') : []
