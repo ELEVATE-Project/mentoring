@@ -1,5 +1,7 @@
 const common = require('@constants/common')
 const reportService = require('@services/reports')
+const responses = require('@helpers/responses')
+const httpStatusCode = require('@generics/http-status')
 
 module.exports = class Reports {
 	/**
@@ -181,6 +183,45 @@ module.exports = class Reports {
 			const deleteReport = await reportService.deleteReportById(req.query.id, req.decodedToken.tenant_code)
 			return deleteReport
 		} catch (error) {
+			return error
+		}
+	}
+
+	/**
+	 * Handles a request to fetch report data using a raw SELECT SQL query.
+	 *
+	 * This method delegates the actual SQL execution to `reportService.fetchData`,
+	 * which validates the query and returns results only for SELECT statements.
+	 *
+	 * @param {Object} req - The Express request object.
+	 * @param {Object} req.body - The request body containing the query.
+	 * @param {string} req.body.query - The raw SQL SELECT query string.
+	 *
+	 * @returns {Promise<Object>} - The response returned by the report service.
+	 *
+	 * @throws {Error} - Returns the error object if execution fails.
+	 */
+	async fetchData(req) {
+		try {
+			// Early validation of query presence/type (service still enforces SELECT + blacklist)
+			if (!req.body || !req.body.query || typeof req.body.query !== 'string' || !req.body.query.trim()) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.bad_request,
+					message: 'Query is required',
+				})
+			}
+
+			const pageNo = Number.isInteger(parseInt(req.query?.pageNo, 10))
+				? parseInt(req.query.pageNo, 10)
+				: common.pagination.DEFAULT_PAGE_NO
+			const pageSizeRaw = parseInt(req.query?.pageSize, 10)
+			const pageSize = Number.isInteger(pageSizeRaw)
+				? Math.min(pageSizeRaw, 1000)
+				: common.pagination.DEFAULT_PAGE_SIZE
+			const data = await reportService.fetchData(req.body, pageNo, pageSize)
+			return data
+		} catch (error) {
+			// Optionally, log the error here
 			return error
 		}
 	}
