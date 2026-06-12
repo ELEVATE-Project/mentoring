@@ -261,7 +261,7 @@ module.exports = class MentorExtensionQueries {
 				additionalFilter = `${searchFilter.whereClause}`
 			}
 
-			const filterClause = filter?.query.length > 0 ? `${filter.query}` : ''
+			let filterClause = filter?.query.length > 0 ? `${filter.query}` : ''
 
 			let saasFilterClause = saasFilter !== '' ? saasFilter : ''
 			const defaultFilterClause = defaultFilter != '' ? 'AND ' + defaultFilter : ''

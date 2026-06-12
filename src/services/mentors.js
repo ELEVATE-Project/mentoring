@@ -1400,34 +1400,38 @@ module.exports = class MentorsHelper {
 			}
 
 			let connectedMentorsIds = []
+			let connectedMentorsCount
 
 			if (queryParams.connected_mentors === 'true') {
-				const connectedQueryParams = { ...queryParams }
-				delete connectedQueryParams.connected_mentors
-				const connectedQuery = utils.processQueryParametersWithExclusions(connectedQueryParams)
-
 				const connectionDetails = await connectionQueries.getConnectionsDetails(
 					pageNo,
 					pageSize,
-					connectedQuery,
+					filteredQuery,
 					searchText,
 					queryParams.mentorId ? queryParams.mentorId : userId,
 					organization_codes,
-					[] // roles can be passed if needed
+					[], // roles can be passed if needed
+					tenantCode
 				)
 
 				if (connectionDetails?.data?.length > 0) {
+					pageNo = null
+					pageSize = null
 					connectedMentorsIds = connectionDetails.data.map((item) => item.user_id)
 					if (!connectedMentorsIds.includes(userId)) {
 						connectedMentorsIds.push(userId)
 					}
 				}
 
-				// If there are no connected mentees, short-circuit and return empty
+				if (typeof connectionDetails?.count === 'number') {
+					connectedMentorsCount = connectionDetails.count
+				}
+
+				// If there are no connected mentors, short-circuit and return empty
 				if (connectedMentorsIds.length === 0) {
 					return responses.successResponse({
 						statusCode: httpStatusCode.ok,
-						message: 'MENTEE_LIST',
+						message: 'MENTOR_LIST',
 						result: {
 							data: [],
 							count: 0,
@@ -1589,6 +1593,10 @@ module.exports = class MentorsHelper {
 						return sortOrder * a[sortBy].localeCompare(b[sortBy])
 					})
 				}
+			}
+
+			if (connectedMentorsCount !== undefined) {
+				extensionDetails.count = connectedMentorsCount
 			}
 
 			return responses.successResponse({
