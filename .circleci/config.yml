@@ -1,6 +1,4 @@
 version: 2.1 # CircleCI version
-orbs:
-  sonarcloud: sonarsource/sonarcloud@1.1.1
 jobs:
   build:
     machine: #Linux machine instead of docker environment
@@ -25,7 +23,6 @@ jobs:
       - store_artifacts:
           path: src/coverage/
           destination: /coverage/
-      - sonarcloud/scan
       - run:
           name: Checking prerequisites
           command: |-
@@ -57,8 +54,6 @@ workflows:
     # Inside the workflow, you define the jobs you want to run.
     jobs:
       - build:
-          context:
-            - SonarCloud
           filters:
             tags:
               only: \b(dev|develop|main)\b
