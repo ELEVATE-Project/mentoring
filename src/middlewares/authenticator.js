@@ -437,8 +437,7 @@ async function validateSession(authHeader) {
 	const userBaseUrl = `${process.env.USER_SERVICE_HOST}${process.env.USER_SERVICE_BASE_URL}`
 	const validateSessionEndpoint = `${userBaseUrl}${endpoints.VALIDATE_SESSIONS}`
 	const reqBody = { token: authHeader }
-
-	const isSessionActive = await requests.post(validateSessionEndpoint, reqBody, '', true)
+	const isSessionActive = await requests.post(validateSessionEndpoint, reqBody, '', authHeader)
 
 	if (isSessionActive?.data?.responseCode === 'UNAUTHORIZED') throw createUnauthorizedResponse('ACCESS_TOKEN_EXPIRED')
 	if (!isSessionActive?.success || !isSessionActive?.data?.result?.data?.user_session_active)

@@ -6,29 +6,29 @@ const userRequests = require('@requests/user')
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
 	up: async (queryInterface, Sequelize) => {
-		await queryInterface.addColumn('sessions', 'created_by', {
-			type: Sequelize.INTEGER,
-			allowNull: false,
-			defaultValue: 0,
-		})
+		// await queryInterface.addColumn('sessions', 'created_by', {
+		// 	type: Sequelize.INTEGER,
+		// 	allowNull: false,
+		// 	defaultValue: 0,
+		// })
 
-		await queryInterface.addColumn('sessions', 'updated_by', {
-			type: Sequelize.INTEGER,
-			allowNull: false,
-			defaultValue: 0,
-		})
+		// await queryInterface.addColumn('sessions', 'updated_by', {
+		// 	type: Sequelize.INTEGER,
+		// 	allowNull: false,
+		// 	defaultValue: 0,
+		// })
 
-		await queryInterface.addColumn('sessions', 'type', {
-			type: Sequelize.STRING,
-			allowNull: false,
-			defaultValue: 'PUBLIC',
-		})
+		// await queryInterface.addColumn('sessions', 'type', {
+		// 	type: Sequelize.STRING,
+		// 	allowNull: false,
+		// 	defaultValue: 'PUBLIC',
+		// })
 
-		await queryInterface.addColumn('sessions', 'mentor_name', {
-			type: Sequelize.STRING,
-			allowNull: false,
-			defaultValue: 'Mentor',
-		})
+		// await queryInterface.addColumn('sessions', 'mentor_name', {
+		// 	type: Sequelize.STRING,
+		// 	allowNull: false,
+		// 	defaultValue: 'Mentor',
+		// })
 
 		// Logic to update mentor names
 		const updateMentorNamesInSessions = async () => {
@@ -40,25 +40,25 @@ module.exports = {
 					return
 				}
 
-				const uniqueMentorIds = [...new Set(sessionsWithNullMentorName.map((session) => session.mentor_id))]
+				// const uniqueMentorIds = [...new Set(sessionsWithNullMentorName.map((session) => session.mentor_id))]
 
-				const mentorDetails = (await userRequests.getListOfUserDetails(uniqueMentorIds)).result
-				const mentorDetailsMap = Object.fromEntries(mentorDetails.map((mentor) => [mentor.id, mentor]))
+				// const mentorDetails = (await userRequests.getListOfUserDetails(uniqueMentorIds)).result
+				// const mentorDetailsMap = Object.fromEntries(mentorDetails.map((mentor) => [mentor.id, mentor]))
 
-				await Promise.all(
-					uniqueMentorIds.map(async (mentorId) => {
-						const sessionToUpdate = sessionsWithNullMentorName.find(
-							(session) => session.mentor_id === mentorId
-						)
-						const matchingMentor = mentorDetailsMap[mentorId]
-						if (sessionToUpdate && matchingMentor) {
-							await sessionQueries.updateOne(
-								{ mentor_id: sessionToUpdate.mentor_id },
-								{ mentor_name: matchingMentor.name }
-							)
-						}
-					})
-				)
+				// await Promise.all(
+				// 	uniqueMentorIds.map(async (mentorId) => {
+				// 		const sessionToUpdate = sessionsWithNullMentorName.find(
+				// 			(session) => session.mentor_id === mentorId
+				// 		)
+				// 		const matchingMentor = mentorDetailsMap[mentorId]
+				// 		if (sessionToUpdate && matchingMentor) {
+				// 			await sessionQueries.updateOne(
+				// 				{ mentor_id: sessionToUpdate.mentor_id },
+				// 				{ mentor_name: matchingMentor.name }
+				// 			)
+				// 		}
+				// 	})
+				// )
 
 				console.log('Mentor names updated successfully.')
 			} catch (error) {
