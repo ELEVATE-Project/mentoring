@@ -57,6 +57,36 @@ module.exports = {
 				.withMessage('end_date must be an integer')
 
 			req.checkBody('type').optional().isString().withMessage('type must be a string')
+
+			req.checkBody('province').optional().isString().withMessage('province must be a string')
+
+			req.checkBody('site').optional().isString().withMessage('site must be a string')
+
+			req.checkBody('learning_objectives')
+				.optional()
+				.isString()
+				.withMessage('learning_objectives must be a string')
+
+			req.checkBody('delivery_format')
+				.optional()
+				.isIn(['ONLINE', 'IN_PERSON', 'HYBRID'])
+				.withMessage('delivery_format must be one of ONLINE, IN_PERSON, HYBRID')
+
+			req.checkBody('target_audience').optional().isString().withMessage('target_audience must be a string')
+
+			req.checkBody('max_participants')
+				.optional()
+				.isInt({ min: 1 })
+				.withMessage('max_participants must be a positive integer')
+
+			req.checkBody('certificate_provided')
+				.optional()
+				.isBoolean()
+				.withMessage('certificate_provided must be a boolean')
+
+			req.checkBody('is_recurring').optional().isBoolean().withMessage('is_recurring must be a boolean')
+
+			req.checkBody('resource_content').optional().isArray().withMessage('resource_content must be an array')
 		} else {
 			req.checkBody('title')
 				.optional()
@@ -113,6 +143,36 @@ module.exports = {
 				.withMessage('end_date must be an integer')
 
 			req.checkBody('type').optional().isString().withMessage('type must be a string')
+
+			req.checkBody('province').optional().isString().withMessage('province must be a string')
+
+			req.checkBody('site').optional().isString().withMessage('site must be a string')
+
+			req.checkBody('learning_objectives')
+				.optional()
+				.isString()
+				.withMessage('learning_objectives must be a string')
+
+			req.checkBody('delivery_format')
+				.optional()
+				.isIn(['ONLINE', 'IN_PERSON', 'HYBRID'])
+				.withMessage('delivery_format must be one of ONLINE, IN_PERSON, HYBRID')
+
+			req.checkBody('target_audience').optional().isString().withMessage('target_audience must be a string')
+
+			req.checkBody('max_participants')
+				.optional()
+				.isInt({ min: 1 })
+				.withMessage('max_participants must be a positive integer')
+
+			req.checkBody('certificate_provided')
+				.optional()
+				.isBoolean()
+				.withMessage('certificate_provided must be a boolean')
+
+			req.checkBody('is_recurring').optional().isBoolean().withMessage('is_recurring must be a boolean')
+
+			req.checkBody('resource_content').optional().isArray().withMessage('resource_content must be an array')
 		}
 	},
 	details: (req) => {

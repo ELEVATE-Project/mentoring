@@ -357,17 +357,29 @@ const getAllowFilteringEntityTypes = async (tenantCode) => {
 			return []
 		}
 
+		const attributes = ['id', 'value', 'label', 'data_type', 'organization_id', 'has_entities', 'model_names']
+		const filter = { allow_filtering: true }
+
 		// Fetch allow_filtering entity types across all orgs for this tenant.
 		// All orgs can define filterable entity types; including them ensures
 		// materialized view columns cover non-default org fields too.
-		const entities = await entityTypeQueries.findAllEntityTypes(
-			null, // no org filter — include all orgs under the tenant
-			tenantCode,
-			['id', 'value', 'label', 'data_type', 'organization_id', 'has_entities', 'model_names'],
-			{
-				allow_filtering: true,
+		const entities = await entityTypeQueries.findAllEntityTypes(null, tenantCode, attributes, filter)
+
+		// Also include DEFAULT_TENANT entity types so tenants that haven't defined
+		// their own entity types still get a view built from the global defaults.
+		const defaultTenantCode = process.env.DEFAULT_TENANT_CODE || 'DEFAULT_TENANT'
+		if (tenantCode !== defaultTenantCode) {
+			const defaultEntities = await entityTypeQueries.findAllEntityTypes(
+				null,
+				defaultTenantCode,
+				attributes,
+				filter
+			)
+			const existingValues = new Set(entities.map((e) => e.value))
+			for (const entity of defaultEntities) {
+				if (!existingValues.has(entity.value)) entities.push(entity)
 			}
-		)
+		}
 
 		return entities
 	} catch (err) {

@@ -146,6 +146,44 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.STRING,
 				allowNull: false,
 			},
+			province: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			site: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			learning_objectives: {
+				type: DataTypes.TEXT,
+				allowNull: true,
+			},
+			delivery_format: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			target_audience: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			max_participants: {
+				type: DataTypes.INTEGER,
+				allowNull: true,
+			},
+			certificate_provided: {
+				type: DataTypes.BOOLEAN,
+				allowNull: true,
+				defaultValue: false,
+			},
+			is_recurring: {
+				type: DataTypes.BOOLEAN,
+				allowNull: true,
+				defaultValue: false,
+			},
+			resource_content: {
+				type: DataTypes.ARRAY(DataTypes.STRING),
+				allowNull: true,
+			},
 		},
 		{ sequelize, modelName: 'Session', tableName: 'sessions', freezeTableName: true, paranoid: true }
 	)
