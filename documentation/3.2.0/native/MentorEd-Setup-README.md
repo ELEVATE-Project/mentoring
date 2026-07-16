@@ -454,12 +454,12 @@ Set the following environment variables to connect MentorED's Chat Communication
     - **Ubuntu/Linux**
 
         ```
-        cd mentoring/src && pm2 start app.js -i 2 --name mentored-mentoring && cd ../.. && \
-        cd user/src && pm2 start app.js -i 2 --name mentored-user && cd ../.. && \
-        cd notification/src && pm2 start app.js -i 2 --name mentored-notification && cd ../.. && \
-        cd interface-service/src && pm2 start app.js -i 2 --name mentored-interface && cd ../.. && \
-        cd scheduler/src && pm2 start app.js -i 2 --name mentored-scheduler && cd ../.. && \
-        cd chat-communications/src && pm2 start app.js -i 2 --name mentored-communications && cd ../..
+        cd mentoring/src && pm2 start app.js -i 1 --name mentored-mentoring && cd ../.. && \
+        cd user/src && pm2 start app.js -i 1 --name mentored-user && cd ../.. && \
+        cd notification/src && pm2 start app.js -i 1 --name mentored-notification && cd ../.. && \
+        cd interface-service/src && pm2 start app.js -i 1 --name mentored-interface && cd ../.. && \
+        cd scheduler/src && pm2 start app.js -i 1 --name mentored-scheduler && cd ../.. && \
+        cd chat-communications/src && pm2 start app.js -i 1 --name mentored-communications && cd ../..
         ```
 
     - **MacOS**
