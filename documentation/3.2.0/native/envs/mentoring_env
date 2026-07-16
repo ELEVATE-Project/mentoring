@@ -89,4 +89,5 @@ COMMUNICATION_SERVICE_HOST="http://localhost:3123"
 ENABLE_CHAT=true
 PORTAL_BASE_URL="https://dev.elevate-mentoring.shikshalokam.org"
 EVENTS_TOPIC="userCreate"   # Ensure this matches the User Service configuration
-
+FROM_EMAIL=example@gmail.com
+EMAIL_SERVICE=smpt
