@@ -12,5 +12,5 @@ KAFKA_HOST=localhost:9092
 KAFKA_TOPIC=develop.notifications
 SENDGRID_API_KEY=asd9f87a
 SENDGRID_FROM_MAIL=no-reply@some.org
-FROM_EMAIL=mallanagouda@gmail.com
+FROM_EMAIL=example@gmail.com
 EMAIL_SERVICE=smpt
