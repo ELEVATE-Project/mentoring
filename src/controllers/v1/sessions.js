@@ -408,7 +408,6 @@ module.exports = class Sessions {
 				req.params.id, // session id
 				req.body.mentees, // Array of mentee ids
 				req.headers['timezone'],
-				req.decodedToken.id,
 				req.decodedToken.organization_id, // organizationId
 				req.decodedToken.organization_code, // organizationCode
 				req.decodedToken.tenant_code

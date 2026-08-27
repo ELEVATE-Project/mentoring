@@ -1,10 +1,8 @@
 module.exports = {
 	create: (req) => {
-		req.checkBody('requestee_id')
-			.notEmpty()
-			.withMessage('requestee_id is required')
-			.isString()
-			.withMessage('requestee_id must be a string')
+		req.checkBody('requestee_id').optional().isString().withMessage('requestee_id must be a string')
+
+		req.checkBody('requestees').optional().isArray().withMessage('requestees must be an array')
 
 		req.checkBody('title')
 			.notEmpty()

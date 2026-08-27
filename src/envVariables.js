@@ -200,6 +200,16 @@ let enviromentVariables = {
 		optional: true,
 		default: 0,
 	},
+	ALLOW_SESSION_TIME_OVERLAP: {
+		message: 'Allow session time overlap',
+		optional: true,
+		default: 'NO',
+	},
+	ENFORCE_MAXIMUM_SESSION_TIME: {
+		message: 'Enforce maximum session time',
+		optional: true,
+		default: 'NO',
+	},
 	SESSION_MENTEE_LIMIT: {
 		message: 'Required session mentee limit',
 		optional: true,
@@ -632,6 +642,11 @@ let enviromentVariables = {
 		optional: true,
 		default: false,
 	},
+	IS_SESSION_REQUEST_FIELDS_EDITABLE: {
+		message: 'Required flag to determine if session request fields are editable',
+		optional: true,
+		default: false,
+	},
 }
 
 let success = true
@@ -718,7 +733,7 @@ module.exports = function () {
 		tableData.push(tableObj)
 	})
 
-	console.log(tableData.toString())
+	//console.log(tableData.toString())
 
 	return {
 		success: success,

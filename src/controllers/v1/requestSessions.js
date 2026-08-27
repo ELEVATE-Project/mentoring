@@ -43,7 +43,8 @@ module.exports = class requestsSessions {
 				req.query.pageNo,
 				req.query.pageSize,
 				req.query.status ? req.query.status.split(',').map((s) => s.trim()) : [],
-				req.decodedToken.tenant_code
+				req.decodedToken.tenant_code,
+				req.query.onlyRequested
 			)
 			return requestSessionDetails
 		} catch (error) {

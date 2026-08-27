@@ -4,6 +4,7 @@ const responses = require('@helpers/responses')
 
 const resourceQueries = require('@database/queries/resources')
 const cacheHelper = require('@generics/cacheHelper')
+const common = require('@constants/common')
 
 module.exports = class SessionsHelper {
 	/**
@@ -46,6 +47,45 @@ module.exports = class SessionsHelper {
 			})
 		} catch (error) {
 			throw error
+		}
+	}
+
+	/**
+	 * List resources for a session.
+	 * @method
+	 * @name listResources
+	 * @param {String} type 					- Resource type.
+	 * @param {String} sessionId 				- Session id.
+	 * @returns {JSON} 							- List of resources
+	 */
+
+	static async listResources(mimetype, type, sessionId, userId, tenantCode) {
+		try {
+			let filter = { status: common.ACTIVE_STATUS }
+			if (mimetype) {
+				filter.mime_type = mimetype
+			}
+			if (type) {
+				filter.type = type
+			}
+			if (sessionId) {
+				filter.session_id = sessionId
+			}
+
+			// Fetch resources for the specified session and type
+			const resources = await resourceQueries.find(filter, tenantCode)
+			console.log('Resources fetched:', resources)
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'RESOURCES_FETCHED_SUCCESSFULLY',
+				result: resources && resources.length > 0 ? resources : [],
+			})
+		} catch (error) {
+			return responses.failureResponse({
+				message: 'ERROR_FETCHING_RESOURCES',
+				statusCode: httpStatusCode.internal_server_error,
+				responseCode: 'SERVER_ERROR',
+			})
 		}
 	}
 }

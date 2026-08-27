@@ -139,8 +139,8 @@ module.exports = class UserHelper {
 	}
 
 	static async #createUserWithBody(userBody, tenantCode) {
-		let orgId = userBody.organization_id
-		let orgCode = userBody.organizations[0].code
+		let orgId = userBody.organization_id || userBody.organizations?.[0]?.id
+		let orgCode = userBody.organization_code || userBody.organizations?.[0]?.code
 
 		// Check if orgId exists before calling toString()
 		if (!orgId) {
@@ -226,9 +226,11 @@ module.exports = class UserHelper {
 				code: orgExtension.organization_code.toString(),
 			},
 		}
-		let roles = userDetails?.user_roles
-		if (userDetails.organization) {
+		let roles = userDetails?.roles || userDetails?.user_roles
+		if (!roles && userDetails.organization?.roles) {
 			roles = userDetails.organization.roles
+		} else if (!roles && Array.isArray(userDetails.organizations) && userDetails.organizations[0]?.roles) {
+			roles = userDetails.organizations[0].roles
 		}
 
 		// List of optional fields to check
@@ -295,7 +297,8 @@ module.exports = class UserHelper {
 	}
 
 	static async #createUser(userExtensionData, tenantCode) {
-		const isAMentor = userExtensionData.roles.some((role) => role.title == common.MENTOR_ROLE)
+		const roles = Array.isArray(userExtensionData.roles) ? userExtensionData.roles : []
+		const isAMentor = roles.some((role) => (typeof role === 'object' ? role.title : role) == common.MENTOR_ROLE)
 		const orgId = userExtensionData.organization.id
 		const orgCode = userExtensionData.organization.code
 		const user = isAMentor

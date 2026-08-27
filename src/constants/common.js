@@ -62,6 +62,8 @@ module.exports = {
 	UNFULFILLED_STATUS: 'UNFULFILLED',
 	PUBLISHED_STATUS: 'PUBLISHED',
 	LIVE_STATUS: 'LIVE',
+	UPCOMING_STATUS: 'UPCOMING',
+	DRAFT_STATUS: 'DRAFT',
 	MENTOR_EVALUATING: 'mentor',
 	internalCacheExpirationTime: process.env.INTERNAL_CACHE_EXP_TIME, // In Seconds
 	RedisCacheExpiryTime: process.env.REDIS_CACHE_EXP_TIME,
@@ -136,7 +138,7 @@ module.exports = {
 	mentorExtensionModelName: 'MentorExtension',
 	userExtensionModelName: 'UserExtension',
 	sessionModelName: 'Session',
-	entityTypeModelNames: ['Session', 'MentorExtension', 'UserExtension'],
+	entityTypeModelNames: ['Session', 'MentorExtension', 'UserExtension', 'RequestSession'],
 	notificationEndPoint: '/mentoring/v1/notifications/emailCronJob',
 	sessionCompleteEndpoint: '/mentoring/v1/sessions/completed/',
 	expireSessionRequestEndpoint: '/mentoring/v1/requestSessions/expire',

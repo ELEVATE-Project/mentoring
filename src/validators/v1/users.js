@@ -16,6 +16,17 @@ module.exports = {
 	 * Called from user service to mentoring service
 	 */
 	add: (req) => {
+		if (
+			req.body &&
+			!req.body.organization_code &&
+			Array.isArray(req.body.organizations) &&
+			req.body.organizations.length > 0
+		) {
+			req.body.organization_code = req.body.organizations[0].code || req.body.organizations[0].id
+		}
+		if (req.body && typeof req.body.id === 'number') {
+			req.body.id = req.body.id.toString()
+		}
 		req.checkBody('tenant_code')
 			.notEmpty()
 			.withMessage('tenant_code is required for multi-tenant isolation')
@@ -33,6 +44,17 @@ module.exports = {
 	 * Called from user service to mentoring service
 	 */
 	update: (req) => {
+		if (
+			req.body &&
+			!req.body.organization_code &&
+			Array.isArray(req.body.organizations) &&
+			req.body.organizations.length > 0
+		) {
+			req.body.organization_code = req.body.organizations[0].code || req.body.organizations[0].id
+		}
+		if (req.body && typeof req.body.id === 'number') {
+			req.body.id = req.body.id.toString()
+		}
 		req.checkBody('tenant_code')
 			.notEmpty()
 			.withMessage('tenant_code is required for multi-tenant isolation')
@@ -50,6 +72,9 @@ module.exports = {
 	 * Called from user service to mentoring service
 	 */
 	delete: (req) => {
+		if (req.body && typeof req.body.id === 'number') {
+			req.body.id = req.body.id.toString()
+		}
 		req.checkBody('tenant_code')
 			.notEmpty()
 			.withMessage('tenant_code is required for multi-tenant isolation')

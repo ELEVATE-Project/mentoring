@@ -1632,7 +1632,7 @@ module.exports = class MentorsHelper {
 					.join(',')}) `
 			}
 
-			if (userPolicyDetails.external_mentor_visibility && userPolicyDetails.organization_code) {
+			if (userPolicyDetails.external_mentor_visibility && userPolicyDetails.organization_id) {
 				// Filter user data based on policy
 				// generate filter based on condition
 				if (userPolicyDetails.external_mentor_visibility === common.CURRENT) {
@@ -1693,7 +1693,8 @@ module.exports = class MentorsHelper {
 		organizationId,
 		tenantCode,
 		startDate,
-		endDate
+		endDate,
+		queryParams
 	) {
 		try {
 			if (!utils.isAMentor(roles)) {
@@ -1715,25 +1716,117 @@ module.exports = class MentorsHelper {
 				mentor_id: loggedInUserId,
 			}
 			if (arrayOfStatus.length > 0) {
-				// if (arrayOfStatus.includes(common.COMPLETED_STATUS) && arrayOfStatus.length == 1) {
-				// 	filters['endDateUtc'] = {
-				// 		$lt: moment().utc().format(),
-				// 	}
-				// } else
-				if (arrayOfStatus.includes(common.PUBLISHED_STATUS) && arrayOfStatus.includes(common.LIVE_STATUS)) {
-					filters['end_date'] = {
-						[Op.gte]: currentDate,
-					}
+				const orConditions = []
+
+				if (arrayOfStatus.includes(common.UPCOMING_STATUS)) {
+					// Virtual status — never persisted. An "upcoming" session is a
+					// PUBLISHED session whose start_date hasn't arrived yet.
+					orConditions.push({
+						status: common.PUBLISHED_STATUS,
+						start_date: { [Op.gte]: currentDate },
+					})
 				}
 
-				filters['status'] = arrayOfStatus
+				if (arrayOfStatus.includes(common.LIVE_STATUS)) {
+					// LIVE is a real, persisted status (set when a mentor starts the session).
+					// But if the mentor hasn't clicked "start" yet, status may still be
+					// PUBLISHED even though the session's time window has begun — treat that
+					// as LIVE too.
+					orConditions.push({ status: common.LIVE_STATUS })
+					orConditions.push({
+						status: common.PUBLISHED_STATUS,
+						start_date: { [Op.lte]: currentDate },
+						end_date: { [Op.gte]: currentDate },
+					})
+				}
+
+				if (arrayOfStatus.includes(common.COMPLETED_STATUS)) {
+					orConditions.push({ status: common.COMPLETED_STATUS })
+					orConditions.push({
+						status: { [Op.in]: [common.PUBLISHED_STATUS, common.LIVE_STATUS] },
+						end_date: { [Op.lte]: currentDate },
+					})
+				}
+
+				// Any other literal statuses (e.g. DRAFT) pass through unchanged,
+				// with no extra time constraint.
+				const otherStatuses = arrayOfStatus.filter(
+					(s) => s !== common.UPCOMING_STATUS && s !== common.LIVE_STATUS && s !== common.COMPLETED_STATUS
+				)
+				if (otherStatuses.length > 0) {
+					orConditions.push({ status: otherStatuses })
+				}
+
+				if (orConditions.length > 0) {
+					filters[Op.or] = orConditions
+				}
 			}
 
-			// Apply custom startDate and endDate filter only if both are provided
-			if (startDate && endDate) {
+			// Apply custom startDate to get upcoming sessions after the startDate. If not passed, it will show all sessions which are completed and upcoming.
+			if (startDate) {
 				filters['start_date'] = { [Op.gte]: startDate }
+			}
+			// pass end date to see the sessions which are completed before the end date. If not passed, it will show all sessions which are completed and upcoming.
+			if (endDate) {
 				filters['end_date'] = { ...(filters['end_date'] || {}), [Op.lte]: endDate }
 			}
+			// Extract other filters from queryParams excluding status, startDate, endDate
+			const excludedParams = ['status', 'startDate', 'endDate']
+			const otherFilters = {}
+
+			if (queryParams) {
+				for (const [key, value] of Object.entries(queryParams)) {
+					// Only add filters that are not in the excluded list and have valid values
+					if (!excludedParams.includes(key) && value && value !== '') {
+						otherFilters[key] = value
+					}
+				}
+			}
+
+			console.log('Other filters extracted from queryParams:', otherFilters)
+
+			// Validate other filters against valid entityTypes for Session model
+			const metaFilters = []
+			if (Object.keys(otherFilters).length > 0) {
+				// Get all entity types for Session model with data_type to check if they're arrays
+				const sessionEntityTypes = await entityTypeQueries.findAllEntityTypes(
+					'',
+					tenantCode,
+					['value', 'model_names', 'data_type'],
+					{
+						status: common.ACTIVE_STATUS,
+						model_names: { [Op.contains]: ['Session'] },
+					}
+				)
+
+				const entityTypeMap = {}
+				sessionEntityTypes.forEach((et) => {
+					entityTypeMap[et.value] = et
+				})
+
+				for (const [key, value] of Object.entries(otherFilters)) {
+					if (entityTypeMap[key]) {
+						const entityType = entityTypeMap[key]
+						const isArrayType = entityType.data_type && entityType.data_type.includes('ARRAY')
+
+						const filterValue = isArrayType ? [value] : value
+						metaFilters.push({
+							meta: {
+								[Op.contains]: {
+									[key]: filterValue,
+								},
+							},
+						})
+					} else {
+						console.log(`✗ Filter '${key}' is NOT a valid entity type - excluding`)
+					}
+				}
+			}
+
+			if (metaFilters.length > 0) {
+				filters[Op.and] = [...(filters[Op.and] || []), ...metaFilters]
+			}
+
 			// Get sessions without mentor details (simple database query)
 			const sessionDetails = await sessionQueries.findAllSessions(page, limit, search, filters, tenantCode)
 
@@ -1756,11 +1849,13 @@ module.exports = class MentorsHelper {
 			//remove meeting_info details except value and platform and add is_assigned flag
 			sessionDetails.rows.forEach((item) => {
 				if (item.meeting_info) {
+					item.meeting_info_details = item.meeting_info
 					item.meeting_info = {
 						value: item.meeting_info.value,
 						platform: item.meeting_info.platform,
 					}
 				}
+
 				item.is_assigned = item.mentor_id !== item.created_by
 				// Normalize org code from enriched organization object for entity type resolution
 				item.organization_code = item.organization?.organization_code || null

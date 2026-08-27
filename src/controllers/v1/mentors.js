@@ -164,7 +164,10 @@ module.exports = class Mentors {
 				req.query.status,
 				req.decodedToken.roles,
 				req.decodedToken.organization_code,
-				req.decodedToken.tenant_code
+				req.decodedToken.tenant_code,
+				req.query.startDate,
+				req.query.endDate,
+				req.query
 			)
 			return sessionDetails
 		} catch (error) {

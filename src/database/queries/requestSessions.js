@@ -6,6 +6,7 @@ const common = require('@constants/common')
 const MenteeExtension = require('@database/models/index').UserExtension
 const { QueryTypes } = require('sequelize')
 const moment = require('moment')
+const { assign } = require('lodash')
 
 exports.getColumns = async () => {
 	try {
@@ -23,12 +24,25 @@ exports.getModelName = async () => {
 	}
 }
 
-exports.addSessionRequest = async (requestorId, requesteeId, Agenda, startDate, endDate, Title, Meta, tenantCode) => {
+exports.addSessionRequest = async (
+	requestorId,
+	requesteeId,
+	Agenda,
+	startDate,
+	endDate,
+	Title,
+	Meta,
+	tenantCode,
+	assignment_type,
+	requestees
+) => {
 	try {
 		const SessionRequestData = [
 			{
 				requestor_id: requestorId,
-				requestee_id: requesteeId,
+				requestee_id: requesteeId || '',
+				requestees: requestees,
+				assignment_type: assignment_type,
 				status: common.CONNECTIONS_STATUS.REQUESTED,
 				title: Title,
 				agenda: Agenda,
@@ -138,6 +152,7 @@ exports.getpendingRequests = async (userId, page, pageSize, tenantCode) => {
 exports.approveRequest = async (userId, requestSessionId, sessionId, tenantCode) => {
 	try {
 		const updateData = {
+			requestee_id: userId,
 			status: common.CONNECTIONS_STATUS.ACCEPTED,
 			session_id: sessionId,
 			updated_by: userId,
@@ -160,10 +175,31 @@ exports.approveRequest = async (userId, requestSessionId, sessionId, tenantCode)
 
 exports.rejectRequest = async (userId, requestSessionId, rejectReason, tenantCode) => {
 	try {
+		const sessionReq = await requestSession.findOne({
+			where: {
+				id: requestSessionId,
+				tenant_code: tenantCode,
+			},
+			raw: true,
+		})
+
+		if (!sessionReq) {
+			return [0, []]
+		}
+
+		const strUserId = String(userId)
+		const currentRejected = Array.isArray(sessionReq.rejected_requestees) ? sessionReq.rejected_requestees : []
+		const updatedRejected = Array.from(new Set([...currentRejected, strUserId]))
+
 		let updateData = {
-			status: common.CONNECTIONS_STATUS.REJECTED,
-			updated_by: userId,
+			updated_by: strUserId,
 			reject_reason: rejectReason ? rejectReason : null,
+			rejected_requestees: updatedRejected,
+		}
+
+		if (sessionReq.assignment_type === 'SPECIFIC') {
+			updateData.requestee_id = userId
+			updateData.status = common.CONNECTIONS_STATUS.REJECTED
 		}
 
 		return await requestSession.update(updateData, {
@@ -179,10 +215,15 @@ exports.rejectRequest = async (userId, requestSessionId, rejectReason, tenantCod
 	}
 }
 
-exports.expireRequest = async (requestSessionId, tenantCode) => {
+exports.expireRequest = async (requestSessionId, tenantCode, requestees = null) => {
 	try {
 		let updateData = {
 			status: common.CONNECTIONS_STATUS.EXPIRED,
+		}
+
+		// If caller provides an updated requestees array, persist it
+		if (Array.isArray(requestees)) {
+			updateData.requestees = requestees
 		}
 
 		return await requestSession.update(updateData, {

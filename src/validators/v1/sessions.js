@@ -6,6 +6,7 @@
  */
 const { filterRequestBody } = require('../common')
 const { sessions } = require('@constants/blacklistConfig')
+const common = require('@constants/common')
 module.exports = {
 	update: (req) => {
 		req.body = filterRequestBody(req.body, sessions.update)
@@ -57,6 +58,11 @@ module.exports = {
 				.withMessage('end_date must be an integer')
 
 			req.checkBody('type').optional().isString().withMessage('type must be a string')
+
+			req.checkBody('status')
+				.optional()
+				.isIn([common.DRAFT_STATUS, common.PUBLISHED_STATUS])
+				.withMessage('status must be one of DRAFT, PUBLISHED')
 		} else {
 			req.checkBody('title')
 				.optional()
@@ -113,6 +119,11 @@ module.exports = {
 				.withMessage('end_date must be an integer')
 
 			req.checkBody('type').optional().isString().withMessage('type must be a string')
+
+			req.checkBody('status')
+				.optional()
+				.isIn([common.DRAFT_STATUS, common.PUBLISHED_STATUS])
+				.withMessage('status must be one of DRAFT, PUBLISHED')
 		}
 	},
 	details: (req) => {
