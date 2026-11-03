@@ -1749,10 +1749,14 @@ module.exports = class MentorsHelper {
 
 				if (arrayOfStatus.includes(common.COMPLETED_STATUS)) {
 					orConditions.push({ status: common.COMPLETED_STATUS })
-					orConditions.push({
-						status: { [Op.in]: [common.PUBLISHED_STATUS, common.LIVE_STATUS] },
-						end_date: { [Op.lte]: currentDate },
-					})
+					// When auto completion is enabled, sessions past their end time are treated as completed.
+					// When it is disabled, they show as Expired in the portal, so Completed returns only completed ones
+					if ([true, 'true', '1', 1].includes(process.env.AUTO_MARK_SESSION_COMPLETED_WHEN_EXPIRED)) {
+						orConditions.push({
+							status: { [Op.in]: [common.PUBLISHED_STATUS, common.LIVE_STATUS] },
+							end_date: { [Op.lte]: currentDate },
+						})
+					}
 				}
 
 				// Any other literal statuses (e.g. DRAFT) pass through unchanged,
