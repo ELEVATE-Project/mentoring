@@ -782,10 +782,10 @@ exports.getAttendedSessions = async (page, limit, search, userId, tenantCode) =>
 		// Flatten to the session row + attendee fields, same shape as getEnrolledSessions
 		return {
 			rows: rows.map((attendee) => {
-				const { meta, ...session } = attendee.session.get({ plain: true })
+				const session = attendee.session.get({ plain: true })
 				return {
 					...session,
-					delivery_mode: meta?.delivery_mode || null,
+					delivery_mode: session.meta?.delivery_mode || null,
 					enrolled_type: attendee.type,
 					joined_at: attendee.joined_at,
 					is_feedback_skipped: attendee.is_feedback_skipped,
