@@ -21,6 +21,8 @@ const mentorService = require('@services/mentors')
 const schedulerRequest = require('@requests/scheduler')
 const communicationHelper = require('@helpers/communications')
 const cacheHelper = require('@generics/cacheHelper')
+const { body } = require('express-validator/check')
+const { get } = require('request')
 
 module.exports = class requestSessionsHelper {
 	static async checkConnectionRequestExists(userId, targetUserId, tenantCode) {
@@ -41,29 +43,63 @@ module.exports = class requestSessionsHelper {
 
 	static async create(bodyData, userId, organizationCode, organizationId, SkipValidation, tenantCode) {
 		try {
-			const mentorUserExists = await cacheHelper.mentor.get(tenantCode, bodyData.requestee_id)
-			if (!mentorUserExists) {
-				return responses.failureResponse({
-					statusCode: httpStatusCode.not_found,
-					message: 'USER_NOT_FOUND',
-				})
+			bodyData['assignment_type'] = 'PUBLIC'
+			if (bodyData.requestee_id) {
+				const mentorUserExists = await cacheHelper.mentor.get(tenantCode, bodyData.requestee_id)
+				if (!mentorUserExists) {
+					return responses.failureResponse({
+						statusCode: httpStatusCode.not_found,
+						message: 'USER_NOT_FOUND',
+					})
+				}
+				bodyData['assignment_type'] = 'SPECIFIC'
 			}
 
-			// Check if a connection already exists between the users
-			const connectionExists = await connectionQueries.getConnection(userId, bodyData.requestee_id, tenantCode)
+			if (bodyData.requestees) {
+				if (Array.isArray(bodyData.requestees)) {
+					const mentorEmails = []
+					for (let i = 0; i < bodyData.requestees.length; i++) {
+						const mentorId = bodyData.requestees[i]
+						if (!isNaN(mentorId)) {
+							// Use cache (now includes email with unScoped=true)
+							let mentorData = await cacheHelper.mentor.get(tenantCode, mentorId)
+							if (!mentorData) {
+								mentorData = await cacheHelper.mentor.get(tenantCode, mentorId)
+							}
+							if (mentorData && mentorData.email) {
+								mentorEmails.push(mentorData.email)
+							}
+							// Skip missing mentee and continue processing the rest
+						} else {
+							mentorEmails.push(mentorId)
+						}
+					}
+					bodyData.mentorEmails = mentorEmails
+					bodyData['assignment_type'] = 'GROUP'
+				}
+			}
 
-			// If not connected, restrict mentee to a single pending request
-			if (!connectionExists) {
-				const pendingRequest = await sessionRequestQueries.checkPendingRequest(
+			if (bodyData.requestee_id) {
+				// Check if a connection already exists between the users
+				const connectionExists = await connectionQueries.getConnection(
 					userId,
 					bodyData.requestee_id,
 					tenantCode
 				)
-				if (pendingRequest.count > 0) {
-					return responses.failureResponse({
-						statusCode: httpStatusCode.bad_request,
-						message: 'SESSION_REQUEST_PENDING',
-					})
+
+				// If not connected, restrict mentee to a single pending request
+				if (!connectionExists) {
+					const pendingRequest = await sessionRequestQueries.checkPendingRequest(
+						userId,
+						bodyData.requestee_id,
+						tenantCode
+					)
+					if (pendingRequest.count > 0) {
+						return responses.failureResponse({
+							statusCode: httpStatusCode.bad_request,
+							message: 'SESSION_REQUEST_PENDING',
+						})
+					}
 				}
 			}
 
@@ -157,28 +193,33 @@ module.exports = class requestSessionsHelper {
 				bodyData.end_date,
 				bodyData.title,
 				bodyData.meta ? bodyData.meta : null,
-				tenantCode
+				tenantCode,
+				bodyData.assignment_type,
+				bodyData.requestees
 			)
 
-			// Schedule a job to expire the session request after end_date
-			const jobId = common.expireSessionRequest + SessionRequestResult.id
+			// Schedule a job to expire the session request after end_date; requests without dates
+			// (optional for Asset/Additional Service) never expire, so no job is created for them
+			if (bodyData.end_date) {
+				const jobId = common.expireSessionRequest + SessionRequestResult.id
 
-			const delay = await utils.getTimeDifferenceInMilliseconds(bodyData.end_date, 0, 'minutes')
+				const delay = await utils.getTimeDifferenceInMilliseconds(bodyData.end_date, 0, 'minutes')
 
-			const reqBody = {
-				job_id: jobId,
-				request_session_id: SessionRequestResult.id,
-				tenant_code: tenantCode,
+				const reqBody = {
+					job_id: jobId,
+					request_session_id: SessionRequestResult.id,
+					tenant_code: tenantCode,
+				}
+
+				await schedulerRequest.createSchedulerJob(
+					jobId,
+					delay,
+					'ExpireSessionRequest',
+					reqBody,
+					`${common.expireSessionRequestEndpoint}/${SessionRequestResult.id}`,
+					common.POST_METHOD
+				)
 			}
-
-			const expire = await schedulerRequest.createSchedulerJob(
-				jobId,
-				delay,
-				'ExpireSessionRequest',
-				reqBody,
-				`${common.expireSessionRequestEndpoint}/${SessionRequestResult.id}`,
-				common.POST_METHOD
-			)
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -197,20 +238,48 @@ module.exports = class requestSessionsHelper {
 	 * @param {number} pageSize - The number of records per page.
 	 * @returns {Promise<Object>} The list of pending session requests.
 	 */
-	static async list(userId, pageNo, pageSize, status, tenantCode) {
+	static async list(userId, pageNo, pageSize, status, tenantCode, onlyRequested = false, query = {}) {
 		try {
 			// Get requests sent by me (requestor_id = userId)
 			const allRequestSession = await sessionRequestQueries.getAllRequests(userId, status, tenantCode)
 			const sessionRequestData = allRequestSession.rows
 
-			// Get requests sent to me (requestee_id = userId)
-			const sessionRequestMapping = await sessionRequestMappingQueries.getSessionsMapping(
-				userId,
-				status,
-				tenantCode
+			let combinedData
+			if (!onlyRequested) {
+				// Get requests sent to me (requestee_id = userId)
+				const sessionRequestMapping = await sessionRequestMappingQueries.getSessionsMapping(
+					userId,
+					status,
+					tenantCode
+				)
+				combinedData = [...sessionRequestData, ...sessionRequestMapping]
+			} else {
+				combinedData = sessionRequestData
+			}
+
+			// Dynamically filter by entity types or metadata parameters passed in query
+			const reservedParams = new Set([
+				'pageNo',
+				'pageSize',
+				'status',
+				'onlyRequested',
+				'SkipValidation',
+				'searchText',
+			])
+			const filterKeys = Object.keys(query).filter(
+				(key) => !reservedParams.has(key) && query[key] !== undefined && query[key] !== ''
 			)
 
-			const combinedData = [...sessionRequestData, ...sessionRequestMapping]
+			if (filterKeys.length > 0) {
+				combinedData = combinedData.filter((session) =>
+					filterKeys.every((key) => {
+						const val = session?.meta?.[key] ?? session?.[key]
+						return Array.isArray(val)
+							? val.includes(query[key])
+							: String(val).toLowerCase() === String(query[key]).toLowerCase()
+					})
+				)
+			}
 
 			// Sort combined data by created_at in descending order (most recent first)
 			combinedData.sort((a, b) => {
@@ -235,76 +304,109 @@ module.exports = class requestSessionsHelper {
 				})
 			}
 
-			const oppositeUserIds = paginatedData.map((s) =>
-				s.requestor_id === userId ? s.requestee_id : s.requestor_id
-			)
-
-			let oppositeUserDetails = await userExtensionQueries.getUsersByUserIds(
-				oppositeUserIds,
-				{
-					attributes: ['user_id', 'image', 'name', 'experience', 'designation', 'organization_code'],
-				},
-				tenantCode
-			)
-
-			const uniqueOrgCodes = [...new Set(oppositeUserDetails.map((u) => u.organization_code))]
-			const modelName = await userExtensionQueries.getModelName()
-
-			const defaults = await getDefaults()
-			if (!defaults.orgCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_ORG_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
-			if (!defaults.tenantCode)
-				return responses.failureResponse({
-					message: 'DEFAULT_TENANT_CODE_NOT_SET',
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
+			let data
+			if (!onlyRequested) {
+				let oppositeUserIds = []
+				paginatedData.forEach((s) => {
+					const isSent = String(s.requestor_id) === String(userId)
+					if (isSent) {
+						if (Array.isArray(s.requestees) && s.requestees.length > 0) {
+							oppositeUserIds.push(...s.requestees)
+						} else if (s.requestee_id) {
+							oppositeUserIds.push(s.requestee_id)
+						}
+					} else {
+						if (s.requestor_id) {
+							oppositeUserIds.push(s.requestor_id)
+						}
+					}
 				})
 
-			oppositeUserDetails = await entityTypeService.processEntityTypesToAddValueLabels(
-				oppositeUserDetails,
-				uniqueOrgCodes,
-				modelName,
-				'organization_code',
-				[],
-				tenantCode
-			)
+				oppositeUserIds = [...new Set(oppositeUserIds.filter(Boolean).map(String))]
 
-			const userDetailsMap = Object.fromEntries(oppositeUserDetails.map((u) => [u.user_id, u]))
-			const userIds = oppositeUserIds.map((id) => String(id))
+				let oppositeUserDetails = await userExtensionQueries.getUsersByUserIds(
+					oppositeUserIds,
+					{
+						attributes: ['user_id', 'image', 'name', 'experience', 'designation', 'organization_code'],
+					},
+					tenantCode
+				)
 
-			const userDetails = await userExtensionQueries.getUsersByUserIds(userIds, {}, tenantCode, true)
+				const uniqueOrgCodes = [...new Set(oppositeUserDetails.map((u) => u.organization_code))]
+				const modelName = await userExtensionQueries.getModelName()
 
-			await Promise.all(
-				userDetails.map(async (u) => {
-					if (u.image) u.image = await utils.getDownloadableUrl(u.image)
-				})
-			)
+				oppositeUserDetails = await entityTypeService.processEntityTypesToAddValueLabels(
+					oppositeUserDetails,
+					uniqueOrgCodes,
+					modelName,
+					'organization_code',
+					[],
+					tenantCode
+				)
 
-			const fullMap = new Map(userDetails.map((u) => [String(u.user_id), u]))
+				const userDetailsMap = Object.fromEntries(oppositeUserDetails.map((u) => [String(u.user_id), u]))
+				const userDetails = await userExtensionQueries.getUsersByUserIds(oppositeUserIds, {}, tenantCode, true)
 
-			const data = paginatedData
-				.map((session) => {
-					const isSent = session.requestor_id === userId
-					const oppositeUserId = isSent ? session.requestee_id : session.requestor_id
-					const user = userDetailsMap[oppositeUserId]
-					const fullUser = fullMap.get(String(oppositeUserId))
+				await Promise.all(
+					userDetails.map(async (u) => {
+						if (u.image) u.image = await utils.getDownloadableUrl(u.image)
+					})
+				)
 
-					if (user && fullUser) {
-						user.image = fullUser.image
+				const fullMap = new Map(userDetails.map((u) => [String(u.user_id), u]))
+
+				data = paginatedData
+					.map((session) => {
+						const isSent = String(session.requestor_id) === String(userId)
+						let user_details = null
+
+						if (isSent) {
+							if (Array.isArray(session.requestees) && session.requestees.length > 0) {
+								user_details = session.requestees
+									.map((id) => {
+										const strId = String(id)
+										const user = userDetailsMap[strId]
+										const fullUser = fullMap.get(strId)
+										if (user && fullUser) {
+											return { ...user, image: fullUser.image }
+										}
+										return user || fullUser || null
+									})
+									.filter(Boolean)
+							} else if (session.requestee_id) {
+								const strId = String(session.requestee_id)
+								const user = userDetailsMap[strId]
+								const fullUser = fullMap.get(strId)
+								if (user && fullUser) {
+									user.image = fullUser.image
+									user_details = user
+								} else {
+									user_details = user || fullUser || null
+								}
+							}
+						} else {
+							const strId = String(session.requestor_id)
+							const user = userDetailsMap[strId]
+							const fullUser = fullMap.get(strId)
+							if (user && fullUser) {
+								user.image = fullUser.image
+								user_details = user
+							} else {
+								user_details = user || fullUser || null
+							}
+						}
+
 						return {
 							...session,
 							id: String(session.id),
-							user_details: user,
+							user_details,
 							request_type: isSent ? 'sent' : 'received',
 						}
-					}
-					return null
-				})
-				.filter(Boolean)
+					})
+					.filter(Boolean)
+			} else {
+				data = paginatedData
+			}
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
@@ -353,18 +455,27 @@ module.exports = class requestSessionsHelper {
 				})
 			}
 
-			// Map session data
-			Object.assign(bodyData, {
-				type: common.SESSION_TYPE.PRIVATE,
-				mentor_id: mentorUserId,
-				mentees: [getRequestSessionDetails.requestor_id],
-				description: getRequestSessionDetails.agenda,
-				title: getRequestSessionDetails.title,
-				start_date: getRequestSessionDetails.start_date,
-				end_date: getRequestSessionDetails.end_date,
-				meta: getRequestSessionDetails.meta || null,
-				sessionCreatedByRequest: true,
-			})
+			bodyData['type'] = bodyData.type || common.SESSION_TYPE.PRIVATE
+			bodyData['mentor_id'] = mentorUserId
+
+			if (
+				process.env.IS_SESSION_REQUEST_FIELDS_EDITABLE === false ||
+				process.env.IS_SESSION_REQUEST_FIELDS_EDITABLE === 'false'
+			) {
+				// Map session data
+				Object.assign(bodyData, {
+					mentees: [getRequestSessionDetails.requestor_id],
+					description: getRequestSessionDetails.agenda,
+					title: getRequestSessionDetails.title,
+					start_date: getRequestSessionDetails.start_date,
+					end_date: getRequestSessionDetails.end_date,
+					categories: getRequestSessionDetails.meta.categories || [],
+					recommended_for: getRequestSessionDetails.meta.recommended_for || [],
+					meeting_info: getRequestSessionDetails.meta.meeting_info || null,
+					meta: getRequestSessionDetails.meta || null,
+					sessionCreatedByRequest: true,
+				})
+			}
 
 			// Create session
 			const sessionCreation = await sessionService.create(
@@ -382,10 +493,25 @@ module.exports = class requestSessionsHelper {
 				return responses.failureResponse({
 					statusCode: sessionCreation.statusCode || httpStatusCode.bad_request,
 					message: sessionCreation.message || 'SESSION_CREATION_FAILED',
-					data: sessionCreation.data || [],
+					result: sessionCreation.data || [],
 				})
 			}
 
+			/*if (getRequestSessionDetails.assignment_type === 'GROUP') {
+				const meta = getRequestSessionDetails.meta || {}
+				meta.parentRequestId = getRequestSessionDetails.id
+				const addSessionRequest = await sessionRequestQueries.addSessionRequest(
+					getRequestSessionDetails.requestor_id,
+					mentorUserId,
+					getRequestSessionDetails.agenda,
+					getRequestSessionDetails.start_date,
+					getRequestSessionDetails.end_date,
+					getRequestSessionDetails.title,
+					meta,
+					getRequestSessionDetails.tenant_code
+				)
+				requestIdtoApprove = addSessionRequest.id
+			}*/
 			// Approve session request
 			const approveSessionRequest = await sessionRequestQueries.approveRequest(
 				mentorUserId,
@@ -406,6 +532,17 @@ module.exports = class requestSessionsHelper {
 					data: [],
 				})
 			}
+
+			// if (getRequestSessionDetails.assignment_type === 'GROUP') {
+			// 	const requestees = (getRequestSessionDetails.requestees || []).filter(
+			// 		(requesteeId) => String(requesteeId) !== String(mentorUserId)
+			// 	)
+			// 	const expireSessionRequest = await sessionRequestQueries.expireRequest(
+			// 		bodyData.request_session_id,
+			// 		tenantCode,
+			// 		requestees
+			// 	)
+			// }
 
 			// Check if mentee user exists - try cache first
 			let userExists = await cacheHelper.mentee.get(tenantCode, getRequestSessionDetails.requestor_id)
@@ -613,6 +750,103 @@ module.exports = class requestSessionsHelper {
 	}
 
 	/**
+	 * Update a pending session request.
+	 * Only RequestSession entity type fields are accepted (validated the same way as create);
+	 * they are merged into the request's meta, e.g. extra_information asked by a Support Provider.
+	 * @param {Object} bodyData - { request_session_id, ...entityTypeFields }
+	 * @param {String} userId - Logged in user id.
+	 * @param {String} orgCode - Organization code of the logged in user.
+	 * @param {String} tenantCode - Tenant code.
+	 * @returns {JSON} - Updated session request meta.
+	 */
+	static async update(bodyData, userId, orgCode, tenantCode) {
+		try {
+			const { request_session_id: requestSessionId, ...updateData } = bodyData
+
+			const requestDetails = await sessionRequestQueries.findOneRequest(requestSessionId, tenantCode)
+			if (!requestDetails) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					responseCode: 'CLIENT_ERROR',
+					message: 'SESSION_REQUEST_NOT_FOUND_OR_ALREADY_PROCESSED',
+				})
+			}
+
+			const rejectedRequestees = requestDetails.rejected_requestees || []
+			if (rejectedRequestees.includes(String(userId))) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+					message: 'INVALID_PERMISSION',
+				})
+			}
+
+			const defaults = await getDefaults()
+			if (!defaults.orgCode)
+				return responses.failureResponse({
+					message: 'DEFAULT_ORG_CODE_NOT_SET',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+
+			const requestSessionModelName = await sessionRequestQueries.getModelName()
+			const entityTypes = await entityTypeCache.getEntityTypesAndEntitiesForModel(
+				requestSessionModelName,
+				tenantCode,
+				orgCode
+			)
+			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
+
+			// Skip required checks: an update only sends the fields being changed
+			const validation = utils.validateInput(updateData, validationData, requestSessionModelName, true)
+			if (!validation.success) {
+				return responses.failureResponse({
+					message: 'SESSION_REQUEST_UPDATE_FAILED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+					result: validation.errors,
+				})
+			}
+
+			const requestSessionColumns = await sessionRequestQueries.getColumns()
+			const restructuredData = utils.restructureBody(updateData, validationData, requestSessionColumns)
+			if (!restructuredData?.meta) {
+				return responses.failureResponse({
+					message: 'SESSION_REQUEST_NO_FIELDS_TO_UPDATE',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			const meta = { ...(requestDetails.meta || {}), ...restructuredData.meta }
+			const [updatedCount] = await sessionRequestQueries.updateRequest(
+				userId,
+				requestDetails.id,
+				meta,
+				tenantCode
+			)
+			if (updatedCount == 0) {
+				return responses.failureResponse({
+					statusCode: httpStatusCode.not_found,
+					responseCode: 'CLIENT_ERROR',
+					message: 'SESSION_REQUEST_NOT_FOUND_OR_ALREADY_PROCESSED',
+				})
+			}
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'SESSION_REQUEST_UPDATED',
+				result: {
+					id: String(requestDetails.id),
+					meta,
+				},
+			})
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
 	 * Get information about a session between the authenticated user and another user.
 	 * @param {Object} req - The request object.
 	 * @param {Object} req.body - The body of the request.
@@ -626,8 +860,23 @@ module.exports = class requestSessionsHelper {
 		try {
 			const requestSessions = await sessionRequestQueries.getRequestSessions(requestSessionId, tenantCode)
 
-			const targetUserId =
-				userId === requestSessions.requestee_id ? requestSessions.requestor_id : requestSessions.requestee_id
+			let targetUserId
+
+			// A request not yet assigned to a provider (e.g. Expired/Rejected LC requests) has no
+			// requestee, so its details are built from the requestor
+			if (
+				(requestSessions && !requestSessions.requestee_id) ||
+				(requestSessions?.assignment_type &&
+					requestSessions.assignment_type == 'GROUP' &&
+					requestSessions.status === common.CONNECTIONS_STATUS.REQUESTED)
+			) {
+				targetUserId = requestSessions.requestor_id
+			} else {
+				targetUserId =
+					userId === requestSessions.requestee_id
+						? requestSessions.requestor_id
+						: requestSessions.requestee_id
+			}
 
 			const [userExtensionsModelName, userDetails] = await Promise.all([
 				userExtensionQueries.getModelName(),

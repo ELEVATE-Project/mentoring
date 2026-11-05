@@ -263,7 +263,16 @@ module.exports = class Sessions {
 			}
 
 			const isBBB = req.query.source == common.BBB_VALUE ? true : false
-			const sessionsCompleted = await sessionService.completed(req.params.id, isBBB, tenantCode, orgCode)
+			const mentees = Array.isArray(req.body?.mentees) ? req.body.mentees.map(String) : []
+			const callerId = req.decodedToken?.id ? String(req.decodedToken.id) : null
+			const sessionsCompleted = await sessionService.completed(
+				req.params.id,
+				isBBB,
+				tenantCode,
+				orgCode,
+				mentees,
+				callerId
+			)
 
 			return sessionsCompleted
 		} catch (error) {
@@ -386,6 +395,7 @@ module.exports = class Sessions {
 				req.query,
 				req.decodedToken.id,
 				req.decodedToken.organization_code,
+				req.decodedToken.roles,
 				req.decodedToken.tenant_code
 			)
 		} catch (error) {
@@ -408,10 +418,12 @@ module.exports = class Sessions {
 				req.params.id, // session id
 				req.body.mentees, // Array of mentee ids
 				req.headers['timezone'],
-				req.decodedToken.id,
 				req.decodedToken.organization_id, // organizationId
 				req.decodedToken.organization_code, // organizationCode
-				req.decodedToken.tenant_code
+				req.decodedToken.tenant_code,
+				null,
+				null,
+				req.decodedToken.id
 			)
 			return sessionDetails
 		} catch (error) {

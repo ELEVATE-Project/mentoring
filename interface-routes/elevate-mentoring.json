@@ -1,6 +1,45 @@
 {
 	"routes": [
 		{
+			"sourceRoute": "/mentoring/v1/support-dashboard/data",
+			"type": "GET",
+			"priority": "MUST_HAVE",
+			"inSequence": false,
+			"orchestrated": false,
+			"targetPackages": [
+				{
+					"basePackageName": "mentoring",
+					"packageName": "elevate-mentoring"
+				}
+			]
+		},
+		{
+			"sourceRoute": "/mentoring/v1/org-admin/updateMentorExtension",
+			"type": "POST",
+			"priority": "MUST_HAVE",
+			"inSequence": false,
+			"orchestrated": false,
+			"targetPackages": [
+				{
+					"basePackageName": "mentoring",
+					"packageName": "elevate-mentoring"
+				}
+			]
+		},
+		{
+			"sourceRoute": "/mentoring/v1/resources/list",
+			"type": "GET",
+			"priority": "MUST_HAVE",
+			"inSequence": false,
+			"orchestrated": false,
+			"targetPackages": [
+				{
+					"basePackageName": "mentoring",
+					"packageName": "elevate-mentoring"
+				}
+			]
+		},
+		{
 			"sourceRoute": "/user/v1/account/login",
 			"type": "POST",
 			"priority": "MUST_HAVE",
@@ -1903,6 +1942,19 @@
 			]
 		},
 		{
+			"sourceRoute": "/mentoring/v1/mentors/cancel/:id",
+			"type": "POST",
+			"priority": "MUST_HAVE",
+			"inSequence": false,
+			"orchestrated": false,
+			"targetPackages": [
+				{
+					"basePackageName": "mentoring",
+					"packageName": "elevate-mentoring"
+				}
+			]
+		},
+		{
 			"sourceRoute": "/mentoring/v1/sessions/feedback",
 			"type": "POST",
 			"priority": "MUST_HAVE",
@@ -2034,6 +2086,19 @@
 		},
 		{
 			"sourceRoute": "/mentoring/v1/mentees/sessions",
+			"type": "GET",
+			"priority": "MUST_HAVE",
+			"inSequence": false,
+			"orchestrated": false,
+			"targetPackages": [
+				{
+					"basePackageName": "mentoring",
+					"packageName": "elevate-mentoring"
+				}
+			]
+		},
+		{
+			"sourceRoute": "/mentoring/v1/mentees/attendedSessions",
 			"type": "GET",
 			"priority": "MUST_HAVE",
 			"inSequence": false,
@@ -4213,6 +4278,19 @@
 		},
 		{
 			"sourceRoute": "/mentoring/v1/requestSessions/reject",
+			"type": "POST",
+			"priority": "MUST_HAVE",
+			"inSequence": false,
+			"orchestrated": false,
+			"targetPackages": [
+				{
+					"basePackageName": "mentoring",
+					"packageName": "elevate-mentoring"
+				}
+			]
+		},
+		{
+			"sourceRoute": "/mentoring/v1/requestSessions/update",
 			"type": "POST",
 			"priority": "MUST_HAVE",
 			"inSequence": false,

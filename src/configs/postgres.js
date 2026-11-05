@@ -1,5 +1,7 @@
 require('module-alias/register')
 require('dotenv').config()
+const { elevateLog } = require('elevate-logger')
+const logger = elevateLog.init()
 
 let environmentData = require('../envVariables')()
 

@@ -9,6 +9,8 @@ const { UniqueConstraintError } = require('sequelize')
 const _ = require('lodash')
 const sessionAttendeesQueries = require('@database/queries/sessionAttendees')
 const sessionQueries = require('@database/queries/sessions')
+const sessionRequestQueries = require('@database/queries/requestSessions')
+const schedulerRequest = require('@requests/scheduler')
 const entityTypeQueries = require('@database/queries/entityType')
 const entityTypeCache = require('@helpers/entityTypeCache')
 const organisationExtensionQueries = require('@database/queries/organisationExtension')
@@ -29,6 +31,7 @@ const connectionQueries = require('@database/queries/connection')
 const communicationHelper = require('@helpers/communications')
 const searchConfig = require('@root/config.json')
 const cacheHelper = require('@generics/cacheHelper')
+const kafkaCommunication = require('@generics/kafka-communication')
 const getOrgIdAndEntityTypes = require('@helpers/getOrgIdAndEntityTypewithEntitiesBasedOnPolicy')
 module.exports = class MentorsHelper {
 	/**
@@ -1478,12 +1481,13 @@ module.exports = class MentorsHelper {
 
 				// organization codes (unique)
 				if (item.organization_code && !uniqueOrganizations.has(item.organization_code)) {
-					organizationCodes.push(item.organization_code)
+					organizationCodes
+						.push(item.organization_code)
 
-					uniqueOrganizations.set(item.organization_code, {
-						organization_id: item.organization_id,
-						organization_code: item.organization_code,
-					})
+						.uniqueOrganizations.set(item.organization_code, {
+							organization_id: item.organization_id,
+							organization_code: item.organization_code,
+						})
 				}
 			}
 			const organizations = Array.from(uniqueOrganizations.values())
@@ -1552,7 +1556,10 @@ module.exports = class MentorsHelper {
 						delete userDetail.user_id
 						delete userDetail.mentor_visibility
 						delete userDetail.mentee_visibility
+						// meta carries internal ids; only expose provider_name (used by the Support Provider dashboard)
+						const providerName = userDetail.meta?.provider_name
 						delete userDetail.meta
+						if (providerName) userDetail.meta = { provider_name: providerName }
 						return userDetail
 					})
 				)
@@ -1632,7 +1639,7 @@ module.exports = class MentorsHelper {
 					.join(',')}) `
 			}
 
-			if (userPolicyDetails.external_mentor_visibility && userPolicyDetails.organization_code) {
+			if (userPolicyDetails.external_mentor_visibility && userPolicyDetails.organization_id) {
 				// Filter user data based on policy
 				// generate filter based on condition
 				if (userPolicyDetails.external_mentor_visibility === common.CURRENT) {
@@ -1693,7 +1700,8 @@ module.exports = class MentorsHelper {
 		organizationId,
 		tenantCode,
 		startDate,
-		endDate
+		endDate,
+		queryParams
 	) {
 		try {
 			if (!utils.isAMentor(roles)) {
@@ -1715,25 +1723,121 @@ module.exports = class MentorsHelper {
 				mentor_id: loggedInUserId,
 			}
 			if (arrayOfStatus.length > 0) {
-				// if (arrayOfStatus.includes(common.COMPLETED_STATUS) && arrayOfStatus.length == 1) {
-				// 	filters['endDateUtc'] = {
-				// 		$lt: moment().utc().format(),
-				// 	}
-				// } else
-				if (arrayOfStatus.includes(common.PUBLISHED_STATUS) && arrayOfStatus.includes(common.LIVE_STATUS)) {
-					filters['end_date'] = {
-						[Op.gte]: currentDate,
+				const orConditions = []
+
+				if (arrayOfStatus.includes(common.UPCOMING_STATUS)) {
+					// Virtual status — never persisted. An "upcoming" session is a
+					// PUBLISHED session whose start_date hasn't arrived yet.
+					orConditions.push({
+						status: common.PUBLISHED_STATUS,
+						start_date: { [Op.gte]: currentDate },
+					})
+				}
+
+				if (arrayOfStatus.includes(common.LIVE_STATUS)) {
+					// LIVE is a real, persisted status (set when a mentor starts the session).
+					// But if the mentor hasn't clicked "start" yet, status may still be
+					// PUBLISHED even though the session's time window has begun — treat that
+					// as LIVE too.
+					orConditions.push({ status: common.LIVE_STATUS })
+					orConditions.push({
+						status: common.PUBLISHED_STATUS,
+						start_date: { [Op.lte]: currentDate },
+						end_date: { [Op.gte]: currentDate },
+					})
+				}
+
+				if (arrayOfStatus.includes(common.COMPLETED_STATUS)) {
+					orConditions.push({ status: common.COMPLETED_STATUS })
+					// When auto completion is enabled, sessions past their end time are treated as completed.
+					// When it is disabled, they show as Expired in the portal, so Completed returns only completed ones
+					if ([true, 'true', '1', 1].includes(process.env.AUTO_MARK_SESSION_COMPLETED_WHEN_EXPIRED)) {
+						orConditions.push({
+							status: { [Op.in]: [common.PUBLISHED_STATUS, common.LIVE_STATUS] },
+							end_date: { [Op.lte]: currentDate },
+						})
 					}
 				}
 
-				filters['status'] = arrayOfStatus
+				// Any other literal statuses (e.g. DRAFT) pass through unchanged,
+				// with no extra time constraint.
+				const otherStatuses = arrayOfStatus.filter(
+					(s) => s !== common.UPCOMING_STATUS && s !== common.LIVE_STATUS && s !== common.COMPLETED_STATUS
+				)
+				if (otherStatuses.length > 0) {
+					orConditions.push({ status: otherStatuses })
+				}
+
+				if (orConditions.length > 0) {
+					filters[Op.or] = orConditions
+				}
 			}
 
-			// Apply custom startDate and endDate filter only if both are provided
-			if (startDate && endDate) {
+			// Apply custom startDate to get upcoming sessions after the startDate. If not passed, it will show all sessions which are completed and upcoming.
+			if (startDate) {
 				filters['start_date'] = { [Op.gte]: startDate }
+			}
+			// pass end date to see the sessions which are completed before the end date. If not passed, it will show all sessions which are completed and upcoming.
+			if (endDate) {
 				filters['end_date'] = { ...(filters['end_date'] || {}), [Op.lte]: endDate }
 			}
+			// Extract other filters from queryParams excluding status, startDate, endDate
+			const excludedParams = ['status', 'startDate', 'endDate']
+			const otherFilters = {}
+
+			if (queryParams) {
+				for (const [key, value] of Object.entries(queryParams)) {
+					// Only add filters that are not in the excluded list and have valid values
+					if (!excludedParams.includes(key) && value && value !== '') {
+						otherFilters[key] = value
+					}
+				}
+			}
+
+			console.log('Other filters extracted from queryParams:', otherFilters)
+
+			// Validate other filters against valid entityTypes for Session model
+			const metaFilters = []
+			if (Object.keys(otherFilters).length > 0) {
+				// Get all entity types for Session model with data_type to check if they're arrays
+				const sessionEntityTypes = await entityTypeQueries.findAllEntityTypes(
+					'',
+					tenantCode,
+					['value', 'model_names', 'data_type'],
+					{
+						status: common.ACTIVE_STATUS,
+						model_names: { [Op.contains]: ['Session'] },
+					}
+				)
+
+				const entityTypeMap = {}
+				sessionEntityTypes.forEach((et) => {
+					entityTypeMap[et.value] = et
+				})
+
+				for (const [key, value] of Object.entries(otherFilters)) {
+					if (entityTypeMap[key]) {
+						const entityType = entityTypeMap[key]
+						const isArrayType = entityType.data_type && entityType.data_type.includes('ARRAY')
+
+						const filterValue = isArrayType ? [value] : value
+						metaFilters.push({
+							meta: {
+								[Op.contains]: {
+									[key]: filterValue,
+								},
+							},
+						})
+					} else {
+						console.log(`✗ Filter '${key}' is NOT a valid entity type - excluding`)
+					}
+				}
+			}
+
+			if (metaFilters.length > 0) {
+				filters[Op.and] = [...(filters[Op.and] || []), ...metaFilters]
+			}
+
 			// Get sessions without mentor details (simple database query)
 			const sessionDetails = await sessionQueries.findAllSessions(page, limit, search, filters, tenantCode)
 
@@ -1756,15 +1860,63 @@ module.exports = class MentorsHelper {
 			//remove meeting_info details except value and platform and add is_assigned flag
 			sessionDetails.rows.forEach((item) => {
 				if (item.meeting_info) {
+					item.meeting_info_details = item.meeting_info
 					item.meeting_info = {
 						value: item.meeting_info.value,
 						platform: item.meeting_info.platform,
 					}
 				}
+
 				item.is_assigned = item.mentor_id !== item.created_by
 				// Normalize org code from enriched organization object for entity type resolution
 				item.organization_code = item.organization?.organization_code || null
 			})
+
+			if (sessionDetails.rows.length) {
+				await Promise.all(
+					sessionDetails.rows.map(async (item) => {
+						const totalEnrolledCount = await sessionAttendeesQueries.getCount({
+							session_id: item.id,
+							tenant_code: tenantCode,
+						})
+						const presentEnrolledCount = await sessionAttendeesQueries.getCount({
+							session_id: item.id,
+							tenant_code: tenantCode,
+							joined_at: { [Op.ne]: null },
+						})
+						item.enrolled_mentees_count = totalEnrolledCount || 0
+						item.present_mentees_count = presentEnrolledCount || 0
+					})
+				)
+
+				// Sessions created by accepting an LC request carry who requested them ("Requested by" on SP cards)
+				const sessionRequests = await sessionRequestQueries.getRequestsBySessionIds(
+					sessionDetails.rows.map((item) => item.id),
+					tenantCode
+				)
+				if (sessionRequests.length) {
+					const requestorIds = [...new Set(sessionRequests.map((request) => String(request.requestor_id)))]
+					const requestorDetails = await userRequests.getUserDetailedListUsingCache(requestorIds, tenantCode)
+					const requestorById = {}
+					;(requestorDetails?.result || []).forEach((user) => {
+						requestorById[String(user.user_id)] = user
+					})
+					const requestBySessionId = {}
+					sessionRequests.forEach((request) => {
+						requestBySessionId[String(request.session_id)] = request
+					})
+					sessionDetails.rows.forEach((item) => {
+						const request = requestBySessionId[String(item.id)]
+						if (!request) return
+						const requestor = requestorById[String(request.requestor_id)]
+						item.requested_by = {
+							id: String(request.requestor_id),
+							name: requestor?.name || null,
+							organization: requestor?.organization?.name || null,
+						}
+					})
+				}
+			}
 
 			// Extract organization codes for entity processing
 			const uniqueOrgCodes = [...new Set(sessionDetails.rows.map((obj) => obj.organization_code).filter(Boolean))]
@@ -1786,6 +1938,161 @@ module.exports = class MentorsHelper {
 		} catch (error) {
 			throw error
 		}
+	}
+
+	/**
+	 * Cancel a session (Support Provider "Cancel Intervention").
+	 * Follows the same cancellation steps as admin notifyAndCancelPrivateSessions.
+	 * @method
+	 * @name cancel
+	 * @param {String} sessionId - Session id.
+	 * @param {String} userId - Logged in user id.
+	 * @param {String} tenantCode - Tenant code.
+	 * @param {String} orgCode - Organization code of the logged in user.
+	 * @param {Object} bodyData - Request body.
+	 * @param {String} bodyData.reason - Reason for cancellation.
+	 * @returns {JSON} - Cancel session response.
+	 */
+	static async cancel(sessionId, userId, tenantCode, orgCode, bodyData) {
+		try {
+			const { reason } = bodyData
+			const sessionDetail = await sessionQueries.findById(sessionId, tenantCode)
+			if (!sessionDetail) {
+				return responses.failureResponse({
+					message: 'SESSION_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			// Only the creator or the mentor of the session can cancel it
+			if (sessionDetail.created_by != userId && sessionDetail.mentor_id != userId) {
+				return responses.failureResponse({
+					message: 'INVALID_PERMISSION',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			if (sessionDetail.status != common.PUBLISHED_STATUS) {
+				return responses.failureResponse({
+					message: 'CANNOT_CANCEL_SESSION',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			// Mark session as CANCELLED (not soft-deleted) so cancelled sessions stay distinguishable
+			// from deleted ones, and record who cancelled it, when and why.
+			const updateCount = await sessionQueries.updateRecords(
+				{
+					status: common.CANCELLED_STATUS,
+					meta: {
+						...(sessionDetail.meta || {}),
+						cancellation: {
+							reason,
+							cancelled_by: userId,
+							cancelled_at: new Date(),
+						},
+					},
+				},
+				{ where: { id: sessionDetail.id, tenant_code: tenantCode, status: common.PUBLISHED_STATUS } }
+			)
+			if (!updateCount || updateCount instanceof Error) {
+				return responses.failureResponse({
+					message: 'SESSION_CANCELLATION_FAILED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			// Invalidate session cache
+			try {
+				await cacheHelper.sessions.delete(tenantCode, sessionDetail.id)
+			} catch (cacheErr) {
+				console.error(`Cache deletion failed for session ${sessionDetail.id}:`, cacheErr)
+			}
+
+			// Remove scheduled reminder jobs so no reminders go out
+			const sessionRelatedJobIds = common.notificationJobIdPrefixes.map((element) => element + sessionDetail.id)
+			for (const jobId of sessionRelatedJobIds) {
+				await schedulerRequest.removeScheduledJob({ jobId })
+			}
+
+			// Notify enrolled attendees. A notification failure should not fail the cancellation itself.
+			try {
+				await this._notifyAttendeesAboutSessionCancellation(sessionDetail, reason, tenantCode, orgCode)
+			} catch (notifyErr) {
+				console.error(`Failed to notify attendees of cancelled session ${sessionDetail.id}:`, notifyErr)
+			}
+
+			console.log(`Cancelled session ${sessionDetail.id} by user ${userId}`)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.accepted,
+				message: 'SESSION_CANCELLED_SUCCESSFULLY',
+			})
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Private method: Email all enrolled attendees that a session has been cancelled.
+	 * Uses the same payload shape as the session delete flow in sessions.update.
+	 * @param {Object} sessionDetail - Cancelled session.
+	 * @param {String} reason - Reason for cancellation.
+	 * @param {String} tenantCode - Tenant code.
+	 * @param {String} orgCode - Organization code used to resolve the email template.
+	 */
+	static async _notifyAttendeesAboutSessionCancellation(sessionDetail, reason, tenantCode, orgCode) {
+		// Enrolled mentees are stored in session_attendees (written by sessions.enroll via findOrCreateAttendee)
+		const sessionAttendees = await sessionAttendeesQueries.findAll({ session_id: sessionDetail.id }, tenantCode)
+		if (sessionAttendees instanceof Error) throw sessionAttendees
+		if (!sessionAttendees?.length) return
+
+		const templateCode = process.env.SESSION_CANCELLED_EMAIL_TEMPLATE
+		const templateData = await cacheHelper.notificationTemplates.get(tenantCode, orgCode, templateCode)
+		if (!templateData) {
+			console.log(`Template ${templateCode} not found, skipping cancellation emails`)
+			return
+		}
+
+		const attendeeIds = sessionAttendees.map((attendee) => attendee.mentee_id)
+		const attendeesAccounts = await userRequests.getUserDetailedList(attendeeIds, tenantCode, false, true)
+		const attendeeDetails = attendeesAccounts?.result || []
+
+		const sessionDuration = Math.round(
+			moment.duration(moment.unix(sessionDetail.end_date).diff(moment.unix(sessionDetail.start_date))).asMinutes()
+		)
+		const startDate = utils.getTimeZone(sessionDetail.start_date, common.dateFormat, sessionDetail.time_zone)
+		const startTime = utils.getTimeZone(sessionDetail.start_date, common.timeFormat, sessionDetail.time_zone)
+
+		await Promise.all(
+			attendeeDetails
+				.filter((attendee) => attendee.email)
+				.map((attendee) =>
+					kafkaCommunication.pushEmailToKafka({
+						type: 'email',
+						email: {
+							to: attendee.email,
+							subject: utils.composeEmailBody(templateData.subject, {
+								sessionTitle: sessionDetail.title,
+							}),
+							body: utils.composeEmailBody(templateData.body, {
+								name: attendee.name,
+								sessionTitle: sessionDetail.title,
+								sessionDuration,
+								unitOfTime: common.UNIT_OF_TIME,
+								startDate,
+								startTime,
+								reason,
+							}),
+						},
+					})
+				)
+		)
+		console.log(`Notified ${attendeeDetails.length} attendee(s) about cancellation of session ${sessionDetail.id}`)
 	}
 
 	/**

@@ -4,9 +4,14 @@ const userRequests = require('@requests/user')
 const entityTypeService = require('@services/entity-type')
 const { Parser } = require('@json2csv/plainjs')
 
-exports.getEnrolledMentees = async (sessionId, queryParams, tenantCode) => {
+exports.getEnrolledMentees = async (sessionId, queryParams, tenantCode, enrolledBy = null) => {
 	try {
-		const mentees = await sessionAttendeesQueries.findAll({ session_id: sessionId }, tenantCode)
+		const filter = { session_id: sessionId }
+		// Restrict to mentees enrolled by a specific user (enrolled_by column)
+		if (enrolledBy) {
+			filter.enrolled_by = String(enrolledBy)
+		}
+		const mentees = await sessionAttendeesQueries.findAll(filter, tenantCode)
 
 		// Early return if no mentees found
 		if (!mentees || mentees.length === 0) {
@@ -19,6 +24,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, tenantCode) => {
 							{ label: 'Organization', value: 'organization' },
 							{ label: 'E-mail ID', value: 'email' },
 							{ label: 'Enrollment Type', value: 'type' },
+							{ label: 'Joined At', value: 'joined_at' },
 						],
 						header: true,
 						includeEmptyRows: true,
@@ -28,11 +34,17 @@ exports.getEnrolledMentees = async (sessionId, queryParams, tenantCode) => {
 		}
 
 		let menteeTypeMap = {}
+		const menteePresenceMap = {}
 		const menteeIds = []
 		mentees.forEach((mentee) => {
 			menteeIds.push(mentee.mentee_id)
 			const isDeleted = Boolean(mentee.deleted_at ?? mentee.deletedAt)
 			menteeTypeMap[mentee.mentee_id] = isDeleted ? '' : mentee.type
+			menteePresenceMap[mentee.mentee_id] = {
+				joined_at: mentee.joined_at ?? null,
+				// Who enrolled the mentee (e.g. the LC), used to group asset requests by coach
+				enrolled_by: mentee.enrolled_by ?? null,
+			}
 		})
 
 		// Fetch missing user details from DB if any
@@ -43,6 +55,9 @@ exports.getEnrolledMentees = async (sessionId, queryParams, tenantCode) => {
 			if (menteeTypeMap.hasOwnProperty(user.user_id)) {
 				user.type = menteeTypeMap[user.user_id]
 			}
+			const attendeeInfo = menteePresenceMap[user.user_id] || {}
+			user.joined_at = attendeeInfo.joined_at ?? null
+			user.enrolled_by = attendeeInfo.enrolled_by ?? null
 		})
 
 		const CSVFields = [
@@ -52,6 +67,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, tenantCode) => {
 			{ label: 'Organization', value: 'organization' },
 			{ label: 'E-mail ID', value: 'email' },
 			{ label: 'Enrollment Type', value: 'type' },
+			{ label: 'Joined At', value: 'joined_at' },
 		]
 		const parser = new Parser({
 			fields: CSVFields,
@@ -95,6 +111,7 @@ exports.getEnrolledMentees = async (sessionId, queryParams, tenantCode) => {
 					email: user.email,
 					type: user.type,
 					organization: user.organization?.name || '',
+					joined_at: user.joined_at || '',
 				}))
 			)
 

@@ -13,7 +13,7 @@ const orgAdminService = require('@services/org-admin')
 
 const userServiceHelper = require('@helpers/users')
 const cacheHelper = require('@generics/cacheHelper')
-
+const { Op } = require('sequelize')
 module.exports = class UserHelper {
 	/**
 	 * Get user list.
@@ -27,10 +27,59 @@ module.exports = class UserHelper {
 	 * @returns {JSON} 							- User list.
 	 */
 
-	static async list(userType, pageNo, pageSize, searchText, userId, organizationId, tenantCode) {
+	static async list(
+		userType,
+		pageNo,
+		pageSize,
+		searchText,
+		userId,
+		organizationId,
+		tenantCode,
+		query = { alphaSort: 'true' }
+	) {
 		try {
+			if (!query?.alphaSort || query?.alphaSort === 'false') {
+				const filter = {
+					query: '',
+					replacements: {},
+				}
+
+				// Add conditions to the filter based on userType or searchText
+				if (userType) {
+					filter.query += `is_mentor = :is_mentor `
+					filter.replacements.is_mentor = userType.toLowerCase() === common.MENTOR_ROLE ? true : false
+				}
+
+				if (query?.notNullFields) {
+					const notNullFields = query.notNullFields.split(',').map((field) => field.trim())
+					if (notNullFields.length) {
+						filter.query +=
+							(filter.query ? ' AND ' : '') +
+							notNullFields.map((field) => `${field} IS NOT NULL`).join(' AND ')
+					}
+				}
+
+				const userDetails = await menteeQueries.getAllUsers(
+					[],
+					pageNo,
+					pageSize,
+					filter,
+					'',
+					query?.notNullFields,
+					false,
+					searchText ? searchText : '',
+					'',
+					tenantCode
+				)
+				return responses.successResponse({
+					statusCode: httpStatusCode.ok,
+					message: 'USER_DETAILS_FETCHED_SUCCESSFULLY',
+					result: userDetails,
+				})
+			}
+
 			const userDetails = await userRequests.list(userType, pageNo, pageSize, searchText, tenantCode)
-			const ids = userDetails.result.data.map((item) => item.values[0].id)
+			const ids = userDetails.result.data.map((item) => item.values[0].user_id)
 
 			let extensionDetails
 			if (userType == common.MENTEE_ROLE) {
@@ -49,7 +98,6 @@ module.exports = class UserHelper {
 					},
 					tenantCode
 				)
-				// Inside your function
 				extensionDetails = extensionDetails.filter((item) => item.mentor_visibility && item.organization_id)
 			}
 			const extensionDataMap = new Map(extensionDetails.map((newItem) => [newItem.user_id, newItem]))
@@ -62,10 +110,10 @@ module.exports = class UserHelper {
 					delete existingItem.values[0].user_id
 					delete existingItem.values[0].mentor_visibility
 					delete existingItem.values[0].organization_id
-					return true // Keep this item
+					return true
 				}
 
-				return false // Remove this item
+				return false
 			})
 
 			return responses.successResponse({
@@ -139,8 +187,8 @@ module.exports = class UserHelper {
 	}
 
 	static async #createUserWithBody(userBody, tenantCode) {
-		let orgId = userBody.organization_id
-		let orgCode = userBody.organizations[0].code
+		let orgId = userBody.organization_id || userBody.organizations?.[0]?.id
+		let orgCode = userBody.organization_code || userBody.organizations?.[0]?.code
 
 		// Check if orgId exists before calling toString()
 		if (!orgId) {
@@ -226,9 +274,11 @@ module.exports = class UserHelper {
 				code: orgExtension.organization_code.toString(),
 			},
 		}
-		let roles = userDetails?.user_roles
-		if (userDetails.organization) {
+		let roles = userDetails?.roles || userDetails?.user_roles
+		if (!roles && userDetails.organization?.roles) {
 			roles = userDetails.organization.roles
+		} else if (!roles && Array.isArray(userDetails.organizations) && userDetails.organizations[0]?.roles) {
+			roles = userDetails.organizations[0].roles
 		}
 
 		// List of optional fields to check
@@ -295,7 +345,8 @@ module.exports = class UserHelper {
 	}
 
 	static async #createUser(userExtensionData, tenantCode) {
-		const isAMentor = userExtensionData.roles.some((role) => role.title == common.MENTOR_ROLE)
+		const roles = Array.isArray(userExtensionData.roles) ? userExtensionData.roles : []
+		const isAMentor = roles.some((role) => (typeof role === 'object' ? role.title : role) == common.MENTOR_ROLE)
 		const orgId = userExtensionData.organization.id
 		const orgCode = userExtensionData.organization.code
 		const user = isAMentor

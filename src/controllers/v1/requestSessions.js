@@ -43,7 +43,9 @@ module.exports = class requestsSessions {
 				req.query.pageNo,
 				req.query.pageSize,
 				req.query.status ? req.query.status.split(',').map((s) => s.trim()) : [],
-				req.decodedToken.tenant_code
+				req.decodedToken.tenant_code,
+				req.query?.onlyRequested,
+				req.query
 			)
 			return requestSessionDetails
 		} catch (error) {
@@ -89,6 +91,24 @@ module.exports = class requestsSessions {
 	async reject(req) {
 		try {
 			return await requestSessionsService.reject(
+				req.body,
+				req.decodedToken.id,
+				req.decodedToken.organization_code,
+				req.decodedToken.tenant_code
+			)
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Update a pending session request's entity type fields (stored in meta).
+	 * @param {Object} req.body - { request_session_id, ...entityTypeFields }
+	 * @returns {Promise<Object>} A success response with the updated meta.
+	 */
+	async update(req) {
+		try {
+			return await requestSessionsService.update(
 				req.body,
 				req.decodedToken.id,
 				req.decodedToken.organization_code,

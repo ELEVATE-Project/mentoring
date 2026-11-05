@@ -3,9 +3,6 @@
 	"version": "3.4",
 	"description": "A mentoring service for mentoring capability",
 	"main": "app.js",
-	"bin": {
-		"elevate-migrations": "module/migrations/bin/migrations.js"
-	},
 	"scripts": {
 		"test": "jest --verbose ./test --config=jest.config.js",
 		"start": "NODE_ENV=development nodemon app.js",

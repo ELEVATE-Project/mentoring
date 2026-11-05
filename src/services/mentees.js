@@ -271,8 +271,22 @@ module.exports = class MenteesHelper {
 	 * @returns {JSON} - List of sessions
 	 */
 
-	static async sessions(userId, page, limit, search = '', tenantCode) {
+	static async sessions(loggedInUserId, page, limit, search = '', decodedToken, scope = '', menteeId = null) {
 		try {
+			const tenantCode = decodedToken.tenant_code
+			const roles = decodedToken.roles
+
+			// if scoppe has NOTATTENDED, ATTENDED
+			if (scope && scope.toLowerCase() === 'attended') {
+				return this.attendedSessions(menteeId, loggedInUserId, roles, page, limit, search, tenantCode)
+			}
+
+			if (scope && scope.toLowerCase() === 'missed') {
+				return this.missedSessions(menteeId, loggedInUserId, roles, page, limit, search, tenantCode)
+			}
+
+			const userId = menteeId || loggedInUserId
+
 			/** Upcoming user's enrolled sessions {My sessions}*/
 			/* Fetch sessions if it is not expired or if expired then either status is live or if mentor 
 				delays in starting session then status will remain published for that particular interval so fetch that also */
@@ -894,6 +908,120 @@ module.exports = class MenteesHelper {
 		}
 	}
 
+	/**
+	 * Missed sessions list. Only sessions the participant did not join (joined_at is not set).
+	 * A user can always see their own list; another participant's list needs a role from
+	 * ROLES_WITH_SESSSIONATTENDEEMANGEACCESS (e.g. Linkage Champion / org_admin).
+	 * @method
+	 * @name missedSessions
+	 * @param {String} [userId] - user id whose missed sessions are requested. Defaults to the logged in user.
+	 * @param {String} loggedInUserId - logged in user id.
+	 * @param {Array} roles - logged in user roles.
+	 * @param {Number} page - page No.
+	 * @param {Number} limit - page limit.
+	 * @param {String} search - search field.
+	 * @param {String} tenantCode - tenant code.
+	 * @returns {JSON} - List of missed sessions
+	 */
+
+	static async missedSessions(userId, loggedInUserId, roles, page, limit, search = '', tenantCode) {
+		try {
+			const menteeId = userId || loggedInUserId
+
+			if (String(menteeId) !== String(loggedInUserId)) {
+				const allowedRoles = (process.env.ROLES_WITH_SESSSIONATTENDEEMANGEACCESS || '')
+					.split(',')
+					.map((role) => role.trim())
+					.filter(Boolean)
+				const hasAccess = (Array.isArray(roles) ? roles : []).some((role) => allowedRoles.includes(role.title))
+				if (!hasAccess) {
+					return responses.failureResponse({
+						message: 'INVALID_PERMISSION',
+						statusCode: httpStatusCode.forbidden,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+
+				// Participant must belong to the same tenant as the logged in user
+				const mentee = await menteeQueries.getMenteeExtension(menteeId, ['user_id'], false, tenantCode)
+				if (!mentee) {
+					return responses.failureResponse({
+						message: 'USER_NOT_FOUND',
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+			}
+
+			const sessionDetails = await sessionQueries.getMissedSessions(page, limit, search, menteeId, tenantCode)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'SESSION_FETCHED_SUCCESSFULLY',
+				result: { data: sessionDetails.rows, count: sessionDetails.count },
+			})
+		} catch (error) {
+			throw error
+		}
+	}
+
+	/**
+	 * Attended sessions list. Only sessions the participant actually joined (joined_at is set).
+	 * A user can always see their own list; another participant's list needs a role from
+	 * ROLES_WITH_SESSSIONATTENDEEMANGEACCESS (e.g. Linkage Champion / org_admin).
+	 * @method
+	 * @name attendedSessions
+	 * @param {String} [userId] - user id whose attended sessions are requested. Defaults to the logged in user.
+	 * @param {String} loggedInUserId - logged in user id.
+	 * @param {Array} roles - logged in user roles.
+	 * @param {Number} page - page No.
+	 * @param {Number} limit - page limit.
+	 * @param {String} search - search field.
+	 * @param {String} tenantCode - tenant code.
+	 * @returns {JSON} - List of attended sessions
+	 */
+
+	static async attendedSessions(userId, loggedInUserId, roles, page, limit, search = '', tenantCode) {
+		try {
+			const menteeId = userId || loggedInUserId
+
+			if (String(menteeId) !== String(loggedInUserId)) {
+				const allowedRoles = (process.env.ROLES_WITH_SESSSIONATTENDEEMANGEACCESS || '')
+					.split(',')
+					.map((role) => role.trim())
+					.filter(Boolean)
+				const hasAccess = (Array.isArray(roles) ? roles : []).some((role) => allowedRoles.includes(role.title))
+				if (!hasAccess) {
+					return responses.failureResponse({
+						message: 'INVALID_PERMISSION',
+						statusCode: httpStatusCode.forbidden,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+
+				// Participant must belong to the same tenant as the logged in user
+				const mentee = await menteeQueries.getMenteeExtension(menteeId, ['user_id'], false, tenantCode)
+				if (!mentee) {
+					return responses.failureResponse({
+						message: 'USER_NOT_FOUND',
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+			}
+
+			const sessionDetails = await sessionQueries.getAttendedSessions(page, limit, search, menteeId, tenantCode)
+
+			return responses.successResponse({
+				statusCode: httpStatusCode.ok,
+				message: 'SESSION_FETCHED_SUCCESSFULLY',
+				result: { data: sessionDetails.rows, count: sessionDetails.count },
+			})
+		} catch (error) {
+			throw error
+		}
+	}
+
 	static async menteeSessionDetails(sessions, userId, tenantCode) {
 		try {
 			// Handle error objects or non-array data
@@ -976,6 +1104,8 @@ module.exports = class MenteesHelper {
 				if (mentor) {
 					session.mentor_name = mentor.name
 					session.organization = mentor.organization?.name
+					// Support Provider's organisation name shown on LC cards
+					session.provider_name = mentor.meta?.provider_name || mentor.provider_name || null
 				}
 			})
 

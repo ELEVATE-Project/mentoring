@@ -157,6 +157,11 @@ let enviromentVariables = {
 		optional: true,
 		default: true,
 	},
+	AUTO_MARK_SESSION_COMPLETED_WHEN_EXPIRED: {
+		message: 'Mark a session as completed automatically when its end time passes, true or false',
+		optional: true,
+		default: true,
+	},
 	SUPPORT_EMAIL_ID: {
 		message: 'Required email id of support',
 		optional: process.env.ENABLE_EMAIL_FOR_REPORT_ISSUE === 'true' ? false : true,
@@ -199,6 +204,16 @@ let enviromentVariables = {
 		message: 'Required session edit window timeout',
 		optional: true,
 		default: 0,
+	},
+	ALLOW_SESSION_TIME_OVERLAP: {
+		message: 'Allow session time overlap',
+		optional: true,
+		default: 'NO',
+	},
+	ENFORCE_MAXIMUM_SESSION_TIME: {
+		message: 'Enforce maximum session time',
+		optional: true,
+		default: 'NO',
 	},
 	SESSION_MENTEE_LIMIT: {
 		message: 'Required session mentee limit',
@@ -557,6 +572,11 @@ let enviromentVariables = {
 		optional: true,
 		default: 'mentor_deletion_notification_email',
 	},
+	SESSION_CANCELLED_EMAIL_TEMPLATE: {
+		message: 'Required email template code to notify attendees when a session is cancelled',
+		optional: true,
+		default: 'session_deleted_by_manager',
+	},
 	PRIVATE_SESSION_CANCELLED_EMAIL_TEMPLATE: {
 		message: 'Required private session cancelled email template code',
 		optional: true,
@@ -631,6 +651,16 @@ let enviromentVariables = {
 		message: 'Required ENABLE_CACHE to handling health check',
 		optional: true,
 		default: false,
+	},
+	IS_SESSION_REQUEST_FIELDS_EDITABLE: {
+		message: 'Required flag to determine if session request fields are editable',
+		optional: true,
+		default: false,
+	},
+	ROLES_WITH_SESSSIONATTENDEEMANGEACCESS: {
+		message: 'Roles allowed to manage session attendees',
+		optional: true,
+		default: '',
 	},
 }
 
@@ -718,7 +748,7 @@ module.exports = function () {
 		tableData.push(tableObj)
 	})
 
-	console.log(tableData.toString())
+	//console.log(tableData.toString())
 
 	return {
 		success: success,

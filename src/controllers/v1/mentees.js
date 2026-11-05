@@ -45,7 +45,9 @@ module.exports = class Mentees {
 				req.pageNo,
 				req.pageSize,
 				req.searchText,
-				req.decodedToken.tenant_code
+				req.decodedToken,
+				req?.query?.scope,
+				req?.query?.menteeId
 			)
 			return sessions
 		} catch (error) {

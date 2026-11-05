@@ -210,7 +210,7 @@ exports.getSessionByUserIdAndTime = async (userId, startDate, endDate, sessionId
 		let startDateResponse, endDateResponse
 		const query = {
 			mentor_id: userId,
-			status: { [Op.ne]: common.COMPLETED_STATUS },
+			status: { [Op.notIn]: [common.COMPLETED_STATUS, common.CANCELLED_STATUS] },
 		}
 
 		if (startDate) {
@@ -390,10 +390,12 @@ exports.updateEnrollmentCount = async (sessionId, increment = true, tenantCode) 
 			? { seats_remaining: literal('"seats_remaining" + 1') }
 			: { seats_remaining: literal('"seats_remaining" - 1') }
 
+		// Decrement only while a seat is left so parallel enrollments cannot overbook
 		return await Session.update(updateFields, {
 			where: {
 				id: sessionId,
 				tenant_code: tenantCode,
+				...(increment ? {} : { seats_remaining: { [Op.gt]: 0 } }),
 			},
 		})
 	} catch (error) {
@@ -674,6 +676,129 @@ exports.getEnrolledSessions = async (page, limit, search, userId, startDate, end
 	}
 }
 
+exports.getMissedSessions = async (page, limit, search, userId, tenantCode) => {
+	try {
+		// A session counts as attended only when the mentee actually joined it (joined_at is set on join).
+		// Soft-deleted attendees and sessions are excluded by the models (paranoid).
+		const { rows, count } = await SessionAttendee.findAndCountAll({
+			where: {
+				mentee_id: userId,
+				tenant_code: tenantCode,
+				joined_at: { [Op.eq]: null },
+			},
+			attributes: ['type', 'is_feedback_skipped'],
+			include: [
+				{
+					model: Session,
+					as: 'session',
+					required: true, // INNER JOIN
+					where: {
+						status: common.COMPLETED_STATUS,
+						tenant_code: tenantCode,
+						...(search ? { title: { [Op.iLike]: `%${search}%` } } : {}),
+					},
+					attributes: [
+						'id',
+						'title',
+						'description',
+						'start_date',
+						'end_date',
+						'status',
+						'mentor_id',
+						'mentor_name',
+						'created_at',
+						'meeting_info',
+						'meta',
+					],
+				},
+			],
+			order: [['created_at', 'DESC']],
+			offset: limit * (page - 1),
+			limit,
+			distinct: true,
+		})
+
+		// Flatten to the session row + attendee fields, same shape as getEnrolledSessions
+		return {
+			rows: rows.map((attendee) => {
+				const { meta, ...session } = attendee.session.get({ plain: true })
+				return {
+					...session,
+					delivery_mode: meta?.delivery_mode || null,
+					enrolled_type: attendee.type,
+					joined_at: attendee.joined_at,
+					is_feedback_skipped: attendee.is_feedback_skipped,
+				}
+			}),
+			count,
+		}
+	} catch (error) {
+		console.error(error)
+		throw error
+	}
+}
+
+exports.getAttendedSessions = async (page, limit, search, userId, tenantCode) => {
+	try {
+		// A session counts as attended only when the mentee actually joined it (joined_at is set on join).
+		// Soft-deleted attendees and sessions are excluded by the models (paranoid).
+		const { rows, count } = await SessionAttendee.findAndCountAll({
+			where: {
+				mentee_id: userId,
+				tenant_code: tenantCode,
+				joined_at: { [Op.ne]: null },
+			},
+			attributes: ['type', 'joined_at', 'is_feedback_skipped'],
+			include: [
+				{
+					model: Session,
+					as: 'session',
+					required: true, // INNER JOIN
+					where: {
+						tenant_code: tenantCode,
+						...(search ? { title: { [Op.iLike]: `%${search}%` } } : {}),
+					},
+					attributes: [
+						'id',
+						'title',
+						'description',
+						'start_date',
+						'end_date',
+						'status',
+						'mentor_id',
+						'mentor_name',
+						'created_at',
+						'meeting_info',
+						'meta',
+					],
+				},
+			],
+			order: [['joined_at', 'DESC']],
+			offset: limit * (page - 1),
+			limit,
+			distinct: true,
+		})
+
+		// Flatten to the session row + attendee fields, same shape as getEnrolledSessions
+		return {
+			rows: rows.map((attendee) => {
+				const { meta, ...session } = attendee.session.get({ plain: true })
+				return {
+					...meta,
+					...session,
+					enrolled_type: attendee.type,
+					joined_at: attendee.joined_at,
+					is_feedback_skipped: attendee.is_feedback_skipped,
+				}
+			}),
+			count,
+		}
+	} catch (error) {
+		console.error(error)
+		throw error
+	}
+}
+
 exports.findAndCountAll = async (filter, tenantCode, options = {}, attributes = {}) => {
 	try {
 		filter.tenant_code = tenantCode
@@ -764,6 +889,8 @@ exports.getUpcomingSessionsFromView = async (
 			'mentor_organization_id',
 			'created_at',
 			'mentor_name',
+			'seats_limit',
+			'seats_remaining',
 			"(meeting_info - 'link') AS meeting_info",
 		]
 
@@ -1152,6 +1279,8 @@ exports.findAllSessions = async (page, limit, search, filters, tenantCode) => {
 				'created_by',
 				'mentor_organization_id',
 				'meta',
+				'seats_remaining',
+				'seats_limit',
 			],
 			offset: parseInt((page - 1) * limit, 10),
 			limit: parseInt(limit, 10),

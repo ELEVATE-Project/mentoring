@@ -356,23 +356,25 @@ function processDbResponse(responseBody, entityType) {
 			// Find the matching entity type for the current key
 			const matchingEntity = entityType.find((entity) => entity.value === key)
 
-			// Filter and map the matching entity values
-			const matchingValues = matchingEntity.entities
-				.filter((entity) => (Array.isArray(output[key]) ? output[key].includes(entity.value) : true))
-				.map((entity) => ({
-					value: entity.value,
-					label: entity.label,
-				}))
+			if (matchingEntity.has_entities !== false) {
+				// Filter and map the matching entity values
+				const matchingValues = matchingEntity.entities
+					.filter((entity) => (Array.isArray(output[key]) ? output[key].includes(entity.value) : true))
+					.map((entity) => ({
+						value: entity.value,
+						label: entity.label,
+					}))
 
-			// Check if there are matching values
-			if (matchingValues.length > 0) {
-				const newValue = Array.isArray(output[key])
-					? matchingValues
-					: matchingValues.find((entity) => entity.value === output[key])
-				output[key] = newValue
-			} else if (Array.isArray(output[key])) {
-				const filteredValue = output[key].filter((item) => item.value && item.label)
-				output[key] = filteredValue
+				// Check if there are matching values
+				if (matchingValues.length > 0) {
+					const newValue = Array.isArray(output[key])
+						? matchingValues
+						: matchingValues.find((entity) => entity.value === output[key])
+					output[key] = newValue
+				} else if (Array.isArray(output[key])) {
+					const filteredValue = output[key].filter((item) => item.value && item.label)
+					output[key] = filteredValue
+				}
 			}
 		}
 

@@ -1,18 +1,18 @@
-FROM node:17
+# syntax=docker/dockerfile:1
+FROM node:22-alpine
 
-#Set working directory
-WORKDIR /var/src/
+WORKDIR /var/src
 
-#Copy package.json file
-COPY ./src/package.json .
+# Manifests first for layer caching
+COPY --chown=node:node ./src/package.json ./src/package-lock.json ./
 
-#Install node packages
-RUN npm install 
-#Copy all files 
-COPY ./src .
+# Production deps only, deterministic install, npm cache mount
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --legacy-peer-deps
 
-#Expose the application port
+# App source (.dockerignore must exclude node_modules and .env)
+COPY --chown=node:node ./src/ ./
+
+USER node
 EXPOSE 3000
-
-#Start the application
-CMD [ "node", "app.js" ]
+CMD ["node", "app.js"]

@@ -1,10 +1,8 @@
 module.exports = {
 	create: (req) => {
-		req.checkBody('requestee_id')
-			.notEmpty()
-			.withMessage('requestee_id is required')
-			.isString()
-			.withMessage('requestee_id must be a string')
+		req.checkBody('requestee_id').optional().isString().withMessage('requestee_id must be a string')
+
+		req.checkBody('requestees').optional().isArray().withMessage('requestees must be an array')
 
 		req.checkBody('title')
 			.notEmpty()
@@ -35,17 +33,17 @@ module.exports = {
 			.matches(/^[a-zA-Z0-9\-.,\s]+$/)
 			.withMessage('invalid title')
 
-		req.checkBody('start_date')
-			.notEmpty()
-			.withMessage('start_date field is required')
-			.isInt()
-			.withMessage('start_date must be an integer')
+		// req.checkBody('start_date')
+		// 	.notEmpty()
+		// 	.withMessage('start_date field is required')
+		// 	.isInt()
+		// 	.withMessage('start_date must be an integer')
 
-		req.checkBody('end_date')
-			.notEmpty()
-			.withMessage('end_date field is empty')
-			.isInt()
-			.withMessage('end_date must be an integer')
+		// req.checkBody('end_date')
+		// 	.notEmpty()
+		// 	.withMessage('end_date field is empty')
+		// 	.isInt()
+		// 	.withMessage('end_date must be an integer')
 
 		req.checkBody('time_zone')
 			.optional()
@@ -107,6 +105,29 @@ module.exports = {
 				const wordCount = value.trim().split(/\s+/).length
 				if (wordCount > 50) {
 					throw new Error('reason must be 50 words or fewer')
+				}
+				return true
+			})
+	},
+
+	update: (req) => {
+		req.checkBody('request_session_id')
+			.notEmpty()
+			.withMessage('request_session_id is required')
+			.isString()
+			.withMessage('request_session_id must be a string')
+
+		req.checkBody('extra_information')
+			.optional()
+			.isString()
+			.withMessage('extra_information must be a string')
+			.custom((value) => {
+				if (!value.trim()) {
+					throw new Error('extra_information cannot be empty')
+				}
+				const wordCount = value.trim().split(/\s+/).length
+				if (wordCount > 300) {
+					throw new Error('extra_information must be 300 words or fewer')
 				}
 				return true
 			})

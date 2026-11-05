@@ -1,3 +1,4 @@
+const crypto = require('crypto')
 // Dependencies
 const _ = require('lodash')
 const moment = require('moment-timezone')
@@ -34,6 +35,7 @@ const mentorsService = require('./mentors')
 const { getEnrolledMentees } = require('@helpers/getEnrolledMentees')
 const responses = require('@helpers/responses')
 const path = require('path')
+const db = require('@database/models/index')
 const ProjectRootDir = path.join(__dirname, '../')
 const inviteeFileDir = ProjectRootDir + common.tempFolderForBulkUpload
 const fileUploadQueries = require('@database/queries/fileUpload')
@@ -122,13 +124,14 @@ module.exports = class SessionsHelper {
 			// If type is passed store it in upper case
 			bodyData.type && (bodyData.type = bodyData.type.toUpperCase())
 			// If session type is private and mentorId is not passed in request body return an error
-			if (bodyData.type && (!bodyData.mentor_id || bodyData.mentor_id == '')) {
+			if (bodyData.type == common.SESSION_TYPE.PRIVATE && (!bodyData.mentor_id || bodyData.mentor_id == '')) {
 				return responses.failureResponse({
 					message: 'MENTORS_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+			bodyData.seats_remaining = bodyData.seats_limit || process.env.DEFAULT_SESSION_SEATS_LIMIT
 			bodyData.created_by = loggedInUserId
 			bodyData.updated_by = loggedInUserId
 			let menteeIdsToEnroll = bodyData.mentees ? bodyData.mentees : []
@@ -204,29 +207,34 @@ module.exports = class SessionsHelper {
 					})
 				}
 			}
-			// Check if mentor is available for this session's time slot
-			const timeSlot = await this.isTimeSlotAvailable(
-				mentorIdToCheck,
-				bodyData.start_date,
-				bodyData.end_date,
-				tenantCode
-			)
+			// Check if mentor is available for this session's time slot.
+			// ALLOW_SESSION_TIME_OVERLAP=NO enforces this check; any other value (or unset) skips it,
+			// since a mentor profile can represent an organization where multiple people handle
+			// sessions, so overlapping session timings are expected/allowed in that case.
+			if (process.env.ALLOW_SESSION_TIME_OVERLAP === 'NO') {
+				const timeSlot = await this.isTimeSlotAvailable(
+					mentorIdToCheck,
+					bodyData.start_date,
+					bodyData.end_date,
+					tenantCode
+				)
 
-			// If time slot not available return corresponding error
-			if (timeSlot.isTimeSlotAvailable === false) {
-				let errorMessage = isSessionCreatedByManager
-					? 'SESSION_CREATION_LIMIT_EXCEDED_FOR_GIVEN_MENTOR'
-					: { key: 'INVALID_TIME_SELECTION', interpolation: { sessionName: timeSlot.sessionName } }
+				// If time slot not available return corresponding error
+				if (timeSlot.isTimeSlotAvailable === false) {
+					let errorMessage = isSessionCreatedByManager
+						? 'SESSION_CREATION_LIMIT_EXCEDED_FOR_GIVEN_MENTOR'
+						: { key: 'INVALID_TIME_SELECTION', interpolation: { sessionName: timeSlot.sessionName } }
 
-				if (bodyData.sessionCreatedByRequest) {
-					errorMessage = 'INVALID_TIME_SELECTION_FOR_GIVEN_MENTOR'
+					if (bodyData.sessionCreatedByRequest) {
+						errorMessage = 'INVALID_TIME_SELECTION_FOR_GIVEN_MENTOR'
+					}
+
+					return responses.failureResponse({
+						message: errorMessage,
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
 				}
-
-				return responses.failureResponse({
-					message: errorMessage,
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
 			}
 
 			// Calculate duration of the session
@@ -241,8 +249,7 @@ module.exports = class SessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
-
-			if (elapsedMinutes > 1440) {
+			if (process.env.ENFORCE_MAXIMUM_SESSION_TIME === 'YES' && elapsedMinutes > 1440) {
 				return responses.failureResponse({
 					message: 'EXCEEDED_MAXIMUM_SESSION_TIME',
 					statusCode: httpStatusCode.bad_request,
@@ -280,7 +287,14 @@ module.exports = class SessionsHelper {
 
 			//validationData = utils.removeParentEntityTypes(JSON.parse(JSON.stringify(validationData)))
 			const validationData = removeDefaultOrgEntityTypes(entityTypes, defaults.orgCode)
-			bodyData.status = common.PUBLISHED_STATUS
+			bodyData.status = bodyData.status || common.PUBLISHED_STATUS
+			if (![common.DRAFT_STATUS, common.PUBLISHED_STATUS].includes(bodyData.status)) {
+				return responses.failureResponse({
+					message: 'INVALID_STATUS',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
 			let res = utils.validateInput(bodyData, validationData, sessionModelName, skipValidation)
 			if (!res.success) {
 				return responses.failureResponse({
@@ -379,7 +393,8 @@ module.exports = class SessionsHelper {
 					orgCode,
 					tenantCode,
 					bodyData.mentor_id,
-					data
+					data,
+					loggedInUserId
 				)
 			}
 
@@ -471,13 +486,18 @@ module.exports = class SessionsHelper {
 
 			// Set notification schedulers for the session
 			// Deep clone to avoid unintended modifications to the original object.
-			const jobsToCreate = _.cloneDeep(common.jobsToCreate)
+			let jobsToCreate = _.cloneDeep(common.jobsToCreate)
 
 			// Calculate delays for notification jobs
 			jobsToCreate[0].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.start_date, 1, 'hour')
 			jobsToCreate[1].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.start_date, 24, 'hour')
 			jobsToCreate[2].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.start_date, 15, 'minutes')
 			jobsToCreate[3].delay = await utils.getTimeDifferenceInMilliseconds(bodyData.end_date, 0, 'minutes')
+
+			// Skip the job that marks the session as completed at its end time when auto completion is disabled
+			if (![true, 'true', '1', 1].includes(process.env.AUTO_MARK_SESSION_COMPLETED_WHEN_EXPIRED)) {
+				jobsToCreate = jobsToCreate.filter((job) => job.jobId !== common.jobPrefixToMarkSessionAsCompleted)
+			}
 
 			// Iterate through the jobs and create scheduler jobs
 			for (let jobIndex = 0; jobIndex < jobsToCreate.length; jobIndex++) {
@@ -687,6 +707,20 @@ module.exports = class SessionsHelper {
 				userId = bodyData.mentor_id
 			}
 
+			// A published session cannot be edited once its start time has passed
+			if (
+				method !== common.DELETE_METHOD &&
+				[common.PUBLISHED_STATUS, common.LIVE_STATUS].includes(sessionDetail.status) &&
+				sessionDetail.start_date &&
+				moment.unix(Number(sessionDetail.start_date)).isSameOrBefore(moment.utc())
+			) {
+				return responses.failureResponse({
+					message: 'SESSION_ALREADY_STARTED',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
 			if (method !== common.DELETE_METHOD && bodyData.mentor_id) {
 				const mentorExtension =
 					(await cacheHelper.mentor.getCacheOnly(tenantCode, bodyData.mentor_id)) ??
@@ -717,22 +751,27 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const timeSlot = await this.isTimeSlotAvailable(
-				userId,
-				bodyData.start_date,
-				bodyData.end_date,
-				tenantCode,
-				sessionId
-			)
-			if (timeSlot.isTimeSlotAvailable === false) {
-				return responses.failureResponse({
-					message: {
-						key: 'INVALID_TIME_SELECTION',
-						interpolation: { sessionName: timeSlot.sessionName },
-					},
-					statusCode: httpStatusCode.bad_request,
-					responseCode: 'CLIENT_ERROR',
-				})
+			// ALLOW_SESSION_TIME_OVERLAP=NO enforces this check; any other value (or unset) skips it,
+			// since a mentor profile can represent an organization where multiple people handle
+			// sessions, so overlapping session timings are expected/allowed in that case.
+			if (process.env.ALLOW_SESSION_TIME_OVERLAP === 'NO') {
+				const timeSlot = await this.isTimeSlotAvailable(
+					userId,
+					bodyData.start_date,
+					bodyData.end_date,
+					tenantCode,
+					sessionId
+				)
+				if (timeSlot.isTimeSlotAvailable === false) {
+					return responses.failureResponse({
+						message: {
+							key: 'INVALID_TIME_SELECTION',
+							interpolation: { sessionName: timeSlot.sessionName },
+						},
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
 			}
 
 			const defaults = await getDefaults()
@@ -806,7 +845,7 @@ module.exports = class SessionsHelper {
 					})
 				}
 
-				if (elapsedMinutes > 1440) {
+				if (process.env.ENFORCE_MAXIMUM_SESSION_TIME === 'YES' && elapsedMinutes > 1440) {
 					return responses.failureResponse({
 						message: 'EXCEEDED_MAXIMUM_SESSION_TIME',
 						statusCode: httpStatusCode.bad_request,
@@ -822,7 +861,7 @@ module.exports = class SessionsHelper {
 			let message
 			const sessionRelatedJobIds = common.notificationJobIdPrefixes.map((element) => element + sessionDetail.id)
 			if (method == common.DELETE_METHOD) {
-				if (sessionDetail.status == common.PUBLISHED_STATUS) {
+				if ([common.PUBLISHED_STATUS, common.DRAFT_STATUS].includes(sessionDetail.status)) {
 					await sessionQueries.deleteSession(
 						{
 							id: sessionId,
@@ -885,7 +924,8 @@ module.exports = class SessionsHelper {
 							orgCode,
 							tenantCode,
 							bodyData.mentor_id ? bodyData.mentor_id : sessionDetail.mentor_id,
-							sessionDetail
+							sessionDetail,
+							userId
 						)
 					}
 
@@ -1438,10 +1478,11 @@ module.exports = class SessionsHelper {
 	 * @param {String} id 						- Session id.
 	 * @param {Number} userId 					- User id.
 	 * @param {Boolean} isAMentor 				- user mentor or not.
+	 * @param {String} organizationId 			- User organization id.
 	 * @returns {JSON} 							- Session details
 	 */
 
-	static async details(id, userId = '', isAMentor = '', queryParams, roles, orgCode, tenantCode) {
+	static async details(id, userId = '', isAMentor = '', queryParams, roles, orgCode, tenantCode, organizationId) {
 		try {
 			let filter = {}
 			if (utils.isNumeric(id)) {
@@ -1551,12 +1592,26 @@ module.exports = class SessionsHelper {
 					}
 
 					const canRetrieveMenteeList =
-						userId == sessionDetailedResponse.created_by || userId == sessionDetailedResponse.mentor_id
+						userId == sessionDetailedResponse.created_by ||
+						userId == sessionDetailedResponse.mentor_id ||
+						hasSessionAttendeeManageAccess(sessionDetailedResponse, roles, tenantCode)
 
 					const shouldIncludeMentees = isMenteesListRequested && canRetrieveMenteeList
 					if (!shouldIncludeMentees) {
 						delete sessionDetailedResponse.mentees
 					}
+
+					const totalEnrolledCount = await sessionAttendeesQueries.getCount({
+						session_id: sessionDetailedResponse.id,
+						tenant_code: tenantCode,
+					})
+					const presentEnrolledCount = await sessionAttendeesQueries.getCount({
+						session_id: sessionDetailedResponse.id,
+						tenant_code: tenantCode,
+						joined_at: { [Op.ne]: null },
+					})
+					sessionDetailedResponse.enrolled_mentees_count = totalEnrolledCount || 0
+					sessionDetailedResponse.present_mentees_count = presentEnrolledCount || 0
 
 					sessionDetailedResponse['resources'] = await this.getResourceAccessibleUrl(
 						sessionDetailedResponse['resources']
@@ -1672,7 +1727,10 @@ module.exports = class SessionsHelper {
 				}
 			}
 
-			const canRetrieveMenteeList = userId == sessionDetails.created_by || userId == sessionDetails.mentor_id
+			const canRetrieveMenteeList =
+				userId == sessionDetails.created_by ||
+				userId == sessionDetails.mentor_id ||
+				hasSessionAttendeeManageAccess(sessionDetails, roles, tenantCode)
 			sessionDetails.mentees = await getEnrolledMentees(sessionDetails.id, {}, tenantCode)
 
 			let sessionAccessorDetails
@@ -1802,6 +1860,18 @@ module.exports = class SessionsHelper {
 			if (!shouldIncludeMentees) {
 				delete processDbResponse.mentees
 			}
+
+			const totalEnrolledCount = await sessionAttendeesQueries.getCount({
+				session_id: processDbResponse.id,
+				tenant_code: tenantCode,
+			})
+			const presentEnrolledCount = await sessionAttendeesQueries.getCount({
+				session_id: processDbResponse.id,
+				tenant_code: tenantCode,
+				joined_at: { [Op.ne]: null },
+			})
+			processDbResponse.enrolled_mentees_count = totalEnrolledCount || 0
+			processDbResponse.present_mentees_count = presentEnrolledCount || 0
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.created,
@@ -1971,11 +2041,32 @@ module.exports = class SessionsHelper {
 					responseCode: 'CLIENT_ERROR',
 				})
 			}
+
 			// add index number to the response
-			allSessions.rows = allSessions.rows.map((data, index) => ({
-				...data,
-				index_number: index + 1 + limit * (page - 1), //To keep consistency with pagination
-			}))
+			allSessions.rows = allSessions.rows.length
+				? allSessions.rows.map((data, index) => ({
+						...data,
+						index_number: index + 1 + limit * (page - 1), //To keep consistency with pagination
+				  }))
+				: []
+
+			if (allSessions.rows.length) {
+				await Promise.all(
+					allSessions.rows.map(async (session) => {
+						const totalEnrolledCount = await sessionAttendeesQueries.getCount({
+							session_id: session.id,
+							tenant_code: tenantCode,
+						})
+						const presentEnrolledCount = await sessionAttendeesQueries.getCount({
+							session_id: session.id,
+							tenant_code: tenantCode,
+							joined_at: { [Op.ne]: null },
+						})
+						session.enrolled_mentees_count = totalEnrolledCount || 0
+						session.present_mentees_count = presentEnrolledCount || 0
+					})
+				)
+			}
 
 			const result = {
 				data: allSessions.rows,
@@ -2003,6 +2094,7 @@ module.exports = class SessionsHelper {
 	 * @param {Boolean} isSelfEnrolled 		- true/false.
 	 * @param {Object} session 				- session details.
 	 * @param {Boolean} isAMentor 			- user is mentor or not.
+	 * @param {String} enrolledBy 			- user id who enrolled the mentee (defaults to the mentee on self enrollment).
 	 * @returns {JSON} 						- Enroll session.
 	 */
 
@@ -2017,7 +2109,8 @@ module.exports = class SessionsHelper {
 		orgCode,
 		tenantCode,
 		roles,
-		email = null
+		email = null,
+		enrolledBy = null
 	) {
 		try {
 			let name
@@ -2142,6 +2235,7 @@ module.exports = class SessionsHelper {
 
 			// check if the session is accessible to the user
 			let isAccessible = await this.checkIfSessionIsAccessible(session, userId, isAMentor, tenantCode, orgCode)
+			console.log('isAccessible:', isAccessible)
 
 			if (!isAccessible) {
 				return responses.failureResponse({
@@ -2162,7 +2256,6 @@ module.exports = class SessionsHelper {
 					tenantCode
 				)
 			}
-
 			if (sessionAttendeeExist) {
 				return responses.failureResponse({
 					message: 'USER_ALREADY_ENROLLED',
@@ -2184,6 +2277,7 @@ module.exports = class SessionsHelper {
 				mentee_id: userId,
 				time_zone: timeZone,
 				type: enrollmentType,
+				enrolled_by: enrolledBy ?? (isSelfEnrolled ? userId : null),
 			}
 			// Optimized: Use findOrCreate to handle enrollment atomically
 			const enrollmentResult = await sessionAttendeesQueries.findOrCreateAttendee(attendee, tenantCode)
@@ -2209,6 +2303,17 @@ module.exports = class SessionsHelper {
 			let seatsUpdated = false
 			if (session.created_by !== userId) {
 				const seatUpdateResult = await sessionQueries.updateEnrollmentCount(sessionId, false, tenantCode)
+
+				// No row updated means the last seat was taken by a parallel enrollment
+				if (Array.isArray(seatUpdateResult) && seatUpdateResult[0] === 0) {
+					await sessionAttendeesQueries.unEnrollFromSession(sessionId, userId, tenantCode)
+					return responses.failureResponse({
+						message: 'SESSION_SEAT_FULL',
+						statusCode: httpStatusCode.bad_request,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
+
 				if (!seatUpdateResult) {
 					// Rollback the enrollment if seat update fails
 					await sessionAttendeesQueries.unEnrollFromSession(sessionId, userId, tenantCode)
@@ -2786,7 +2891,7 @@ module.exports = class SessionsHelper {
 	 * @returns {JSON} - updated session data.
 	 */
 
-	static async completed(sessionId, isBBB, tenantCode, orgCode) {
+	static async completed(sessionId, isBBB, tenantCode, orgCode, mentees = [], callerId = null) {
 		try {
 			let isSessionCached = false
 			let sessionDetails = await cacheHelper.sessions.get(tenantCode, sessionId)
@@ -2802,6 +2907,20 @@ module.exports = class SessionsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
+			}
+
+			// Marking attendance is limited to the session's mentor or creator
+			if (mentees.length > 0) {
+				const isPrivileged =
+					callerId &&
+					(String(sessionDetails.mentor_id) === callerId || String(sessionDetails.created_by) === callerId)
+				if (!isPrivileged) {
+					return responses.failureResponse({
+						message: 'NOT_AUTHORIZED_TO_MARK_ATTENDANCE',
+						statusCode: httpStatusCode.forbidden,
+						responseCode: 'CLIENT_ERROR',
+					})
+				}
 			}
 
 			let resourceInfo
@@ -2890,23 +3009,44 @@ module.exports = class SessionsHelper {
 				sessionDetails.started_at != null &&
 				!isBBB
 			) {
+				// Session isn't completed here, but attendance still has to be recorded
+				const attendance =
+					mentees.length > 0
+						? await sessionAttendeesQueries.markAttendedBulk(sessionId, mentees, tenantCode)
+						: []
 				return responses.successResponse({
 					statusCode: httpStatusCode.ok,
-					result: [],
+					result: attendance,
 				})
 			}
 
-			const updateResult = await sessionQueries.updateOne(
-				{
-					id: sessionId,
-				},
-				{
-					status: common.COMPLETED_STATUS,
-					completed_at: utils.utcFormat(),
-				},
-				tenantCode,
-				{ returning: false, raw: true }
-			)
+			// Attendance and completion succeed or fail together
+			let attendance = []
+			const transaction = await db.sequelize.transaction()
+			try {
+				if (mentees.length > 0) {
+					attendance = await sessionAttendeesQueries.markAttendedBulk(sessionId, mentees, tenantCode, {
+						transaction,
+					})
+				}
+				const updateResult = await sessionQueries.updateOne(
+					{
+						id: sessionId,
+					},
+					{
+						status: common.COMPLETED_STATUS,
+						completed_at: utils.utcFormat(),
+					},
+					tenantCode,
+					{ returning: false, raw: true, transaction }
+				)
+				// updateOne returns the error instead of throwing it
+				if (updateResult instanceof Error) throw updateResult
+				await transaction.commit()
+			} catch (error) {
+				await transaction.rollback()
+				throw error
+			}
 
 			try {
 				await cacheHelper.sessions.delete(tenantCode, sessionId)
@@ -2943,7 +3083,7 @@ module.exports = class SessionsHelper {
 
 			return responses.successResponse({
 				statusCode: httpStatusCode.ok,
-				result: [],
+				result: attendance,
 			})
 		} catch (error) {
 			throw error
@@ -3423,11 +3563,12 @@ module.exports = class SessionsHelper {
 	 * @name enrolledMentees
 	 * @param {string} sessionId - ID of the session.
 	 * @param {Object} queryParams - Query parameters.
+	 * @param {string} [queryParams.enrolled_by] - '1' to return only mentees enrolled by the logged in user.
 	 * @param {string} userID - ID of the user making the request.
 	 * @returns {Promise<Object>} - A promise that resolves with the success response containing details of enrolled mentees.
 	 * @throws {Error} - Throws an error if there's an issue during data retrieval.
 	 */
-	static async enrolledMentees(sessionId, queryParams, userID, organizationId, tenantCode) {
+	static async enrolledMentees(sessionId, queryParams, userID, orgCode, roles, tenantCode) {
 		try {
 			const session =
 				(await cacheHelper.sessions.get(tenantCode, sessionId)) ??
@@ -3443,7 +3584,11 @@ module.exports = class SessionsHelper {
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
-			} else if (session.created_by != userID && session.mentor_id != userID) {
+			}
+
+			const hasAttendeeManageAccess = hasSessionAttendeeManageAccess(session, roles, tenantCode)
+
+			if (session.created_by != userID && session.mentor_id != userID && !hasAttendeeManageAccess) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
 					statusCode: httpStatusCode.bad_request,
@@ -3451,7 +3596,9 @@ module.exports = class SessionsHelper {
 				})
 			}
 
-			const enrolledMentees = await getEnrolledMentees(sessionId, queryParams, tenantCode)
+			// enrolled_by=1 -> only mentees enrolled by the logged in user (e.g. the Linkage Champion who assigned them)
+			const enrolledBy = ['1', 'true'].includes(String(queryParams?.enrolled_by)) ? userID : null
+			const enrolledMentees = await getEnrolledMentees(sessionId, queryParams, tenantCode, enrolledBy)
 
 			if (queryParams?.csv === 'true') {
 				const timestamp = moment().format('YYYY-MM-DD_HH-mm-ss')
@@ -3486,6 +3633,7 @@ module.exports = class SessionsHelper {
 	 * @param {String} tenantCode				- Tenant code.
 	 * @param {String} mentorId					- Mentor id (optional).
 	 * @param {Object} sessionDetails			- Pre-fetched session details (optional, for optimization).
+	 * @param {String} enrolledBy				- User id who is adding the mentees (e.g. Linkage Champion).
 	 * @returns {JSON} 							- Session details
 	 */
 
@@ -3497,7 +3645,8 @@ module.exports = class SessionsHelper {
 		organizationCode,
 		tenantCode,
 		mentorId = null,
-		sessionDetails = null
+		sessionDetails = null,
+		enrolledBy = null
 	) {
 		try {
 			if (!sessionDetails) {
@@ -3509,6 +3658,23 @@ module.exports = class SessionsHelper {
 			if (!sessionDetails) {
 				return responses.failureResponse({
 					message: 'SESSION_NOT_FOUND',
+					statusCode: httpStatusCode.bad_request,
+					responseCode: 'CLIENT_ERROR',
+				})
+			}
+
+			// Check seats on the latest DB row, the cached copy can be stale when another user assigns at the same time
+			const latestSession = await sessionQueries.findById(sessionId, tenantCode)
+			if (
+				latestSession &&
+				!(latestSession instanceof Error) &&
+				latestSession.seats_remaining < menteeIds.length
+			) {
+				return responses.failureResponse({
+					message: {
+						key: 'SESSION_SEATS_NOT_AVAILABLE',
+						interpolation: { count: Math.max(0, latestSession.seats_remaining) },
+					},
 					statusCode: httpStatusCode.bad_request,
 					responseCode: 'CLIENT_ERROR',
 				})
@@ -3546,7 +3712,8 @@ module.exports = class SessionsHelper {
 					organizationCode,
 					tenantCode,
 					undefined,
-					menteeData.email
+					menteeData.email,
+					enrolledBy
 				)
 					.then((response) => ({
 						id: menteeData.user_id,
@@ -3583,6 +3750,24 @@ module.exports = class SessionsHelper {
 				await cacheHelper.sessions.delete(tenantCode, sessionId)
 			} catch (cacheError) {
 				// Cache invalidation failure - continue operation
+			}
+
+			// Push to Kafka for brac_utility to sync with Project Service
+			try {
+				await kafkaCommunication.pushSessionEnrollmentToKafka({
+					eventId: crypto.randomUUID(),
+					eventType: 'SESSION_MENTEES_ASSIGNED',
+					sessionId: String(sessionId),
+					mentees: successIds,
+					tenantCode: tenantCode,
+					orgCode: organizationCode,
+					mentorId: effectiveMentorId,
+					enrolledBy: enrolledBy,
+					session: sessionDetails,
+					occurredAt: new Date().toISOString(),
+				})
+			} catch (kafkaErr) {
+				console.error('Failed to push session enrollment to kafka:', kafkaErr)
 			}
 
 			return responses.successResponse({
@@ -3962,7 +4147,7 @@ module.exports = class SessionsHelper {
 			// Get organization details with cache-first approach
 			let orgDetails = null
 			try {
-				// Try cache first using available organizationId and organizationCode
+				// Try cache with default organization context first
 				orgDetails = await cacheHelper.organizations.get(tenantCode, organizationCode, organizationId)
 			} catch (cacheError) {
 				console.warn('Organization cache lookup failed, falling back to database')
@@ -4372,4 +4557,31 @@ class MentorError extends Error {
 		this.name = 'MentorError'
 		this.data = data
 	}
+}
+
+/**
+ * @description 							- Check if the user's role allows managing attendees of the session.
+ * 											  Allowed roles are configured via ROLES_WITH_SESSSIONATTENDEEMANGEACCESS.
+ * 											  - admin        : no tenant check
+ * 											  - other roles  : session tenant must match user's tenant
+ * @method
+ * @name hasSessionAttendeeManageAccess
+ * @param {Object} session 					- Session details.
+ * @param {Array} roles 					- User roles.
+ * @param {String} tenantCode 				- User tenant code.
+ * @returns {Boolean} 						- True if the user can manage session attendees.
+ */
+function hasSessionAttendeeManageAccess(session, roles, tenantCode) {
+	const rolesEnv = process.env.ROLES_WITH_SESSSIONATTENDEEMANGEACCESS || ''
+	const allowedRoles = rolesEnv
+		.split(',')
+		.map((role) => role.trim())
+		.filter(Boolean)
+	const userRoles = (Array.isArray(roles) ? roles : [])
+		.map((role) => role.title)
+		.filter((title) => allowedRoles.includes(title))
+
+	if (userRoles.includes(common.ADMIN_ROLE)) return true
+
+	return userRoles.length > 0 && session.tenant_code === tenantCode
 }

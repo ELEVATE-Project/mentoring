@@ -1,5 +1,7 @@
 const SessionAttendee = require('@database/models/index').SessionAttendee
 const { Op, col } = require('sequelize')
+const utils = require('@generics/utils')
+const common = require('@constants/common')
 
 exports.create = async (data, tenantCode) => {
 	try {
@@ -310,5 +312,44 @@ exports.getCount = async (filter = {}, options = {}) => {
 		})
 	} catch (error) {
 		return error
+	}
+}
+
+/**
+ * Mark enrolled mentees as present by stamping joined_at. Mentees who already
+ * joined keep their original joined_at. Throws on failure so callers can roll back.
+ * @returns {{marked: string[], already_marked: string[], not_enrolled: string[]}}
+ */
+exports.markAttendedBulk = async (sessionId, menteeIds, tenantCode, options = {}) => {
+	const requested = [...new Set(menteeIds.map(String))]
+	const enrolled = await SessionAttendee.findAll({
+		where: { session_id: sessionId, mentee_id: { [Op.in]: requested }, tenant_code: tenantCode },
+		attributes: ['mentee_id', 'joined_at'],
+		raw: true,
+		...options,
+	})
+	const enrolledIds = enrolled.map((attendee) => String(attendee.mentee_id))
+	const pending = enrolled.filter((attendee) => !attendee.joined_at).map((attendee) => String(attendee.mentee_id))
+
+	if (pending.length > 0) {
+		await SessionAttendee.update(
+			{ joined_at: utils.utcFormat() },
+			{
+				where: {
+					session_id: sessionId,
+					mentee_id: { [Op.in]: pending },
+					tenant_code: tenantCode,
+					joined_at: null,
+					type: common.INVITED,
+				},
+				...options,
+			}
+		)
+	}
+
+	return {
+		marked: pending,
+		already_marked: enrolledIds.filter((id) => !pending.includes(id)),
+		not_enrolled: requested.filter((id) => !enrolledIds.includes(id)),
 	}
 }

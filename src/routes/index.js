@@ -137,7 +137,6 @@ module.exports = (app) => {
 			}
 
 			controllerResponse = new controller()[method] ? await new controller()[method](req) : next()
-			console.log('Controller Response:', controllerResponse)
 		} catch (error) {
 			// If controller or service throws some random error
 			console.error('Controller Error:', error)

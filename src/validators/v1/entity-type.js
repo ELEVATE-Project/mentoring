@@ -43,8 +43,8 @@ module.exports = {
 			.withMessage('model_names must be an array with at least one element')
 
 		req.checkBody('model_names.*')
-			.isIn(['Session', 'MentorExtension', 'UserExtension'])
-			.withMessage('model_names must be in Session,MentorExtension,UserExtension')
+			.isIn(['Session', 'MentorExtension', 'UserExtension', 'RequestSession'])
+			.withMessage('model_names must be in Session,MentorExtension,UserExtension,RequestSession')
 
 		req.checkBody('has_entities').optional().isBoolean().withMessage('has_entities is invalid, must be boolean')
 
